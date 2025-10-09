@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curriculum Tracker</title>
+    
+    <!-- Firebase Scripts - Load First -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- React Scripts -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        @keyframes fall { to { transform: translateY(100vh); opacity: 0; } }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Wait for Firebase to load
+        window.addEventListener('load', function() {
+            // Check if Firebase is loaded
+            if (typeof firebase === 'undefined') {
+                document.getElementById('root').innerHTML = `
+                    <div style="display: flex; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(to bottom right, #9333ea, #ec4899); font-family: sans-serif;">
+                        <div style="background: white; padding: 2rem; border-radius: 1rem; text-align: center; max-width: 400px;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">⚠️</div>
+                            <h2 style="font-size: 1.5rem; font-weight: bold; color: #1f2937; margin-bottom: 1rem;">Firebase Loading Error</h2>
+                            <p style="color: #6b7280; margin-bottom: 1rem;">Unable to load Firebase. Please check your internet connection and refresh the page.</p>
+                            <button onclick="location.reload()" style="background: #9333ea; color: white; padding: 0.5rem 1.5rem; border-radius: 0.5rem; border: none; cursor: pointer; font-weight: 600;">
+                                Reload Page
+                            </button>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Initialize Firebase
+            
+            // ============================================
+            // REPLACE WITH YOUR FIREBASE CONFIG
+            // ============================================
+            const firebaseConfig = {
+                apiKey: "AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",
+                authDomain: "curriculum-dbb10.firebaseapp.com",
+                projectId: "curriculum-dbb10",
+                storageBucket: "curriculum-dbb10.firebasestorage.app",
+                messagingSenderId: "706387632109",
+                appId: "1:706387632109:web:06c78a304fdbdc12f391e4"
+            };
+
+            // Initialize Firebase
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            const db = firebase.firestore();
+
+            // Start the React app
+            startApp(db);
+        });
+
+        // Main App Function
+        function startApp(db) {
+            const { useState, useEffect } = React;
+
+        // Teachers Data
+        const TEACHERS = [
+            { afid: 'AF248', name: 'Vivek Bansal', subject: 'Physics', school: 'CoE Barwani', dob: '1990-03-15', email: 'vivek@example.com', phone: '9876543210' },
+            { afid: 'AF464', name: 'Sandeep Dixit', subject: 'Chemistry', school: 'CoE Barwani', dob: '1988-07-22', email: 'sandeep@example.com', phone: '9876543211' },
+            { afid: 'AF853', name: 'Dayanand Kumar', subject: 'Maths', school: 'CoE Barwani', dob: '1992-11-08', email: 'dayanand@example.com', phone: '9876543212' },
+            { afid: 'AF709', name: 'Arpith Singh', subject: 'Maths', school: 'CoE Cuttak', dob: '1991-05-19', email: 'arpith@example.com', phone: '9876543213' },
+            { afid: 'AF832', name: 'Shubham Patil', subject: 'Chemistry', school: 'CoE Cuttak', dob: '1989-09-30', email: 'shubham@example.com', phone: '9876543214' },
+            { afid: 'AF459', name: 'Ekanta Sahu', subject: 'Physics', school: 'CoE Cuttak', dob: '1993-12-25', email: 'ekanta@example.com', phone: '9876543215' },
+            { afid: 'AF790', name: 'Anubhav Sundaria', subject: 'Maths', school: 'CoE Bundi', dob: '1990-02-14', email: 'anubhav@example.com', phone: '9876543216' },
+            { afid: 'AF789', name: 'Md. Saif Farooqui', subject: 'Chemistry', school: 'CoE Bundi', dob: '1991-08-07', email: 'saif@example.com', phone: '9876543217' },
+            { afid: 'AF788', name: 'Ajay Kumar', subject: 'Physics', school: 'CoE Bundi', dob: '1988-10-20', email: 'ajay@example.com', phone: '9876543218' },
+            { afid: 'AF529', name: 'Shivam Gupta', subject: 'Physics', school: 'EMRS Bhopal', dob: '1992-01-11', email: 'shivam@example.com', phone: '9876543219' },
+            { afid: 'AF840', name: 'Darshil Jain', subject: 'Chemistry', school: 'EMRS Bhopal', dob: '1990-06-28', email: 'darshil@example.com', phone: '9876543220' },
+            { afid: 'AF834', name: 'Sunil Parmar', subject: 'Maths', school: 'EMRS Bhopal', dob: '1989-04-17', email: 'sunil@example.com', phone: '9876543221' },
+            { afid: 'AF843', name: 'Yogesh Kumar', subject: 'Physics', school: 'CoE Mahisagar', dob: '1991-10-03', email: 'yogesh@example.com', phone: '9876543222' },
+            { afid: 'AF635', name: 'Archana', subject: 'Chemistry', school: 'CoE Mahisagar', dob: '1993-10-15', email: 'archana@example.com', phone: '9876543223' },
+            { afid: 'AF842', name: 'Monu Kumar', subject: 'Maths', school: 'CoE Mahisagar', dob: '1990-12-09', email: 'monu@example.com', phone: '9876543224' },
+            { afid: 'AF804', name: 'Nidhi', subject: 'Physics', school: 'JNV Bharuch', dob: '1992-03-21', email: 'nidhi@example.com', phone: '9876543225' },
+            { afid: 'AF800', name: 'Madan Singh', subject: 'Chemistry', school: 'JNV Bharuch', dob: '1988-08-14', email: 'madan@example.com', phone: '9876543226' },
+            { afid: 'AF786', name: 'Jyoti', subject: 'Maths', school: 'JNV Bharuch', dob: '1991-11-26', email: 'jyoti@example.com', phone: '9876543227' },
+            { afid: 'AF723', name: 'Ranjesh', subject: 'Biology', school: 'JNV Bharuch', dob: '1990-05-05', email: 'ranjesh@example.com', phone: '9876543228' }
+        ];
+
+        // Curriculum Data
+        const CURRICULUM = {
+            Physics: {
+                11: [
+                    { id: 'P11-1', name: 'Physical World', topics: ['Units', 'Dimensions', 'Motion', 'Laws', 'Work', 'Energy'], targetDate: '2025-11-15' },
+                    { id: 'P11-2', name: 'Kinematics', topics: ['Displacement', 'Velocity', 'Acceleration', 'Equations', 'Projectile', 'Relative'], targetDate: '2025-11-30' }
+                ],
+                12: [
+                    { id: 'P12-1', name: 'Electric Charges', topics: ['Charge', 'Coulomb', 'Field', 'Flux', 'Gauss', 'Dipole'], targetDate: '2025-12-15' },
+                    { id: 'P12-2', name: 'Current Electricity', topics: ['Current', 'Ohm', 'Resistance', 'Series', 'Kirchhoff', 'Bridge'], targetDate: '2025-12-30' }
+                ]
+            },
+            Chemistry: {
+                11: [
+                    { id: 'C11-1', name: 'Basic Concepts', topics: ['Matter', 'Atoms', 'Mole', 'Stoichiometry', 'Reactions', 'Equations'], targetDate: '2025-11-15' },
+                    { id: 'C11-2', name: 'Atomic Structure', topics: ['Particles', 'Models', 'Quantum', 'Configuration', 'Orbitals', 'Aufbau'], targetDate: '2025-11-30' }
+                ],
+                12: [
+                    { id: 'C12-1', name: 'Solutions', topics: ['Types', 'Concentration', 'Solubility', 'Raoult', 'Colligative', 'Mass'], targetDate: '2025-12-15' },
+                    { id: 'C12-2', name: 'Electrochemistry', topics: ['Cells', 'Galvanic', 'Nernst', 'Conductance', 'Electrolysis', 'Batteries'], targetDate: '2025-12-30' }
+                ]
+            },
+            Maths: {
+                11: [
+                    { id: 'M11-1', name: 'Sets', topics: ['Theory', 'Operations', 'Venn', 'De Morgan', 'Cartesian', 'Relations'], targetDate: '2025-11-15' },
+                    { id: 'M11-2', name: 'Relations Functions', topics: ['Types', 'Functions', 'Domain', 'Inverse', 'Composite', 'Binary'], targetDate: '2025-11-30' }
+                ],
+                12: [
+                    { id: 'M12-1', name: 'Functions', topics: ['Types', 'Inverse Trig', 'Binary', 'Composition', 'Invertible', 'Properties'], targetDate: '2025-12-15' },
+                    { id: 'M12-2', name: 'Inverse Trig', topics: ['Domain', 'Graphs', 'Properties', 'Derivatives', 'Integrals', 'Applications'], targetDate: '2025-12-30' }
+                ]
+            },
+            Biology: {
+                11: [
+                    { id: 'B11-1', name: 'Living World', topics: ['Diversity', 'Taxonomy', 'Classification', 'Nomenclature', 'Systematics', 'Aids'], targetDate: '2025-11-15' },
+                    { id: 'B11-2', name: 'Classification', topics: ['Kingdoms', 'Monera', 'Protista', 'Fungi', 'Plantae', 'Animalia'], targetDate: '2025-11-30' }
+                ],
+                12: [
+                    { id: 'B12-1', name: 'Reproduction', topics: ['Asexual', 'Sexual', 'Human', 'Fertilization', 'Pregnancy', 'Parturition'], targetDate: '2025-12-15' },
+                    { id: 'B12-2', name: 'Genetics', topics: ['Mendel', 'Inheritance', 'Chromosomal', 'Sex', 'Linkage', 'Crossing'], targetDate: '2025-12-30' }
+                ]
+            }
+        };
+
+        function App() {
+            const [currentUser, setCurrentUser] = useState(null);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [activeTab, setActiveTab] = useState('overview');
+            const [loginForm, setLoginForm] = useState({ afid: '', password: '' });
+            const [showConfetti, setShowConfetti] = useState(false);
+            const [chapterProgress, setChapterProgress] = useState({});
+            const [loading, setLoading] = useState(false);
+
+            useEffect(() => {
+                const initDB = async () => {
+                    try {
+                        const initDoc = await db.collection('system').doc('initialized').get();
+                        if (!initDoc.exists) {
+                            for (const teacher of TEACHERS) {
+                                await db.collection('teachers').doc(teacher.afid).set(teacher);
+                            }
+                            await db.collection('system').doc('initialized').set({ date: new Date().toISOString() });
+                        }
+                    } catch (error) {
+                        console.error('Init error:', error);
+                    }
+                };
+
+                const loadProgress = () => {
+                    db.collection('chapterProgress').onSnapshot((snapshot) => {
+                        const progress = {};
+                        snapshot.docs.forEach(doc => {
+                            progress[doc.id] = doc.data();
+                        });
+                        setChapterProgress(progress);
+                    });
+                };
+
+                initDB();
+                loadProgress();
+            }, []);
+
+            useEffect(() => {
+                if (showConfetti) {
+                    setTimeout(() => setShowConfetti(false), 3000);
+                }
+            }, [showConfetti]);
+
+            const handleLogin = () => {
+                setLoading(true);
+                setTimeout(() => {
+                    if (loginForm.afid === 'ADMIN' && loginForm.password === 'admin123') {
+                        setIsAdmin(true);
+                        setCurrentUser({ name: 'Administrator', afid: 'ADMIN' });
+                        setActiveTab('admin-dashboard');
+                    } else {
+                        const teacher = TEACHERS.find(t => t.afid === loginForm.afid);
+                        if (teacher && loginForm.password === 'pass123') {
+                            setCurrentUser(teacher);
+                            setIsAdmin(false);
+                            setActiveTab('overview');
+                            checkBirthday(teacher);
+                        } else {
+                            alert('Invalid credentials! Try AFID: AF248, Password: pass123');
+                        }
+                    }
+                    setLoading(false);
+                }, 500);
+            };
+
+            const checkBirthday = (teacher) => {
+                const today = new Date();
+                const dob = new Date(teacher.dob);
+                if (today.getMonth() === dob.getMonth() && today.getDate() === dob.getDate()) {
+                    setShowConfetti(true);
+                }
+            };
+
+            const updateChapterProgress = async (chapterId, field, value) => {
+                try {
+                    const currentProgress = chapterProgress[chapterId] || {};
+                    const updatedProgress = {
+                        ...currentProgress,
+                        [field]: value,
+                        lastUpdated: new Date().toISOString(),
+                        updatedBy: currentUser.afid
+                    };
+                    await db.collection('chapterProgress').doc(chapterId).set(updatedProgress, { merge: true });
+                } catch (error) {
+                    console.error('Update error:', error);
+                    alert('Failed to save. Check your internet connection.');
+                }
+            };
+
+            const getSubjectCompletion = (subject, grade) => {
+                const chapters = CURRICULUM[subject]?.[grade] || [];
+                const completed = chapters.filter(ch => chapterProgress[ch.id]?.completed === 'Yes').length;
+                return { 
+                    total: chapters.length, 
+                    completed, 
+                    percentage: chapters.length ? Math.round((completed / chapters.length) * 100) : 0 
+                };
+            };
+
+            const handleLogout = () => {
+                setCurrentUser(null);
+                setIsAdmin(false);
+                setActiveTab('overview');
+                setLoginForm({ afid: '', password: '' });
+            };
+
+            if (!currentUser) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+                            <div className="text-center mb-8">
+                                <div className="text-6xl mb-4">📚</div>
+                                <h1 className="text-3xl font-bold text-gray-800">Curriculum Tracker</h1>
+                                <p className="text-gray-600 mt-2">Track Your Teaching Journey</p>
+                            </div>
+                            <div className="space-y-4">
+                                <input
+                                    type="text"
+                                    placeholder="Enter AFID"
+                                    value={loginForm.afid}
+                                    onChange={(e) => setLoginForm({ ...loginForm, afid: e.target.value.toUpperCase() })}
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                                />
+                                <input
+                                    type="password"
+                                    placeholder="Enter Password"
+                                    value={loginForm.password}
+                                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                                />
+                                <button
+                                    onClick={handleLogin}
+                                    disabled={loading}
+                                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg transform hover:scale-105 transition disabled:opacity-50"
+                                >
+                                    {loading ? 'Logging in...' : 'Login'}
+                                </button>
+                            </div>
+                            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                                <p className="text-xs text-gray-600 text-center font-semibold mb-2">Demo Credentials:</p>
+                                <p className="text-xs text-gray-600">👤 Admin: ADMIN / admin123</p>
+                                <p className="text-xs text-gray-600">👨‍🏫 Teacher: AF248 / pass123</p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            const Confetti = () => (
+                <div className="fixed inset-0 pointer-events-none z-50">
+                    {[...Array(50)].map((_, i) => (
+                        <div
+                            key={i}
+                            className="absolute text-2xl"
+                            style={{
+                                left: `${Math.random() * 100}%`,
+                                top: `${Math.random() * 100}%`,
+                                animation: 'fall 3s linear forwards',
+                                animationDelay: `${Math.random() * 2}s`
+                            }}
+                        >
+                            🎉
+                        </div>
+                    ))}
+                </div>
+            );
+
+            const OverviewPage = () => {
+                const subjects = ['Physics', 'Chemistry', 'Maths', 'Biology'];
+                
+                return (
+                    <div className="space-y-6">
+                        <h2 className="text-3xl font-bold text-gray-800">📊 Overview Dashboard</h2>
+                        
+                        {showConfetti && <Confetti />}
+                        
+                        {showConfetti && (
+                            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-6 rounded-xl shadow-lg text-center">
+                                <div className="text-5xl mb-3">🎂</div>
+                                <h3 className="text-2xl font-bold">Happy Birthday {currentUser.name}!</h3>
+                                <p className="mt-2">Wishing you a wonderful year ahead!</p>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {[11, 12].map(grade => (
+                                <div key={grade} className="bg-white rounded-xl shadow-lg p-6">
+                                    <h3 className="text-2xl font-bold text-gray-800 mb-4">Class {grade}th</h3>
+                                    <div className="space-y-4">
+                                        {subjects.map(subject => {
+                                            const completion = getSubjectCompletion(subject, grade);
+                                            const status = completion.percentage === 100 ? 'completed' : 
+                                                          completion.percentage >= 50 ? 'on-track' : 'delayed';
+                                            const bgColor = status === 'completed' ? 'bg-green-100 border-green-500' :
+                                                           status === 'delayed' ? 'bg-red-100 border-red-500' :
+                                                           'bg-white border-gray-300';
+                                            
+                                            return (
+                                                <div key={subject} className={`p-4 rounded-lg border-2 ${bgColor}`}>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="font-semibold text-gray-800">{subject}</span>
+                                                        <span className="text-2xl font-bold text-gray-700">{completion.percentage}%</span>
+                                                    </div>
+                                                    <div className="mt-2 bg-gray-200 rounded-full h-3">
+                                                        <div 
+                                                            className={`h-3 rounded-full transition-all duration-500 ${status === 'completed' ? 'bg-green-500' : status === 'delayed' ? 'bg-red-500' : 'bg-blue-500'}`}
+                                                            style={{ width: `${completion.percentage}%` }}
+                                                        ></div>
+                                                    </div>
+                                                    <p className="text-sm text-gray-600 mt-2">
+                                                        {completion.completed} / {completion.total} chapters completed
+                                                    </p>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            const ChaptersPage = () => {
+                const [selectedGrade, setSelectedGrade] = useState(11);
+                const chapters = CURRICULUM[currentUser.subject]?.[selectedGrade] || [];
+
+                return (
+                    <div className="space-y-6">
+                        <h2 className="text-3xl font-bold text-gray-800">📖 Chapters - {currentUser.subject}</h2>
+
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => setSelectedGrade(11)}
+                                className={`px-6 py-3 rounded-lg font-semibold transition ${selectedGrade === 11 ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                            >
+                                Class 11th
+                            </button>
+                            <button
+                                onClick={() => setSelectedGrade(12)}
+                                className={`px-6 py-3 rounded-lg font-semibold transition ${selectedGrade === 12 ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                            >
+                                Class 12th
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {chapters.map(chapter => {
+                                const progress = chapterProgress[chapter.id] || {};
+                                const completedTopics = progress.completedTopics || [];
+                                const status = progress.completed === 'Yes' ? 'completed' : 'pending';
+                                const bgColor = status === 'completed' ? 'bg-green-50 border-green-500' : 'bg-white border-gray-300';
+
+                                return (
+                                    <div key={chapter.id} className={`rounded-xl border-2 ${bgColor} p-6 shadow-lg transition-all hover:shadow-xl`}>
+                                        <h3 className="font-bold text-lg text-gray-800 mb-3">{chapter.name}</h3>
+                                        
+                                        <div className="space-y-3 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Topics:</span>
+                                                <span className="font-semibold">{completedTopics.length}/{chapter.topics.length}</span>
+                                            </div>
+                                            
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Target:</span>
+                                                <span className="font-semibold">{chapter.targetDate}</span>
+                                            </div>
+
+                                            {progress.completionDate && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Completed:</span>
+                                                    <span className="font-semibold text-green-600">{progress.completionDate}</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <hr className="my-4 border-gray-200" />
+
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Chapter Completed?</label>
+                                                <select
+                                                    value={progress.completed || 'No'}
+                                                    onChange={(e) => {
+                                                        updateChapterProgress(chapter.id, 'completed', e.target.value);
+                                                        if (e.target.value === 'Yes') {
+                                                            updateChapterProgress(chapter.id, 'completionDate', new Date().toISOString().split('T')[0]);
+                                                            setShowConfetti(true);
+                                                        }
+                                                    }}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                                >
+                                                    <option>No</option>
+                                                    <option>Yes</option>
+                                                </select>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
+                                                <select
+                                                    value={progress.method || 'Online'}
+                                                    onChange={(e) => updateChapterProgress(chapter.id, 'method', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                                >
+                                                    <option>Online</option>
+                                                    <option>Offline</option>
+                                                </select>
+                                            </div>
+
+                                            {progress.method === 'Offline' && (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Why offline?)</label>
+                                                    <textarea
+                                                        value={progress.notes || ''}
+                                                        onChange={(e) => updateChapterProgress(chapter.id, 'notes', e.target.value)}
+                                                        placeholder="Reason for offline teaching..."
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                                        rows="2"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <hr className="my-4 border-gray-200" />
+
+                                        <details className="cursor-pointer">
+                                            <summary className="font-semibold text-purple-600 hover:text-purple-800 select-none">View Topics ({completedTopics.length}/{chapter.topics.length})</summary>
+                                            <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                                                {chapter.topics.map((topic, idx) => (
+                                                    <label key={idx} className="flex items-center gap-2 text-sm hover:bg-purple-50 p-2 rounded cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={completedTopics.includes(topic)}
+                                                            onChange={(e) => {
+                                                                const updated = e.target.checked 
+                                                                    ? [...completedTopics, topic]
+                                                                    : completedTopics.filter(t => t !== topic);
+                                                                updateChapterProgress(chapter.id, 'completedTopics', updated);
+                                                            }}
+                                                            className="w-4 h-4 text-purple-600"
+                                                        />
+                                                        <span className={completedTopics.includes(topic) ? 'line-through text-gray-500' : ''}>{topic}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </details>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            };
+
+            const ProfilePage = () => {
+                return (
+                    <div className="space-y-6">
+                        <h2 className="text-3xl font-bold text-gray-800">👤 Teacher Profile</h2>
+
+                        <div className="bg-white rounded-xl shadow-lg p-8">
+                            <div className="flex flex-col md:flex-row gap-8">
+                                <div className="flex-shrink-0">
+                                    <div className="w-32 h-32 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-lg">
+                                        {currentUser.name.charAt(0)}
+                                    </div>
+                                </div>
+                                <div className="flex-1">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label className="text-sm text-gray-600 font-medium">Name</label>
+                                            <div className="text-lg font-semibold text-gray-800 mt-1">{currentUser.name}</div>
+                                        </div>
+                                        <div>
+                                            <label className="text-sm text-gray-600 font-medium">AFID</label>
+                                            <div className="text-lg font-semibold text-gray-800 mt-1">{currentUser.afid}</div>
+                                        </div>
+                                        <div>
+                                            <label className="text-sm text-gray-600 font-medium">Subject</label>
+                                            <div className="text-lg font-semibold text-gray-800 mt-1">{currentUser.subject}</div>
+                                        </div>
+                                        <div>
+                                            <label className="text-sm text-gray-600 font-medium">Centre Name</label>
+                                            <div className="text-lg font-semibold text-gray-800 mt-1">{currentUser.school}</div>
+                                        </div>
+                                        <div>
+                                            <label className="text-sm text-gray-600 font-medium">Date of Birth</label>
+                                            <div className="text-lg font-semibold text-gray-800 mt-1">{new Date(currentUser.dob).toLocaleDateString()}</div>
+                                        </div>
+                                        <div>
+                                            <label className="text-sm text-gray-600 font-medium">Email</label>
+                                            <div className="text-lg font-semibold text-gray-800 mt-1">{currentUser.email}</div>
+                                        </div>
+                                        <div>
+                                            <label className="text-sm text-gray-600 font-medium">Phone Number</label>
+                                            <div className="text-lg font-semibold text-gray-800 mt-1">{currentUser.phone}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const AdminDashboard = () => {
+                const schools = [...new Set(TEACHERS.map(t => t.school))];
+                const allSubjects = ['Physics', 'Chemistry', 'Maths', 'Biology'];
+                
+                const schoolStats = schools.map(school => {
+                    const schoolTeachers = TEACHERS.filter(t => t.school === school);
+                    let totalChapters = 0;
+                    let completedChapters = 0;
+                    
+                    schoolTeachers.forEach(teacher => {
+                        allSubjects.forEach(subject => {
+                            [11, 12].forEach(grade => {
+                                const chapters = CURRICULUM[subject]?.[grade] || [];
+                                totalChapters += chapters.length;
+                                chapters.forEach(ch => {
+                                    if (chapterProgress[ch.id]?.completed === 'Yes') {
+                                        completedChapters++;
+                                    }
+                                });
+                            });
+                        });
+                    });
+                    
+                    const percentage = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
+                    return { school, totalChapters, completedChapters, percentage, teacherCount: schoolTeachers.length };
+                });
+
+                return (
+                    <div className="space-y-6">
+                        <h2 className="text-3xl font-bold text-gray-800">📈 Admin Dashboard</h2>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="bg-gradient-to-br from-purple-500 to-purple-700 text-white rounded-xl shadow-lg p-6">
+                                <div className="text-5xl mb-3">👥</div>
+                                <div className="text-3xl font-bold">{TEACHERS.length}</div>
+                                <div className="text-purple-100 text-sm">Total Teachers</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-pink-500 to-pink-700 text-white rounded-xl shadow-lg p-6">
+                                <div className="text-5xl mb-3">🏫</div>
+                                <div className="text-3xl font-bold">{schools.length}</div>
+                                <div className="text-pink-100 text-sm">Total Schools</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-orange-500 to-orange-700 text-white rounded-xl shadow-lg p-6">
+                                <div className="text-5xl mb-3">📊</div>
+                                <div className="text-3xl font-bold">{Object.keys(chapterProgress).length}</div>
+                                <div className="text-orange-100 text-sm">Chapters Tracked</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-xl shadow-lg p-6">
+                            <h3 className="text-2xl font-bold text-gray-800 mb-6">School Performance</h3>
+                            <div className="space-y-4">
+                                {schoolStats.map((stat, idx) => {
+                                    const status = stat.percentage >= 75 ? 'excellent' : 
+                                                  stat.percentage >= 50 ? 'good' : 
+                                                  stat.percentage >= 25 ? 'fair' : 'poor';
+                                    const colorClass = status === 'excellent' ? 'bg-green-100 border-green-500' :
+                                                      status === 'good' ? 'bg-blue-100 border-blue-500' :
+                                                      status === 'fair' ? 'bg-yellow-100 border-yellow-500' :
+                                                      'bg-red-100 border-red-500';
+                                    
+                                    return (
+                                        <div key={idx} className={`border-l-4 p-4 rounded-r-lg ${colorClass}`}>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <div>
+                                                    <h4 className="font-bold text-lg text-gray-800">{stat.school}</h4>
+                                                    <p className="text-sm text-gray-600">{stat.teacherCount} Teachers</p>
+                                                </div>
+                                                <span className="text-3xl font-bold text-gray-700">{stat.percentage}%</span>
+                                            </div>
+                                            <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+                                                <div 
+                                                    className={`h-3 rounded-full transition-all duration-500 ${
+                                                        status === 'excellent' ? 'bg-green-500' :
+                                                        status === 'good' ? 'bg-blue-500' :
+                                                        status === 'fair' ? 'bg-yellow-500' :
+                                                        'bg-red-500'
+                                                    }`}
+                                                    style={{ width: `${stat.percentage}%` }}
+                                                ></div>
+                                            </div>
+                                            <p className="text-sm text-gray-600">
+                                                {stat.completedChapters} / {stat.totalChapters} chapters completed
+                                            </p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-xl shadow-lg p-6">
+                            <h3 className="text-2xl font-bold text-gray-800 mb-6">Teacher Directory</h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b-2 border-gray-200 bg-gray-50">
+                                            <th className="text-left p-3 font-semibold text-gray-700">AFID</th>
+                                            <th className="text-left p-3 font-semibold text-gray-700">Name</th>
+                                            <th className="text-left p-3 font-semibold text-gray-700">Subject</th>
+                                            <th className="text-left p-3 font-semibold text-gray-700">School</th>
+                                            <th className="text-left p-3 font-semibold text-gray-700">Contact</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {TEACHERS.map((teacher, idx) => (
+                                            <tr key={idx} className="border-b border-gray-100 hover:bg-purple-50 transition-colors">
+                                                <td className="p-3 font-mono text-sm">{teacher.afid}</td>
+                                                <td className="p-3 font-medium">{teacher.name}</td>
+                                                <td className="p-3">{teacher.subject}</td>
+                                                <td className="p-3 text-sm">{teacher.school}</td>
+                                                <td className="p-3 text-sm">{teacher.phone}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-red-50">
+                    <nav className="bg-white shadow-lg sticky top-0 z-40">
+                        <div className="max-w-7xl mx-auto px-4 py-4">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-3">
+                                    <div className="text-3xl">📚</div>
+                                    <div>
+                                        <h1 className="text-2xl font-bold text-gray-800">Curriculum Tracker</h1>
+                                        <p className="text-sm text-gray-600">{currentUser.name} - {currentUser.school || 'Administrator'}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleLogout}
+                                    className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition shadow-md hover:shadow-lg"
+                                >
+                                    🚪 Logout
+                                </button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    <div className="max-w-7xl mx-auto px-4 py-6">
+                        {!isAdmin && (
+                            <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
+                                {[
+                                    { id: 'overview', label: 'Overview', icon: '🏠' },
+                                    { id: 'chapters', label: 'Chapters', icon: '📖' },
+                                    { id: 'profile', label: 'Profile', icon: '👤' }
+                                ].map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition whitespace-nowrap ${
+                                            activeTab === tab.id
+                                                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105'
+                                                : 'bg-white text-gray-700 hover:bg-gray-100 shadow'
+                                        }`}
+                                    >
+                                        <span className="text-xl">{tab.icon}</span>
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        <div>
+                            {isAdmin && <AdminDashboard />}
+                            {!isAdmin && activeTab === 'overview' && <OverviewPage />}
+                            {!isAdmin && activeTab === 'chapters' && <ChaptersPage />}
+                            {!isAdmin && activeTab === 'profile' && <ProfilePage />}
+                        </div>
+                    </div>
+
+                    <footer className="bg-white mt-12 py-6 shadow-inner">
+                        <div className="max-w-7xl mx-auto px-4 text-center">
+                            <p className="text-gray-600 text-sm">© 2025 Curriculum Tracker | Made with ❤️ for Teachers</p>
+                        </div>
+                    </footer>
+                </div>
+            );
+        }
+
+                    ReactDOM.render(<App />, document.getElementById('root'));
+        }
+    </script>
+</body>
+</html>
