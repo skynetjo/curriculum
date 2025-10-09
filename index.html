@@ -1,846 +1,1326 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Curriculum Tracker</title>
+const CurriculumManagement = () => {
+                    const [selectedSubject, setSelectedSubject] = useState('Physics');
+                    const [selectedGrade, setSelectedGrade] = useState(11);
+                    const [editingChapter, setEditingChapter] = useState(null);
+                    const [isAddingChapter, setIsAddingChapter] = useState(false);
+                    const [chapterForm, setChapterForm] = useState({ id: '', name: '', topics: [], targetDate: '' });
+                    const [newTopic, setNewTopic] = useState('');
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+                    const chapters = curriculum[selectedSubject]?.[selectedGrade] || [];
 
-  <!-- React -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-  <style>
-    @keyframes fall { to { transform: translateY(100vh); opacity: 0; } }
-    * { box-sizing: border-box; }
-    /* small shadow for dropdown select on mac - optional */
-    select:focus { outline: none; box-shadow: 0 0 0 4px rgba(99,102,241,0.15); border-color: rgb(99 102 241); }
-  </style>
-</head>
-<body>
-  <div id="root"></div>
-
-  <script type="text/babel">
-  const { useState, useEffect, useRef } = React;
-
-  // ---------- Replace with your Firebase config ----------
-  const firebaseConfig = {
-    apiKey: "AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",
-    authDomain: "curriculum-dbb10.firebaseapp.com",
-    projectId: "curriculum-dbb10",
-    storageBucket: "curriculum-dbb10.firebasestorage.app",
-    messagingSenderId: "706387632109",
-    appId: "1:706387632109:web:06c78a304fdbdc12f391e4"
-  };
-  // ------------------------------------------------------
-
-  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-  const db = firebase.firestore();
-
-  function App(){
-    const [currentUser, setCurrentUser] = useState(null);
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [activeTab, setActiveTab] = useState('overview');
-    const [loginForm, setLoginForm] = useState({ afid: '', password: '' });
-    const [loading, setLoading] = useState(false);
-    const [teachers, setTeachers] = useState([]);
-    const [curriculum, setCurriculum] = useState({});
-    const [chapterProgress, setChapterProgress] = useState({});
-    const [showConfetti, setShowConfetti] = useState(false);
-    const [analyticsData, setAnalyticsData] = useState(null);
-
-    // controls for expanded topics per chapter id
-    const [expandedChapters, setExpandedChapters] = useState({});
-
-    // Chart refs & instances
-    const pieRef = useRef(null), barRef = useRef(null), schoolRef = useRef(null);
-    const chartInst = useRef({ pie: null, bar: null, school: null });
-
-    // seed (small) - only used once if DB not initialized
-    const TEACHERS_SEED = [
-      { afid: 'AF248', name: 'Vivek Bansal', subject: 'Physics', school: 'CoE Barwani', dob: '1990-03-15', email:'vivek@example.com', phone:'9876543210', password:'pass123' },
-      { afid: 'AF464', name: 'Sandeep Dixit', subject: 'Chemistry', school: 'CoE Barwani', dob: '1988-07-22', email:'sandeep@example.com', phone:'9876543211', password:'pass123' },
-      { afid: 'AF853', name: 'Dayanand Kumar', subject: 'Maths', school: 'CoE Barwani', dob: '1992-11-08', email:'dayanand@example.com', phone:'9876543212', password:'pass123' },
-      { afid: 'AF723', name: 'Ranjesh', subject: 'Biology', school: 'JNV Bharuch', dob: '1990-05-05', email:'ranjesh@example.com', phone:'9876543228', password:'pass123' }
-    ];
-
-    const CURRICULUM_SEED = {
-      Physics: { 11: [{ id:'P11-1', name:'Physical World', topics:['Units','Dimensions','Motion'], targetDate:'2025-11-15' }, { id:'P11-2', name:'Kinematics', topics:['Displacement','Velocity'], targetDate:'2025-11-30' }], 12:[{ id:'P12-1', name:'Electric Charges', topics:['Charge','Coulomb'], targetDate:'2025-12-15' }] },
-      Chemistry: { 11:[{ id:'C11-1', name:'Basic Concepts', topics:['Matter','Atoms'], targetDate:'2025-11-20' }], 12:[{ id:'C12-1', name:'Solutions', topics:['Concentration'], targetDate:'2025-12-05' }] },
-      Maths: { 11:[{ id:'M11-1', name:'Sets', topics:['Theory'], targetDate:'2025-11-25' }], 12:[{ id:'M12-1', name:'Functions', topics:['Types'], targetDate:'2025-12-10' }] },
-      Biology: { 11:[{ id:'B11-1', name:'Living World', topics:['Diversity'], targetDate:'2025-11-18' }], 12:[{ id:'B12-1', name:'Reproduction', topics:['Asexual'], targetDate:'2025-12-12' }] }
-    };
-
-    // initialize & listeners
-    useEffect(() => {
-      const init = async () => {
-        try {
-          const initDoc = await db.collection('system').doc('initialized').get();
-          if (!initDoc.exists) {
-            // seed teachers
-            for (const t of TEACHERS_SEED) {
-              await db.collection('teachers').doc(t.afid).set(t);
-            }
-            // seed curriculum
-            await db.collection('meta').doc('curriculum').set(CURRICULUM_SEED);
-            await db.collection('system').doc('initialized').set({ date: new Date().toISOString() });
-            console.log('Seeded DB with initial data');
-          }
-        } catch (e) { console.error('init error', e); }
-      };
-
-      const unsubProgress = db.collection('chapterProgress').onSnapshot(snap => {
-        const map = {};
-        snap.docs.forEach(d => map[d.id] = d.data());
-        setChapterProgress(map);
-      });
-
-      const unsubTeachers = db.collection('teachers').onSnapshot(snap => {
-        const arr = snap.docs.map(d => d.data());
-        setTeachers(arr);
-      });
-
-      const unsubCurr = db.collection('meta').doc('curriculum').onSnapshot(doc => {
-        if (doc.exists) setCurriculum(doc.data());
-        else setCurriculum(CURRICULUM_SEED);
-      });
-
-      init();
-      return () => { unsubProgress(); unsubTeachers(); unsubCurr(); };
-    }, []);
-
-    // analytics compute when data changes
-    useEffect(() => {
-      if (!curriculum) return;
-      const compute = () => {
-        const schoolStatus = {};
-        const teacherMap = {}; // afid -> {name, school, completed, total}
-        let totalChapters = 0, totalCompleted = 0;
-
-        Object.keys(curriculum).forEach(subject => {
-          Object.keys(curriculum[subject]).forEach(grade => {
-            (curriculum[subject][grade] || []).forEach(ch => {
-              totalChapters++;
-              const prog = chapterProgress[ch.id] || {};
-              const st = computeChapterStatus(ch, prog); // our status helper (used in UI also)
-              if (st.key === 'completed') totalCompleted++;
-              // attribute to teachers who match subject
-              teachers.forEach(t => {
-                if (t.subject === subject) {
-                  teacherMap[t.afid] = teacherMap[t.afid] || { afid: t.afid, name: t.name, school: t.school, completed:0, total:0 };
-                  teacherMap[t.afid].total++;
-                  if (st.key === 'completed') teacherMap[t.afid].completed++;
-                }
-                // school stats accumulate for each chapter (naive but consistent)
-                schoolStatus[t.school] = schoolStatus[t.school] || { delayed:0, ontrack:0, total:0 };
-                schoolStatus[t.school].total++;
-                if (st.key === 'delayed') schoolStatus[t.school].delayed++;
-                else if (['ontrack','ahead','completed'].includes(st.key)) schoolStatus[t.school].ontrack++;
-                else if (st.key === 'partial') schoolStatus[t.school].ontrack += 0; // partial counted neither ontrack nor delayed (we can keep in total)
-              });
-            });
-          });
-        });
-
-        const teacherArr = Object.values(teacherMap).map(t => ({ ...t, percent: t.total ? Math.round((t.completed / t.total) * 100) : 0 }));
-        teacherArr.sort((a,b) => b.percent - a.percent);
-
-        setAnalyticsData({ totalChapters, totalCompleted, teacherArr, schoolStatus });
-      };
-
-      compute();
-    }, [curriculum, chapterProgress, teachers]);
-
-    // Chart rendering when analyticsData changes
-    useEffect(() => {
-      if (!analyticsData) {
-        destroyAllCharts();
-        return;
-      }
-
-      // PIE / DOUGHNUT: Completed vs Pending
-      const completed = analyticsData.totalCompleted || 0;
-      const pending = Math.max(0, (analyticsData.totalChapters || 0) - completed);
-      if (pieRef.current) {
-        if (chartInst.current.pie) chartInst.current.pie.destroy();
-        chartInst.current.pie = new Chart(pieRef.current.getContext('2d'), {
-          type: 'doughnut',
-          data: { labels:['Completed','Pending'], datasets:[{ data:[completed,pending], backgroundColor:['#10B981','#F97316'] }] },
-          options: { plugins:{ legend:{ position:'bottom' } }, cutout: '65%' }
-        });
-      }
-
-      // BAR: Teacher completion %
-      if (barRef.current) {
-        if (chartInst.current.bar) chartInst.current.bar.destroy();
-        const top = (analyticsData.teacherArr || []).slice(0,8);
-        chartInst.current.bar = new Chart(barRef.current.getContext('2d'), {
-          type: 'bar',
-          data: { labels: top.map(t => `${t.name} (${t.afid})`), datasets:[{ label:'Completion %', data: top.map(t => t.percent), backgroundColor:'#4F46E5' }] },
-          options: { indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{ min:0, max:100, ticks:{ callback: v => v + '%' } } } }
-        });
-      }
-
-      // SCHOOL: stacked ontrack vs delayed
-      if (schoolRef.current) {
-        if (chartInst.current.school) chartInst.current.school.destroy();
-        const schools = Object.keys(analyticsData.schoolStatus || {});
-        const ontrack = schools.map(s => analyticsData.schoolStatus[s].ontrack || 0);
-        const delayed = schools.map(s => analyticsData.schoolStatus[s].delayed || 0);
-        chartInst.current.school = new Chart(schoolRef.current.getContext('2d'), {
-          type: 'bar',
-          data: { labels: schools, datasets: [{ label:'On track', data:ontrack, backgroundColor:'#10B981' }, { label:'Delayed', data:delayed, backgroundColor:'#EF4444' }] },
-          options: { plugins:{ legend:{ position:'bottom' } }, scales:{ x:{ stacked:true }, y:{ stacked:true } } }
-        });
-      }
-    }, [analyticsData]);
-
-    function destroyAllCharts(){
-      Object.values(chartInst.current).forEach(c => { if (c && c.destroy) c.destroy(); });
-      chartInst.current = { pie:null, bar:null, school:null };
-    }
-
-    // ---------- Helper: compute chapter status (used by UI & analytics) ----------
-    function computeChapterStatus(chapter = {}, progress = {}){
-      // progress fields: completed: 'Yes'|'No', completionDate: 'YYYY-MM-DD', completedTopics: [...], testConducted: 'Yes'|'No'
-      const defaultRes = { label:'No target', key:'no-target', color:'bg-gray-100' };
-      if (!chapter) return defaultRes;
-      if (!chapter.targetDate) return defaultRes;
-
-      const target = new Date(chapter.targetDate);
-      const compDate = progress.completionDate ? new Date(progress.completionDate) : null;
-      const topicsDone = (progress.completedTopics || []).length;
-      const topicsTotal = (chapter.topics || []).length;
-
-      // If user marked completed = Yes but test not conducted => partial
-      if (progress.completed === 'Yes' && progress.testConducted !== 'Yes') {
-        // Show as partially completed (orange). If target passed, still show delayed-like but orange.
-        return { label: 'Partially completed', key: 'partial', color: 'bg-orange-100' };
-      }
-
-      // If not completed at all
-      if (progress.completed !== 'Yes') {
-        const today = new Date();
-        if (today > target) return { label: 'Delayed', key:'delayed', color:'bg-red-100' };
-        // partially covered by topics only (but not marked complete) -> show pending
-        if (topicsDone > 0 && topicsDone < topicsTotal) return { label: 'Partially done', key:'partial-topics', color:'bg-orange-100' };
-        return { label: 'Pending', key:'pending', color:'bg-yellow-100' };
-      }
-
-      // Completed and testConducted === 'Yes' => evaluate based on dates
-      if (compDate) {
-        if (compDate > target) return { label:'Delayed', key:'delayed', color:'bg-red-100' };
-        if (compDate.toDateString() === target.toDateString()) return { label:'On Track', key:'ontrack', color:'bg-green-100' };
-        if (compDate < target) return { label:'Ahead — Good job', key:'ahead', color:'bg-green-100' };
-        return { label:'Completed', key:'completed', color:'bg-green-100' };
-      }
-
-      // If somehow marked completed but no completionDate: treat as completed (but this case should be rare)
-      return { label:'Completed', key:'completed', color:'bg-green-100' };
-    }
-
-    // ---------- Login (mock admin + teacher via teachers collection) ----------
-    const handleLogin = async () => {
-      setLoading(true);
-      try {
-        const afid = (loginForm.afid || '').trim().toUpperCase();
-        if (!afid) return alert('Enter AFID');
-        if (afid === 'ADMIN' && loginForm.password === 'admin123') {
-          setIsAdmin(true);
-          setCurrentUser({ name:'Administrator', afid:'ADMIN' });
-          setActiveTab('admin');
-          setLoading(false);
-          return;
-        }
-        const doc = await db.collection('teachers').doc(afid).get();
-        if (!doc.exists) { alert('Invalid AFID or password'); setLoading(false); return; }
-        const t = doc.data();
-        if (t.password === loginForm.password) {
-          setCurrentUser(t);
-          setIsAdmin(false);
-          setActiveTab('overview');
-          // birthday confetti if today
-          const dob = t.dob ? new Date(t.dob) : null;
-          if (dob) {
-            const now = new Date();
-            if (dob.getMonth() === now.getMonth() && dob.getDate() === now.getDate()) setShowConfetti(true);
-          }
-        } else {
-          alert('Invalid AFID or password');
-        }
-      } catch (e) { console.error('login err', e); alert('Login failed'); }
-      setLoading(false);
-    };
-
-    // ---------- Update chapter progress in Firestore ----------
-    // write merges and handles null clearing when value === null
-    const updateChapterProgress = async (chapterId, field, value) => {
-      try {
-        // create update object
-        const updateObj = { [field]: value };
-        // if clearing completionDate explicitly, set null in document
-        // Firestore .set with { merge:true } accepts nulls
-        await db.collection('chapterProgress').doc(chapterId).set(updateObj, { merge: true });
-        // local optimistic UI update (makes UI feel immediate)
-        setChapterProgress(prev => {
-          const copied = { ...prev };
-          copied[chapterId] = { ...(copied[chapterId] || {}), ...updateObj };
-          return copied;
-        });
-      } catch (e) {
-        console.error('update error', e);
-        alert('Failed to update. Check connection and rules.');
-      }
-    };
-
-    const toggleExpand = (chapterId) => {
-      setExpandedChapters(prev => ({ ...prev, [chapterId]: !prev[chapterId] }));
-    };
-
-    // ---------- CSV export (Admin) ----------
-    const exportCSV = () => {
-      if (!analyticsData) return alert('No analytics data');
-      const rows = [['AFID','Name','School','Completed','Total','Percent']];
-      analyticsData.teacherArr.forEach(t => rows.push([t.afid, t.name, t.school, t.completed, t.total, t.percent + '%']));
-      const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `analytics_${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-    };
-
-    // ---------- UI Components ----------
-    if (!currentUser) {
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-            <div className="text-center mb-8">
-              <div className="text-6xl mb-4">📚</div>
-              <h1 className="text-3xl font-bold text-gray-800">Curriculum Tracker</h1>
-              <p className="text-gray-600 mt-2">Login with AFID and password</p>
-            </div>
-            <div className="space-y-4">
-              <input className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg" value={loginForm.afid} onChange={e=>setLoginForm({...loginForm, afid:e.target.value})} placeholder="AFID (e.g. AF248 or ADMIN)"/>
-              <input type="password" className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg" value={loginForm.password} onChange={e=>setLoginForm({...loginForm, password:e.target.value})} placeholder="Password"/>
-              <button onClick={handleLogin} disabled={loading} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-semibold">{loading ? 'Logging in...' : 'Login'}</button>
-            </div>
-            <div className="mt-6 text-xs text-gray-500 text-center">
-              <p>Admin AFID: <strong>ADMIN</strong> | Password: admin123 (for dev)</p>
-              <p>Teacher passwords stored in teachers collection (admin can change)</p>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Top-right birthday banner (if any today)
-    const todaysBirthdays = teachers.filter(t => {
-      try {
-        if (!t.dob) return false;
-        const d = new Date(t.dob); const now = new Date();
-        return d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
-      } catch { return false; }
-    });
-
-    // ---------- Teacher Pages ----------
-    const Overview = () => {
-      const subjects = Object.keys(curriculum || {});
-      const upcomingWeek = teachers.filter(t => {
-        if (!t.dob) return false;
-        const d = new Date(t.dob); const now = new Date();
-        const next = new Date(now.getFullYear(), d.getMonth(), d.getDate());
-        const diff = Math.ceil((next - now)/(1000*60*60*24));
-        return diff >=0 && diff <= 7;
-      });
-
-      return (
-        <div className="space-y-6">
-          <h2 className="text-3xl font-bold text-gray-800">📊 Overview</h2>
-          <div className="grid md:grid-cols-2 gap-6">
-            {[11,12].map(g => (
-              <div key={g} className="bg-white p-6 rounded-xl shadow">
-                <h3 className="text-xl font-semibold mb-4">Class {g}th</h3>
-                <div className="space-y-3">
-                  {subjects.map(s => {
-                    const chapters = (curriculum[s] && curriculum[s][g]) || [];
-                    const completedCount = chapters.filter(ch => (chapterProgress[ch.id]?.completed === 'Yes' && chapterProgress[ch.id]?.testConducted === 'Yes')).length;
-                    const percentage = chapters.length ? Math.round((completedCount / chapters.length) * 100) : 0;
-                    return (
-                      <div key={s} className="p-3 border rounded">
-                        <div className="flex justify-between"><div className="font-medium">{s}</div><div className="font-bold">{percentage}%</div></div>
-                        <div className="h-3 bg-gray-200 rounded mt-2"><div className="h-3 rounded bg-green-500" style={{ width: `${percentage}%` }}></div></div>
-                        <div className="text-sm text-gray-500 mt-1">{completedCount} / {chapters.length} chapters completed (test done)</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-
-            <div className="bg-white p-6 rounded-xl shadow">
-              <h3 className="text-xl font-semibold">Upcoming birthdays (week)</h3>
-              <div className="mt-3 space-y-2">
-                {upcomingWeek.length ? upcomingWeek.map(t => <div key={t.afid} className="flex justify-between"><div>{t.name} ({t.afid})</div><div className="text-sm text-gray-500">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>) : <div className="text-gray-500">No birthdays this week</div>}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-    const Chapters = () => {
-      const [selectedGrade, setSelectedGrade] = useState(11);
-      const subj = currentUser.subject;
-      const chapters = (curriculum[subj] && curriculum[subj][selectedGrade]) || [];
-
-      return (
-        <div className="space-y-6">
-          <h2 className="text-3xl font-bold">📘 Chapters - {subj}</h2>
-          <div className="flex gap-3 mb-4">
-            <button onClick={()=>setSelectedGrade(11)} className={`px-4 py-2 rounded ${selectedGrade===11 ? 'bg-purple-600 text-white' : 'bg-white'}`}>Class 11th</button>
-            <button onClick={()=>setSelectedGrade(12)} className={`px-4 py-2 rounded ${selectedGrade===12 ? 'bg-purple-600 text-white' : 'bg-white'}`}>Class 12th</button>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {chapters.map(ch => {
-              const prog = chapterProgress[ch.id] || {};
-              const status = computeChapterStatus(ch, prog);
-              // color classes
-              const colorClass = status.key === 'delayed' ? 'bg-red-50 border-red-400' : status.key === 'partial' || status.key === 'partial-topics' ? 'bg-orange-50 border-orange-400' : (['ontrack','ahead','completed'].includes(status.key) ? 'bg-green-50 border-green-400' : 'bg-white border-gray-200');
-
-              const completedTopics = prog.completedTopics || [];
-
-              return (
-                <div key={ch.id} className={`rounded-xl border-2 ${colorClass} p-5 shadow`}>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-lg font-semibold">{ch.name}</h3>
-                      <div className="text-sm text-gray-600 mt-1">Topics: <span className="font-semibold">{completedTopics.length}/{(ch.topics||[]).length}</span></div>
-                      <div className="text-sm text-gray-600">Target: <span className="font-semibold">{ch.targetDate || '—'}</span></div>
-                    </div>
-                    <div className="text-sm text-gray-600 font-medium">{status.label}</div>
-                  </div>
-
-                  <hr className="my-3" />
-
-                  <div className="space-y-3">
-                    {/* Test conducted selector */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Chapter Test Conducted?</label>
-                      <select value={prog.testConducted || 'No'} onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value)} className="w-full border px-3 py-2 rounded mt-1">
-                        <option>No</option><option>Yes</option>
-                      </select>
-                    </div>
-
-                    {/* Completed select */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Chapter Completed?</label>
-                      <select value={prog.completed || 'No'} onChange={e => {
-                        const val = e.target.value;
-                        // if changed to No => clear completionDate
-                        if (val === 'No') {
-                          updateChapterProgress(ch.id, 'completed', 'No');
-                          updateChapterProgress(ch.id, 'completionDate', null);
-                        } else {
-                          // set completed = Yes and completionDate to today (but the UI status will show partial if test not conducted)
-                          updateChapterProgress(ch.id, 'completed', 'Yes');
-                          const todayStr = new Date().toISOString().split('T')[0];
-                          updateChapterProgress(ch.id, 'completionDate', todayStr);
-                          // show confetti only if test conducted is Yes (full completion)
-                          const after = chapterProgress[ch.id] && chapterProgress[ch.id].testConducted === 'Yes';
-                          if (after || (chapterProgress[ch.id] && chapterProgress[ch.id].testConducted === 'Yes')) setShowConfetti(true);
+                    const handleSaveChapter = async () => {
+                        try {
+                            const updatedCurriculum = {
+                                ...curriculum[selectedSubject],
+                                [selectedGrade]: editingChapter
+                                    ? chapters.map(ch => ch.id === chapterForm.id ? chapterForm : ch)
+                                    : [...chapters, chapterForm]
+                            };
+                            await db.collection('curriculum').doc(selectedSubject).set(updatedCurriculum);
+                            setEditingChapter(null);
+                            setIsAddingChapter(false);
+                            setChapterForm({ id: '', name: '', topics: [], targetDate: '' });
+                            alert('Chapter saved successfully!');
+                        } catch (error) {
+                            alert('Error saving chapter');
                         }
-                      }} className="w-full border px-3 py-2 rounded mt-1">
-                        <option>No</option><option>Yes</option>
-                      </select>
-                      <div className="text-xs text-gray-500 mt-1">Note: If test is not conducted, marking Completed will show as <span className="font-semibold">Partially completed</span>.</div>
-                    </div>
+                    };
 
-                    {/* Method */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Method</label>
-                      <select value={prog.method || 'Online'} onChange={e => updateChapterProgress(ch.id, 'method', e.target.value)} className="w-full border px-3 py-2 rounded mt-1">
-                        <option>Online</option><option>Offline</option>
-                      </select>
-                    </div>
+                    const handleDeleteChapter = async (chapterId) => {
+                        if (confirm('Delete this chapter?')) {
+                            try {
+                                const updatedCurriculum = {
+                                    ...curriculum[selectedSubject],
+                                    [selectedGrade]: chapters.filter(ch => ch.id !== chapterId)
+                                };
+                                await db.collection('curriculum').doc(selectedSubject).set(updatedCurriculum);
+                                alert('Chapter deleted!');
+                            } catch (error) {
+                                alert('Error deleting chapter');
+                            }
+                        }
+                    };
 
-                    { (chapterProgress[ch.id] && chapterProgress[ch.id].method === 'Offline') && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Notes (Why offline?)</label>
-                        <textarea value={chapterProgress[ch.id].notes || ''} onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value)} className="w-full border px-3 py-2 rounded mt-1" rows="2" placeholder="Reason for offline teaching..." />
-                      </div>
-                    )}
+                    const addTopic = () => {
+                        if (newTopic.trim()) {
+                            setChapterForm({ ...chapterForm, topics: [...chapterForm.topics, newTopic.trim()] });
+                            setNewTopic('');
+                        }
+                    };
 
-                    {/* Expand/minimize topics manually - changed from <details> */}
-                    <div>
-                      <div className="flex justify-between items-center">
-                        <div className="font-semibold text-sm text-purple-700">Topics ({completedTopics.length}/{(ch.topics||[]).length})</div>
-                        <button onClick={() => toggleExpand(ch.id)} className="text-sm text-gray-600 underline">{expandedChapters[ch.id] ? 'Minimize' : 'Expand'}</button>
-                      </div>
+                    const removeTopic = (index) => {
+                        setChapterForm({ ...chapterForm, topics: chapterForm.topics.filter((_, i) => i !== index) });
+                    };
 
-                      { expandedChapters[ch.id] && (
-                        <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
-                          { (ch.topics || []).map((t, idx) => {
-                            const checked = (chapterProgress[ch.id] && (chapterProgress[ch.id].completedTopics || []).includes(t));
-                            return (
-                              <label key={idx} className="flex items-center gap-2 p-2 rounded hover:bg-purple-50 cursor-pointer">
-                                <input type="checkbox" checked={checked} onChange={e => {
-                                  const prev = (chapterProgress[ch.id] && chapterProgress[ch.id].completedTopics) || [];
-                                  const updated = e.target.checked ? [...prev, t] : prev.filter(x => x !== t);
-                                  updateChapterProgress(ch.id, 'completedTopics', updated);
-                                  // DO NOT auto-collapse - panel remains open (user requested)
-                                }} className="w-4 h-4" />
-                                <span className={checked ? 'line-through text-gray-500' : ''}>{t}</span>
-                              </label>
-                            );
-                          })}
+                    return (
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-3xl font-bold text-gray-800">📚 Manage Curriculum</h2>
+                                <button
+                                    onClick={() => {
+                                        setIsAddingChapter(true);
+                                        setChapterForm({ id: `${selectedSubject.charAt(0)}${selectedGrade}-${Date.now()}`, name: '', topics: [], targetDate: '' });
+                                    }}
+                                    className="bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-600"
+                                >
+                                    ➕ Add New Chapter
+                                </button>
+                            </div>
+
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <div className="flex gap-4 mb-6">
+                                    <select
+                                        value={selectedSubject}
+                                        onChange={(e) => setSelectedSubject(e.target.value)}
+                                        className="px-4 py-2 border rounded-lg"
+                                    >
+                                        <option>Physics</option>
+                                        <option>Chemistry</option>
+                                        <option>Maths</option>
+                                        <option>Biology</option>
+                                    </select>
+                                    <select
+                                        value={selectedGrade}
+                                        onChange={(e) => setSelectedGrade(Number(e.target.value))}
+                                        className="px-4 py-2 border rounded-lg"
+                                    >
+                                        <option value={11}>Class 11th</option>
+                                        <option value={12}>Class 12th</option>
+                                    </select>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {chapters.map((chapter) => (
+                                        <div key={chapter.id} className="border rounded-lg p-4">
+                                            <div className="flex justify-between items-start">
+                                                <div className="flex-1">
+                                                    <h4 className="font-bold text-lg">{chapter.name}</h4>
+                                                    <p className="text-sm text-gray-600 mt-1">Target Date: {chapter.targetDate}</p>
+                                                    <p className="text-sm text-gray-600">Topics: {chapter.topics.join(', ')}</p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingChapter(chapter.id);
+                                                            setChapterForm(chapter);
+                                                        }}
+                                                        className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteChapter(chapter.id)}
+                                                        className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {(isAddingChapter || editingChapter) && (
+                                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                                    <div className="bg-white rounded-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                                        <h3 className="text-2xl font-bold mb-6">{isAddingChapter ? 'Add Chapter' : 'Edit Chapter'}</h3>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1">Chapter Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={chapterForm.name}
+                                                    onChange={(e) => setChapterForm({ ...chapterForm, name: e.target.value })}
+                                                    className="w-full px-3 py-2 border rounded-lg"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1">Target Completion Date</label>
+                                                <input
+                                                    type="date"
+                                                    value={chapterForm.targetDate}
+                                                    onChange={(e) => setChapterForm({ ...chapterForm, targetDate: e.target.value })}
+                                                    className="w-full px-3 py-2 border rounded-lg"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1">Topics</label>
+                                                <div className="flex gap-2 mb-2">
+                                                    <input
+                                                        type="text"
+                                                        value={newTopic}
+                                                        onChange={(e) => setNewTopic(e.target.value)}
+                                                        onKeyPress={(e) => e.key === 'Enter' && addTopic()}
+                                                        placeholder="Enter topic name"
+                                                        className="flex-1 px-3 py-2 border rounded-lg"
+                                                    />
+                                                    <button onClick={addTopic} className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600">
+                                                        Add
+                                                    </button>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {chapterForm.topics.map((topic, idx) => (
+                                                        <div key={idx} className="flex justify-between items-center bg-gray-50 p-2 rounded">
+                                                            <span>{topic}</span>
+                                                            <button onClick={() => removeTopic(idx)} className="text-red-500 hover:text-red-700">
+                                                                ✕
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-4 mt-6">
+                                            <button onClick={handleSaveChapter} className="flex-1 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600">
+                                                Save
+                                            </button>
+                                            <button 
+                                                onClick={() => { setIsAddingChapter(false); setEditingChapter(null); }}
+                                                className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                      )}
+                    );
+                };
+
+                const AnalyticsDashboard = () => {
+                    const allSubjects = ['Physics', 'Chemistry', 'Maths', 'Biology'];
+                    
+                    const teacherPerformance = teachers.map(teacher => {
+                        let totalChapters = 0;
+                        let completedChapters = 0;
+                        let delayedChapters = 0;
+
+                        [11, 12].forEach(grade => {
+                            const chapters = curriculum[teacher.subject]?.[grade] || [];
+                            totalChapters += chapters.length;
+                            chapters.forEach(ch => {
+                                const progress = chapterProgress[ch.id];
+                                if (progress?.completed === 'Yes') {
+                                    completedChapters++;
+                                } else if (new Date() > new Date(ch.targetDate)) {
+                                    delayedChapters++;
+                                }
+                            });
+                        });
+
+                        const percentage = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
+                        return { 
+                            ...teacher, 
+                            totalChapters, 
+                            completedChapters, 
+                            delayedChapters, 
+                            percentage,
+                            status: percentage >= 75 ? 'excellent' : percentage >= 50 ? 'good' : percentage >= 25 ? 'fair' : 'poor'
+                        };
+                    });
+
+                    const schoolPerformance = [...new Set(teachers.map(t => t.school))].map(school => {
+                        const schoolTeachers = teacherPerformance.filter(t => t.school === school);
+                        const avgPercentage = schoolTeachers.length > 0 
+                            ? Math.round(schoolTeachers.reduce((sum, t) => sum + t.percentage, 0) / schoolTeachers.length)
+                            : 0;
+                        return {
+                            school,
+                            avgPercentage,
+                            status: avgPercentage >= 75 ? 'On Track' : avgPercentage >= 50 ? 'Monitor' : 'Lagging'
+                        };
+                    });
+
+                    const subjectData = allSubjects.map(subject => {
+                        let total = 0;
+                        let completed = 0;
+                        [11, 12].forEach(grade => {
+                            const chapters = curriculum[subject]?.[grade] || [];
+                            total += chapters.length;
+                            chapters.forEach(ch => {
+                                if (chapterProgress[ch.id]?.completed === 'Yes') completed++;
+                            });
+                        });
+                        return { subject, completed, remaining: total - completed, total };
+                    });
+
+                    return (
+                        <div className="space-y-6">
+                            <h2 className="text-3xl font-bold text-gray-800">📊 Analytics Dashboard</h2>
+
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div className="bg-gradient-to-br from-purple-500 to-purple-700 text-white rounded-xl p-6">
+                                    <div className="text-4xl mb-2">👥</div>
+                                    <div className="text-3xl font-bold">{teachers.length}</div>
+                                    <div className="text-purple-100 text-sm">Total Teachers</div>
+                                </div>
+                                <div className="bg-gradient-to-br from-blue-500 to-blue-700 text-white rounded-xl p-6">
+                                    <div className="text-4xl mb-2">✅</div>
+                                    <div className="text-3xl font-bold">
+                                        {Object.values(chapterProgress).filter(p => p.completed === 'Yes').length}
+                                    </div>
+                                    <div className="text-blue-100 text-sm">Chapters Completed</div>
+                                </div>
+                                <div className="bg-gradient-to-br from-orange-500 to-orange-700 text-white rounded-xl p-6">
+                                    <div className="text-4xl mb-2">⏳</div>
+                                    <div className="text-3xl font-bold">
+                                        {teacherPerformance.reduce((sum, t) => sum + t.delayedChapters, 0)}
+                                    </div>
+                                    <div className="text-orange-100 text-sm">Delayed Chapters</div>
+                                </div>
+                                <div className="bg-gradient-to-br from-green-500 to-green-700 text-white rounded-xl p-6">
+                                    <div className="text-4xl mb-2">🎯</div>
+                                    <div className="text-3xl font-bold">
+                                        {Math.round(teacherPerformance.reduce((sum, t) => sum + t.percentage, 0) / teacherPerformance.length)}%
+                                    </div>
+                                    <div className="text-green-100 text-sm">Avg Completion</div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="bg-white rounded-xl shadow-lg p-6">
+                                    <h3 className="text-xl font-bold mb-4">Subject-wise Progress</h3>
+                                    <div className="space-y-4">
+                                        {subjectData.map((data, idx) => {
+                                            const colors = ['bg-purple-500', 'bg-blue-500', 'bg-orange-500', 'bg-green-500'];
+                                            const percentage = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
+                                            return (
+                                                <div key={idx}>
+                                                    <div className="flex justify-between mb-1">
+                                                        <span className="font-medium">{data.subject}</span>
+                                                        <span className="font-bold">{percentage}%</span>
+                                                    </div>
+                                                    <div className="w-full bg-gray-200 rounded-full h-3">
+                                                        <div className={`h-3 rounded-full ${colors[idx]}`} style={{ width: `${percentage}%` }}></div>
+                                                    </div>
+                                                    <p className="text-xs text-gray-600 mt-1">{data.completed}/{data.total} chapters</p>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-xl shadow-lg p-6">
+                                    <h3 className="text-xl font-bold mb-4">School Performance</h3>
+                                    <div className="space-y-3">
+                                        {schoolPerformance.map((school, idx) => (
+                                            <div key={idx} className={`p-3 rounded-lg ${
+                                                school.status === 'On Track' ? 'bg-green-100 border-l-4 border-green-500' :
+                                                school.status === 'Monitor' ? 'bg-yellow-100 border-l-4 border-yellow-500' :
+                                                'bg-red-100 border-l-4 border-red-500'
+                                            }`}>
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <span className="font-medium">{school.school}</span>
+                                                        <span className={`ml-2 text-xs px-2 py-1 rounded ${
+                                                            school.status === 'On Track' ? 'bg-green-200 text-green-800' :
+                                                            school.status === 'Monitor' ? 'bg-yellow-200 text-yellow-800' :
+                                                            'bg-red-200 text-red-800'
+                                                        }`}>
+                                                            {school.status}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-2xl font-bold">{school.avgPercentage}%</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <h3 className="text-xl font-bold mb-4">Teacher Performance</h3>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b-2 bg-gray-50">
+                                                <th className="text-left p-3">Teacher</th>
+                                                <th className="text-left p-3">Subject</th>
+                                                <th className="text-left p-3">School</th>
+                                                <th className="text-left p-3">Completed</th>
+                                                <th className="text-left p-3">Delayed</th>
+                                                <th className="text-left p-3">Progress</th>
+                                                <th className="text-left p-3">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {teacherPerformance.sort((a, b) => b.percentage - a.percentage).map((teacher, idx) => (
+                                                <tr key={idx} className="border-b hover:bg-gray-50">
+                                                    <td className="p-3 font-medium">{teacher.name}</td>
+                                                    <td className="p-3">{teacher.subject}</td>
+                                                    <td className="p-3 text-sm">{teacher.school}</td>
+                                                    <td className="p-3 text-green-600 font-semibold">{teacher.completedChapters}/{teacher.totalChapters}</td>
+                                                    <td className="p-3 text-red-600 font-semibold">{teacher.delayedChapters}</td>
+                                                    <td className="p-3">
+                                                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                                                            <div 
+                                                                className={`h-2 rounded-full ${
+                                                                    teacher.status === 'excellent' ? 'bg-green-500' :
+                                                                    teacher.status === 'good' ? 'bg-blue-500' :
+                                                                    teacher.status === 'fair' ? 'bg-yellow-500' : 'bg-red-500'
+                                                                }`}
+                                                                style={{ width: `${teacher.percentage}%` }}
+                                                            ></div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                                                            teacher.status === 'excellent' ? 'bg-green-100 text-green-800' :
+                                                            teacher.status === 'good' ? 'bg-blue-100 text-blue-800' :
+                                                            teacher.status === 'fair' ? 'bg-yellow-100 text-yellow-800' :
+                                                            'bg-red-100 text-red-800'
+                                                        }`}>
+                                                            {teacher.percentage}%
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                };
+
+                // Teacher Components
+                const OverviewPage = () => {
+                    const subjects = ['Physics', 'Chemistry', 'Maths', 'Biology'];
+                    const today = new Date();
+                    const isBirthday = today.getMonth() === new Date(currentUser.dob).getMonth() && 
+                                      today.getDate() === new Date(currentUser.dob).getDate();
+                    
+                    return (
+                        <div className="space-y-6">
+                            <h2 className="text-3xl font-bold text-gray-800">📊 Overview Dashboard</h2>
+                            
+                            {showConfetti && <Confetti />}
+                            
+                            {isBirthday && (
+                                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-6 rounded-xl shadow-lg text-center animate-bounce">
+                                    <div className="text-5xl mb-3">🎂🎉</div>
+                                    <h3 className="text-2xl font-bold">Happy Birthday {currentUser.name}!</h3>
+                                    <p className="mt-2">Wishing you a wonderful year ahead filled with success!</p>
+                                </div>
+                            )}
+
+                            {birthdaysThisWeek.length > 0 && (
+                                <div className="bg-gradient-to-r from-pink-100 to-purple-100 border-2 border-pink-300 rounded-xl p-6">
+                                    <h3 className="text-xl font-bold text-gray-800 mb-4">🎂 Upcoming Birthdays This Week</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {birthdaysThisWeek.map((teacher, idx) => (
+                                            <div key={idx} className="bg-white rounded-lg p-3 shadow">
+                                                <span className="font-semibold">{teacher.name}</span>
+                                                <span className="text-sm text-gray-600 ml-2">
+                                                    {teacher.daysUntil === 0 ? '🎉 Today!' : `in ${teacher.daysUntil} day${teacher.daysUntil > 1 ? 's' : ''}`}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {[11, 12].map(grade => (
+                                    <div key={grade} className="bg-white rounded-xl shadow-lg p-6">
+                                        <h3 className="text-2xl font-bold text-gray-800 mb-4">Class {grade}th</h3>
+                                        <div className="space-y-4">
+                                            {subjects.map(subject => {
+                                                const completion = getSubjectCompletion(subject, grade);
+                                                const status = completion.percentage === 100 ? 'completed' : 
+                                                              completion.percentage >= 50 ? 'on-track' : 'delayed';
+                                                const bgColor = status === 'completed' ? 'bg-green-100 border-green-500' :
+                                                               status === 'delayed' ? 'bg-red-100 border-red-500' :
+                                                               'bg-white border-gray-300';
+                                                
+                                                return (
+                                                    <div key={subject} className={`p-4 rounded-lg border-2 ${bgColor}`}>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="font-semibold text-gray-800">{subject}</span>
+                                                            <span className="text-2xl font-bold text-gray-700">{completion.percentage}%</span>
+                                                        </div>
+                                                        <div className="mt-2 bg-gray-200 rounded-full h-3">
+                                                            <div 
+                                                                className={`h-3 rounded-full transition-all duration-500 ${status === 'completed' ? 'bg-green-500' : status === 'delayed' ? 'bg-red-500' : 'bg-blue-500'}`}
+                                                                style={{ width: `${completion.percentage}%` }}
+                                                            ></div>
+                                                        </div>
+                                                        <p className="text-sm text-gray-600 mt-2">
+                                                            {completion.completed} / {completion.total} chapters completed
+                                                        </p>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                };
+
+                const ChaptersPage = () => {
+                    const [selectedGrade, setSelectedGrade] = useState(11);
+                    const chapters = curriculum[currentUser.subject]?.[selectedGrade] || [];
+
+                    return (
+                        <div className="space-y-6">
+                            <h2 className="text-3xl font-bold text-gray-800">📖 Chapters - {currentUser.subject}</h2>
+
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={() => setSelectedGrade(11)}
+                                    className={`px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105 ${
+                                        selectedGrade === 11 
+                                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg' 
+                                        : 'bg-white text-gray-700 hover:bg-gray-50 shadow'
+                                    }`}
+                                >
+                                    Class 11th
+                                </button>
+                                <button
+                                    onClick={() => setSelectedGrade(12)}
+                                    className={`px-6 py-3 rounded-lg font-semibold transition-all transform hover:scale-105 ${
+                                        selectedGrade === 12 
+                                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg' 
+                                        : 'bg-white text-gray-700 hover:bg-gray-50 shadow'
+                                    }`}
+                                >
+                                    Class 12th
+                                </button>
+                            </div>
+
+                            {showConfetti && <Confetti />}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {chapters.map(chapter => {
+                                    const progress = chapterProgress[chapter.id] || {};
+                                    const completedTopics = progress.completedTopics || [];
+                                    const chapterStatus = getChapterStatus(chapter, progress);
+
+                                    return (
+                                        <div 
+                                            key={chapter.id} 
+                                            className={`rounded-xl border-2 ${chapterStatus.color} p-6 shadow-lg transition-all duration-300 hover:shadow-2xl hover:scale-105 transform`}
+                                            style={{ perspective: '1000px' }}
+                                        >
+                                            <div className="flex justify-between items-start mb-3">
+                                                <h3 className="font-bold text-lg text-gray-800 flex-1">{chapter.name}</h3>
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                                    chapterStatus.status === 'ahead' ? 'bg-green-200 text-green-800' :
+                                                    chapterStatus.status === 'completed' ? 'bg-green-200 text-green-800' :
+                                                    chapterStatus.status === 'delayed' ? 'bg-red-200 text-red-800' :
+                                                    'bg-blue-200 text-blue-800'
+                                                }`}>
+                                                    {chapterStatus.label}
+                                                </span>
+                                            </div>
+                                            
+                                            <div className="space-y-3 text-sm">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Topics:</span>
+                                                    <span className="font-semibold">{completedTopics.length}/{chapter.topics.length}</span>
+                                                </div>
+                                                
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Target Date:</span>
+                                                    <span className="font-semibold">{chapter.targetDate}</span>
+                                                </div>
+
+                                                {progress.completionDate && (
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-600">Completed:</span>
+                                                        <span className="font-semibold text-green-600">{progress.completionDate}</span>
+                                                    </div>
+                                                )}
+
+                                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                                    <div 
+                                                        className="h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
+                                                        style={{ width: `${(completedTopics.length / chapter.topics.length) * 100}%` }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+
+                                            <hr className="my-4 border-gray-200" />
+
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Chapter Completed?</label>
+                                                    <select
+                                                        value={progress.completed || 'No'}
+                                                        onChange={(e) => {
+                                                            updateChapterProgress(chapter.id, 'completed', e.target.value);
+                                                            if (e.target.value === 'Yes') {
+                                                                updateChapterProgress(chapter.id, 'completionDate', new Date().toISOString().split('T')[0]);
+                                                            }
+                                                        }}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition"
+                                                    >
+                                                        <option>No</option>
+                                                        <option>Yes</option>
+                                                    </select>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Method</label>
+                                                    <select
+                                                        value={progress.method || 'Online'}
+                                                        onChange={(e) => updateChapterProgress(chapter.id, 'method', e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition"
+                                                    >
+                                                        <option>Online</option>
+                                                        <option>Offline</option>
+                                                    </select>
+                                                </div>
+
+                                                {progress.method === 'Offline' && (
+                                                    <div className="animate-slideDown">
+                                                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Why offline?)</label>
+                                                        <textarea
+                                                            value={progress.notes || ''}
+                                                            onChange={(e) => updateChapterProgress(chapter.id, 'notes', e.target.value)}
+                                                            placeholder="Reason for offline teaching..."
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition"
+                                                            rows="2"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <hr className="my-4 border-gray-200" />
+
+                                            <details className="cursor-pointer group">
+                                                <summary className="font-semibold text-purple-600 hover:text-purple-800 select-none list-none flex justify-between items-center">
+                                                    <span>View Topics ({completedTopics.length}/{chapter.topics.length})</span>
+                                                    <span className="transform group-open:rotate-180 transition-transform">▼</span>
+                                                </summary>
+                                                <div className="mt-3 space-y-2 max-h-48 overflow-y-auto animate-slideDown">
+                                                    {chapter.topics.map((topic, idx) => (
+                                                        <label 
+                                                            key={idx} 
+                                                            className="flex items-center gap-2 text-sm hover:bg-purple-50 p-2 rounded cursor-pointer transition-all transform hover:scale-102"
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={completedTopics.includes(topic)}
+                                                                onChange={(e) => {
+                                                                    const updated = e.target.checked 
+                                                                        ? [...completedTopics, topic]
+                                                                        : completedTopics.filter(t => t !== topic);
+                                                                    updateChapterProgress(chapter.id, 'completedTopics', updated);
+                                                                }}
+                                                                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                                                            />
+                                                            <span className={completedTopics.includes(topic) ? 'line-through text-gray-500' : ''}>
+                                                                {topic}
+                                                            </span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </details>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                };
+
+                const ProfilePage = () => {
+                    return (
+                        <div className="space-y-6">
+                            <h2 className="text-3xl font-bold text-gray-800">👤 Teacher Profile</h2>
+
+                            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl shadow-lg p-8 transform hover:scale-102 transition-all">
+                                <div className="flex flex-col md:flex-row gap-8">
+                                    <div className="flex-shrink-0">
+                                        <div className="w-32 h-32 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-2xl transform hover:rotate-12 transition-transform">
+                                            {currentUser.name.charAt(0)}
+                                        </div>
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {[
+                                                { label: 'Name', value: currentUser.name },
+                                                { label: 'AFID', value: currentUser.afid },
+                                                { label: 'Subject', value: currentUser.subject },
+                                                { label: 'Centre Name', value: currentUser.school },
+                                                { label: 'Date of Birth', value: new Date(currentUser.dob).toLocaleDateString() },
+                                                { label: 'Email', value: currentUser.email },
+                                                { label: 'Phone Number', value: currentUser.phone }
+                                            ].map((item, idx) => (
+                                                <div key={idx} className="bg-white rounded-lg p-4 shadow hover:shadow-lg transition-all transform hover:scale-105">
+                                                    <label className="text-sm text-gray-600 font-medium">{item.label}</label>
+                                                    <div className="text-lg font-semibold text-gray-800 mt-1">{item.value}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                };
+
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-red-50">
+                        <nav className="bg-white shadow-lg sticky top-0 z-40 backdrop-blur-sm bg-opacity-95">
+                            <div className="max-w-7xl mx-auto px-4 py-4">
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-3xl animate-bounce">📚</div>
+                                        <div>
+                                            <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                                                Curriculum Tracker
+                                            </h1>
+                                            <p className="text-sm text-gray-600">{currentUser.name} - {currentUser.school || 'Administrator'}</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={handleLogout}
+                                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition shadow-md hover:shadow-lg transform hover:scale-105"
+                                    >
+                                        🚪 Logout
+                                    </button>
+                                </div>
+                            </div>
+                        </nav>
+
+                        <div className="max-w-7xl mx-auto px-4 py-6">
+                            {isAdmin ? (
+                                <div>
+                                    <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
+                                        {[
+                                            { id: 'teachers', label: 'Teachers', icon: '👥' },
+                                            { id: 'curriculum', label: 'Curriculum', icon: '📚' },
+                                            { id: 'analytics', label: 'Analytics', icon: '📊' }
+                                        ].map(tab => (
+                                            <button
+                                                key={tab.id}
+                                                onClick={() => setActiveTab(tab.id)}
+                                                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all whitespace-nowrap transform hover:scale-105 ${
+                                                    activeTab === tab.id
+                                                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
+                                                        : 'bg-white text-gray-700 hover:bg-gray-50 shadow'
+                                                }`}
+                                            >
+                                                <span className="text-xl">{tab.icon}</span>
+                                                {tab.label}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {activeTab === 'teachers' && <TeachersManagement />}
+                                    {activeTab === 'curriculum' && <CurriculumManagement />}
+                                    {activeTab === 'analytics' && <AnalyticsDashboard />}
+                                </div>
+                            ) : (
+                                <div>
+                                    <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
+                                        {[
+                                            { id: 'overview', label: 'Overview', icon: '🏠' },
+                                            { id: 'chapters', label: 'Chapters', icon: '📖' },
+                                            { id: 'profile', label: 'Profile', icon: '👤' }
+                                        ].map(tab => (
+                                            <button
+                                                key={tab.id}
+                                                onClick={() => setActiveTab(tab.id)}
+                                                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all whitespace-nowrap transform hover:scale-105 ${
+                                                    activeTab === tab.id
+                                                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
+                                                        : 'bg-white text-gray-700 hover:bg-gray-50 shadow'
+                                                }`}
+                                            >
+                                                <span className="text-xl">{tab.icon}</span>
+                                                {tab.label}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {activeTab === 'overview' && <OverviewPage />}
+                                    {activeTab === 'chapters' && <ChaptersPage />}
+                                    {activeTab === 'profile' && <ProfilePage />}
+                                </div>
+                            )}
+                        </div>
+
+                        <footer className="bg-white mt-12 py-6 shadow-inner">
+                            <div className="max-w-7xl mx-auto px-4 text-center">
+                                <p className="text-gray-600 text-sm">© 2025 Curriculum Tracker | Made with ❤️ for Teachers</p>
+                            </div>
+                        </footer>
                     </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    };
+                );
+            }
 
-    // ---------- Profile ----------
-    const Profile = () => (
-      <div className="space-y-6">
-        <h2 className="text-3xl font-bold">👤 Profile</h2>
-        <div className="bg-white p-6 rounded shadow">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div><div className="text-sm text-gray-500">Name</div><div className="font-semibold">{currentUser.name}</div></div>
-            <div><div className="text-sm text-gray-500">AFID</div><div className="font-semibold">{currentUser.afid}</div></div>
-            <div><div className="text-sm text-gray-500">Subject</div><div className="font-semibold">{currentUser.subject}</div></div>
-            <div><div className="text-sm text-gray-500">School</div><div className="font-semibold">{currentUser.school}</div></div>
-            <div><div className="text-sm text-gray-500">DOB</div><div className="font-semibold">{currentUser.dob ? new Date(currentUser.dob).toLocaleDateString() : '—'}</div></div>
-            <div><div className="text-sm text-gray-500">Email</div><div className="font-semibold">{currentUser.email || '—'}</div></div>
-          </div>
-        </div>
-      </div>
-    );
-
-    // ---------- Admin Pages ----------
-    const AdminTeachers = () => {
-      const [editing, setEditing] = useState(null);
-      const [form, setForm] = useState({ afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' });
-
-      useEffect(() => { setForm(editing || { afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' }); }, [editing]);
-
-      const saveTeacher = async () => {
-        if (!form.afid) return alert('AFID required');
-        try {
-          const id = form.afid.toUpperCase();
-          await db.collection('teachers').doc(id).set({ ...form, afid: id }, { merge: true });
-          alert('Saved');
-          setEditing(null);
-        } catch (e) { console.error(e); alert('Save failed'); }
-      };
-
-      const deleteTeacher = async (afid) => {
-        if (!confirm('Delete teacher ' + afid + '?')) return;
-        try { await db.collection('teachers').doc(afid).delete(); } catch (e) { console.error(e); alert('Delete failed'); }
-      };
-
-      return (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-2xl font-bold">Teacher Directory</h3>
-            <button onClick={() => setEditing({})} className="px-4 py-2 bg-blue-600 text-white rounded">+ Add</button>
-          </div>
-
-          <div className="bg-white p-4 rounded shadow overflow-x-auto">
-            <table className="w-full">
-              <thead><tr className="bg-gray-50"><th className="p-2">AFID</th><th className="p-2">Name</th><th className="p-2">Subject</th><th className="p-2">School</th><th className="p-2">Phone</th><th className="p-2">Actions</th></tr></thead>
-              <tbody>{teachers.map(t => (<tr key={t.afid} className="border-b"><td className="p-2 font-mono">{t.afid}</td><td className="p-2">{t.name}</td><td className="p-2">{t.subject}</td><td className="p-2">{t.school}</td><td className="p-2">{t.phone}</td><td className="p-2"><div className="flex gap-2"><button onClick={()=>setEditing(t)} className="px-2 py-1 bg-yellow-300 rounded">Edit</button><button onClick={()=>deleteTeacher(t.afid)} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button></div></td></tr>))}</tbody>
-            </table>
-          </div>
-
-          { editing !== null && (
-            <div className="bg-white p-4 rounded shadow">
-              <h4 className="font-semibold mb-3">{editing.afid ? 'Edit' : 'Add'} Teacher</h4>
-              <div className="grid md:grid-cols-2 gap-2">
-                {['afid','name','subject','school','dob','email','phone','password'].map(k => (
-                  <div key={k}><label className="text-sm text-gray-600">{k.toUpperCase()}</label><input value={form[k]||''} onChange={e=>setForm({...form, [k]: e.target.value})} className="w-full border px-2 py-2 rounded" /></div>
-                ))}
-              </div>
-              <div className="mt-3 space-x-2">
-                <button onClick={saveTeacher} className="px-4 py-2 bg-green-600 text-white rounded">Save</button>
-                <button onClick={()=>setEditing(null)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    };
-
-    const AdminCurriculum = () => {
-      const [subject, setSubject] = useState(Object.keys(curriculum || {})[0] || 'Physics');
-      const [grade, setGrade] = useState(11);
-      const [newChapter, setNewChapter] = useState({ name:'', topics:'', targetDate:'' });
-
-      useEffect(()=>{ if (!subject) setSubject(Object.keys(curriculum||{})[0]||'Physics'); }, [curriculum]);
-
-      const addChapter = async () => {
-        if (!newChapter.name) return alert('Name required');
-        const newCurr = { ...(curriculum || {}) };
-        newCurr[subject] = newCurr[subject] || {};
-        newCurr[subject][grade] = newCurr[subject][grade] || [];
-        const id = subject.charAt(0).toUpperCase() + grade + '-' + (newCurr[subject][grade].length + 1) + '-' + Date.now().toString().slice(-4);
-        newCurr[subject][grade].push({ id, name:newChapter.name, topics: newChapter.topics ? newChapter.topics.split(',').map(x=>x.trim()) : [], targetDate: newChapter.targetDate || '' });
-        try { await db.collection('meta').doc('curriculum').set(newCurr); setNewChapter({ name:'', topics:'', targetDate:'' }); alert('Added'); }
-        catch(e){ console.error(e); alert('Failed'); }
-      };
-
-      const updateChapter = async (subject, grade, id, updates) => {
-        try {
-          const newCurr = { ...(curriculum || {}) };
-          const arr = newCurr[subject][grade];
-          const idx = arr.findIndex(x=>x.id===id);
-          if (idx===-1) return;
-          arr[idx] = { ...arr[idx], ...updates };
-          await db.collection('meta').doc('curriculum').set(newCurr);
-        } catch(e){ console.error(e); alert('Failed update'); }
-      };
-
-      const deleteChapter = async (subject, grade, id) => {
-        if (!confirm('Delete chapter?')) return;
-        try {
-          const newCurr = { ...(curriculum || {}) };
-          newCurr[subject][grade] = newCurr[subject][grade].filter(x => x.id !== id);
-          await db.collection('meta').doc('curriculum').set(newCurr);
-        } catch(e) { console.error(e); alert('Delete failed'); }
-      };
-
-      return (
-        <div className="space-y-6">
-          <div className="flex gap-3 items-center">
-            <h3 className="text-2xl font-bold">Curriculum</h3>
-            <select value={subject} onChange={e=>setSubject(e.target.value)} className="border px-2 py-1 rounded">
-              {Object.keys(curriculum || {}).map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={grade} onChange={e=>setGrade(Number(e.target.value))} className="border px-2 py-1 rounded">
-              <option value={11}>Class 11</option><option value={12}>Class 12</option>
-            </select>
-          </div>
-
-          <div className="bg-white p-4 rounded shadow">
-            <h4 className="font-semibold mb-2">Add Chapter</h4>
-            <div className="grid md:grid-cols-3 gap-2">
-              <input placeholder="Name" value={newChapter.name} onChange={e=>setNewChapter({...newChapter, name:e.target.value})} className="border px-2 py-2 rounded" />
-              <input placeholder="Topics (comma separated)" value={newChapter.topics} onChange={e=>setNewChapter({...newChapter, topics:e.target.value})} className="border px-2 py-2 rounded" />
-              <input type="date" value={newChapter.targetDate} onChange={e=>setNewChapter({...newChapter, targetDate:e.target.value})} className="border px-2 py-2 rounded" />
-            </div>
-            <div className="mt-3"><button onClick={addChapter} className="px-4 py-2 bg-blue-600 text-white rounded">Add</button></div>
-          </div>
-
-          <div className="space-y-3">
-            { (curriculum[subject] && (curriculum[subject][grade] || []).map(ch => {
-              const prog = chapterProgress[ch.id] || {};
-              const status = computeChapterStatus(ch, prog);
-              return (
-                <div key={ch.id} className={`p-3 rounded border ${status.key === 'delayed' ? 'border-red-300' : status.key==='partial'||status.key==='partial-topics' ? 'border-orange-300' : 'border-gray-200'} bg-white flex justify-between items-center`}>
-                  <div>
-                    <div className="font-semibold">{ch.name} <span className="text-xs text-gray-500">({ch.id})</span></div>
-                    <div className="text-sm text-gray-600">{(ch.topics||[]).join(', ')}</div>
-                    <div className="text-sm mt-1">Target: {ch.targetDate || '—'}</div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <div className="text-sm">{status.label}</div>
-                    <div className="flex gap-2">
-                      <button onClick={() => { const n = prompt('Edit name', ch.name); if (n !== null) updateChapter(subject, grade, ch.id, { name:n }); }} className="px-2 py-1 bg-yellow-300 rounded">Edit</button>
-                      <button onClick={() => { const t = prompt('Set target (YYYY-MM-DD)', ch.targetDate || ''); if (t !== null) updateChapter(subject, grade, ch.id, { targetDate: t }); }} className="px-2 py-1 bg-blue-300 rounded">Set Target</button>
-                      <button onClick={() => { const ts = prompt('Edit topics (comma separated)', (ch.topics||[]).join(', ')); if (ts !== null) updateChapter(subject, grade, ch.id, { topics: ts.split(',').map(x=>x.trim()) }); }} className="px-2 py-1 bg-green-300 rounded">Edit Topics</button>
-                      <button onClick={() => deleteChapter(subject, grade, ch.id)} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })) || <div className="text-gray-500">No chapters</div> }
-          </div>
-        </div>
-      );
-    };
-
-    const AdminAnalytics = () => {
-      const data = analyticsData;
-      return (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-2xl font-bold">Analytics</h3>
-            <div className="flex gap-2">
-              <button onClick={exportCSV} className="px-3 py-2 bg-green-600 text-white rounded">Export CSV</button>
-              <button onClick={() => { alert('Analytics refreshes automatically'); }} className="px-3 py-2 bg-gray-200 rounded">Refresh</button>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="bg-white rounded p-4 shadow text-center">
-              <div className="text-sm text-gray-500">Total Chapters</div>
-              <div className="text-3xl font-bold mt-2">{data ? data.totalChapters : '—'}</div>
-              <div className="text-sm text-gray-500 mt-1">Completed: {data ? data.totalCompleted : '—'}</div>
-            </div>
-
-            <div className="bg-white rounded p-4 shadow text-center">
-              <div className="text-sm text-gray-500">Syllabus Completion</div>
-              { data ? <canvas ref={pieRef} width="220" height="160"></canvas> : <div className="text-gray-500 mt-6">No data</div> }
-            </div>
-
-            <div className="bg-white rounded p-4 shadow">
-              <div className="text-sm text-gray-500">Top Teachers</div>
-              <div className="mt-3 space-y-2">
-                { data && data.teacherArr.length ? data.teacherArr.slice(0,6).map(t => (<div key={t.afid} className="flex justify-between"><div><div className="font-medium">{t.name} <span className="text-xs text-gray-500">({t.afid})</span></div><div className="text-xs text-gray-500">{t.school}</div></div><div className="text-sm font-bold">{t.percent}%</div></div>)) : <div className="text-gray-500">No data</div> }
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded p-4 shadow">
-            <div className="text-sm text-gray-500 mb-2">Teacher Completion % (Top 8)</div>
-            { data ? <canvas ref={barRef} width="800" height="300"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">No data</div> }
-          </div>
-
-          <div className="bg-white rounded p-4 shadow">
-            <div className="text-sm text-gray-500 mb-2">School - On Track vs Delayed</div>
-            { data ? <canvas ref={schoolRef} width="800" height="240"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">No data</div> }
-          </div>
-
-          <div className="bg-white rounded p-4 shadow">
-            <div className="text-sm text-gray-500 mb-2">Detailed Teacher Table</div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50"><tr><th className="p-2">AFID</th><th className="p-2">Name</th><th className="p-2">School</th><th className="p-2">Completed</th><th className="p-2">Total</th><th className="p-2">Percent</th></tr></thead>
-                <tbody>
-                  { data && data.teacherArr.length ? data.teacherArr.map(t => (<tr key={t.afid} className="border-b"><td className="p-2 font-mono">{t.afid}</td><td className="p-2">{t.name}</td><td className="p-2">{t.school}</td><td className="p-2">{t.completed}</td><td className="p-2">{t.total}</td><td className="p-2">{t.percent}%</td></tr>)) : <tr><td colSpan="6" className="p-4 text-gray-500">No data</td></tr> }
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      );
-    };
-
-    const AdminDashboard = () => {
-      const [tab, setTab] = useState('overview');
-      return (
-        <div className="space-y-6">
-          <h2 className="text-3xl font-bold">📈 Admin Dashboard</h2>
-          <div className="flex gap-2 mb-4">
-            {['overview','teachers','curriculum','analytics','settings'].map(t => <button key={t} onClick={()=>setTab(t)} className={`px-3 py-2 rounded ${tab===t ? 'bg-purple-600 text-white' : 'bg-white'}`}>{t.charAt(0).toUpperCase()+t.slice(1)}</button>)}
-          </div>
-
-          { tab === 'overview' && (
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="bg-white p-4 rounded shadow text-center">
-                <div className="text-sm text-gray-500">Total Teachers</div>
-                <div className="text-2xl font-bold mt-2">{teachers.length}</div>
-              </div>
-              <div className="bg-white p-4 rounded shadow text-center">
-                <div className="text-sm text-gray-500">Total Schools</div>
-                <div className="text-2xl font-bold mt-2">{[...new Set(teachers.map(t=>t.school))].length}</div>
-              </div>
-              <div className="bg-white p-4 rounded shadow text-center">
-                <div className="text-sm text-gray-500">Chapters Tracked</div>
-                <div className="text-2xl font-bold mt-2">{Object.keys(chapterProgress || {}).length}</div>
-              </div>
-            </div>
-          )}
-
-          { tab === 'teachers' && <AdminTeachers /> }
-          { tab === 'curriculum' && <AdminCurriculum /> }
-          { tab === 'analytics' && <AdminAnalytics /> }
-          { tab === 'settings' && <div className="bg-white p-4 rounded shadow">Admin settings here</div> }
-        </div>
-      );
-    };
-
-    // ---------- Main layout ----------
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-red-50">
-        <nav className="bg-white shadow sticky top-0 z-40">
-          <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <div className="text-2xl">📚</div>
-              <div>
-                <div className="font-bold text-lg">Curriculum Tracker</div>
-                <div className="text-sm text-gray-500">{isAdmin ? 'Administrator' : `${currentUser.name} - ${currentUser.school}`}</div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button onClick={() => { setCurrentUser(null); setIsAdmin(false); setActiveTab('overview'); }} className="px-3 py-2 bg-red-500 text-white rounded">Logout</button>
-            </div>
-          </div>
-        </nav>
-
-        {/* Birthday banner top-right */}
-        { todaysBirthdays.length > 0 && (
-          <div className="fixed top-6 right-6 z-50">
-            <div className="bg-white border p-3 rounded shadow flex items-center gap-3">
-              <div className="text-2xl">🎂</div>
-              <div>
-                <div className="font-semibold">Happy Birthday!</div>
-                <div className="text-sm text-gray-600">{todaysBirthdays.map(t => t.name).join(', ')}</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="mb-6">
-            { !isAdmin && (
-              <div className="flex gap-2">
-                <button onClick={()=>setActiveTab('overview')} className={`px-4 py-2 rounded ${activeTab==='overview' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 'bg-white'}`}>🏠 Overview</button>
-                <button onClick={()=>setActiveTab('chapters')} className={`px-4 py-2 rounded ${activeTab==='chapters' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 'bg-white'}`}>📖 Chapters</button>
-                <button onClick={()=>setActiveTab('profile')} className={`px-4 py-2 rounded ${activeTab==='profile' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 'bg-white'}`}>👤 Profile</button>
-              </div>
-            )}
-
-            { isAdmin && (
-              <div className="flex gap-2">
-                <button onClick={() => setActiveTab('admin')} className="px-4 py-2 rounded bg-white">Admin Dashboard</button>
-              </div>
-            )}
-          </div>
-
-          <div>
-            { isAdmin && <AdminDashboard /> }
-            { !isAdmin && activeTab === 'overview' && <Overview /> }
-            { !isAdmin && activeTab === 'chapters' && <Chapters /> }
-            { !isAdmin && activeTab === 'profile' && <Profile /> }
-          </div>
-        </div>
-
-        <footer className="bg-white mt-12 py-6">
-          <div className="max-w-7xl mx-auto px-4 text-center text-gray-600">© 2025 Curriculum Tracker</div>
-        </footer>
-
-        { showConfetti && <Confetti /> }
-      </div>
-    );
-  }
-
-  // small Confetti component (kept simple)
-  function Confetti(){
-    return (
-      <div className="fixed inset-0 pointer-events-none z-50">
-        {Array.from({length:36}).map((_,i) => <div key={i} style={{ position:'absolute', left:`${Math.random()*100}%`, top:`${Math.random()*8}%`, animation:'fall 3s linear forwards', animationDelay:`${Math.random()*2}s`, fontSize:18 }}>{i%2? '🎉':'✨'}</div>)}
-      </div>
-    );
-  }
-
-  ReactDOM.render(<App />, document.getElementById('root'));
-  </script>
+            ReactDOM.render(<App />, document.getElementById('root'));
+        }
+    </script>
+    
+    <style>
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .animate-slideDown {
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        .hover\:scale-102:hover {
+            transform: scale(1.02);
+        }
+        
+        /* Smooth transitions for all elements */
+        * {
+            transition: all 0.2s ease-in-out;
+        }
+    </style>
 </body>
 </html>
+                <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curriculum Tracker</title>
+    
+    <!-- Firebase Scripts -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- React Scripts -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Recharts for Analytics -->
+    <script src="https://unpkg.com/recharts@2.5.0/dist/Recharts.js"></script>
+    
+    <style>
+        @keyframes fall { to { transform: translateY(100vh); opacity: 0; } }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        window.addEventListener('load', function() {
+            if (typeof firebase === 'undefined') {
+                document.getElementById('root').innerHTML = `
+                    <div style="display: flex; justify-content: center; align-items: center; height: 100vh; background: linear-gradient(to bottom right, #9333ea, #ec4899); font-family: sans-serif;">
+                        <div style="background: white; padding: 2rem; border-radius: 1rem; text-align: center; max-width: 400px;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">⚠️</div>
+                            <h2 style="font-size: 1.5rem; font-weight: bold; color: #1f2937; margin-bottom: 1rem;">Firebase Loading Error</h2>
+                            <p style="color: #6b7280; margin-bottom: 1rem;">Unable to load Firebase. Please refresh the page.</p>
+                            <button onclick="location.reload()" style="background: #9333ea; color: white; padding: 0.5rem 1.5rem; border-radius: 0.5rem; border: none; cursor: pointer; font-weight: 600;">Reload Page</button>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // ============================================
+            // REPLACE WITH YOUR FIREBASE CONFIG
+            // ============================================
+            const firebaseConfig = {
+                apiKey: "YOUR_API_KEY",
+                authDomain: "YOUR_PROJECT.firebaseapp.com",
+                projectId: "YOUR_PROJECT_ID",
+                storageBucket: "YOUR_PROJECT.appspot.com",
+                messagingSenderId: "YOUR_SENDER_ID",
+                appId: "YOUR_APP_ID"
+            };
+
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+            const db = firebase.firestore();
+
+            startApp(db);
+        });
+
+        function startApp(db) {
+            const { useState, useEffect } = React;
+
+            // Initial Data
+            const INITIAL_TEACHERS = [
+                { afid: 'AF248', name: 'Vivek Bansal', subject: 'Physics', school: 'CoE Barwani', dob: '1990-03-15', email: 'vivek@example.com', phone: '9876543210', password: 'pass123' },
+                { afid: 'AF464', name: 'Sandeep Dixit', subject: 'Chemistry', school: 'CoE Barwani', dob: '1988-07-22', email: 'sandeep@example.com', phone: '9876543211', password: 'pass123' },
+                { afid: 'AF853', name: 'Dayanand Kumar', subject: 'Maths', school: 'CoE Barwani', dob: '1992-11-08', email: 'dayanand@example.com', phone: '9876543212', password: 'pass123' },
+                { afid: 'AF709', name: 'Arpith Singh', subject: 'Maths', school: 'CoE Cuttak', dob: '1991-05-19', email: 'arpith@example.com', phone: '9876543213', password: 'pass123' },
+                { afid: 'AF832', name: 'Shubham Patil', subject: 'Chemistry', school: 'CoE Cuttak', dob: '1989-09-30', email: 'shubham@example.com', phone: '9876543214', password: 'pass123' },
+                { afid: 'AF459', name: 'Ekanta Sahu', subject: 'Physics', school: 'CoE Cuttak', dob: '1993-12-25', email: 'ekanta@example.com', phone: '9876543215', password: 'pass123' },
+                { afid: 'AF790', name: 'Anubhav Sundaria', subject: 'Maths', school: 'CoE Bundi', dob: '1990-02-14', email: 'anubhav@example.com', phone: '9876543216', password: 'pass123' },
+                { afid: 'AF789', name: 'Md. Saif Farooqui', subject: 'Chemistry', school: 'CoE Bundi', dob: '1991-08-07', email: 'saif@example.com', phone: '9876543217', password: 'pass123' },
+                { afid: 'AF788', name: 'Ajay Kumar', subject: 'Physics', school: 'CoE Bundi', dob: '1988-10-20', email: 'ajay@example.com', phone: '9876543218', password: 'pass123' },
+                { afid: 'AF529', name: 'Shivam Gupta', subject: 'Physics', school: 'EMRS Bhopal', dob: '1992-01-11', email: 'shivam@example.com', phone: '9876543219', password: 'pass123' },
+                { afid: 'AF840', name: 'Darshil Jain', subject: 'Chemistry', school: 'EMRS Bhopal', dob: '1990-06-28', email: 'darshil@example.com', phone: '9876543220', password: 'pass123' },
+                { afid: 'AF834', name: 'Sunil Parmar', subject: 'Maths', school: 'EMRS Bhopal', dob: '1989-04-17', email: 'sunil@example.com', phone: '9876543221', password: 'pass123' },
+                { afid: 'AF843', name: 'Yogesh Kumar', subject: 'Physics', school: 'CoE Mahisagar', dob: '1991-10-03', email: 'yogesh@example.com', phone: '9876543222', password: 'pass123' },
+                { afid: 'AF635', name: 'Archana', subject: 'Chemistry', school: 'CoE Mahisagar', dob: '1993-10-15', email: 'archana@example.com', phone: '9876543223', password: 'pass123' },
+                { afid: 'AF842', name: 'Monu Kumar', subject: 'Maths', school: 'CoE Mahisagar', dob: '1990-12-09', email: 'monu@example.com', phone: '9876543224', password: 'pass123' },
+                { afid: 'AF804', name: 'Nidhi', subject: 'Physics', school: 'JNV Bharuch', dob: '1992-03-21', email: 'nidhi@example.com', phone: '9876543225', password: 'pass123' },
+                { afid: 'AF800', name: 'Madan Singh', subject: 'Chemistry', school: 'JNV Bharuch', dob: '1988-08-14', email: 'madan@example.com', phone: '9876543226', password: 'pass123' },
+                { afid: 'AF786', name: 'Jyoti', subject: 'Maths', school: 'JNV Bharuch', dob: '1991-11-26', email: 'jyoti@example.com', phone: '9876543227', password: 'pass123' },
+                { afid: 'AF723', name: 'Ranjesh', subject: 'Biology', school: 'JNV Bharuch', dob: '1990-05-05', email: 'ranjesh@example.com', phone: '9876543228', password: 'pass123' }
+            ];
+
+            function App() {
+                const [currentUser, setCurrentUser] = useState(null);
+                const [isAdmin, setIsAdmin] = useState(false);
+                const [activeTab, setActiveTab] = useState('overview');
+                const [loginForm, setLoginForm] = useState({ afid: '', password: '' });
+                const [showConfetti, setShowConfetti] = useState(false);
+                const [confettiMessage, setConfettiMessage] = useState('');
+                const [chapterProgress, setChapterProgress] = useState({});
+                const [teachers, setTeachers] = useState([]);
+                const [curriculum, setCurriculum] = useState({});
+                const [loading, setLoading] = useState(false);
+                const [birthdaysThisWeek, setBirthdaysThisWeek] = useState([]);
+                const [birthdaysThisMonth, setBirthdaysThisMonth] = useState([]);
+
+                useEffect(() => {
+                    const initDB = async () => {
+                        try {
+                            const initDoc = await db.collection('system').doc('initialized').get();
+                            if (!initDoc.exists) {
+                                for (const teacher of INITIAL_TEACHERS) {
+                                    await db.collection('teachers').doc(teacher.afid).set(teacher);
+                                }
+                                await db.collection('system').doc('initialized').set({ date: new Date().toISOString() });
+                            }
+                        } catch (error) {
+                            console.error('Init error:', error);
+                        }
+                    };
+
+                    const loadTeachers = () => {
+                        db.collection('teachers').onSnapshot((snapshot) => {
+                            const teachersList = snapshot.docs.map(doc => ({ ...doc.data() }));
+                            setTeachers(teachersList);
+                            checkUpcomingBirthdays(teachersList);
+                        });
+                    };
+
+                    const loadCurriculum = () => {
+                        db.collection('curriculum').onSnapshot((snapshot) => {
+                            const curriculumData = {};
+                            snapshot.docs.forEach(doc => {
+                                curriculumData[doc.id] = doc.data();
+                            });
+                            setCurriculum(curriculumData);
+                        });
+                    };
+
+                    const loadProgress = () => {
+                        db.collection('chapterProgress').onSnapshot((snapshot) => {
+                            const progress = {};
+                            snapshot.docs.forEach(doc => {
+                                progress[doc.id] = doc.data();
+                            });
+                            setChapterProgress(progress);
+                        });
+                    };
+
+                    initDB();
+                    loadTeachers();
+                    loadCurriculum();
+                    loadProgress();
+                }, []);
+
+                useEffect(() => {
+                    if (showConfetti) {
+                        setTimeout(() => setShowConfetti(false), 4000);
+                    }
+                }, [showConfetti]);
+
+                const checkUpcomingBirthdays = (teachersList) => {
+                    const today = new Date();
+                    const thisWeek = [];
+                    const thisMonth = [];
+
+                    teachersList.forEach(teacher => {
+                        const dob = new Date(teacher.dob);
+                        const thisYearBirthday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
+                        const daysUntil = Math.ceil((thisYearBirthday - today) / (1000 * 60 * 60 * 24));
+
+                        if (daysUntil >= 0 && daysUntil <= 7) {
+                            thisWeek.push({ ...teacher, daysUntil });
+                        }
+                        if (today.getMonth() === dob.getMonth()) {
+                            thisMonth.push(teacher);
+                        }
+                    });
+
+                    setBirthdaysThisWeek(thisWeek);
+                    setBirthdaysThisMonth(thisMonth);
+                };
+
+                const handleLogin = async () => {
+                    setLoading(true);
+                    setTimeout(async () => {
+                        if (loginForm.afid === 'ADMIN' && loginForm.password === 'admin123') {
+                            setIsAdmin(true);
+                            setCurrentUser({ name: 'Administrator', afid: 'ADMIN' });
+                            setActiveTab('teachers');
+                        } else {
+                            const teacher = teachers.find(t => t.afid === loginForm.afid && t.password === loginForm.password);
+                            if (teacher) {
+                                setCurrentUser(teacher);
+                                setIsAdmin(false);
+                                setActiveTab('overview');
+                                checkBirthday(teacher);
+                            } else {
+                                alert('Invalid AFID or Password');
+                            }
+                        }
+                        setLoading(false);
+                    }, 500);
+                };
+
+                const checkBirthday = (teacher) => {
+                    const today = new Date();
+                    const dob = new Date(teacher.dob);
+                    if (today.getMonth() === dob.getMonth() && today.getDate() === dob.getDate()) {
+                        setConfettiMessage(`Happy Birthday ${teacher.name}! 🎂`);
+                        setShowConfetti(true);
+                    }
+                };
+
+                const updateChapterProgress = async (chapterId, field, value) => {
+                    try {
+                        const currentProgress = chapterProgress[chapterId] || {};
+                        const updatedProgress = {
+                            ...currentProgress,
+                            [field]: value,
+                            lastUpdated: new Date().toISOString(),
+                            updatedBy: currentUser.afid
+                        };
+                        await db.collection('chapterProgress').doc(chapterId).set(updatedProgress, { merge: true });
+                        
+                        if (field === 'completed' && value === 'Yes') {
+                            setConfettiMessage('Chapter Completed! Great Work! 🎉');
+                            setShowConfetti(true);
+                        }
+                    } catch (error) {
+                        console.error('Update error:', error);
+                        alert('Failed to save. Check your internet connection.');
+                    }
+                };
+
+                const getChapterStatus = (chapter, progress) => {
+                    const today = new Date();
+                    const targetDate = new Date(chapter.targetDate);
+                    const completionDate = progress.completionDate ? new Date(progress.completionDate) : null;
+
+                    if (progress.completed === 'Yes') {
+                        if (completionDate && completionDate <= targetDate) {
+                            return { status: 'ahead', label: 'Ahead - Good Job!', color: 'bg-green-50 border-green-500' };
+                        }
+                        return { status: 'completed', label: 'On Track', color: 'bg-green-50 border-green-500' };
+                    }
+
+                    if (today > targetDate) {
+                        return { status: 'delayed', label: 'Delayed', color: 'bg-red-50 border-red-500' };
+                    }
+
+                    return { status: 'pending', label: 'In Progress', color: 'bg-white border-gray-300' };
+                };
+
+                const getSubjectCompletion = (subject, grade) => {
+                    const chapters = curriculum[subject]?.[grade] || [];
+                    const completed = chapters.filter(ch => chapterProgress[ch.id]?.completed === 'Yes').length;
+                    return { 
+                        total: chapters.length, 
+                        completed, 
+                        percentage: chapters.length ? Math.round((completed / chapters.length) * 100) : 0 
+                    };
+                };
+
+                const handleLogout = () => {
+                    setCurrentUser(null);
+                    setIsAdmin(false);
+                    setActiveTab('overview');
+                    setLoginForm({ afid: '', password: '' });
+                };
+
+                if (!currentUser) {
+                    return (
+                        <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+                                <div className="text-center mb-8">
+                                    <div className="text-6xl mb-4">📚</div>
+                                    <h1 className="text-3xl font-bold text-gray-800">Curriculum Tracker</h1>
+                                    <p className="text-gray-600 mt-2">Track Your Teaching Journey</p>
+                                </div>
+                                <div className="space-y-4">
+                                    <input
+                                        type="text"
+                                        placeholder="Enter AFID"
+                                        value={loginForm.afid}
+                                        onChange={(e) => setLoginForm({ ...loginForm, afid: e.target.value.toUpperCase() })}
+                                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                                    />
+                                    <input
+                                        type="password"
+                                        placeholder="Enter Password"
+                                        value={loginForm.password}
+                                        onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                                        onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+                                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                                    />
+                                    <button
+                                        onClick={handleLogin}
+                                        disabled={loading}
+                                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg transform hover:scale-105 transition disabled:opacity-50"
+                                    >
+                                        {loading ? 'Logging in...' : 'Login'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                const Confetti = () => (
+                    <div className="fixed inset-0 pointer-events-none z-50">
+                        {[...Array(100)].map((_, i) => (
+                            <div
+                                key={i}
+                                className="absolute text-3xl"
+                                style={{
+                                    left: `${Math.random() * 100}%`,
+                                    top: `${-20 + Math.random() * 20}%`,
+                                    animation: `fall ${3 + Math.random() * 2}s linear forwards`,
+                                    animationDelay: `${Math.random() * 2}s`
+                                }}
+                            >
+                                {['🎉', '🎊', '🎈', '✨', '🌟'][Math.floor(Math.random() * 5)]}
+                            </div>
+                        ))}
+                        {confettiMessage && (
+                            <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-8 py-4 rounded-full shadow-2xl text-xl font-bold animate-bounce">
+                                {confettiMessage}
+                            </div>
+                        )}
+                    </div>
+                );
+
+                // Admin Components
+                const TeachersManagement = () => {
+                    const [editingTeacher, setEditingTeacher] = useState(null);
+                    const [isAdding, setIsAdding] = useState(false);
+                    const [formData, setFormData] = useState({
+                        afid: '', name: '', subject: '', school: '', dob: '', email: '', phone: '', password: 'pass123'
+                    });
+
+                    const handleSave = async () => {
+                        try {
+                            await db.collection('teachers').doc(formData.afid).set(formData);
+                            setEditingTeacher(null);
+                            setIsAdding(false);
+                            setFormData({ afid: '', name: '', subject: '', school: '', dob: '', email: '', phone: '', password: 'pass123' });
+                            alert('Teacher saved successfully!');
+                        } catch (error) {
+                            alert('Error saving teacher');
+                        }
+                    };
+
+                    const handleDelete = async (afid) => {
+                        if (confirm('Are you sure you want to delete this teacher?')) {
+                            try {
+                                await db.collection('teachers').doc(afid).delete();
+                                alert('Teacher deleted successfully!');
+                            } catch (error) {
+                                alert('Error deleting teacher');
+                            }
+                        }
+                    };
+
+                    return (
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-3xl font-bold text-gray-800">👥 Manage Teachers</h2>
+                                <button
+                                    onClick={() => {
+                                        setIsAdding(true);
+                                        setFormData({ afid: '', name: '', subject: '', school: '', dob: '', email: '', phone: '', password: 'pass123' });
+                                    }}
+                                    className="bg-green-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-600 transition shadow-lg"
+                                >
+                                    ➕ Add New Teacher
+                                    </button>
+                            </div>
+
+                            {(isAdding || editingTeacher) && (
+                                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                                    <div className="bg-white rounded-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                                        <h3 className="text-2xl font-bold mb-6">{isAdding ? 'Add New Teacher' : 'Edit Teacher'}</h3>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">AFID</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.afid}
+                                                    onChange={(e) => setFormData({ ...formData, afid: e.target.value.toUpperCase() })}
+                                                    disabled={!isAdding}
+                                                    className="w-full px-3 py-2 border rounded-lg"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.name}
+                                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                    className="w-full px-3 py-2 border rounded-lg"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                                                <select
+                                                    value={formData.subject}
+                                                    onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                                                    className="w-full px-3 py-2 border rounded-lg"
+                                                >
+                                                    <option value="">Select Subject</option>
+                                                    <option>Physics</option>
+                                                    <option>Chemistry</option>
+                                                    <option>Maths</option>
+                                                    <option>Biology</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">School</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.school}
+                                                    onChange={(e) => setFormData({ ...formData, school: e.target.value })}
+                                                    className="w-full px-3 py-2 border rounded-lg"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                                                <input
+                                                    type="date"
+                                                    value={formData.dob}
+                                                    onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                                                    className="w-full px-3 py-2 border rounded-lg"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                                <input
+                                                    type="email"
+                                                    value={formData.email}
+                                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                                    className="w-full px-3 py-2 border rounded-lg"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                                                <input
+                                                    type="tel"
+                                                    value={formData.phone}
+                                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                                    className="w-full px-3 py-2 border rounded-lg"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.password}
+                                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                                    className="w-full px-3 py-2 border rounded-lg"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-4 mt-6">
+                                            <button onClick={handleSave} className="flex-1 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600">
+                                                Save
+                                            </button>
+                                            <button 
+                                                onClick={() => { setIsAdding(false); setEditingTeacher(null); }}
+                                                className="flex-1 bg-gray-500 text-white py-3 rounded-lg font-semibold hover:bg-gray-600"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b-2 border-gray-200 bg-gray-50">
+                                                <th className="text-left p-3 font-semibold">AFID</th>
+                                                <th className="text-left p-3 font-semibold">Name</th>
+                                                <th className="text-left p-3 font-semibold">Subject</th>
+                                                <th className="text-left p-3 font-semibold">School</th>
+                                                <th className="text-left p-3 font-semibold">Contact</th>
+                                                <th className="text-left p-3 font-semibold">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {teachers.map((teacher) => (
+                                                <tr key={teacher.afid} className="border-b hover:bg-gray-50">
+                                                    <td className="p-3">{teacher.afid}</td>
+                                                    <td className="p-3 font-medium">{teacher.name}</td>
+                                                    <td className="p-3">{teacher.subject}</td>
+                                                    <td className="p-3">{teacher.school}</td>
+                                                    <td className="p-3 text-sm">{teacher.phone}</td>
+                                                    <td className="p-3">
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingTeacher(teacher.afid);
+                                                                    setFormData(teacher);
+                                                                }}
+                                                                className="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600"
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDelete(teacher.afid)}
+                                                                className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                };
+
+                const CurriculumManagement = () => {
+                    const [selectedSubject, setSelectedSubject] = useState('Physics');
+                    const [selectedGrade, setSelectedGrade] = useState(11);
+                    const [
