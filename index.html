@@ -21,39 +21,180 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    @keyframes fall { to { transform: translateY(120vh) rotate(20deg); opacity: 0; } }
     * { box-sizing: border-box; }
-    /* Flip card styles */
-    .flip-card { perspective: 1200px; }
-    .flip-card-inner { transition: transform 0.6s; transform-style: preserve-3d; position: relative; }
-    .flip-card.flip .flip-card-inner { transform: rotateY(180deg); }
-    .flip-card-front, .flip-card-back {
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-      position: absolute; inset: 0;
+    
+    /* Modern confetti animations */
+    @keyframes confetti-fall {
+      0% { transform: translateY(-100vh) rotate(0deg) scale(1); opacity: 1; }
+      50% { opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg) scale(0.5); opacity: 0; }
     }
-    .flip-card-back { transform: rotateY(180deg); }
-    /* small focus glow for selects and inputs */
-    input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 5px rgba(99,102,241,0.08); border-color: #6366F1; }
-    /* confetti defaults */
-    .confetti-piece { position: absolute; font-size: 18px; animation: fall 3s linear forwards; }
+    @keyframes confetti-swing {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-25px); }
+      75% { transform: translateX(25px); }
+    }
+    .confetti-piece {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      animation: confetti-fall 4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards, 
+                 confetti-swing 1.5s ease-in-out infinite;
+    }
+    
+    /* Smooth expand animation for topics */
+    .topics-container {
+      overflow: hidden;
+      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease;
+    }
+    .topics-collapsed {
+      max-height: 0 !important;
+      opacity: 0;
+    }
+    .topics-expanded {
+      max-height: 800px;
+      opacity: 1;
+    }
+    
+    /* Card hover effects with modern shadow */
+    .chapter-card {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+    .chapter-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      transition: left 0.5s;
+    }
+    .chapter-card:hover::before {
+      left: 100%;
+    }
+    .chapter-card:hover {
+      transform: translateY(-8px) scale(1.02);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
+    
+    /* Modern focus styles */
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.2);
+      border-color: #8B5CF6;
+      transition: all 0.2s;
+    }
+    
+    /* Pulse animation for status badges */
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      50% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+    }
+    .status-badge-ahead {
+      animation: pulse-glow 2s infinite;
+    }
+    
+    /* Smooth page transitions */
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Progress bar animation */
+    .progress-bar {
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    /* Gradient background animation */
+    @keyframes gradient-shift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .animated-gradient {
+      background-size: 200% 200%;
+      animation: gradient-shift 15s ease infinite;
+    }
+    
+    /* Sticky footer setup */
+    html, body { height: 100%; margin: 0; }
+    #root { display: flex; flex-direction: column; min-height: 100vh; }
+    .main-content { flex: 1 0 auto; }
+    footer { flex-shrink: 0; }
+    
+    /* Mobile responsive improvements */
+    @media (max-width: 768px) {
+      .chapter-card {
+        margin-bottom: 1rem;
+      }
+      .grid-responsive {
+        grid-template-columns: 1fr !important;
+      }
+    }
+    
+    /* Loading skeleton */
+    @keyframes skeleton-loading {
+      0% { background-position: -200px 0; }
+      100% { background-position: calc(200px + 100%) 0; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200px 100%;
+      animation: skeleton-loading 1.5s ease-in-out infinite;
+    }
+    
+    /* Button hover effects */
+    .btn-primary {
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(139, 92, 246, 0.3);
+    }
+    
+    /* Checkbox custom styling */
+    input[type="checkbox"] {
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border: 2px solid #8B5CF6;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    input[type="checkbox"]:checked {
+      background: #8B5CF6;
+      border-color: #8B5CF6;
+    }
+    input[type="checkbox"]:checked::after {
+      content: '✓';
+      position: absolute;
+      color: white;
+      font-size: 14px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-/* Curriculum Tracker - single file app
-   - Firebase Firestore read/write
-   - Admin CRUD (teachers, curriculum)
-   - Chapter target logic, confetti, birthdays
-   - Chart.js analytics
-   - CSS flip animations on chapter cards
-*/
+/* Modern Curriculum Tracker with improved UI/UX */
 
 const { useState, useEffect, useRef } = React;
 
-// --- === USE YOUR EXISTING FIREBASE PROJECT CONFIG BELOW (kept same) === ---
+// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",
   authDomain: "curriculum-dbb10.firebaseapp.com",
@@ -62,13 +203,12 @@ const firebaseConfig = {
   messagingSenderId: "706387632109",
   appId: "1:706387632109:web:06c78a304fdbdc12f391e4"
 };
-// -------------------------------------------------------------------------
 
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 function App() {
-  // global states
+  // Global states
   const [currentUser, setCurrentUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
@@ -82,35 +222,64 @@ function App() {
 
   // UI states
   const [expandedChapters, setExpandedChapters] = useState({});
-  const [flipState, setFlipState] = useState({}); // for card flips
   const [showConfetti, setShowConfetti] = useState(false);
 
   // Chart refs
   const pieRef = useRef(null), barRef = useRef(null), schoolRef = useRef(null);
   const charts = useRef({});
 
-  // seed data used only if DB not initialized
+  // Seed data
   const TEACHERS_SEED = [
     { afid:'AF248', name:'Vivek Bansal', subject:'Physics', school:'CoE Barwani', dob:'1990-03-15', email:'vivek@example.com', phone:'9876543210', password:'pass123' },
     { afid:'AF464', name:'Sandeep Dixit', subject:'Chemistry', school:'CoE Barwani', dob:'1988-07-22', email:'sandeep@example.com', phone:'9876543211', password:'pass123' },
     { afid:'AF853', name:'Dayanand Kumar', subject:'Maths', school:'CoE Barwani', dob:'1992-11-08', email:'dayanand@example.com', phone:'9876543212', password:'pass123' },
     { afid:'AF723', name:'Ranjesh', subject:'Biology', school:'JNV Bharuch', dob:'1990-05-05', email:'ranjesh@example.com', phone:'9876543228', password:'pass123' }
   ];
+  
   const CURRICULUM_SEED = {
-    Physics:{11:[{id:'P11-1', name:'Physical World', topics:['Units','Dimensions','Motion'], targetDate:'2025-11-15'}],12:[{id:'P12-1', name:'Electric Charges',topics:['Charge','Coulomb'], targetDate:'2025-12-15'}]},
-    Chemistry:{11:[{id:'C11-1', name:'Basic Concepts', topics:['Matter','Atoms'], targetDate:'2025-11-20'}],12:[{id:'C12-1', name:'Solutions', topics:['Concentration'], targetDate:'2025-12-05'}]},
-    Maths:{11:[{id:'M11-1', name:'Sets', topics:['Theory'], targetDate:'2025-11-25'}],12:[{id:'M12-1', name:'Functions', topics:['Types'], targetDate:'2025-12-10'}]},
-    Biology:{11:[{id:'B11-1', name:'Living World', topics:['Diversity'], targetDate:'2025-11-18'}],12:[{id:'B12-1', name:'Reproduction', topics:['Asexual'], targetDate:'2025-12-12'}]}
+    Physics:{
+      11:[
+        {id:'P11-1', name:'Unit & Dimension', topics:['Units','Dimensions','Errors','Measurements','Significant Figures'], targetDate:'2025-07-10'},
+        {id:'P11-2', name:'Motion in Straight Line', topics:['Distance','Displacement','Velocity','Acceleration','Equations of Motion'], targetDate:'2025-08-15'}
+      ],
+      12:[
+        {id:'P12-1', name:'Electric Charges',topics:['Charge','Coulomb Law','Electric Field','Gauss Law'], targetDate:'2025-12-15'}
+      ]
+    },
+    Chemistry:{
+      11:[
+        {id:'C11-1', name:'Basic Concepts', topics:['Matter','Atoms','Molecules','Mole Concept'], targetDate:'2025-11-20'}
+      ],
+      12:[
+        {id:'C12-1', name:'Solutions', topics:['Concentration','Molarity','Molality','Colligative Properties'], targetDate:'2025-12-05'}
+      ]
+    },
+    Maths:{
+      11:[
+        {id:'M11-1', name:'Sets', topics:['Set Theory','Operations','Venn Diagrams'], targetDate:'2025-11-25'},
+        {id:'M11-2', name:'Relations & Functions', topics:['Relations','Types of Functions','Domain & Range'], targetDate:'2025-12-20'}
+      ],
+      12:[
+        {id:'M12-1', name:'Functions', topics:['Types','Inverse','Composite'], targetDate:'2025-12-10'}
+      ]
+    },
+    Biology:{
+      11:[
+        {id:'B11-1', name:'Living World', topics:['Diversity','Classification','Nomenclature'], targetDate:'2025-11-18'}
+      ],
+      12:[
+        {id:'B12-1', name:'Reproduction', topics:['Asexual','Sexual','Human Reproduction'], targetDate:'2025-12-12'}
+      ]
+    }
   };
 
-  // ----- initialize, listeners, and seeding -----
+  // Initialize DB
   useEffect(() => {
     let unsubP, unsubT, unsubC;
     const init = async () => {
       try {
         const initDoc = await db.collection('system').doc('initialized').get();
         if (!initDoc.exists) {
-          // seed
           for (const t of TEACHERS_SEED) await db.collection('teachers').doc(t.afid).set(t);
           await db.collection('meta').doc('curriculum').set(CURRICULUM_SEED);
           await db.collection('system').doc('initialized').set({ date: new Date().toISOString() });
@@ -138,46 +307,49 @@ function App() {
     return () => { if (unsubP) unsubP(); if (unsubT) unsubT(); if (unsubC) unsubC(); };
   }, []);
 
-  // ----- helper: compute chapter status -----
+  // Compute chapter status
   function computeChapterStatus(chapter = {}, progress = {}) {
-    // handles targetDate, completed, testConducted, completedTopics
-    if (!chapter || !chapter.targetDate) return { label:'No target', key:'no-target', color:'bg-gray-100' };
+    if (!chapter || !chapter.targetDate) return { label:'No target', key:'no-target', color:'bg-gray-100', textColor:'text-gray-700' };
+    
     const target = new Date(chapter.targetDate);
     const today = new Date();
     const compDate = progress.completionDate ? new Date(progress.completionDate) : null;
     const topicsDone = (progress.completedTopics || []).length;
     const topicsTotal = (chapter.topics || []).length;
 
-    // If completed yes but test not conducted -> partial
-    if (progress.completed === 'Yes' && progress.testConducted !== 'Yes') {
-      // If target passed -> partial (but still delayed-like, show orange)
-      return { label:'Partially completed', key:'partial', color:'bg-orange-100' };
-    }
-
-    // Not completed
-    if (progress.completed !== 'Yes') {
-      // partial topics
-      if (topicsDone > 0 && topicsDone < topicsTotal) {
-        return { label:'Partially done', key:'partial-topics', color:'bg-orange-100' };
+    // Completed with test
+    if (progress.completed === 'Yes' && progress.testConducted === 'Yes') {
+      if (compDate && compDate < target) {
+        return { label:'Ahead — Excellent!', key:'ahead', color:'bg-gradient-to-r from-green-400 to-emerald-500', textColor:'text-white' };
       }
-      // not started and overdue
-      if (today > target) return { label:'Delayed', key:'delayed', color:'bg-red-100' };
-      return { label:'Pending', key:'pending', color:'bg-yellow-100' };
+      if (compDate && compDate > target) {
+        return { label:'Completed (Late)', key:'delayed', color:'bg-orange-100 border-orange-300', textColor:'text-orange-700' };
+      }
+      return { label:'Completed ✓', key:'completed', color:'bg-green-100 border-green-300', textColor:'text-green-700' };
     }
 
-    // If completed === 'Yes' AND test conducted === 'Yes'
-    if (compDate) {
-      if (compDate > target) return { label:'Delayed', key:'delayed', color:'bg-red-100' };
-      if (compDate.toDateString() === target.toDateString()) return { label:'On Track', key:'ontrack', color:'bg-green-100' };
-      if (compDate < target) return { label:'Ahead — Good job', key:'ahead', color:'bg-green-100' };
-      return { label:'Completed', key:'completed', color:'bg-green-100' };
+    // Completed but no test
+    if (progress.completed === 'Yes' && progress.testConducted !== 'Yes') {
+      return { label:'Partially Completed', key:'partial', color:'bg-yellow-100 border-yellow-300', textColor:'text-yellow-700' };
     }
 
-    // fallback
-    return { label:'Completed', key:'completed', color:'bg-green-100' };
+    // In progress with some topics done
+    if (topicsDone > 0 && topicsDone < topicsTotal) {
+      if (today > target) {
+        return { label:'Delayed (In Progress)', key:'delayed-progress', color:'bg-red-100 border-red-300', textColor:'text-red-700' };
+      }
+      return { label:`In Progress (${topicsDone}/${topicsTotal})`, key:'in-progress', color:'bg-blue-100 border-blue-300', textColor:'text-blue-700' };
+    }
+
+    // Not started
+    if (today > target) {
+      return { label:'Delayed', key:'delayed', color:'bg-red-100 border-red-300', textColor:'text-red-700' };
+    }
+    
+    return { label:'Pending', key:'pending', color:'bg-gray-100 border-gray-300', textColor:'text-gray-700' };
   }
 
-  // ----- analytics compute -----
+  // Analytics compute
   useEffect(() => {
     if (!curriculum) return;
     const schoolStatus = {};
@@ -190,18 +362,19 @@ function App() {
           totalChapters++;
           const prog = chapterProgress[ch.id] || {};
           const st = computeChapterStatus(ch, prog);
-          if (st.key === 'completed') totalCompleted++;
+          if (st.key === 'completed' || st.key === 'ahead') totalCompleted++;
+          
           teachers.forEach(t => {
             if (t.subject === subject) {
               teacherMap[t.afid] = teacherMap[t.afid] || { afid: t.afid, name: t.name, school: t.school, completed:0, total:0 };
               teacherMap[t.afid].total++;
-              if (st.key === 'completed') teacherMap[t.afid].completed++;
+              if (st.key === 'completed' || st.key === 'ahead') teacherMap[t.afid].completed++;
+              
+              schoolStatus[t.school] = schoolStatus[t.school] || { delayed:0, ontrack:0, total:0 };
+              schoolStatus[t.school].total++;
+              if (st.key.includes('delayed')) schoolStatus[t.school].delayed++;
+              else if (['ontrack','ahead','completed'].includes(st.key)) schoolStatus[t.school].ontrack++;
             }
-            // school accum
-            schoolStatus[t.school] = schoolStatus[t.school] || { delayed:0, ontrack:0, total:0 };
-            schoolStatus[t.school].total++;
-            if (st.key === 'delayed') schoolStatus[t.school].delayed++;
-            else if (['ontrack','ahead','completed'].includes(st.key)) schoolStatus[t.school].ontrack++;
           });
         });
       });
@@ -212,36 +385,59 @@ function App() {
     setAnalyticsData({ totalChapters, totalCompleted, teacherArr, schoolStatus });
   }, [curriculum, chapterProgress, teachers]);
 
-  // ----- Chart rendering -----
+  // Charts
   useEffect(() => {
     if (!analyticsData) {
       destroyAllCharts();
       return;
     }
-    // Doughnut
+    
     const completed = analyticsData.totalCompleted || 0;
     const pending = Math.max(0, (analyticsData.totalChapters || 0) - completed);
+    
     if (pieRef.current) {
       if (charts.current?.pie) charts.current.pie.destroy();
       charts.current.pie = new Chart(pieRef.current.getContext('2d'), {
         type:'doughnut',
-        data:{ labels:['Completed','Pending'], datasets:[{ data:[completed,pending], backgroundColor:['#10B981','#F97316'] }] },
-        options:{ plugins:{ legend:{ position:'bottom' } }, cutout: '65%' }
+        data:{ 
+          labels:['Completed','Pending'], 
+          datasets:[{ 
+            data:[completed,pending], 
+            backgroundColor:['#10B981','#F59E0B'],
+            borderWidth: 0
+          }] 
+        },
+        options:{ 
+          plugins:{ legend:{ position:'bottom' } }, 
+          cutout: '70%'
+        }
       });
     }
 
-    // Bar (teacher)
     if (barRef.current) {
       if (charts.current.bar) charts.current.bar.destroy();
       const top = analyticsData.teacherArr.slice(0,8);
       charts.current.bar = new Chart(barRef.current.getContext('2d'), {
         type:'bar',
-        data:{ labels: top.map(t => `${t.name} (${t.afid})`), datasets:[{ label:'Completion %', data: top.map(t=>t.percent), backgroundColor:'#6366F1' }] },
-        options:{ indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{ min:0, max:100, ticks:{ callback:v => v + '%' } } } }
+        data:{ 
+          labels: top.map(t => `${t.name}`), 
+          datasets:[{ 
+            label:'Completion %', 
+            data: top.map(t=>t.percent), 
+            backgroundColor:'#8B5CF6',
+            borderRadius: 8
+          }] 
+        },
+        options:{ 
+          indexAxis:'y', 
+          plugins:{ legend:{ display:false } }, 
+          scales:{ 
+            x:{ min:0, max:100, ticks:{ callback:v => v + '%' } } 
+          } 
+        }
       });
     }
 
-    // School stacked
     if (schoolRef.current) {
       if (charts.current.school) charts.current.school.destroy();
       const schools = Object.keys(analyticsData.schoolStatus || {});
@@ -249,22 +445,33 @@ function App() {
       const delayed = schools.map(s => analyticsData.schoolStatus[s].delayed || 0);
       charts.current.school = new Chart(schoolRef.current.getContext('2d'), {
         type:'bar',
-        data:{ labels: schools, datasets: [{ label:'On track', data:ontrack, backgroundColor:'#10B981' }, { label:'Delayed', data:delayed, backgroundColor:'#EF4444' }] },
-        options:{ plugins:{ legend:{ position:'bottom' } }, scales:{ x:{ stacked:true }, y:{ stacked:true } } }
+        data:{ 
+          labels: schools, 
+          datasets: [
+            { label:'On track', data:ontrack, backgroundColor:'#10B981', borderRadius: 6 }, 
+            { label:'Delayed', data:delayed, backgroundColor:'#EF4444', borderRadius: 6 }
+          ] 
+        },
+        options:{ 
+          plugins:{ legend:{ position:'bottom' } }, 
+          scales:{ x:{ stacked:true }, y:{ stacked:true } } 
+        }
       });
     }
-
   }, [analyticsData]);
 
-  function destroyAllCharts() { Object.values(charts.current || {}).forEach(c => { if (c && c.destroy) c.destroy(); }); charts.current = {}; }
+  function destroyAllCharts() { 
+    Object.values(charts.current || {}).forEach(c => { if (c && c.destroy) c.destroy(); }); 
+    charts.current = {}; 
+  }
 
-  // ----- login (mocked) -----
+  // Login
   const handleLogin = async () => {
     setLoading(true);
     try {
       const afid = (loginForm.afid || '').trim().toUpperCase();
       if (!afid) { alert('Enter AFID'); setLoading(false); return; }
-      // admin hidden - no hint on UI
+      
       if (afid === 'ADMIN' && loginForm.password === 'admin123') {
         setIsAdmin(true);
         setCurrentUser({ name:'Administrator', afid:'ADMIN' });
@@ -272,55 +479,70 @@ function App() {
         setLoading(false);
         return;
       }
+      
       const doc = await db.collection('teachers').doc(afid).get();
       if (!doc.exists) { alert('Invalid AFID or password'); setLoading(false); return; }
+      
       const t = doc.data();
       if (t.password === loginForm.password) {
         setCurrentUser(t);
         setIsAdmin(false);
         setActiveTab('overview');
-        // birthday confetti
+        
         if (t.dob) {
-          const d = new Date(t.dob); const now = new Date();
-          if (d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) setShowConfetti(true);
+          const d = new Date(t.dob); 
+          const now = new Date();
+          if (d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) {
+            setShowConfetti(true);
+            setTimeout(() => setShowConfetti(false), 5000);
+          }
         }
-      } else { alert('Invalid AFID or password'); }
-    } catch (e) { console.error('login error', e); alert('Login failed'); }
+      } else { 
+        alert('Invalid AFID or password'); 
+      }
+    } catch (e) { 
+      console.error('login error', e); 
+      alert('Login failed'); 
+    }
     setLoading(false);
   };
 
-  // ----- update chapter progress (write to firestore) -----
+  // Update chapter progress
   const updateChapterProgress = async (chapterId, field, value) => {
     try {
-      // if clearing date, set null
       const updateObj = { [field]: value };
-      // special-case: if completed set to No -> clear completionDate
-      if (field === 'completed' && value === 'No') updateObj['completionDate'] = null;
+      
+      if (field === 'completed' && value === 'No') {
+        updateObj['completionDate'] = null;
+      }
+      
       await db.collection('chapterProgress').doc(chapterId).set(updateObj, { merge: true });
-      // optimistic local update
       setChapterProgress(prev => ({ ...prev, [chapterId]: { ...(prev[chapterId]||{}), ...updateObj } }));
-      // confetti logic: if completed yes and testconducted yes -> show confetti
+      
       if (field === 'completed' && value === 'Yes') {
-        // read current testConducted after update (optimistic)
         const cur = chapterProgress[chapterId] || {};
         if (cur.testConducted === 'Yes' || updateObj.testConducted === 'Yes') {
           setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 3500);
+          setTimeout(() => setShowConfetti(false), 5000);
+        }
+      }
+      
+      if (field === 'testConducted' && value === 'Yes') {
+        const cur = chapterProgress[chapterId] || {};
+        if (cur.completed === 'Yes' || updateObj.completed === 'Yes') {
+          setShowConfetti(true);
+          setTimeout(() => setShowConfetti(false), 5000);
         }
       }
     } catch (e) {
       console.error('update error', e);
-      alert('Failed to update. Check Firestore rules and network.');
+      alert('Failed to update');
     }
   };
 
-  // manual toggle expand for topics
   const toggleExpand = (id) => setExpandedChapters(prev => ({ ...prev, [id]: !prev[id] }));
 
-  // flip state on card
-  const toggleFlip = (id) => setFlipState(prev => ({ ...prev, [id]: !prev[id] }));
-
-  // export analytics CSV
+  // Export CSV
   const exportCSV = () => {
     if (!analyticsData) return alert('No analytics yet');
     const rows = [['AFID','Name','School','Completed','Total','Percent']];
@@ -328,17 +550,21 @@ function App() {
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href=url; a.download = `analytics_${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement('a'); 
+    a.href=url; 
+    a.download = `analytics_${new Date().toISOString().slice(0,10)}.csv`; 
+    a.click(); 
+    URL.revokeObjectURL(url);
   };
 
-  // todays birthdays list
+  // Birthdays
   const todaysBirthdays = teachers.filter(t => {
     if (!t.dob) return false;
-    const d = new Date(t.dob); const now = new Date();
+    const d = new Date(t.dob); 
+    const now = new Date();
     return d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
   });
 
-  // upcoming week/month birthdays
   const upcoming = (period='week') => {
     const now = new Date();
     return teachers.filter(t => {
@@ -351,7 +577,7 @@ function App() {
     });
   };
 
-  // ----- Admin CRUD helpers -----
+  // Admin functions
   const addOrUpdateTeacher = async (teacherObj) => {
     if (!teacherObj.afid) return alert('AFID required');
     const id = teacherObj.afid.toUpperCase();
@@ -363,11 +589,23 @@ function App() {
 
   const deleteTeacher = async (afid) => {
     if (!confirm('Delete teacher ' + afid + '?')) return;
-    try { await db.collection('teachers').doc(afid).delete(); alert('Deleted'); } catch (e) { console.error(e); alert('Delete failed'); }
+    try { 
+      await db.collection('teachers').doc(afid).delete(); 
+      alert('Deleted'); 
+    } catch (e) { 
+      console.error(e); 
+      alert('Delete failed'); 
+    }
   };
 
   const saveCurriculum = async (newCurr) => {
-    try { await db.collection('meta').doc('curriculum').set(newCurr); alert('Curriculum updated'); } catch (e) { console.error(e); alert('Failed'); }
+    try { 
+      await db.collection('meta').doc('curriculum').set(newCurr); 
+      alert('Curriculum updated'); 
+    } catch (e) { 
+      console.error(e); 
+      alert('Failed'); 
+    }
   };
 
   const addChapterAdmin = async (subject, grade, chapter) => {
@@ -399,65 +637,133 @@ function App() {
     } catch (e) { console.error(e); alert('Delete failed'); }
   };
 
-  // ----- UI Components render -----
-  if (!currentUser) {
-    // Login UI - remove demo credentials
+  // Modern Confetti Component
+  function Confetti() {
+    const shapes = ['●', '■', '▲', '★', '♦', '♥', '✦', '✧'];
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
+    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-          <div className="text-center mb-6">
-            <div className="text-6xl">📚</div>
-            <h1 className="text-3xl font-bold text-gray-800">Curriculum Tracker</h1>
-            <p className="text-gray-600 mt-2">Login to continue</p>
+      <div className="fixed inset-0 pointer-events-none z-[9999]">
+        {Array.from({length: 60}).map((_,i) => {
+          const shape = shapes[Math.floor(Math.random() * shapes.length)];
+          const color = colors[Math.floor(Math.random() * colors.length)];
+          const size = 12 + Math.random() * 20;
+          const left = Math.random() * 100;
+          const delay = Math.random() * 2;
+          const duration = 3 + Math.random() * 2;
+          
+          return (
+            <div 
+              key={i} 
+              className="confetti-piece" 
+              style={{
+                left: `${left}%`,
+                top: '-50px',
+                color: color,
+                fontSize: `${size}px`,
+                animationDelay: `${delay}s`,
+                animationDuration: `${duration}s`,
+                opacity: 0.8 + Math.random() * 0.2
+              }}
+            >
+              {shape}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Login UI
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 animated-gradient flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl p-8 sm:p-10 w-full max-w-md transform transition-all hover:scale-105">
+          <div className="text-center mb-8 fade-in">
+            <div className="text-7xl mb-4 animate-bounce">📚</div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              Curriculum Tracker
+            </h1>
+            <p className="text-gray-600 mt-3 text-lg">Login to continue</p>
           </div>
 
-          <div className="space-y-4">
-            <input className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg" value={loginForm.afid} onChange={e => setLoginForm({...loginForm, afid: e.target.value})} placeholder="AFID" />
-            <input type="password" className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} placeholder="Password" />
-            <button onClick={handleLogin} disabled={loading} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-semibold">{loading ? 'Logging in...' : 'Login'}</button>
+          <div className="space-y-5">
+            <div>
+              <input 
+                className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg transition-all focus:border-purple-500" 
+                value={loginForm.afid} 
+                onChange={e => setLoginForm({...loginForm, afid: e.target.value})} 
+                placeholder="Enter AFID" 
+              />
+            </div>
+            <div>
+              <input 
+                type="password" 
+                className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg transition-all focus:border-purple-500" 
+                value={loginForm.password} 
+                onChange={e => setLoginForm({...loginForm, password: e.target.value})} 
+                placeholder="Password"
+                onKeyPress={e => e.key === 'Enter' && handleLogin()} 
+              />
+            </div>
+            <button 
+              onClick={handleLogin} 
+              disabled={loading} 
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-bold text-lg btn-primary disabled:opacity-50"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                  </svg>
+                  Logging in...
+                </span>
+              ) : 'Login'}
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  // Confetti component
-  function Confetti() {
-    const colors = ['🎉','✨','🎊','🥳','🎈'];
-    return (
-      <div className="fixed inset-0 pointer-events-none z-50">
-        {Array.from({length: 40}).map((_,i) => (
-          <div key={i} className="confetti-piece" style={{
-            left: `${Math.random()*100}%`,
-            top: `${Math.random()*8}%`,
-            animationDelay: `${Math.random()*1.5}s`,
-            fontSize: `${12 + Math.random()*18}px`
-          }}>{colors[i % colors.length]}</div>
-        ))}
-      </div>
-    );
-  }
-
-  // Overview for teachers
+  // Overview Component
   const Overview = () => {
     const subjects = Object.keys(curriculum || {});
     return (
-      <div className="space-y-6">
-        <h2 className="text-3xl font-bold">📊 Overview</h2>
-        <div className="grid md:grid-cols-2 gap-6">
+      <div className="space-y-6 fade-in">
+        <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+          📊 Overview
+        </h2>
+        
+        <div className="grid md:grid-cols-2 gap-6 grid-responsive">
           {[11,12].map(g => (
-            <div key={g} className="bg-white rounded-xl shadow p-6">
-              <h3 className="text-xl font-semibold mb-4">Class {g}th</h3>
-              <div className="space-y-3">
+            <div key={g} className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+              <h3 className="text-2xl font-bold mb-4 text-gray-800">Class {g}th</h3>
+              <div className="space-y-4">
                 {subjects.map(s => {
                   const chapters = (curriculum[s] && curriculum[s][g]) || [];
-                  const completedCount = chapters.filter(ch => (chapterProgress[ch.id]?.completed === 'Yes' && chapterProgress[ch.id]?.testConducted === 'Yes')).length;
+                  const completedCount = chapters.filter(ch => {
+                    const prog = chapterProgress[ch.id];
+                    return prog?.completed === 'Yes' && prog?.testConducted === 'Yes';
+                  }).length;
                   const percentage = chapters.length ? Math.round((completedCount / chapters.length) * 100) : 0;
+                  
                   return (
-                    <div key={s} className="p-3 border rounded">
-                      <div className="flex justify-between"><div className="font-medium">{s}</div><div className="font-bold">{percentage}%</div></div>
-                      <div className="h-3 bg-gray-200 rounded mt-2"><div className="h-3 rounded bg-green-500" style={{ width: `${percentage}%` }}></div></div>
-                      <div className="text-sm text-gray-500 mt-1">{completedCount} / {chapters.length} chapters completed (test done)</div>
+                    <div key={s} className="p-4 border-2 rounded-xl hover:border-purple-300 transition-colors">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="font-bold text-lg text-gray-800">{s}</div>
+                        <div className="text-2xl font-bold text-purple-600">{percentage}%</div>
+                      </div>
+                      <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-3 rounded-full bg-gradient-to-r from-green-400 to-emerald-500 progress-bar" 
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                      <div className="text-sm text-gray-600 mt-2">
+                        {completedCount} / {chapters.length} chapters completed
+                      </div>
                     </div>
                   );
                 })}
@@ -465,17 +771,51 @@ function App() {
             </div>
           ))}
 
-          <div className="bg-white rounded-xl shadow p-6">
-            <h3 className="text-xl font-semibold">Birthdays</h3>
-            <div className="mt-3 space-y-3">
-              <div className="p-3 border rounded">
-                <div className="font-semibold">This Week</div>
-                <div className="text-sm text-gray-600 mt-2">{upcoming('week').length ? upcoming('week').map(t => <div key={t.afid} className="flex justify-between"><div>{t.name} ({t.afid})</div><div className="text-sm">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>) : <div className="text-gray-500">No birthdays this week</div>}</div>
+          <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+            <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+              <span>🎂</span> Birthdays
+            </h3>
+            <div className="space-y-4">
+              <div className="p-4 border-2 rounded-xl bg-gradient-to-r from-purple-50 to-pink-50">
+                <div className="font-bold text-lg mb-3 text-purple-700">This Week</div>
+                <div className="space-y-2">
+                  {upcoming('week').length ? (
+                    upcoming('week').map(t => (
+                      <div key={t.afid} className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
+                        <div>
+                          <div className="font-medium">{t.name}</div>
+                          <div className="text-sm text-gray-500">({t.afid})</div>
+                        </div>
+                        <div className="text-sm font-semibold text-purple-600">
+                          {new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-gray-500 text-center py-3">No birthdays this week</div>
+                  )}
+                </div>
               </div>
 
-              <div className="p-3 border rounded">
-                <div className="font-semibold">This Month</div>
-                <div className="text-sm text-gray-600 mt-2">{upcoming('month').length ? upcoming('month').map(t => <div key={t.afid} className="flex justify-between"><div>{t.name} ({t.afid})</div><div className="text-sm">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>) : <div className="text-gray-500">No birthdays this month</div>}</div>
+              <div className="p-4 border-2 rounded-xl bg-gradient-to-r from-blue-50 to-cyan-50">
+                <div className="font-bold text-lg mb-3 text-blue-700">This Month</div>
+                <div className="space-y-2">
+                  {upcoming('month').length ? (
+                    upcoming('month').slice(0, 5).map(t => (
+                      <div key={t.afid} className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
+                        <div>
+                          <div className="font-medium">{t.name}</div>
+                          <div className="text-sm text-gray-500">({t.afid})</div>
+                        </div>
+                        <div className="text-sm font-semibold text-blue-600">
+                          {new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-gray-500 text-center py-3">No birthdays this month</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -484,140 +824,219 @@ function App() {
     );
   };
 
-  // Chapters page for teacher
+  // Chapters Component with improved UI
   const Chapters = () => {
     const [selectedGrade, setSelectedGrade] = useState(11);
     const subj = currentUser.subject;
     const chapters = (curriculum[subj] && curriculum[subj][selectedGrade]) || [];
 
     return (
-      <div className="space-y-6">
-        <h2 className="text-3xl font-bold">📘 Chapters - {subj}</h2>
-        <div className="flex gap-3 mb-4">
-          <button onClick={() => setSelectedGrade(11)} className={`px-4 py-2 rounded ${selectedGrade===11 ? 'bg-purple-600 text-white' : 'bg-white'}`}>Class 11th</button>
-          <button onClick={() => setSelectedGrade(12)} className={`px-4 py-2 rounded ${selectedGrade===12 ? 'bg-purple-600 text-white' : 'bg-white'}`}>Class 12th</button>
+      <div className="space-y-6 fade-in">
+        <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+          📘 Chapters - {subj}
+        </h2>
+        
+        <div className="flex gap-3 mb-6">
+          <button 
+            onClick={() => setSelectedGrade(11)} 
+            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+              selectedGrade===11 
+                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105' 
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Class 11th
+          </button>
+          <button 
+            onClick={() => setSelectedGrade(12)} 
+            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+              selectedGrade===12 
+                ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-105' 
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Class 12th
+          </button>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 grid-responsive">
           {chapters.map(ch => {
             const prog = chapterProgress[ch.id] || {};
             const status = computeChapterStatus(ch, prog);
-            const colorClass = status.key === 'delayed' ? 'bg-red-50 border-red-400' : (status.key === 'partial' || status.key === 'partial-topics') ? 'bg-orange-50 border-orange-400' : (['ontrack','ahead','completed'].includes(status.key) ? 'bg-green-50 border-green-400' : 'bg-white border-gray-200');
             const completedTopics = prog.completedTopics || [];
-            const isFlipped = !!flipState[ch.id];
+            const isExpanded = !!expandedChapters[ch.id];
+            const topicsPercent = ch.topics?.length ? Math.round((completedTopics.length / ch.topics.length) * 100) : 0;
 
             return (
-              <div key={ch.id} className={`flip-card ${isFlipped ? 'flip' : ''} ${colorClass} border-2 rounded-xl shadow p-4`} >
-                <div className="flip-card-inner relative">
-                  {/* FRONT */}
-                  <div className="flip-card-front p-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-semibold">{ch.name}</h3>
-                        <div className="text-sm text-gray-600 mt-1">Topics: <span className="font-semibold">{completedTopics.length}/{(ch.topics||[]).length}</span></div>
-                        <div className="text-sm text-gray-600">Target: <span className="font-semibold">{ch.targetDate || '—'}</span></div>
-                      </div>
-                      <div className="text-sm text-gray-600">{status.label}</div>
+              <div 
+                key={ch.id} 
+                className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5`}
+              >
+                {/* Header */}
+                <div className="mb-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-xl font-bold text-gray-800 pr-2">{ch.name}</h3>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${status.textColor} ${status.key === 'ahead' ? 'status-badge-ahead' : ''}`}>
+                      {status.label}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between text-gray-700">
+                      <span className="font-medium">Topics Progress:</span>
+                      <span className="font-bold text-purple-600">{completedTopics.length}/{ch.topics?.length || 0}</span>
                     </div>
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-2 bg-gradient-to-r from-purple-500 to-pink-500 progress-bar" 
+                        style={{ width: `${topicsPercent}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-gray-600 mt-2">
+                      <span>Target Date:</span>
+                      <span className="font-semibold">{ch.targetDate || '—'}</span>
+                    </div>
+                  </div>
+                </div>
 
-                    <hr className="my-3" />
+                <hr className="my-4 border-gray-300" />
 
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Chapter Test Conducted?</label>
-                        <select value={prog.testConducted || 'No'} onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value)} className="w-full border px-3 py-2 rounded mt-1">
-                          <option>No</option><option>Yes</option>
-                        </select>
-                      </div>
+                {/* Form Controls */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Chapter Test Conducted?
+                    </label>
+                    <select 
+                      value={prog.testConducted || 'No'} 
+                      onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value)} 
+                      className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-purple-400"
+                    >
+                      <option>No</option>
+                      <option>Yes</option>
+                    </select>
+                  </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Chapter Completed?</label>
-                        <select value={prog.completed || 'No'} onChange={e => {
-                          const val = e.target.value;
-                          if (val === 'No') {
-                            updateChapterProgress(ch.id, 'completed', 'No');
-                            updateChapterProgress(ch.id, 'completionDate', null);
-                          } else {
-                            updateChapterProgress(ch.id, 'completed', 'Yes');
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Chapter Completed?
+                    </label>
+                    <select 
+                      value={prog.completed || 'No'} 
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === 'No') {
+                          updateChapterProgress(ch.id, 'completed', 'No');
+                          updateChapterProgress(ch.id, 'completionDate', null);
+                        } else {
+                          updateChapterProgress(ch.id, 'completed', 'Yes');
+                          if (!prog.completionDate) {
                             const todayStr = new Date().toISOString().split('T')[0];
                             updateChapterProgress(ch.id, 'completionDate', todayStr);
-                            // show confetti only after verifying test conducted (handled by compute and listener)
-                            const cur = chapterProgress[ch.id] || {};
-                            if (cur.testConducted === 'Yes') { setShowConfetti(true); setTimeout(()=>setShowConfetti(false), 3500); }
                           }
-                        }} className="w-full border px-3 py-2 rounded mt-1">
-                          <option>No</option><option>Yes</option>
-                        </select>
-                        <div className="text-xs text-gray-500 mt-1">Note: If test is not conducted, marking Completed will show as <span className="font-semibold">Partially completed</span>.</div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Method</label>
-                        <select value={prog.method || 'Online'} onChange={e => updateChapterProgress(ch.id, 'method', e.target.value)} className="w-full border px-3 py-2 rounded mt-1">
-                          <option>Online</option><option>Offline</option>
-                        </select>
-                      </div>
-
-                      { (chapterProgress[ch.id] && chapterProgress[ch.id].method === 'Offline') && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Notes (Why offline?)</label>
-                          <textarea value={chapterProgress[ch.id].notes || ''} onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value)} className="w-full border px-3 py-2 rounded mt-1" rows="2" placeholder="Reason for offline teaching..." />
-                        </div>
-                      )}
-
-                      {/* Expand/minimize topics manual */}
-                      <div>
-                        <div className="flex justify-between items-center">
-                          <div className="font-semibold text-sm text-purple-700">Topics ({completedTopics.length}/{(ch.topics||[]).length})</div>
-                          <div className="flex gap-2">
-                            <button onClick={() => toggleExpand(ch.id)} className="text-sm text-gray-600 underline">{expandedChapters[ch.id] ? 'Minimize' : 'Expand'}</button>
-                            <button onClick={() => toggleFlip(ch.id)} className="text-sm text-gray-600 underline">Flip</button>
-                          </div>
-                        </div>
-
-                        { expandedChapters[ch.id] && (
-                          <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
-                            { (ch.topics || []).map((t, idx) => {
-                              const checked = (chapterProgress[ch.id] && (chapterProgress[ch.id].completedTopics || []).includes(t));
-                              return (
-                                <label key={idx} className="flex items-center gap-2 p-2 rounded hover:bg-purple-50 cursor-pointer">
-                                  <input type="checkbox" checked={checked} onChange={e => {
-                                    const prev = (chapterProgress[ch.id] && chapterProgress[ch.id].completedTopics) || [];
-                                    const updated = e.target.checked ? [...prev, t] : prev.filter(x=>x!==t);
-                                    updateChapterProgress(ch.id, 'completedTopics', updated);
-                                    // DO NOT auto-collapse
-                                  }} className="w-4 h-4" />
-                                  <span className={checked ? 'line-through text-gray-500' : ''}>{t}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
+                        }
+                      }} 
+                      className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-purple-400"
+                    >
+                      <option>No</option>
+                      <option>Yes</option>
+                    </select>
+                    <div className="text-xs text-gray-600 mt-2 bg-yellow-50 p-2 rounded">
+                      Note: Without test, shows as "Partially Completed"
                     </div>
                   </div>
 
-                  {/* BACK of card - allow teacher notes / quick stats */}
-                  <div className="flip-card-back p-3 bg-white rounded">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-semibold">Details — {ch.name}</h3>
-                        <div className="text-sm text-gray-600 mt-1">Target: <span className="font-semibold">{ch.targetDate}</span></div>
-                        <div className="text-sm text-gray-600 mt-2">Topics:</div>
-                        <ul className="list-disc ml-5 mt-2 text-sm text-gray-700 max-h-36 overflow-y-auto">
-                          { (ch.topics||[]).map((t, i) => <li key={i}>{t}</li>) }
-                        </ul>
-                      </div>
-                      <div>
-                        <button onClick={() => toggleFlip(ch.id)} className="px-3 py-1 bg-purple-600 text-white rounded">Back</button>
-                      </div>
+                  {/* Completion Date Input */}
+                  {prog.completed === 'Yes' && (
+                    <div className="bg-purple-50 p-3 rounded-xl border border-purple-200">
+                      <label className="block text-sm font-bold text-purple-900 mb-2">
+                        Completion Date
+                      </label>
+                      <input 
+                        type="date" 
+                        value={prog.completionDate || ''} 
+                        onChange={e => updateChapterProgress(ch.id, 'completionDate', e.target.value)} 
+                        className="w-full border-2 border-purple-300 px-4 py-2 rounded-lg"
+                      />
                     </div>
+                  )}
 
-                    <hr className="my-3" />
-                    <div className="text-sm text-gray-700">
-                      <div><strong>Completed topics:</strong> {(chapterProgress[ch.id] && (chapterProgress[ch.id].completedTopics||[]).length) || 0} / {(ch.topics||[]).length}</div>
-                      <div className="mt-2"><strong>Test Conducted:</strong> {(chapterProgress[ch.id] && chapterProgress[ch.id].testConducted) || 'No'}</div>
-                      <div className="mt-2"><strong>Completion Date:</strong> {(chapterProgress[ch.id] && chapterProgress[ch.id].completionDate) || '—'}</div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Teaching Method
+                    </label>
+                    <select 
+                      value={prog.method || 'Online'} 
+                      onChange={e => updateChapterProgress(ch.id, 'method', e.target.value)} 
+                      className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-purple-400"
+                    >
+                      <option>Online</option>
+                      <option>Offline</option>
+                    </select>
+                  </div>
+
+                  {prog.method === 'Offline' && (
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">
+                        Notes (Why offline?)
+                      </label>
+                      <textarea 
+                        value={prog.notes || ''} 
+                        onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value)} 
+                        className="w-full border-2 border-gray-300 px-4 py-2 rounded-xl" 
+                        rows="2" 
+                        placeholder="Reason for offline teaching..."
+                      />
+                    </div>
+                  )}
+
+                  {/* Topics Accordion */}
+                  <div className="border-t pt-4">
+                    <button 
+                      onClick={() => toggleExpand(ch.id)}
+                      className="w-full flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl hover:from-purple-100 hover:to-pink-100 transition-all"
+                    >
+                      <span className="font-bold text-purple-700 flex items-center gap-2">
+                        <span>📋</span>
+                        Topics ({completedTopics.length}/{ch.topics?.length || 0})
+                      </span>
+                      <svg 
+                        className={`w-5 h-5 text-purple-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    <div className={`topics-container ${isExpanded ? 'topics-expanded' : 'topics-collapsed'}`}>
+                      <div className="mt-3 space-y-2 max-h-64 overflow-y-auto px-1">
+                        {(ch.topics || []).map((t, idx) => {
+                          const checked = completedTopics.includes(t);
+                          return (
+                            <label 
+                              key={idx} 
+                              className="flex items-center gap-3 p-3 rounded-xl hover:bg-purple-50 cursor-pointer transition-colors group"
+                            >
+                              <input 
+                                type="checkbox" 
+                                checked={checked} 
+                                onChange={e => {
+                                  const updated = e.target.checked 
+                                    ? [...completedTopics, t] 
+                                    : completedTopics.filter(x => x !== t);
+                                  updateChapterProgress(ch.id, 'completedTopics', updated);
+                                }} 
+                              />
+                              <span className={`flex-1 ${checked ? 'line-through text-gray-500' : 'text-gray-800 font-medium'}`}>
+                                {t}
+                              </span>
+                              {checked && <span className="text-green-500 text-xl">✓</span>}
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -629,29 +1048,41 @@ function App() {
     );
   };
 
-  // Profile
+  // Profile Component
   const Profile = () => (
-    <div className="space-y-6">
-      <h2 className="text-3xl font-bold">👤 Profile</h2>
-      <div className="bg-white p-6 rounded shadow">
-        <div className="grid md:grid-cols-2 gap-4">
-          <div><div className="text-sm text-gray-500">Name</div><div className="font-semibold">{currentUser.name}</div></div>
-          <div><div className="text-sm text-gray-500">AFID</div><div className="font-semibold">{currentUser.afid}</div></div>
-          <div><div className="text-sm text-gray-500">Subject</div><div className="font-semibold">{currentUser.subject}</div></div>
-          <div><div className="text-sm text-gray-500">School</div><div className="font-semibold">{currentUser.school}</div></div>
-          <div><div className="text-sm text-gray-500">DOB</div><div className="font-semibold">{currentUser.dob ? new Date(currentUser.dob).toLocaleDateString() : '—'}</div></div>
-          <div><div className="text-sm text-gray-500">Email</div><div className="font-semibold">{currentUser.email || '—'}</div></div>
+    <div className="space-y-6 fade-in">
+      <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+        👤 Profile
+      </h2>
+      <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
+        <div className="grid md:grid-cols-2 gap-6">
+          {[
+            { label: 'Name', value: currentUser.name },
+            { label: 'AFID', value: currentUser.afid },
+            { label: 'Subject', value: currentUser.subject },
+            { label: 'School', value: currentUser.school },
+            { label: 'Date of Birth', value: currentUser.dob ? new Date(currentUser.dob).toLocaleDateString() : '—' },
+            { label: 'Email', value: currentUser.email || '—' },
+            { label: 'Phone', value: currentUser.phone || '—' }
+          ].map(item => (
+            <div key={item.label} className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl">
+              <div className="text-sm font-medium text-gray-600 mb-1">{item.label}</div>
+              <div className="text-lg font-bold text-gray-800">{item.value}</div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
   );
 
-  // Admin - Teachers management
+  // Admin Components
   function AdminTeachers() {
     const [editing, setEditing] = useState(null);
     const [form, setForm] = useState({ afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' });
 
-    useEffect(() => setForm(editing || { afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' }), [editing]);
+    useEffect(() => {
+      setForm(editing || { afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' });
+    }, [editing]);
 
     const save = async () => {
       if (!form.afid) return alert('AFID required');
@@ -661,26 +1092,50 @@ function App() {
 
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center flex-wrap gap-3">
           <h3 className="text-2xl font-bold">Teacher Directory</h3>
-          <button onClick={() => setEditing({})} className="px-4 py-2 bg-blue-600 text-white rounded">+ Add Teacher</button>
+          <button 
+            onClick={() => setEditing({})} 
+            className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
+          >
+            + Add Teacher
+          </button>
         </div>
 
-        <div className="bg-white p-4 rounded shadow overflow-x-auto">
+        <div className="bg-white p-4 rounded-2xl shadow-lg overflow-x-auto">
           <table className="w-full">
-            <thead><tr className="bg-gray-50"><th className="p-2">AFID</th><th className="p-2">Name</th><th className="p-2">Subject</th><th className="p-2">School</th><th className="p-2">Phone</th><th className="p-2">Actions</th></tr></thead>
+            <thead>
+              <tr className="bg-gradient-to-r from-purple-50 to-pink-50">
+                <th className="p-3 text-left font-bold">AFID</th>
+                <th className="p-3 text-left font-bold">Name</th>
+                <th className="p-3 text-left font-bold">Subject</th>
+                <th className="p-3 text-left font-bold">School</th>
+                <th className="p-3 text-left font-bold">Phone</th>
+                <th className="p-3 text-left font-bold">Actions</th>
+              </tr>
+            </thead>
             <tbody>
               {teachers.map(t => (
-                <tr key={t.afid} className="border-b hover:bg-gray-50">
-                  <td className="p-2 font-mono">{t.afid}</td>
-                  <td className="p-2">{t.name}</td>
-                  <td className="p-2">{t.subject}</td>
-                  <td className="p-2">{t.school}</td>
-                  <td className="p-2">{t.phone}</td>
-                  <td className="p-2">
-                    <div className="flex gap-2">
-                      <button onClick={() => setEditing(t)} className="px-2 py-1 bg-yellow-400 rounded">Edit</button>
-                      <button onClick={() => deleteTeacher(t.afid)} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>
+                <tr key={t.afid} className="border-b hover:bg-purple-50 transition-colors">
+                  <td className="p-3 font-mono font-semibold">{t.afid}</td>
+                  <td className="p-3">{t.name}</td>
+                  <td className="p-3">{t.subject}</td>
+                  <td className="p-3">{t.school}</td>
+                  <td className="p-3">{t.phone}</td>
+                  <td className="p-3">
+                    <div className="flex gap-2 flex-wrap">
+                      <button 
+                        onClick={() => setEditing(t)} 
+                        className="px-3 py-1 bg-yellow-400 rounded-lg hover:bg-yellow-500 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => deleteTeacher(t.afid)} 
+                        className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -689,17 +1144,37 @@ function App() {
           </table>
         </div>
 
-        { editing !== null && (
-          <div className="bg-white p-4 rounded shadow">
-            <h4 className="font-semibold mb-3">{editing.afid ? 'Edit Teacher' : 'Add Teacher'}</h4>
-            <div className="grid md:grid-cols-2 gap-3">
+        {editing !== null && (
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h4 className="font-bold text-xl mb-4">{editing.afid ? 'Edit Teacher' : 'Add Teacher'}</h4>
+            <div className="grid md:grid-cols-2 gap-4">
               {['afid','name','subject','school','dob','email','phone','password'].map(k => (
-                <div key={k}><label className="text-sm text-gray-600">{k.toUpperCase()}</label><input value={form[k] || ''} onChange={e => setForm({...form, [k]: e.target.value})} className="w-full border px-2 py-2 rounded" /></div>
+                <div key={k}>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    {k.toUpperCase()}
+                  </label>
+                  <input 
+                    type={k === 'dob' ? 'date' : k === 'password' ? 'password' : 'text'}
+                    value={form[k] || ''} 
+                    onChange={e => setForm({...form, [k]: e.target.value})} 
+                    className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400" 
+                  />
+                </div>
               ))}
             </div>
-            <div className="mt-3 flex gap-2">
-              <button onClick={save} className="px-4 py-2 bg-green-600 text-white rounded">Save</button>
-              <button onClick={() => setEditing(null)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
+            <div className="mt-5 flex gap-3">
+              <button 
+                onClick={save} 
+                className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
+              >
+                Save
+              </button>
+              <button 
+                onClick={() => setEditing(null)} 
+                className="px-6 py-3 bg-gray-200 rounded-xl font-semibold hover:bg-gray-300 transition-all"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         )}
@@ -707,227 +1182,407 @@ function App() {
     );
   }
 
-  // Admin - Curriculum
   function AdminCurriculum() {
     const [subject, setSubject] = useState(Object.keys(curriculum || {})[0] || 'Physics');
     const [grade, setGrade] = useState(11);
     const [newChapter, setNewChapter] = useState({ name:'', topics:'', targetDate:'' });
 
-    useEffect(() => { if (!subject) setSubject(Object.keys(curriculum||{})[0]||'Physics'); }, [curriculum]);
+    useEffect(() => { 
+      if (!subject) setSubject(Object.keys(curriculum||{})[0]||'Physics'); 
+    }, [curriculum]);
 
     const addNew = async () => {
       if (!newChapter.name) return alert('Name required');
-      await addChapterAdmin(subject, grade, { name: newChapter.name, topics: newChapter.topics ? newChapter.topics.split(',').map(x=>x.trim()) : [], targetDate: newChapter.targetDate || '' });
+      await addChapterAdmin(
+        subject, 
+        grade, 
+        { 
+          name: newChapter.name, 
+          topics: newChapter.topics ? newChapter.topics.split(',').map(x=>x.trim()) : [], 
+          targetDate: newChapter.targetDate || '' 
+        }
+      );
       setNewChapter({ name:'', topics:'', targetDate:'' });
     };
 
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <h3 className="text-2xl font-bold">Curriculum</h3>
-          <select value={subject} onChange={e=>setSubject(e.target.value)} className="border px-2 py-1 rounded">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h3 className="text-2xl font-bold">Curriculum Management</h3>
+          <select 
+            value={subject} 
+            onChange={e=>setSubject(e.target.value)} 
+            className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium"
+          >
             {Object.keys(curriculum || {}).map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select value={grade} onChange={e=>setGrade(Number(e.target.value))} className="border px-2 py-1 rounded">
-            <option value={11}>Class 11</option><option value={12}>Class 12</option>
+          <select 
+            value={grade} 
+            onChange={e=>setGrade(Number(e.target.value))} 
+            className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium"
+          >
+            <option value={11}>Class 11</option>
+            <option value={12}>Class 12</option>
           </select>
         </div>
 
-        <div className="bg-white p-4 rounded shadow">
-          <h4 className="font-semibold mb-2">Add New Chapter</h4>
-          <div className="grid md:grid-cols-3 gap-2">
-            <input placeholder="Chapter name" value={newChapter.name} onChange={e => setNewChapter({...newChapter, name: e.target.value})} className="border px-2 py-2 rounded" />
-            <input placeholder="Topics (comma separated)" value={newChapter.topics} onChange={e=>setNewChapter({...newChapter, topics: e.target.value})} className="border px-2 py-2 rounded" />
-            <input type="date" value={newChapter.targetDate} onChange={e=>setNewChapter({...newChapter, targetDate: e.target.value})} className="border px-2 py-2 rounded" />
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <h4 className="font-bold text-lg mb-3">Add New Chapter</h4>
+          <div className="grid md:grid-cols-3 gap-3">
+            <input 
+              placeholder="Chapter name" 
+              value={newChapter.name} 
+              onChange={e => setNewChapter({...newChapter, name: e.target.value})} 
+              className="border-2 border-gray-300 px-3 py-2 rounded-lg" 
+            />
+            <input 
+              placeholder="Topics (comma separated)" 
+              value={newChapter.topics} 
+              onChange={e=>setNewChapter({...newChapter, topics: e.target.value})} 
+              className="border-2 border-gray-300 px-3 py-2 rounded-lg" 
+            />
+            <input 
+              type="date" 
+              value={newChapter.targetDate} 
+              onChange={e=>setNewChapter({...newChapter, targetDate: e.target.value})} 
+              className="border-2 border-gray-300 px-3 py-2 rounded-lg" 
+            />
           </div>
-          <div className="mt-3"><button onClick={addNew} className="px-4 py-2 bg-blue-600 text-white rounded">Add Chapter</button></div>
+          <div className="mt-4">
+            <button 
+              onClick={addNew} 
+              className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
+            >
+              Add Chapter
+            </button>
+          </div>
         </div>
 
         <div className="space-y-3">
-          { (curriculum[subject] && (curriculum[subject][grade] || []).map(ch => {
+          {(curriculum[subject] && (curriculum[subject][grade] || []).map(ch => {
             const prog = chapterProgress[ch.id] || {};
             const status = computeChapterStatus(ch, prog);
+            
             return (
-              <div key={ch.id} className={`p-3 rounded border ${status.key==='delayed' ? 'border-red-300' : status.key.includes('partial') ? 'border-orange-300' : 'border-gray-200'} bg-white flex justify-between items-center`}>
+              <div 
+                key={ch.id} 
+                className={`p-4 rounded-xl border-2 ${status.color} flex justify-between items-center flex-wrap gap-3`}
+              >
                 <div>
-                  <div className="font-semibold">{ch.name} <span className="text-xs text-gray-500">({ch.id})</span></div>
-                  <div className="text-sm text-gray-600">{(ch.topics||[]).join(', ')}</div>
-                  <div className="text-sm mt-1">Target: {ch.targetDate || '—'}</div>
+                  <div className="font-bold text-lg">
+                    {ch.name} <span className="text-xs text-gray-500">({ch.id})</span>
+                  </div>
+                  <div className="text-sm text-gray-700 mt-1">{(ch.topics||[]).join(', ')}</div>
+                  <div className="text-sm mt-1">Target: <span className="font-semibold">{ch.targetDate || '—'}</span></div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <div className="text-sm">{status.label}</div>
-                  <div className="flex gap-2">
-                    <button onClick={() => { const n = prompt('Edit name', ch.name); if (n !== null) updateChapterAdmin(subject, grade, ch.id, { name: n }); }} className="px-2 py-1 bg-yellow-300 rounded">Edit</button>
-                    <button onClick={() => { const t = prompt('Set target (YYYY-MM-DD)', ch.targetDate || ''); if (t !== null) updateChapterAdmin(subject, grade, ch.id, { targetDate: t }); }} className="px-2 py-1 bg-blue-300 rounded">Set Target</button>
-                    <button onClick={() => { const ts = prompt('Edit topics (comma separated)', (ch.topics||[]).join(', ')); if (ts !== null) updateChapterAdmin(subject, grade, ch.id, { topics: ts.split(',').map(x=>x.trim()) }); }} className="px-2 py-1 bg-green-300 rounded">Edit Topics</button>
-                    <button onClick={() => deleteChapterAdmin(subject, grade, ch.id)} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>
+                  <div className={`text-sm font-semibold px-3 py-1 rounded-full ${status.textColor}`}>
+                    {status.label}
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <button 
+                      onClick={() => { 
+                        const n = prompt('Edit name', ch.name); 
+                        if (n !== null) updateChapterAdmin(subject, grade, ch.id, { name: n }); 
+                      }} 
+                      className="px-3 py-1 bg-yellow-300 rounded-lg hover:bg-yellow-400 transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      onClick={() => { 
+                        const t = prompt('Set target (YYYY-MM-DD)', ch.targetDate || ''); 
+                        if (t !== null) updateChapterAdmin(subject, grade, ch.id, { targetDate: t }); 
+                      }} 
+                      className="px-3 py-1 bg-blue-300 rounded-lg hover:bg-blue-400 transition-colors"
+                    >
+                      Set Target
+                    </button>
+                    <button 
+                      onClick={() => { 
+                        const ts = prompt('Edit topics (comma separated)', (ch.topics||[]).join(', ')); 
+                        if (ts !== null) updateChapterAdmin(subject, grade, ch.id, { topics: ts.split(',').map(x=>x.trim()) }); 
+                      }} 
+                      className="px-3 py-1 bg-green-300 rounded-lg hover:bg-green-400 transition-colors"
+                    >
+                      Edit Topics
+                    </button>
+                    <button 
+                      onClick={() => deleteChapterAdmin(subject, grade, ch.id)} 
+                      className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               </div>
             );
-          })) || <div className="text-gray-500">No chapters for this selection</div> }
+          })) || <div className="text-gray-500 text-center py-6">No chapters for this selection</div>}
         </div>
       </div>
     );
   }
 
-  // Admin Analytics
   function AdminAnalytics() {
     const data = analyticsData;
+    
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h3 className="text-2xl font-bold">Analytics</h3>
-          <div className="flex gap-2">
-            <button onClick={exportCSV} className="px-3 py-2 bg-green-600 text-white rounded">Export CSV</button>
-            <button onClick={() => alert('Analytics refreshes automatically')} className="px-3 py-2 bg-gray-200 rounded">Refresh</button>
+        <div className="flex justify-between items-center flex-wrap gap-3">
+          <h3 className="text-2xl font-bold">Analytics Dashboard</h3>
+          <div className="flex gap-2 flex-wrap">
+            <button 
+              onClick={exportCSV} 
+              className="px-4 py-2 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
+            >
+              📊 Export CSV
+            </button>
+            <button 
+              onClick={() => alert('Analytics refresh automatically')} 
+              className="px-4 py-2 bg-gray-200 rounded-xl font-semibold hover:bg-gray-300 transition-all"
+            >
+              🔄 Refresh
+            </button>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          <div className="bg-white p-4 rounded shadow text-center">
-            <div className="text-sm text-gray-500">Total Chapters</div>
-            <div className="text-3xl font-bold mt-2">{data ? data.totalChapters : '—'}</div>
-            <div className="text-sm text-gray-500 mt-1">Completed: {data ? data.totalCompleted : '—'}</div>
+        <div className="grid md:grid-cols-3 gap-6 grid-responsive">
+          <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-2xl shadow-lg text-center">
+            <div className="text-sm opacity-90 mb-2">Total Chapters</div>
+            <div className="text-5xl font-bold">{data ? data.totalChapters : '—'}</div>
+            <div className="text-sm opacity-90 mt-2">Completed: {data ? data.totalCompleted : '—'}</div>
           </div>
 
-          <div className="bg-white p-4 rounded shadow text-center">
-            <div className="text-sm text-gray-500">Syllabus Completion</div>
-            { data ? <canvas ref={pieRef} width="220" height="160"></canvas> : <div className="text-gray-500 mt-6">No data</div> }
+          <div className="bg-white p-4 rounded-2xl shadow-lg text-center">
+            <div className="text-sm text-gray-600 mb-2">Syllabus Completion</div>
+            {data ? <canvas ref={pieRef} width="220" height="160"></canvas> : <div className="text-gray-500 mt-6">Loading...</div>}
           </div>
 
-          <div className="bg-white p-4 rounded shadow">
-            <div className="text-sm text-gray-500">Top Teachers</div>
-            <div className="mt-3 space-y-2">
-              { data && data.teacherArr.length ? data.teacherArr.slice(0,6).map(t => (
-                <div key={t.afid} className="flex justify-between">
-                  <div><div className="font-medium">{t.name} <span className="text-xs text-gray-500">({t.afid})</span></div><div className="text-xs text-gray-500">{t.school}</div></div>
-                  <div className="text-sm font-bold">{t.percent}%</div>
-                </div>
-              )) : <div className="text-gray-500">No data</div> }
+          <div className="bg-white p-4 rounded-2xl shadow-lg">
+            <div className="text-sm text-gray-600 mb-3 font-bold">Top Teachers</div>
+            <div className="space-y-2">
+              {data && data.teacherArr.length ? (
+                data.teacherArr.slice(0,5).map((t, idx) => (
+                  <div key={t.afid} className="flex justify-between items-center p-2 rounded-lg hover:bg-purple-50">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-purple-600">{idx + 1}.</span>
+                      <div>
+                        <div className="font-medium">{t.name}</div>
+                        <div className="text-xs text-gray-500">{t.school}</div>
+                      </div>
+                    </div>
+                    <div className="text-lg font-bold text-purple-600">{t.percent}%</div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-gray-500">No data</div>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-500 mb-2">Teacher Completion % (Top 8)</div>
-          { data ? <canvas ref={barRef} width="800" height="300"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">No data</div> }
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <div className="text-sm text-gray-600 mb-4 font-bold">Teacher Completion % (Top 8)</div>
+          {data ? <canvas ref={barRef} width="800" height="300"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">Loading...</div>}
         </div>
 
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-500 mb-2">Schools - On Track vs Delayed</div>
-          { data ? <canvas ref={schoolRef} width="800" height="240"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">No data</div> }
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <div className="text-sm text-gray-600 mb-4 font-bold">Schools - On Track vs Delayed</div>
+          {data ? <canvas ref={schoolRef} width="800" height="240"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">Loading...</div>}
         </div>
 
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-500 mb-2">Detailed Teacher Table</div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50"><tr><th className="p-2">AFID</th><th className="p-2">Name</th><th className="p-2">School</th><th className="p-2">Completed</th><th className="p-2">Total</th><th className="p-2">Percent</th></tr></thead>
-              <tbody>{ data && data.teacherArr.length ? data.teacherArr.map(t => (<tr key={t.afid} className="border-b hover:bg-gray-50"><td className="p-2 font-mono">{t.afid}</td><td className="p-2">{t.name}</td><td className="p-2">{t.school}</td><td className="p-2">{t.completed}</td><td className="p-2">{t.total}</td><td className="p-2">{t.percent}%</td></tr>)) : <tr><td colSpan="6" className="p-4 text-gray-500">No data</td></tr> }</tbody>
-            </table>
-          </div>
+        <div className="bg-white p-4 rounded-2xl shadow-lg overflow-x-auto">
+          <div className="text-sm text-gray-600 mb-3 font-bold">Detailed Teacher Statistics</div>
+          <table className="w-full">
+            <thead className="bg-gradient-to-r from-purple-50 to-pink-50">
+              <tr>
+                <th className="p-3 text-left font-bold">AFID</th>
+                <th className="p-3 text-left font-bold">Name</th>
+                <th className="p-3 text-left font-bold">School</th>
+                <th className="p-3 text-left font-bold">Completed</th>
+                <th className="p-3 text-left font-bold">Total</th>
+                <th className="p-3 text-left font-bold">Percent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data && data.teacherArr.length ? (
+                data.teacherArr.map(t => (
+                  <tr key={t.afid} className="border-b hover:bg-purple-50 transition-colors">
+                    <td className="p-3 font-mono font-semibold">{t.afid}</td>
+                    <td className="p-3">{t.name}</td>
+                    <td className="p-3">{t.school}</td>
+                    <td className="p-3 text-green-600 font-bold">{t.completed}</td>
+                    <td className="p-3 font-semibold">{t.total}</td>
+                    <td className="p-3">
+                      <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full font-bold">
+                        {t.percent}%
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="p-4 text-gray-500 text-center">No data</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     );
   }
 
-  // Admin Dashboard
   function AdminDashboard() {
     const [tab, setTab] = useState('overview');
+    
     return (
-      <div className="space-y-6">
-        <h2 className="text-3xl font-bold">📈 Admin Dashboard</h2>
-        <div className="flex gap-2 mb-4">
-          {['overview','teachers','curriculum','analytics','settings'].map(t => <button key={t} onClick={()=>setTab(t)} className={`px-3 py-2 rounded ${tab===t ? 'bg-purple-600 text-white' : 'bg-white'}`}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>)}
+      <div className="space-y-6 fade-in">
+        <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+          📈 Admin Dashboard
+        </h2>
+        
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+          {['overview','teachers','curriculum','analytics','settings'].map(t => (
+            <button 
+              key={t} 
+              onClick={()=>setTab(t)} 
+              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                tab===t 
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg' 
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
         </div>
 
-        { tab === 'overview' && (
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="bg-white p-4 rounded shadow text-center">
-              <div className="text-sm text-gray-500">Total Teachers</div>
-              <div className="text-2xl font-bold mt-2">{teachers.length}</div>
+        {tab === 'overview' && (
+          <div className="grid md:grid-cols-3 gap-6 grid-responsive">
+            <div className="bg-gradient-to-br from-blue-500 to-cyan-500 text-white p-6 rounded-2xl shadow-lg text-center">
+              <div className="text-sm opacity-90 mb-2">Total Teachers</div>
+              <div className="text-5xl font-bold">{teachers.length}</div>
             </div>
-            <div className="bg-white p-4 rounded shadow text-center">
-              <div className="text-sm text-gray-500">Total Schools</div>
-              <div className="text-2xl font-bold mt-2">{[...new Set(teachers.map(t=>t.school))].length}</div>
+            <div className="bg-gradient-to-br from-green-500 to-emerald-500 text-white p-6 rounded-2xl shadow-lg text-center">
+              <div className="text-sm opacity-90 mb-2">Total Schools</div>
+              <div className="text-5xl font-bold">{[...new Set(teachers.map(t=>t.school))].length}</div>
             </div>
-            <div className="bg-white p-4 rounded shadow text-center">
-              <div className="text-sm text-gray-500">Chapters Tracked</div>
-              <div className="text-2xl font-bold mt-2">{Object.keys(chapterProgress || {}).length}</div>
+            <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-2xl shadow-lg text-center">
+              <div className="text-sm opacity-90 mb-2">Chapters Tracked</div>
+              <div className="text-5xl font-bold">{Object.keys(chapterProgress || {}).length}</div>
             </div>
           </div>
         )}
 
-        { tab === 'teachers' && <AdminTeachers /> }
-        { tab === 'curriculum' && <AdminCurriculum /> }
-        { tab === 'analytics' && <AdminAnalytics /> }
-        { tab === 'settings' && <div className="bg-white p-4 rounded shadow">Admin settings will be here</div> }
+        {tab === 'teachers' && <AdminTeachers />}
+        {tab === 'curriculum' && <AdminCurriculum />}
+        {tab === 'analytics' && <AdminAnalytics />}
+        {tab === 'settings' && (
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h4 className="font-bold text-lg mb-3">Settings</h4>
+            <p className="text-gray-600">Admin settings and configurations will be available here.</p>
+          </div>
+        )}
       </div>
     );
   }
 
-  // ----- main render layout -----
+  // Main Layout
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-red-50">
-      <nav className="bg-white shadow sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+    <div className="bg-gradient-to-br from-purple-50 via-pink-50 to-red-50 animated-gradient">
+      <nav className="bg-white shadow-lg sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <div className="text-2xl">📚</div>
+            <div className="text-3xl">📚</div>
             <div>
-              <div className="font-bold text-lg">Curriculum Tracker</div>
-              <div className="text-sm text-gray-500">{isAdmin ? 'Administrator' : `${currentUser.name} - ${currentUser.school}`}</div>
+              <div className="font-bold text-xl bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Curriculum Tracker
+              </div>
+              <div className="text-sm text-gray-600">
+                {isAdmin ? 'Administrator' : `${currentUser.name} - ${currentUser.school}`}
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => { setCurrentUser(null); setIsAdmin(false); setActiveTab('overview'); }} className="px-3 py-2 bg-red-500 text-white rounded">Logout</button>
-          </div>
+          <button 
+            onClick={() => { 
+              setCurrentUser(null); 
+              setIsAdmin(false); 
+              setActiveTab('overview'); 
+            }} 
+            className="px-5 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+          >
+            Logout
+          </button>
         </div>
       </nav>
 
-      {/* Birthday banner top-right */}
-      { todaysBirthdays.length > 0 && (
-        <div className="fixed top-6 right-6 z-50">
-          <div className="bg-white border p-3 rounded shadow flex items-center gap-3">
-            <div className="text-2xl">🎂</div>
+      {/* Birthday Banner */}
+      {todaysBirthdays.length > 0 && (
+        <div className="fixed top-20 right-4 z-50 max-w-xs">
+          <div className="bg-white border-4 border-purple-400 p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce">
+            <div className="text-4xl">🎂</div>
             <div>
-              <div className="font-semibold">Happy Birthday!</div>
-              <div className="text-sm text-gray-600">{todaysBirthdays.map(t => t.name).join(', ')}</div>
+              <div className="font-bold text-purple-700">Happy Birthday!</div>
+              <div className="text-sm text-gray-700">{todaysBirthdays.map(t => t.name).join(', ')}</div>
             </div>
           </div>
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="main-content max-w-7xl mx-auto px-4 py-6">
         <div className="mb-6">
-          { !isAdmin && (
-            <div className="flex gap-2">
-              <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 rounded ${activeTab==='overview' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 'bg-white'}`}>🏠 Overview</button>
-              <button onClick={() => setActiveTab('chapters')} className={`px-4 py-2 rounded ${activeTab==='chapters' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 'bg-white'}`}>📖 Chapters</button>
-              <button onClick={() => setActiveTab('profile')} className={`px-4 py-2 rounded ${activeTab==='profile' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 'bg-white'}`}>👤 Profile</button>
-            </div>
-          )}
-
-          { isAdmin && (
-            <div className="flex gap-2">
-              <button onClick={() => setActiveTab('admin')} className="px-4 py-2 rounded bg-white">Admin Dashboard</button>
+          {!isAdmin && (
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              <button 
+                onClick={() => setActiveTab('overview')} 
+                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  activeTab==='overview' 
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                🏠 Overview
+              </button>
+              <button 
+                onClick={() => setActiveTab('chapters')} 
+                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  activeTab==='chapters' 
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                📖 Chapters
+              </button>
+              <button 
+                onClick={() => setActiveTab('profile')} 
+                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  activeTab==='profile' 
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                👤 Profile
+              </button>
             </div>
           )}
         </div>
 
         <div>
-          { isAdmin && <AdminDashboard /> }
-          { !isAdmin && activeTab === 'overview' && <Overview /> }
-          { !isAdmin && activeTab === 'chapters' && <Chapters /> }
-          { !isAdmin && activeTab === 'profile' && <Profile /> }
+          {isAdmin && <AdminDashboard />}
+          {!isAdmin && activeTab === 'overview' && <Overview />}
+          {!isAdmin && activeTab === 'chapters' && <Chapters />}
+          {!isAdmin && activeTab === 'profile' && <Profile />}
         </div>
       </div>
 
-      <footer className="bg-white mt-12 py-6">
-        <div className="max-w-7xl mx-auto px-4 text-center text-gray-600">© 2025 Curriculum Tracker</div>
+      <footer className="bg-gradient-to-r from-purple-600 to-pink-600 text-white py-6 mt-12">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <p className="font-medium">© 2025 Curriculum Tracker - Empowering Education</p>
+          <p className="text-sm opacity-90 mt-1">Made with ❤️ for Avanti Fellows</p>
+        </div>
       </footer>
 
-      { showConfetti && <Confetti /> }
+      {showConfetti && <Confetti />}
     </div>
   );
 }
