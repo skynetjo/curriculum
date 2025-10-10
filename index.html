@@ -210,11 +210,11 @@
   <div id="root"></div>
 
   <script type="text/babel">
-/* Final Stable Curriculum Tracker with Firebase Auth */
+/* Final Production-Ready Curriculum Tracker */
 
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-// Firebase config - UPDATE WITH YOUR CREDENTIALS
+// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",
   authDomain: "curriculum-dbb10.firebaseapp.com",
@@ -227,6 +227,10 @@ const firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
+
+// Constants
+const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology'];
+const DEFAULT_SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Bundi', 'CoE Mahisagar', 'EMRS Bhopal', 'JNV Bharuch'];
 
 function App() {
   // Global states
@@ -241,6 +245,7 @@ function App() {
   const [curriculum, setCurriculum] = useState({});
   const [chapterProgress, setChapterProgress] = useState({});
   const [analyticsData, setAnalyticsData] = useState(null);
+  const [schools, setSchools] = useState(DEFAULT_SCHOOLS);
 
   // UI states
   const [expandedChapters, setExpandedChapters] = useState({});
@@ -295,6 +300,26 @@ function App() {
     }
   };
 
+  // Load schools from Firestore
+  useEffect(() => {
+    const loadSchools = async () => {
+      try {
+        const doc = await db.collection('meta').doc('schools').get();
+        if (doc.exists) {
+          setSchools(doc.data().list || DEFAULT_SCHOOLS);
+        } else {
+          // Initialize with default schools
+          await db.collection('meta').doc('schools').set({ list: DEFAULT_SCHOOLS });
+          setSchools(DEFAULT_SCHOOLS);
+        }
+      } catch (e) {
+        console.error('Error loading schools', e);
+        setSchools(DEFAULT_SCHOOLS);
+      }
+    };
+    loadSchools();
+  }, []);
+
   // Auth state observer
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -327,7 +352,8 @@ function App() {
               }
             }
           } else {
-            console.error('Teacher data not found');
+            console.error('Teacher data not found for email:', user.email);
+            alert('Teacher profile not found. Please contact admin.');
             await auth.signOut();
           }
         }
@@ -552,6 +578,8 @@ function App() {
         alert('Incorrect password.');
       } else if (e.code === 'auth/invalid-email') {
         alert('Invalid email format.');
+      } else if (e.code === 'auth/invalid-credential') {
+        alert('Invalid credentials. Please check your email and password.');
       } else {
         alert('Login failed: ' + e.message);
       }
@@ -699,6 +727,8 @@ function App() {
   const addOrUpdateTeacher = async (teacherObj, password = null) => {
     if (!teacherObj.afid) return alert('AFID required');
     if (!teacherObj.email) return alert('Email required');
+    if (!teacherObj.subject) return alert('Subject required');
+    if (!teacherObj.school) return alert('School required');
     
     const id = teacherObj.afid.toUpperCase();
     const email = teacherObj.email.toLowerCase();
@@ -768,6 +798,33 @@ function App() {
       newCurr[subject][grade] = newCurr[subject][grade].filter(ch => ch.id !== id);
       await saveCurriculum(newCurr);
     } catch (e) { console.error(e); alert('Delete failed'); }
+  };
+
+  // School management
+  const addSchool = async (schoolName) => {
+    if (!schoolName || !schoolName.trim()) return alert('School name required');
+    try {
+      const newSchools = [...schools, schoolName.trim()];
+      await db.collection('meta').doc('schools').set({ list: newSchools });
+      setSchools(newSchools);
+      alert('School added successfully');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to add school');
+    }
+  };
+
+  const deleteSchool = async (schoolName) => {
+    if (!confirm(`Delete school "${schoolName}"?`)) return;
+    try {
+      const newSchools = schools.filter(s => s !== schoolName);
+      await db.collection('meta').doc('schools').set({ list: newSchools });
+      setSchools(newSchools);
+      alert('School deleted');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to delete school');
+    }
   };
 
   // CSV Import functionality
@@ -1038,7 +1095,6 @@ function App() {
 
   // STABLE Chapters Component with persistent grade selection
   const Chapters = React.memo(() => {
-    // Persistent grade state that won't reset on re-renders
     const [selectedGrade, setSelectedGrade] = useState(11);
     const subj = currentUser.subject;
     const chapters = useMemo(() => {
@@ -1087,7 +1143,6 @@ function App() {
                 key={ch.id} 
                 className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5 no-flicker`}
               >
-                {/* Header */}
                 <div className="mb-4">
                   <div className="flex justify-between items-start mb-2">
                     <h3 className="text-xl font-bold text-gray-800 pr-2">{ch.name}</h3>
@@ -1116,7 +1171,6 @@ function App() {
 
                 <hr className="my-4 border-gray-300" />
 
-                {/* Form Controls */}
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -1161,7 +1215,6 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Completion Date Input */}
                   {prog.completed === 'Yes' && (
                     <div className="bg-purple-50 p-3 rounded-xl border border-purple-200">
                       <label className="block text-sm font-bold text-purple-900 mb-2">
@@ -1205,7 +1258,6 @@ function App() {
                     </div>
                   )}
 
-                  {/* Topics Accordion */}
                   <div className="border-t pt-4">
                     <button 
                       onClick={() => toggleExpand(ch.id)}
@@ -1309,6 +1361,8 @@ function App() {
     const save = async () => {
       if (!form.afid) return alert('AFID required');
       if (!form.email) return alert('Email required');
+      if (!form.subject) return alert('Subject required');
+      if (!form.school) return alert('School required');
       
       if (isNewTeacher && !form.password) {
         return alert('Password required for new teacher');
@@ -1379,20 +1433,95 @@ function App() {
           <div className="bg-white p-6 rounded-2xl shadow-lg">
             <h4 className="font-bold text-xl mb-4">{isNewTeacher ? 'Add New Teacher' : 'Edit Teacher'}</h4>
             <div className="grid md:grid-cols-2 gap-4">
-              {['afid','name','email','subject','school','dob','phone'].map(k => (
-                <div key={k}>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">
-                    {k.toUpperCase()} {k === 'email' && <span className="text-red-500">*</span>}
-                  </label>
-                  <input 
-                    type={k === 'dob' ? 'date' : k === 'email' ? 'email' : 'text'}
-                    value={form[k] || ''} 
-                    onChange={e => setForm({...form, [k]: e.target.value})} 
-                    className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400"
-                    disabled={!isNewTeacher && k === 'afid'}
-                  />
-                </div>
-              ))}
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  AFID <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text"
+                  value={form.afid || ''} 
+                  onChange={e => setForm({...form, afid: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400"
+                  disabled={!isNewTeacher}
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  NAME <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text"
+                  value={form.name || ''} 
+                  onChange={e => setForm({...form, name: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  EMAIL <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="email"
+                  value={form.email || ''} 
+                  onChange={e => setForm({...form, email: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  SUBJECT <span className="text-red-500">*</span>
+                </label>
+                <select 
+                  value={form.subject || ''} 
+                  onChange={e => setForm({...form, subject: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400"
+                >
+                  <option value="">Select Subject</option>
+                  {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  SCHOOL <span className="text-red-500">*</span>
+                </label>
+                <select 
+                  value={form.school || ''} 
+                  onChange={e => setForm({...form, school: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400"
+                >
+                  <option value="">Select School</option>
+                  {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  DATE OF BIRTH
+                </label>
+                <input 
+                  type="date"
+                  value={form.dob || ''} 
+                  onChange={e => setForm({...form, dob: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  PHONE
+                </label>
+                <input 
+                  type="text"
+                  value={form.phone || ''} 
+                  onChange={e => setForm({...form, phone: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400"
+                />
+              </div>
+
               {isNewTeacher && (
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-1 block">
@@ -1435,17 +1564,23 @@ function App() {
   }
 
   function AdminCurriculum() {
-    const [subject, setSubject] = useState(Object.keys(curriculum || {})[0] || 'Physics');
+    const curriculumKeys = Object.keys(curriculum || {});
+    const [subject, setSubject] = useState(curriculumKeys.length > 0 ? curriculumKeys[0] : '');
     const [grade, setGrade] = useState(11);
     const [newChapter, setNewChapter] = useState({ name:'', topics:'', targetDate:'' });
     const fileInputRef = useRef(null);
 
-    useEffect(() => { 
-      if (!subject) setSubject(Object.keys(curriculum||{})[0]||'Physics'); 
-    }, [curriculum]);
+    // Update subject when curriculum changes
+    useEffect(() => {
+      const keys = Object.keys(curriculum || {});
+      if (keys.length > 0 && !subject) {
+        setSubject(keys[0]);
+      }
+    }, [curriculum, subject]);
 
     const addNew = async () => {
       if (!newChapter.name) return alert('Name required');
+      if (!subject) return alert('Please select a subject');
       await addChapterAdmin(
         subject, 
         grade, 
@@ -1467,6 +1602,11 @@ function App() {
         return;
       }
       
+      if (!subject) {
+        alert('Please select a subject first');
+        return;
+      }
+      
       handleCSVImport(file, subject, grade);
       e.target.value = '';
     };
@@ -1478,14 +1618,15 @@ function App() {
           <select 
             value={subject} 
             onChange={e=>setSubject(e.target.value)} 
-            className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium"
+            className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium bg-white"
           >
-            {Object.keys(curriculum || {}).map(s => <option key={s} value={s}>{s}</option>)}
+            {curriculumKeys.length === 0 && <option value="">Loading...</option>}
+            {curriculumKeys.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <select 
             value={grade} 
             onChange={e=>setGrade(Number(e.target.value))} 
-            className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium"
+            className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium bg-white"
           >
             <option value={11}>Class 11</option>
             <option value={12}>Class 12</option>
@@ -1510,7 +1651,8 @@ function App() {
           />
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all file-upload-btn flex items-center gap-2"
+            disabled={!subject}
+            className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all file-upload-btn flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span>📁</span> Choose CSV File to Import
           </button>
@@ -1551,7 +1693,8 @@ function App() {
           <div className="mt-4">
             <button 
               onClick={addNew} 
-              className="px-5 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
+              disabled={!subject}
+              className="px-5 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Add Chapter
             </button>
@@ -1559,7 +1702,7 @@ function App() {
         </div>
 
         <div className="space-y-3">
-          {(curriculum[subject] && (curriculum[subject][grade] || []).map(ch => {
+          {subject && curriculum[subject] && (curriculum[subject][grade] || []).map(ch => {
             const prog = chapterProgress[ch.id] || {};
             const status = computeChapterStatus(ch, prog);
             
@@ -1617,7 +1760,11 @@ function App() {
                 </div>
               </div>
             );
-          })) || <div className="text-gray-500 text-center py-6">No chapters for this selection</div>}
+          })}
+          {!subject && <div className="text-gray-500 text-center py-6">Please select a subject</div>}
+          {subject && (!curriculum[subject] || !curriculum[subject][grade] || curriculum[subject][grade].length === 0) && (
+            <div className="text-gray-500 text-center py-6">No chapters for this selection</div>
+          )}
         </div>
       </div>
     );
@@ -1728,6 +1875,8 @@ function App() {
 
   // Settings Component
   function AdminSettings() {
+    const [newSchool, setNewSchool] = useState('');
+
     return (
       <div className="space-y-6">
         <h3 className="text-2xl font-bold">Settings</h3>
@@ -1754,7 +1903,48 @@ function App() {
             <div className="text-sm text-gray-700 space-y-2">
               <div>Total Teachers: <strong>{teachers.length}</strong></div>
               <div>Total Chapters: <strong>{analyticsData?.totalChapters || 0}</strong></div>
-              <div>Version: <strong>2.0 - Stable</strong></div>
+              <div>Total Schools: <strong>{schools.length}</strong></div>
+              <div>Version: <strong>2.0 - Production</strong></div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-lg md:col-span-2">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>🏫</span> School Management
+            </h4>
+            
+            <div className="mb-4">
+              <label className="text-sm font-medium text-gray-700 mb-2 block">Add New School</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  value={newSchool}
+                  onChange={e => setNewSchool(e.target.value)}
+                  placeholder="School name"
+                  className="flex-1 border-2 border-gray-300 px-3 py-2 rounded-lg"
+                />
+                <button 
+                  onClick={() => { addSchool(newSchool); setNewSchool(''); }}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-700 mb-2">Current Schools:</div>
+              {schools.map(school => (
+                <div key={school} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium">{school}</span>
+                  <button 
+                    onClick={() => deleteSchool(school)}
+                    className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -1819,7 +2009,7 @@ function App() {
             </div>
             <div className="bg-gradient-to-br from-green-500 to-emerald-500 text-white p-6 rounded-2xl shadow-lg text-center">
               <div className="text-sm opacity-90 mb-2">Total Schools</div>
-              <div className="text-5xl font-bold">{[...new Set(teachers.map(t=>t.school))].length}</div>
+              <div className="text-5xl font-bold">{schools.length}</div>
             </div>
             <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-2xl shadow-lg text-center">
               <div className="text-sm opacity-90 mb-2">Chapters Tracked</div>
