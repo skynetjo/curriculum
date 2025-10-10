@@ -156,6 +156,7 @@ const firebaseConfig = {
   appId: "1:471403213746:web:8a8a8a8a8a8a8a8a8a8a8a"
 };
 
+// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
@@ -181,9 +182,9 @@ function App() {
   const pieRef = useRef(null), barRef = useRef(null), schoolRef = useRef(null);
   const charts = useRef({});
 
-  // Seed data
+  // Seed data (only used for Firebase initialization if empty)
   const TEACHERS_SEED = [
-    { afid: 'admin', password: 'admin123', name: 'Admin User', isAdmin: true },
+    { afid: 'admin', password: 'admin123', name: 'Admin User', isAdmin: true, school: 'System Admin', subject: 'Administration' },
     { afid: 'VB001', password: 'password123', name: 'Vivek Bansal', school: 'CoE Barwani', subject: 'Physics', dob: '1985-03-15', email: 'vivek@example.com' }
   ];
 
@@ -199,28 +200,30 @@ function App() {
     }
   };
 
-  // Initialize data
+  // Initialize Firebase data only
   useEffect(() => {
-    initializeData();
+    initializeFirebaseData();
   }, []);
 
-  const initializeData = async () => {
+  const initializeFirebaseData = async () => {
     try {
-      // Initialize teachers
+      // Check if teachers collection exists and initialize if empty
       const teachersSnap = await db.collection('teachers').get();
       if (teachersSnap.empty) {
+        console.log('Initializing teachers data...');
         for (const teacher of TEACHERS_SEED) {
           await db.collection('teachers').add(teacher);
         }
       }
 
-      // Initialize curriculum
+      // Check if curriculum exists and initialize if empty
       const currSnap = await db.collection('curriculum').get();
       if (currSnap.empty) {
+        console.log('Initializing curriculum data...');
         await db.collection('curriculum').doc('data').set(CURRICULUM_SEED);
       }
 
-      // Set up listeners
+      // Set up Firebase listeners
       const unsubT = db.collection('teachers').onSnapshot(snap => {
         const teacherList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setTeachers(teacherList);
@@ -247,8 +250,10 @@ function App() {
         unsubC();
         unsubP();
       };
+
     } catch (error) {
-      console.error('Initialization error:', error);
+      console.error('Firebase initialization error:', error);
+      alert('Failed to connect to database. Please check your internet connection and try again.');
     }
   };
 
@@ -275,7 +280,7 @@ function App() {
     return { label:'Ahead', key:'ahead', color:'bg-green-100' };
   }
 
-  // Authentication
+  // Firebase-only authentication
   const handleLogin = async () => {
     if (!loginForm.afid || !loginForm.password) {
       alert('Please fill all fields');
@@ -283,7 +288,9 @@ function App() {
     }
 
     setLoading(true);
+
     try {
+      // Query Firebase for teacher
       const teachersSnap = await db.collection('teachers').where('afid', '==', loginForm.afid).get();
 
       if (teachersSnap.empty) {
@@ -292,14 +299,17 @@ function App() {
         return;
       }
 
-      const teacher = teachersSnap.docs[0].data();
+      const teacherDoc = teachersSnap.docs[0];
+      const teacher = teacherDoc.data();
+
       if (teacher.password !== loginForm.password) {
         alert('Invalid password');
         setLoading(false);
         return;
       }
 
-      setCurrentUser({ ...teacher, id: teachersSnap.docs[0].id });
+      // Successful login
+      setCurrentUser({ id: teacherDoc.id, ...teacher });
       setIsAdmin(teacher.isAdmin || false);
       setLoginForm({ afid: '', password: '' });
 
@@ -316,19 +326,19 @@ function App() {
           }, 5000);
         }
       }
+
     } catch (error) {
       console.error('Login error:', error);
-      alert('Login failed');
+      alert('Login failed. Please check your internet connection and try again.');
     }
+
     setLoading(false);
   };
 
-  // Chapter progress update
+  // Firebase-only chapter progress update
   const updateChapterProgress = async (chapterId, field, value) => {
     try {
-      const docRef = db.collection('chapterProgress').doc(chapterId);
       const currentData = chapterProgress[chapterId] || {};
-
       const updatedData = { ...currentData, [field]: value };
 
       // Auto-set completion date when chapter is completed
@@ -349,9 +359,12 @@ function App() {
         updatedData.completionDate = null;
       }
 
-      await docRef.set(updatedData, { merge: true });
+      // Save to Firebase only
+      await db.collection('chapterProgress').doc(chapterId).set(updatedData, { merge: true });
+
     } catch (error) {
       console.error('Update error:', error);
+      alert('Failed to update progress. Please check your internet connection.');
     }
   };
 
@@ -366,7 +379,7 @@ function App() {
     return d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
   });
 
-  // Login screen
+  // Login screen (without demo credentials)
   if (!currentUser) {
     return (
       <div className="min-h-screen animated-bg flex items-center justify-center p-4">
@@ -386,6 +399,7 @@ function App() {
                 onChange={e => setLoginForm(prev => ({ ...prev, afid: e.target.value }))}
                 className="w-full border border-gray-300 px-4 py-3 rounded-lg transition-all duration-200"
                 placeholder="Enter your AFID"
+                autoCapitalize="none"
               />
             </div>
             <div>
@@ -725,12 +739,44 @@ function App() {
     </div>
   );
 
-  // Simple admin dashboard (keeping the existing functionality)
+  // Simple admin dashboard
   const AdminDashboard = () => (
     <div className="space-y-6">
       <h2 className="text-3xl font-bold">⚙️ Admin Dashboard</h2>
       <div className="chapter-box bg-white p-6 rounded-xl shadow-lg">
-        <p className="text-gray-600">Admin functionality preserved from original code...</p>
+        <div className="grid md:grid-cols-3 gap-6">
+          <div className="p-6 bg-blue-50 rounded-lg text-center">
+            <div className="text-3xl font-bold text-blue-600">{teachers.length}</div>
+            <div className="text-blue-600 font-medium">Total Teachers</div>
+          </div>
+          <div className="p-6 bg-green-50 rounded-lg text-center">
+            <div className="text-3xl font-bold text-green-600">{Object.keys(curriculum).length}</div>
+            <div className="text-green-600 font-medium">Subjects</div>
+          </div>
+          <div className="p-6 bg-purple-50 rounded-lg text-center">
+            <div className="text-3xl font-bold text-purple-600">{Object.keys(chapterProgress).length}</div>
+            <div className="text-purple-600 font-medium">Chapters Tracked</div>
+          </div>
+        </div>
+
+        <div className="mt-8">
+          <h3 className="text-xl font-semibold mb-4">Teachers List</h3>
+          <div className="space-y-2">
+            {teachers.map((teacher, idx) => (
+              <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <div className="font-semibold">{teacher.name}</div>
+                  <div className="text-sm text-gray-600">{teacher.afid} • {teacher.school}</div>
+                </div>
+                <div className="text-sm">
+                  <span className={`px-2 py-1 rounded-full ${teacher.isAdmin ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {teacher.isAdmin ? 'Admin' : teacher.subject}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
