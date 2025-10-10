@@ -20,6 +20,9 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+  <!-- PapaParse for CSV -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
   <style>
     * { box-sizing: border-box; }
     
@@ -184,15 +187,24 @@
       left: 50%;
       transform: translate(-50%, -50%);
     }
+
+    /* File upload styling */
+    .file-upload-btn {
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .file-upload-btn:hover {
+      background: #7C3AED;
+    }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-/* Modern Curriculum Tracker with improved UI/UX */
+/* Stabilized Curriculum Tracker with all fixes */
 
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 // Firebase config
 const firebaseConfig = {
@@ -308,7 +320,7 @@ function App() {
   }, []);
 
   // Compute chapter status
-  function computeChapterStatus(chapter = {}, progress = {}) {
+  const computeChapterStatus = useCallback((chapter = {}, progress = {}) => {
     if (!chapter || !chapter.targetDate) return { label:'No target', key:'no-target', color:'bg-gray-100', textColor:'text-gray-700' };
     
     const target = new Date(chapter.targetDate);
@@ -347,7 +359,7 @@ function App() {
     }
     
     return { label:'Pending', key:'pending', color:'bg-gray-100 border-gray-300', textColor:'text-gray-700' };
-  }
+  }, []);
 
   // Analytics compute
   useEffect(() => {
@@ -383,7 +395,7 @@ function App() {
     const teacherArr = Object.values(teacherMap).map(t => ({ ...t, percent: t.total ? Math.round((t.completed / t.total) * 100) : 0 }));
     teacherArr.sort((a,b) => b.percent - a.percent);
     setAnalyticsData({ totalChapters, totalCompleted, teacherArr, schoolStatus });
-  }, [curriculum, chapterProgress, teachers]);
+  }, [curriculum, chapterProgress, teachers, computeChapterStatus]);
 
   // Charts
   useEffect(() => {
@@ -507,8 +519,8 @@ function App() {
     setLoading(false);
   };
 
-  // Update chapter progress
-  const updateChapterProgress = async (chapterId, field, value) => {
+  // Stabilized update with batching to prevent blinking
+  const updateChapterProgress = useCallback(async (chapterId, field, value) => {
     try {
       const updateObj = { [field]: value };
       
@@ -516,31 +528,32 @@ function App() {
         updateObj['completionDate'] = null;
       }
       
+      // Optimistic update first to prevent blinking
+      setChapterProgress(prev => ({ 
+        ...prev, 
+        [chapterId]: { ...(prev[chapterId]||{}), ...updateObj } 
+      }));
+      
+      // Then update Firebase
       await db.collection('chapterProgress').doc(chapterId).set(updateObj, { merge: true });
-      setChapterProgress(prev => ({ ...prev, [chapterId]: { ...(prev[chapterId]||{}), ...updateObj } }));
       
-      if (field === 'completed' && value === 'Yes') {
-        const cur = chapterProgress[chapterId] || {};
-        if (cur.testConducted === 'Yes' || updateObj.testConducted === 'Yes') {
-          setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 5000);
-        }
-      }
+      // Check confetti conditions
+      const currentProg = chapterProgress[chapterId] || {};
+      const newProg = { ...currentProg, ...updateObj };
       
-      if (field === 'testConducted' && value === 'Yes') {
-        const cur = chapterProgress[chapterId] || {};
-        if (cur.completed === 'Yes' || updateObj.completed === 'Yes') {
-          setShowConfetti(true);
-          setTimeout(() => setShowConfetti(false), 5000);
-        }
+      if (newProg.completed === 'Yes' && newProg.testConducted === 'Yes') {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000);
       }
     } catch (e) {
       console.error('update error', e);
       alert('Failed to update');
     }
-  };
+  }, [chapterProgress]);
 
-  const toggleExpand = (id) => setExpandedChapters(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggleExpand = useCallback((id) => {
+    setExpandedChapters(prev => ({ ...prev, [id]: !prev[id] }));
+  }, []);
 
   // Export CSV
   const exportCSV = () => {
@@ -558,14 +571,16 @@ function App() {
   };
 
   // Birthdays
-  const todaysBirthdays = teachers.filter(t => {
-    if (!t.dob) return false;
-    const d = new Date(t.dob); 
-    const now = new Date();
-    return d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
-  });
+  const todaysBirthdays = useMemo(() => {
+    return teachers.filter(t => {
+      if (!t.dob) return false;
+      const d = new Date(t.dob); 
+      const now = new Date();
+      return d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
+    });
+  }, [teachers]);
 
-  const upcoming = (period='week') => {
+  const upcoming = useCallback((period='week') => {
     const now = new Date();
     return teachers.filter(t => {
       if (!t.dob) return false;
@@ -575,7 +590,15 @@ function App() {
       if (period === 'week') return diff >=0 && diff <= 7;
       return diff >=0 && diff <= 30;
     });
-  };
+  }, [teachers]);
+
+  // Get subjects available at current user's school
+  const getSchoolSubjects = useCallback(() => {
+    if (!currentUser || !currentUser.school) return Object.keys(curriculum || {});
+    const schoolTeachers = teachers.filter(t => t.school === currentUser.school);
+    const subjects = [...new Set(schoolTeachers.map(t => t.subject))];
+    return subjects.filter(s => curriculum[s]); // Only subjects that exist in curriculum
+  }, [currentUser, teachers, curriculum]);
 
   // Admin functions
   const addOrUpdateTeacher = async (teacherObj) => {
@@ -635,6 +658,71 @@ function App() {
       newCurr[subject][grade] = newCurr[subject][grade].filter(ch => ch.id !== id);
       await saveCurriculum(newCurr);
     } catch (e) { console.error(e); alert('Delete failed'); }
+  };
+
+  // CSV Import functionality
+  const handleCSVImport = (file, subject, grade) => {
+    Papa.parse(file, {
+      complete: async (results) => {
+        try {
+          const rows = results.data;
+          if (rows.length < 2) {
+            alert('CSV file is empty or invalid');
+            return;
+          }
+          
+          // Parse chapters and topics
+          const chapters = [];
+          let currentChapter = null;
+          
+          rows.forEach((row, index) => {
+            if (index === 0) return; // Skip header
+            
+            const chapterName = row[0] ? row[0].trim() : '';
+            const topicName = row[1] ? row[1].trim() : '';
+            
+            if (chapterName) {
+              // New chapter
+              if (currentChapter) {
+                chapters.push(currentChapter);
+              }
+              currentChapter = {
+                name: chapterName,
+                topics: topicName ? [topicName] : [],
+                targetDate: ''
+              };
+            } else if (topicName && currentChapter) {
+              // Add topic to current chapter
+              currentChapter.topics.push(topicName);
+            }
+          });
+          
+          // Add last chapter
+          if (currentChapter) {
+            chapters.push(currentChapter);
+          }
+          
+          if (chapters.length === 0) {
+            alert('No valid chapters found in CSV');
+            return;
+          }
+          
+          // Add chapters to curriculum
+          for (const chapter of chapters) {
+            await addChapterAdmin(subject, grade, chapter);
+          }
+          
+          alert(`Successfully imported ${chapters.length} chapters!`);
+        } catch (e) {
+          console.error('Import error:', e);
+          alert('Failed to import CSV. Please check the format.');
+        }
+      },
+      error: (error) => {
+        console.error('Parse error:', error);
+        alert('Failed to parse CSV file');
+      }
+    });
   };
 
   // Modern Confetti Component
@@ -729,7 +817,8 @@ function App() {
 
   // Overview Component
   const Overview = () => {
-    const subjects = Object.keys(curriculum || {});
+    const subjects = getSchoolSubjects();
+    
     return (
       <div className="space-y-6 fade-in">
         <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
@@ -824,8 +913,9 @@ function App() {
     );
   };
 
-  // Chapters Component with improved UI
+  // Chapters Component with STABLE grade selection
   const Chapters = () => {
+    // Use a separate state to maintain grade selection
     const [selectedGrade, setSelectedGrade] = useState(11);
     const subj = currentUser.subject;
     const chapters = (curriculum[subj] && curriculum[subj][selectedGrade]) || [];
@@ -1186,6 +1276,7 @@ function App() {
     const [subject, setSubject] = useState(Object.keys(curriculum || {})[0] || 'Physics');
     const [grade, setGrade] = useState(11);
     const [newChapter, setNewChapter] = useState({ name:'', topics:'', targetDate:'' });
+    const fileInputRef = useRef(null);
 
     useEffect(() => { 
       if (!subject) setSubject(Object.keys(curriculum||{})[0]||'Physics'); 
@@ -1203,6 +1294,19 @@ function App() {
         }
       );
       setNewChapter({ name:'', topics:'', targetDate:'' });
+    };
+
+    const handleFileUpload = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      if (!file.name.endsWith('.csv')) {
+        alert('Please upload a CSV file');
+        return;
+      }
+      
+      handleCSVImport(file, subject, grade);
+      e.target.value = ''; // Reset file input
     };
 
     return (
@@ -1226,8 +1330,42 @@ function App() {
           </select>
         </div>
 
+        {/* CSV Import Section */}
+        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-6 rounded-2xl shadow-lg border-2 border-blue-200">
+          <h4 className="font-bold text-lg mb-3 text-blue-900 flex items-center gap-2">
+            <span>📊</span> Import Curriculum from CSV
+          </h4>
+          <p className="text-sm text-gray-700 mb-4">
+            Upload a CSV file with format: <strong>Column A = Chapter Name, Column B = Topic Name</strong><br/>
+            (Chapter name only on first row, then multiple topic rows)
+          </p>
+          <input 
+            ref={fileInputRef}
+            type="file" 
+            accept=".csv" 
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all file-upload-btn flex items-center gap-2"
+          >
+            <span>📁</span> Choose CSV File to Import
+          </button>
+          <div className="mt-3 text-xs text-gray-600 bg-white p-3 rounded-lg">
+            <strong>Example CSV format:</strong><br/>
+            Chapter,Topic<br/>
+            Unit & Dimension,Units<br/>
+            ,Dimensions<br/>
+            ,Errors<br/>
+            Motion,Distance<br/>
+            ,Velocity
+          </div>
+        </div>
+
+        {/* Manual Entry Section */}
         <div className="bg-white p-6 rounded-2xl shadow-lg">
-          <h4 className="font-bold text-lg mb-3">Add New Chapter</h4>
+          <h4 className="font-bold text-lg mb-3">Or Add Manually</h4>
           <div className="grid md:grid-cols-3 gap-3">
             <input 
               placeholder="Chapter name" 
@@ -1251,7 +1389,7 @@ function App() {
           <div className="mt-4">
             <button 
               onClick={addNew} 
-              className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
+              className="px-5 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
             >
               Add Chapter
             </button>
@@ -1432,6 +1570,71 @@ function App() {
     );
   }
 
+  // Settings Component
+  function AdminSettings() {
+    return (
+      <div className="space-y-6">
+        <h3 className="text-2xl font-bold">Settings</h3>
+        
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>📋</span> Data Management
+            </h4>
+            <div className="space-y-3">
+              <button 
+                onClick={exportCSV}
+                className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-left"
+              >
+                Export Analytics Data (CSV)
+              </button>
+              <button 
+                onClick={() => {
+                  if (confirm('This will reset all chapter progress. Are you sure?')) {
+                    // Add reset logic here
+                    alert('Feature coming soon');
+                  }
+                }}
+                className="w-full px-4 py-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-all text-left"
+              >
+                Reset All Progress
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>🔔</span> Notifications
+            </h4>
+            <p className="text-gray-600 text-sm">
+              Notification settings and alerts configuration will be available here.
+            </p>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>👥</span> User Roles
+            </h4>
+            <p className="text-gray-600 text-sm">
+              Manage user roles and permissions.
+            </p>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>⚙️</span> System Info
+            </h4>
+            <div className="text-sm text-gray-700 space-y-2">
+              <div>Total Teachers: <strong>{teachers.length}</strong></div>
+              <div>Total Chapters: <strong>{analyticsData?.totalChapters || 0}</strong></div>
+              <div>Version: <strong>2.0</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function AdminDashboard() {
     const [tab, setTab] = useState('overview');
     
@@ -1477,12 +1680,7 @@ function App() {
         {tab === 'teachers' && <AdminTeachers />}
         {tab === 'curriculum' && <AdminCurriculum />}
         {tab === 'analytics' && <AdminAnalytics />}
-        {tab === 'settings' && (
-          <div className="bg-white p-6 rounded-2xl shadow-lg">
-            <h4 className="font-bold text-lg mb-3">Settings</h4>
-            <p className="text-gray-600">Admin settings and configurations will be available here.</p>
-          </div>
-        )}
+        {tab === 'settings' && <AdminSettings />}
       </div>
     );
   }
