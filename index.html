@@ -210,7 +210,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-/* FINAL CLEAN VERSION - NO SEED DATA */
+/* FINAL VERSION - CLEAN START */
 
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
@@ -224,7 +224,7 @@ const firebaseConfig = {
   appId: "1:706387632109:web:06c78a304fdbdc12f391e4"
 };
 
-// Primary app for admin and regular operations
+// Initialize Firebase
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
@@ -324,7 +324,7 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Initialize DB - NO SEED DATA
+  // Initialize DB listeners
   useEffect(() => {
     let unsubP, unsubT, unsubC;
 
@@ -361,7 +361,7 @@ function App() {
 
     if (progress.completed === 'Yes' && progress.testConducted === 'Yes') {
       if (compDate && compDate < target) {
-        return { label:'Ahead — Excellent!', key:'ahead', color:'bg-gradient-to-r from-green-400 to-emerald-500', textColor:'text-white' };
+        return { label:'Ahead – Excellent!', key:'ahead', color:'bg-gradient-to-r from-green-400 to-emerald-500', textColor:'text-white' };
       }
       if (compDate && compDate > target) {
         return { label:'Completed (Late)', key:'delayed', color:'bg-orange-100 border-orange-300', textColor:'text-orange-700' };
@@ -637,30 +637,6 @@ function App() {
     return subjects.filter(s => curriculum[s]);
   }, [currentUser, teachers, curriculum]);
 
-  // FIXED: Create user account using REST API instead of secondary auth
-  const createUserAccount = async (email, password, teacherData) => {
-    try {
-      // First, save teacher data to Firestore
-      await db.collection('teachers').doc(teacherData.afid).set({
-        ...teacherData,
-        email: email
-      });
-      
-      // Show success and instructions
-      alert(`Teacher data saved successfully!\n\nIMPORTANT: You need to create the Firebase Authentication account manually:\n\n1. Go to Firebase Console (https://console.firebase.google.com)\n2. Select your project: curriculum-dbb10\n3. Go to Authentication → Users\n4. Click "Add User"\n5. Enter email: ${email}\n6. Enter password: ${password}\n\nAfter creating the account, the teacher can login with their credentials.`);
-      
-      return true;
-    } catch (e) {
-      console.error('Save teacher error', e);
-      if (e.code === 'permission-denied') {
-        alert('Permission denied. Please check Firestore security rules:\n\nGo to Firebase Console → Firestore Database → Rules\nEnsure authenticated users can write to the teachers collection.');
-      } else {
-        alert('Failed to save teacher: ' + e.message);
-      }
-      return false;
-    }
-  };
-
   const addOrUpdateTeacher = async (teacherObj, password = null) => {
     if (!teacherObj.afid) return alert('AFID required');
     if (!teacherObj.email) return alert('Email required');
@@ -672,9 +648,10 @@ function App() {
     
     try {
       if (password) {
-        // Create new account
-        const success = await createUserAccount(email, password, { ...teacherObj, afid: id });
-        if (!success) return;
+        // New teacher - save to Firestore first
+        await db.collection('teachers').doc(id).set({ ...teacherObj, afid: id, email: email });
+        
+        alert(`Teacher data saved!\n\nNOW CREATE FIREBASE AUTH ACCOUNT:\n\n1. Go to Firebase Console\n2. Authentication → Users → Add User\n3. Email: ${email}\n4. Password: ${password}\n\nAfter this, teacher can login.`);
       } else {
         // Just update Firestore
         await db.collection('teachers').doc(id).set({ ...teacherObj, afid: id, email: email }, { merge: true });
@@ -687,10 +664,10 @@ function App() {
   };
 
   const deleteTeacher = async (afid, email) => {
-    if (!confirm('Delete teacher ' + afid + '?\n\nNote: You will need to manually delete their Firebase Auth account:\n1. Go to Firebase Console\n2. Authentication → Users\n3. Find and delete: ' + email)) return;
+    if (!confirm(`Delete teacher ${afid}?\n\nREMINDER: Also delete their Firebase Auth account manually.`)) return;
     try { 
       await db.collection('teachers').doc(afid).delete(); 
-      alert('Teacher deleted from database.\n\nReminder: Also delete their Firebase Auth account from the Console.'); 
+      alert('Teacher deleted from database.\n\nDon\'t forget to delete from Firebase Auth!'); 
     } catch (e) { 
       console.error(e); 
       alert('Delete failed: ' + e.message); 
@@ -872,7 +849,7 @@ function App() {
     );
   }
 
-  // Login UI
+  // Login UI - INSTRUCTIONS REMOVED
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 animated-gradient flex items-center justify-center p-4">
@@ -883,7 +860,7 @@ function App() {
               Curriculum Tracker
             </h1>
             <p className="text-gray-600 mt-3 text-lg">Avanti Fellows</p>
-            <p className="text-gray-500 mt-1 text-sm">Login with your email</p>
+            <p className="text-gray-500 mt-1 text-sm">Login with your credentials</p>
           </div>
 
           <div className="space-y-5">
@@ -893,7 +870,7 @@ function App() {
                 className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg transition-all focus:border-purple-500" 
                 value={loginForm.email} 
                 onChange={e => setLoginForm({...loginForm, email: e.target.value})} 
-                placeholder="Email (e.g. admin@avantifellows.org)" 
+                placeholder="Email" 
               />
             </div>
             <div>
@@ -921,13 +898,6 @@ function App() {
                 </span>
               ) : 'Login'}
             </button>
-          </div>
-          
-          <div className="mt-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-sm">
-            <p className="font-bold text-yellow-800 mb-2">🔧 First Time Setup:</p>
-            <p className="text-gray-700">Create admin account in Firebase Console:</p>
-            <p className="text-gray-600 mt-1">Email: admin@avantifellows.org</p>
-            <p className="text-gray-600">Password: (your choice)</p>
           </div>
         </div>
       </div>
@@ -1636,7 +1606,7 @@ function App() {
             disabled={!subject}
             className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all file-upload-btn flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span>📁</span> Choose CSV File to Import
+            <span>📂</span> Choose CSV File to Import
           </button>
           <div className="mt-3 text-xs text-gray-600 bg-white p-3 rounded-lg">
             <strong>Example CSV format:</strong><br/>
@@ -1906,7 +1876,7 @@ function App() {
               <div>Total Teachers: <strong>{teachers.length}</strong></div>
               <div>Total Chapters: <strong>{analyticsData?.totalChapters || 0}</strong></div>
               <div>Total Schools: <strong>{schools.length}</strong></div>
-              <div>Version: <strong>3.0 - Clean Start</strong></div>
+              <div>Version: <strong>3.1 Final</strong></div>
             </div>
           </div>
 
@@ -1947,27 +1917,6 @@ function App() {
                   </button>
                 </div>
               ))}
-            </div>
-          </div>
-
-          <div className="bg-yellow-50 border-2 border-yellow-300 p-6 rounded-2xl shadow-lg md:col-span-2">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2 text-yellow-800">
-              <span>⚠️</span> Important: Manual Firebase Setup Required
-            </h4>
-            <div className="text-sm text-gray-700 space-y-3">
-              <p className="font-bold">To create teacher accounts, you must manually create Firebase Auth accounts:</p>
-              <ol className="list-decimal list-inside space-y-2 pl-4">
-                <li>When you add a teacher, their data is saved to Firestore</li>
-                <li>You'll see a popup with instructions</li>
-                <li>Go to <a href="https://console.firebase.google.com" target="_blank" className="text-blue-600 underline">Firebase Console</a></li>
-                <li>Select your project: <strong>curriculum-dbb10</strong></li>
-                <li>Go to Authentication → Users</li>
-                <li>Click "Add User" and enter the email and password shown in the popup</li>
-                <li>The teacher can then login with those credentials</li>
-              </ol>
-              <p className="text-xs text-gray-600 mt-3 p-3 bg-white rounded">
-                <strong>Why manual?</strong> Firebase security restrictions prevent creating auth accounts directly from the client for security reasons. This is the proper way to handle user creation in a production environment.
-              </p>
             </div>
           </div>
         </div>
