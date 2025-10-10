@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Curriculum Tracker</title>
+  <title>Curriculum Tracker - Avanti Fellows</title>
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 
   <!-- React -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -196,17 +197,24 @@
     .file-upload-btn:hover {
       background: #7C3AED;
     }
+    
+    /* Prevent flickering during updates */
+    .no-flicker {
+      will-change: contents;
+      backface-visibility: hidden;
+      transform: translateZ(0);
+    }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-/* Stabilized Curriculum Tracker with all fixes */
+/* Final Stable Curriculum Tracker with Firebase Auth */
 
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-// Firebase config
+// Firebase config - UPDATE WITH YOUR CREDENTIALS
 const firebaseConfig = {
   apiKey: "AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",
   authDomain: "curriculum-dbb10.firebaseapp.com",
@@ -218,14 +226,16 @@ const firebaseConfig = {
 
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
 
 function App() {
   // Global states
   const [currentUser, setCurrentUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  const [loginForm, setLoginForm] = useState({ afid: '', password: '' });
-  const [loading, setLoading] = useState(false);
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
 
   const [teachers, setTeachers] = useState([]);
   const [curriculum, setCurriculum] = useState({});
@@ -242,10 +252,10 @@ function App() {
 
   // Seed data
   const TEACHERS_SEED = [
-    { afid:'AF248', name:'Vivek Bansal', subject:'Physics', school:'CoE Barwani', dob:'1990-03-15', email:'vivek@example.com', phone:'9876543210', password:'pass123' },
-    { afid:'AF464', name:'Sandeep Dixit', subject:'Chemistry', school:'CoE Barwani', dob:'1988-07-22', email:'sandeep@example.com', phone:'9876543211', password:'pass123' },
-    { afid:'AF853', name:'Dayanand Kumar', subject:'Maths', school:'CoE Barwani', dob:'1992-11-08', email:'dayanand@example.com', phone:'9876543212', password:'pass123' },
-    { afid:'AF723', name:'Ranjesh', subject:'Biology', school:'JNV Bharuch', dob:'1990-05-05', email:'ranjesh@example.com', phone:'9876543228', password:'pass123' }
+    { afid:'AF248', name:'Vivek Bansal', subject:'Physics', school:'CoE Barwani', dob:'1990-03-15', email:'vivek@avantifellows.org', phone:'9876543210' },
+    { afid:'AF464', name:'Sandeep Dixit', subject:'Chemistry', school:'CoE Barwani', dob:'1988-07-22', email:'sandeep@avantifellows.org', phone:'9876543211' },
+    { afid:'AF853', name:'Dayanand Kumar', subject:'Maths', school:'CoE Barwani', dob:'1992-11-08', email:'dayanand@avantifellows.org', phone:'9876543212' },
+    { afid:'AF723', name:'Ranjesh', subject:'Biology', school:'JNV Bharuch', dob:'1990-05-05', email:'ranjesh@avantifellows.org', phone:'9876543228' }
   ];
   
   const CURRICULUM_SEED = {
@@ -285,6 +295,52 @@ function App() {
     }
   };
 
+  // Auth state observer
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        // Check if admin
+        if (user.email === 'admin@avantifellows.org') {
+          setIsAdmin(true);
+          setCurrentUser({ name: 'Administrator', email: user.email, afid: 'ADMIN' });
+          setActiveTab('admin');
+        } else {
+          // Get teacher data
+          const teacherSnapshot = await db.collection('teachers')
+            .where('email', '==', user.email)
+            .limit(1)
+            .get();
+          
+          if (!teacherSnapshot.empty) {
+            const teacherData = teacherSnapshot.docs[0].data();
+            setCurrentUser(teacherData);
+            setIsAdmin(false);
+            setActiveTab('overview');
+            
+            // Check birthday
+            if (teacherData.dob) {
+              const d = new Date(teacherData.dob); 
+              const now = new Date();
+              if (d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) {
+                setShowConfetti(true);
+                setTimeout(() => setShowConfetti(false), 5000);
+              }
+            }
+          } else {
+            console.error('Teacher data not found');
+            await auth.signOut();
+          }
+        }
+      } else {
+        setCurrentUser(null);
+        setIsAdmin(false);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   // Initialize DB
   useEffect(() => {
     let unsubP, unsubT, unsubC;
@@ -304,16 +360,16 @@ function App() {
       const map = {};
       snap.docs.forEach(d => map[d.id] = d.data());
       setChapterProgress(map);
-    });
+    }, err => console.error('chapterProgress error', err));
 
     unsubT = db.collection('teachers').onSnapshot(snap => {
       setTeachers(snap.docs.map(d => d.data()));
-    });
+    }, err => console.error('teachers error', err));
 
     unsubC = db.collection('meta').doc('curriculum').onSnapshot(doc => {
       if (doc.exists) setCurriculum(doc.data());
       else setCurriculum(CURRICULUM_SEED);
-    });
+    }, err => console.error('curriculum error', err));
 
     init();
     return () => { if (unsubP) unsubP(); if (unsubT) unsubT(); if (unsubC) unsubC(); };
@@ -329,7 +385,6 @@ function App() {
     const topicsDone = (progress.completedTopics || []).length;
     const topicsTotal = (chapter.topics || []).length;
 
-    // Completed with test
     if (progress.completed === 'Yes' && progress.testConducted === 'Yes') {
       if (compDate && compDate < target) {
         return { label:'Ahead — Excellent!', key:'ahead', color:'bg-gradient-to-r from-green-400 to-emerald-500', textColor:'text-white' };
@@ -340,12 +395,10 @@ function App() {
       return { label:'Completed ✓', key:'completed', color:'bg-green-100 border-green-300', textColor:'text-green-700' };
     }
 
-    // Completed but no test
     if (progress.completed === 'Yes' && progress.testConducted !== 'Yes') {
       return { label:'Partially Completed', key:'partial', color:'bg-yellow-100 border-yellow-300', textColor:'text-yellow-700' };
     }
 
-    // In progress with some topics done
     if (topicsDone > 0 && topicsDone < topicsTotal) {
       if (today > target) {
         return { label:'Delayed (In Progress)', key:'delayed-progress', color:'bg-red-100 border-red-300', textColor:'text-red-700' };
@@ -353,7 +406,6 @@ function App() {
       return { label:`In Progress (${topicsDone}/${topicsTotal})`, key:'in-progress', color:'bg-blue-100 border-blue-300', textColor:'text-blue-700' };
     }
 
-    // Not started
     if (today > target) {
       return { label:'Delayed', key:'delayed', color:'bg-red-100 border-red-300', textColor:'text-red-700' };
     }
@@ -477,49 +529,47 @@ function App() {
     charts.current = {}; 
   }
 
-  // Login
+  // Login with Firebase Auth
   const handleLogin = async () => {
-    setLoading(true);
+    setAuthLoading(true);
     try {
-      const afid = (loginForm.afid || '').trim().toUpperCase();
-      if (!afid) { alert('Enter AFID'); setLoading(false); return; }
+      const email = (loginForm.email || '').trim().toLowerCase();
+      const password = loginForm.password;
       
-      if (afid === 'ADMIN' && loginForm.password === 'admin123') {
-        setIsAdmin(true);
-        setCurrentUser({ name:'Administrator', afid:'ADMIN' });
-        setActiveTab('admin');
-        setLoading(false);
-        return;
+      if (!email || !password) { 
+        alert('Please enter email and password'); 
+        setAuthLoading(false); 
+        return; 
       }
       
-      const doc = await db.collection('teachers').doc(afid).get();
-      if (!doc.exists) { alert('Invalid AFID or password'); setLoading(false); return; }
-      
-      const t = doc.data();
-      if (t.password === loginForm.password) {
-        setCurrentUser(t);
-        setIsAdmin(false);
-        setActiveTab('overview');
-        
-        if (t.dob) {
-          const d = new Date(t.dob); 
-          const now = new Date();
-          if (d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) {
-            setShowConfetti(true);
-            setTimeout(() => setShowConfetti(false), 5000);
-          }
-        }
-      } else { 
-        alert('Invalid AFID or password'); 
-      }
+      await auth.signInWithEmailAndPassword(email, password);
+      // Auth state observer will handle the rest
     } catch (e) { 
       console.error('login error', e); 
-      alert('Login failed'); 
+      if (e.code === 'auth/user-not-found') {
+        alert('User not found. Please contact admin.');
+      } else if (e.code === 'auth/wrong-password') {
+        alert('Incorrect password.');
+      } else if (e.code === 'auth/invalid-email') {
+        alert('Invalid email format.');
+      } else {
+        alert('Login failed: ' + e.message);
+      }
     }
-    setLoading(false);
+    setAuthLoading(false);
   };
 
-  // Stabilized update with batching to prevent blinking
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      setActiveTab('overview');
+    } catch (e) {
+      console.error('logout error', e);
+    }
+  };
+
+  // Stabilized update with batching and debouncing
+  const updateTimeouts = useRef({});
   const updateChapterProgress = useCallback(async (chapterId, field, value) => {
     try {
       const updateObj = { [field]: value };
@@ -528,23 +578,35 @@ function App() {
         updateObj['completionDate'] = null;
       }
       
-      // Optimistic update first to prevent blinking
+      // Immediate optimistic update to prevent blinking
       setChapterProgress(prev => ({ 
         ...prev, 
         [chapterId]: { ...(prev[chapterId]||{}), ...updateObj } 
       }));
       
-      // Then update Firebase
-      await db.collection('chapterProgress').doc(chapterId).set(updateObj, { merge: true });
-      
-      // Check confetti conditions
-      const currentProg = chapterProgress[chapterId] || {};
-      const newProg = { ...currentProg, ...updateObj };
-      
-      if (newProg.completed === 'Yes' && newProg.testConducted === 'Yes') {
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 5000);
+      // Clear existing timeout for this chapter
+      if (updateTimeouts.current[chapterId]) {
+        clearTimeout(updateTimeouts.current[chapterId]);
       }
+      
+      // Debounce Firebase update by 300ms to batch rapid changes
+      updateTimeouts.current[chapterId] = setTimeout(async () => {
+        try {
+          await db.collection('chapterProgress').doc(chapterId).set(updateObj, { merge: true });
+          
+          // Check confetti conditions
+          const currentProg = chapterProgress[chapterId] || {};
+          const newProg = { ...currentProg, ...updateObj };
+          
+          if (newProg.completed === 'Yes' && newProg.testConducted === 'Yes') {
+            setShowConfetti(true);
+            setTimeout(() => setShowConfetti(false), 5000);
+          }
+        } catch (e) {
+          console.error('Firebase update error', e);
+        }
+      }, 300);
+      
     } catch (e) {
       console.error('update error', e);
       alert('Failed to update');
@@ -597,24 +659,72 @@ function App() {
     if (!currentUser || !currentUser.school) return Object.keys(curriculum || {});
     const schoolTeachers = teachers.filter(t => t.school === currentUser.school);
     const subjects = [...new Set(schoolTeachers.map(t => t.subject))];
-    return subjects.filter(s => curriculum[s]); // Only subjects that exist in curriculum
+    return subjects.filter(s => curriculum[s]);
   }, [currentUser, teachers, curriculum]);
 
   // Admin functions
-  const addOrUpdateTeacher = async (teacherObj) => {
-    if (!teacherObj.afid) return alert('AFID required');
-    const id = teacherObj.afid.toUpperCase();
+  const createUserAccount = async (email, password, teacherData) => {
     try {
-      await db.collection('teachers').doc(id).set({ ...teacherObj, afid: id }, { merge: true });
-      alert('Saved teacher');
-    } catch (e) { console.error('save teacher err', e); alert('Save failed'); }
+      // Create Firebase Auth user
+      const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+      
+      // Save teacher data to Firestore
+      await db.collection('teachers').doc(teacherData.afid).set({
+        ...teacherData,
+        email: email,
+        uid: userCredential.user.uid
+      });
+      
+      // Sign out the newly created user so admin can stay logged in
+      await auth.signOut();
+      
+      // Sign admin back in
+      await auth.signInWithEmailAndPassword('admin@avantifellows.org', 'admin123');
+      
+      alert('Teacher account created successfully!');
+      return true;
+    } catch (e) {
+      console.error('Create user error', e);
+      if (e.code === 'auth/email-already-in-use') {
+        alert('Email already in use. Please use a different email.');
+      } else if (e.code === 'auth/weak-password') {
+        alert('Password should be at least 6 characters.');
+      } else {
+        alert('Failed to create account: ' + e.message);
+      }
+      return false;
+    }
   };
 
-  const deleteTeacher = async (afid) => {
-    if (!confirm('Delete teacher ' + afid + '?')) return;
+  const addOrUpdateTeacher = async (teacherObj, password = null) => {
+    if (!teacherObj.afid) return alert('AFID required');
+    if (!teacherObj.email) return alert('Email required');
+    
+    const id = teacherObj.afid.toUpperCase();
+    const email = teacherObj.email.toLowerCase();
+    
+    try {
+      // Check if this is a new teacher (has password)
+      if (password) {
+        // Create Firebase Auth account
+        const success = await createUserAccount(email, password, { ...teacherObj, afid: id });
+        if (!success) return;
+      } else {
+        // Just update Firestore data
+        await db.collection('teachers').doc(id).set({ ...teacherObj, afid: id, email: email }, { merge: true });
+        alert('Teacher data updated');
+      }
+    } catch (e) { 
+      console.error('save teacher err', e); 
+      alert('Save failed: ' + e.message); 
+    }
+  };
+
+  const deleteTeacher = async (afid, email) => {
+    if (!confirm('Delete teacher ' + afid + '? Note: You will need to manually delete their Firebase Auth account from the Firebase Console.')) return;
     try { 
       await db.collection('teachers').doc(afid).delete(); 
-      alert('Deleted'); 
+      alert('Teacher deleted from database. Please also delete their auth account from Firebase Console if needed.'); 
     } catch (e) { 
       console.error(e); 
       alert('Delete failed'); 
@@ -671,18 +781,16 @@ function App() {
             return;
           }
           
-          // Parse chapters and topics
           const chapters = [];
           let currentChapter = null;
           
           rows.forEach((row, index) => {
-            if (index === 0) return; // Skip header
+            if (index === 0) return;
             
             const chapterName = row[0] ? row[0].trim() : '';
             const topicName = row[1] ? row[1].trim() : '';
             
             if (chapterName) {
-              // New chapter
               if (currentChapter) {
                 chapters.push(currentChapter);
               }
@@ -692,12 +800,10 @@ function App() {
                 targetDate: ''
               };
             } else if (topicName && currentChapter) {
-              // Add topic to current chapter
               currentChapter.topics.push(topicName);
             }
           });
           
-          // Add last chapter
           if (currentChapter) {
             chapters.push(currentChapter);
           }
@@ -707,7 +813,6 @@ function App() {
             return;
           }
           
-          // Add chapters to curriculum
           for (const chapter of chapters) {
             await addChapterAdmin(subject, grade, chapter);
           }
@@ -762,6 +867,18 @@ function App() {
     );
   }
 
+  // Loading screen
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 animated-gradient flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-8xl mb-4 animate-bounce">📚</div>
+          <div className="text-white text-2xl font-bold">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
   // Login UI
   if (!currentUser) {
     return (
@@ -772,16 +889,18 @@ function App() {
             <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
               Curriculum Tracker
             </h1>
-            <p className="text-gray-600 mt-3 text-lg">Login to continue</p>
+            <p className="text-gray-600 mt-3 text-lg">Avanti Fellows</p>
+            <p className="text-gray-500 mt-1 text-sm">Login with your email</p>
           </div>
 
           <div className="space-y-5">
             <div>
               <input 
+                type="email"
                 className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg transition-all focus:border-purple-500" 
-                value={loginForm.afid} 
-                onChange={e => setLoginForm({...loginForm, afid: e.target.value})} 
-                placeholder="Enter AFID" 
+                value={loginForm.email} 
+                onChange={e => setLoginForm({...loginForm, email: e.target.value})} 
+                placeholder="Email (e.g. vivek@avantifellows.org)" 
               />
             </div>
             <div>
@@ -796,10 +915,10 @@ function App() {
             </div>
             <button 
               onClick={handleLogin} 
-              disabled={loading} 
+              disabled={authLoading} 
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-bold text-lg btn-primary disabled:opacity-50"
             >
-              {loading ? (
+              {authLoading ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
@@ -809,6 +928,10 @@ function App() {
                 </span>
               ) : 'Login'}
             </button>
+          </div>
+          
+          <div className="mt-6 text-center text-sm text-gray-600">
+            <p>Need help? Contact admin@avantifellows.org</p>
           </div>
         </div>
       </div>
@@ -913,15 +1036,17 @@ function App() {
     );
   };
 
-  // Chapters Component with STABLE grade selection
-  const Chapters = () => {
-    // Use a separate state to maintain grade selection
+  // STABLE Chapters Component with persistent grade selection
+  const Chapters = React.memo(() => {
+    // Persistent grade state that won't reset on re-renders
     const [selectedGrade, setSelectedGrade] = useState(11);
     const subj = currentUser.subject;
-    const chapters = (curriculum[subj] && curriculum[subj][selectedGrade]) || [];
+    const chapters = useMemo(() => {
+      return (curriculum[subj] && curriculum[subj][selectedGrade]) || [];
+    }, [curriculum, subj, selectedGrade]);
 
     return (
-      <div className="space-y-6 fade-in">
+      <div className="space-y-6 fade-in no-flicker">
         <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
           📘 Chapters - {subj}
         </h2>
@@ -960,7 +1085,7 @@ function App() {
             return (
               <div 
                 key={ch.id} 
-                className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5`}
+                className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5 no-flicker`}
               >
                 {/* Header */}
                 <div className="mb-4">
@@ -1136,7 +1261,7 @@ function App() {
         </div>
       </div>
     );
-  };
+  });
 
   // Profile Component
   const Profile = () => (
@@ -1169,15 +1294,29 @@ function App() {
   function AdminTeachers() {
     const [editing, setEditing] = useState(null);
     const [form, setForm] = useState({ afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' });
+    const [isNewTeacher, setIsNewTeacher] = useState(false);
 
     useEffect(() => {
-      setForm(editing || { afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' });
+      if (editing) {
+        setForm(editing);
+        setIsNewTeacher(false);
+      } else {
+        setForm({ afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' });
+        setIsNewTeacher(true);
+      }
     }, [editing]);
 
     const save = async () => {
       if (!form.afid) return alert('AFID required');
-      await addOrUpdateTeacher(form);
+      if (!form.email) return alert('Email required');
+      
+      if (isNewTeacher && !form.password) {
+        return alert('Password required for new teacher');
+      }
+      
+      await addOrUpdateTeacher(form, isNewTeacher ? form.password : null);
       setEditing(null);
+      setForm({ afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' });
     };
 
     return (
@@ -1185,7 +1324,7 @@ function App() {
         <div className="flex justify-between items-center flex-wrap gap-3">
           <h3 className="text-2xl font-bold">Teacher Directory</h3>
           <button 
-            onClick={() => setEditing({})} 
+            onClick={() => { setEditing(null); setIsNewTeacher(true); }} 
             className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
           >
             + Add Teacher
@@ -1198,6 +1337,7 @@ function App() {
               <tr className="bg-gradient-to-r from-purple-50 to-pink-50">
                 <th className="p-3 text-left font-bold">AFID</th>
                 <th className="p-3 text-left font-bold">Name</th>
+                <th className="p-3 text-left font-bold">Email</th>
                 <th className="p-3 text-left font-bold">Subject</th>
                 <th className="p-3 text-left font-bold">School</th>
                 <th className="p-3 text-left font-bold">Phone</th>
@@ -1209,19 +1349,20 @@ function App() {
                 <tr key={t.afid} className="border-b hover:bg-purple-50 transition-colors">
                   <td className="p-3 font-mono font-semibold">{t.afid}</td>
                   <td className="p-3">{t.name}</td>
+                  <td className="p-3 text-sm">{t.email}</td>
                   <td className="p-3">{t.subject}</td>
                   <td className="p-3">{t.school}</td>
                   <td className="p-3">{t.phone}</td>
                   <td className="p-3">
                     <div className="flex gap-2 flex-wrap">
                       <button 
-                        onClick={() => setEditing(t)} 
+                        onClick={() => { setEditing(t); setIsNewTeacher(false); }} 
                         className="px-3 py-1 bg-yellow-400 rounded-lg hover:bg-yellow-500 transition-colors"
                       >
                         Edit
                       </button>
                       <button 
-                        onClick={() => deleteTeacher(t.afid)} 
+                        onClick={() => deleteTeacher(t.afid, t.email)} 
                         className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                       >
                         Delete
@@ -1234,38 +1375,59 @@ function App() {
           </table>
         </div>
 
-        {editing !== null && (
+        {(editing !== null || isNewTeacher) && (
           <div className="bg-white p-6 rounded-2xl shadow-lg">
-            <h4 className="font-bold text-xl mb-4">{editing.afid ? 'Edit Teacher' : 'Add Teacher'}</h4>
+            <h4 className="font-bold text-xl mb-4">{isNewTeacher ? 'Add New Teacher' : 'Edit Teacher'}</h4>
             <div className="grid md:grid-cols-2 gap-4">
-              {['afid','name','subject','school','dob','email','phone','password'].map(k => (
+              {['afid','name','email','subject','school','dob','phone'].map(k => (
                 <div key={k}>
                   <label className="text-sm font-medium text-gray-700 mb-1 block">
-                    {k.toUpperCase()}
+                    {k.toUpperCase()} {k === 'email' && <span className="text-red-500">*</span>}
                   </label>
                   <input 
-                    type={k === 'dob' ? 'date' : k === 'password' ? 'password' : 'text'}
+                    type={k === 'dob' ? 'date' : k === 'email' ? 'email' : 'text'}
                     value={form[k] || ''} 
                     onChange={e => setForm({...form, [k]: e.target.value})} 
-                    className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400" 
+                    className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400"
+                    disabled={!isNewTeacher && k === 'afid'}
                   />
                 </div>
               ))}
+              {isNewTeacher && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    PASSWORD <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="password"
+                    value={form.password || ''} 
+                    onChange={e => setForm({...form, password: e.target.value})} 
+                    className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-purple-400"
+                    placeholder="Minimum 6 characters"
+                  />
+                </div>
+              )}
             </div>
             <div className="mt-5 flex gap-3">
               <button 
                 onClick={save} 
                 className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
               >
-                Save
+                {isNewTeacher ? 'Create Account' : 'Update'}
               </button>
               <button 
-                onClick={() => setEditing(null)} 
+                onClick={() => { setEditing(null); setIsNewTeacher(false); }} 
                 className="px-6 py-3 bg-gray-200 rounded-xl font-semibold hover:bg-gray-300 transition-all"
               >
                 Cancel
               </button>
             </div>
+            {isNewTeacher && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700">
+                <strong>Note:</strong> This will create a Firebase Authentication account with the provided email and password. 
+                The teacher can then login using these credentials.
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1306,7 +1468,7 @@ function App() {
       }
       
       handleCSVImport(file, subject, grade);
-      e.target.value = ''; // Reset file input
+      e.target.value = '';
     };
 
     return (
@@ -1475,12 +1637,6 @@ function App() {
             >
               📊 Export CSV
             </button>
-            <button 
-              onClick={() => alert('Analytics refresh automatically')} 
-              className="px-4 py-2 bg-gray-200 rounded-xl font-semibold hover:bg-gray-300 transition-all"
-            >
-              🔄 Refresh
-            </button>
           </div>
         </div>
 
@@ -1588,46 +1744,41 @@ function App() {
               >
                 Export Analytics Data (CSV)
               </button>
-              <button 
-                onClick={() => {
-                  if (confirm('This will reset all chapter progress. Are you sure?')) {
-                    // Add reset logic here
-                    alert('Feature coming soon');
-                  }
-                }}
-                className="w-full px-4 py-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-all text-left"
-              >
-                Reset All Progress
-              </button>
             </div>
           </div>
 
           <div className="bg-white p-6 rounded-2xl shadow-lg">
             <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-              <span>🔔</span> Notifications
-            </h4>
-            <p className="text-gray-600 text-sm">
-              Notification settings and alerts configuration will be available here.
-            </p>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl shadow-lg">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-              <span>👥</span> User Roles
-            </h4>
-            <p className="text-gray-600 text-sm">
-              Manage user roles and permissions.
-            </p>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl shadow-lg">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-              <span>⚙️</span> System Info
+              <span>👥</span> System Info
             </h4>
             <div className="text-sm text-gray-700 space-y-2">
               <div>Total Teachers: <strong>{teachers.length}</strong></div>
               <div>Total Chapters: <strong>{analyticsData?.totalChapters || 0}</strong></div>
-              <div>Version: <strong>2.0</strong></div>
+              <div>Version: <strong>2.0 - Stable</strong></div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>🔑</span> Admin Account
+            </h4>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>Admin email: <strong>admin@avantifellows.org</strong></p>
+              <p className="text-xs text-gray-500 mt-2">
+                Note: To create the admin account, use Firebase Console to manually create a user with this email.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>ℹ️</span> Instructions
+            </h4>
+            <div className="text-sm text-gray-700 space-y-2">
+              <p>• Teachers login with email/password</p>
+              <p>• Admin creates accounts with passwords</p>
+              <p>• Grade selection persists during updates</p>
+              <p>• All updates are auto-saved</p>
             </div>
           </div>
         </div>
@@ -1702,11 +1853,7 @@ function App() {
             </div>
           </div>
           <button 
-            onClick={() => { 
-              setCurrentUser(null); 
-              setIsAdmin(false); 
-              setActiveTab('overview'); 
-            }} 
+            onClick={handleLogout} 
             className="px-5 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
           >
             Logout
