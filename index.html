@@ -21,147 +21,54 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    /* Modern animations */
-    @keyframes confettiFall { 
-      0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
-      50% { opacity: 1; }
-      100% { transform: translateY(120vh) rotate(720deg); opacity: 0; } 
-    }
-
-    @keyframes sparkle {
-      0%, 100% { transform: scale(0.8) rotate(0deg); opacity: 0.7; }
-      50% { transform: scale(1.2) rotate(180deg); opacity: 1; }
-    }
-
-    @keyframes bounce {
-      0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-      40% { transform: translateY(-10px); }
-      60% { transform: translateY(-5px); }
-    }
-
-    @keyframes slideInUp {
-      from { transform: translateY(20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-    }
-
-    @keyframes gradient {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-
+    @keyframes fall { to { transform: translateY(120vh) rotate(20deg); opacity: 0; } }
     * { box-sizing: border-box; }
-
-    /* Enhanced confetti styles */
-    .confetti-piece { 
-      position: absolute; 
-      font-size: 20px; 
-      animation: confettiFall 4s linear forwards; 
-      will-change: transform, opacity;
+    /* Flip card styles */
+    .flip-card { perspective: 1200px; }
+    .flip-card-inner { transition: transform 0.6s; transform-style: preserve-3d; position: relative; }
+    .flip-card.flip .flip-card-inner { transform: rotateY(180deg); }
+    .flip-card-front, .flip-card-back {
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      position: absolute; inset: 0;
     }
-
-    .sparkle-piece {
-      position: absolute;
-      font-size: 16px;
-      animation: sparkle 2s ease-in-out infinite;
-    }
-
-    /* Modern chapter box animations */
-    .chapter-box {
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      animation: slideInUp 0.6s ease-out forwards;
-      will-change: transform;
-    }
-
-    .chapter-box:hover {
-      transform: translateY(-8px);
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    }
-
-    .completion-badge {
-      animation: bounce 2s infinite;
-    }
-
-    /* Enhanced focus styles */
-    input:focus, select:focus, textarea:focus { 
-      outline: none; 
-      box-shadow: 0 0 0 3px rgba(99,102,241,0.1), 0 0 0 1px #6366F1; 
-      border-color: #6366F1; 
-      transition: all 0.2s ease;
-    }
-
-    /* Animated gradient background */
-    .animated-bg {
-      background: linear-gradient(-45deg, #f3e8ff, #fce7f3, #fef3c7, #ddd6fe);
-      background-size: 400% 400%;
-      animation: gradient 15s ease infinite;
-    }
-
-    /* Loading animation */
-    .loading-spinner {
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-
-    /* Modern button hover effects */
-    .modern-button {
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .modern-button::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-      transition: left 0.5s;
-    }
-
-    .modern-button:hover::before {
-      left: 100%;
-    }
-
-    .modern-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-    }
+    .flip-card-back { transform: rotateY(180deg); }
+    /* small focus glow for selects and inputs */
+    input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 5px rgba(99,102,241,0.08); border-color: #6366F1; }
+    /* confetti defaults */
+    .confetti-piece { position: absolute; font-size: 18px; animation: fall 3s linear forwards; }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
+/* Curriculum Tracker - single file app
+   - Firebase Firestore read/write
+   - Admin CRUD (teachers, curriculum)
+   - Chapter target logic, confetti, birthdays
+   - Chart.js analytics
+   - CSS flip animations on chapter cards
+*/
+
 const { useState, useEffect, useRef } = React;
 
-// Firebase config
+// --- === USE YOUR EXISTING FIREBASE PROJECT CONFIG BELOW (kept same) === ---
 const firebaseConfig = {
-  apiKey: "AIzaSyDhkKBvJbJuRovFXKD-9b4S-_1a4a-RzV4",
-  authDomain: "curriculum-tracker-f1e6c.firebaseapp.com",
-  projectId: "curriculum-tracker-f1e6c",
-  storageBucket: "curriculum-tracker-f1e6c.appspot.com",
-  messagingSenderId: "471403213746",
-  appId: "1:471403213746:web:8a8a8a8a8a8a8a8a8a8a8a"
+  apiKey: "AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",
+  authDomain: "curriculum-dbb10.firebaseapp.com",
+  projectId: "curriculum-dbb10",
+  storageBucket: "curriculum-dbb10.firebasestorage.app",
+  messagingSenderId: "706387632109",
+  appId: "1:706387632109:web:06c78a304fdbdc12f391e4"
 };
+// -------------------------------------------------------------------------
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 function App() {
-  // State management
+  // global states
   const [currentUser, setCurrentUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
@@ -173,647 +80,815 @@ function App() {
   const [chapterProgress, setChapterProgress] = useState({});
   const [analyticsData, setAnalyticsData] = useState(null);
 
-  // Enhanced confetti and animations
+  // UI states
   const [expandedChapters, setExpandedChapters] = useState({});
+  const [flipState, setFlipState] = useState({}); // for card flips
   const [showConfetti, setShowConfetti] = useState(false);
-  const [showSparkles, setShowSparkles] = useState(false);
 
   // Chart refs
   const pieRef = useRef(null), barRef = useRef(null), schoolRef = useRef(null);
   const charts = useRef({});
 
-  // Seed data (only used for Firebase initialization if empty)
+  // seed data used only if DB not initialized
   const TEACHERS_SEED = [
-    { afid: 'admin', password: 'admin123', name: 'Admin User', isAdmin: true, school: 'System Admin', subject: 'Administration' },
-    { afid: 'VB001', password: 'password123', name: 'Vivek Bansal', school: 'CoE Barwani', subject: 'Physics', dob: '1985-03-15', email: 'vivek@example.com' }
+    { afid:'AF248', name:'Vivek Bansal', subject:'Physics', school:'CoE Barwani', dob:'1990-03-15', email:'vivek@example.com', phone:'9876543210', password:'pass123' },
+    { afid:'AF464', name:'Sandeep Dixit', subject:'Chemistry', school:'CoE Barwani', dob:'1988-07-22', email:'sandeep@example.com', phone:'9876543211', password:'pass123' },
+    { afid:'AF853', name:'Dayanand Kumar', subject:'Maths', school:'CoE Barwani', dob:'1992-11-08', email:'dayanand@example.com', phone:'9876543212', password:'pass123' },
+    { afid:'AF723', name:'Ranjesh', subject:'Biology', school:'JNV Bharuch', dob:'1990-05-05', email:'ranjesh@example.com', phone:'9876543228', password:'pass123' }
   ];
-
   const CURRICULUM_SEED = {
-    Physics: {
-      11: [
-        { id: 'p1', name: 'P1 Unit & Dimension', topics: ['Units', 'Dimensional Analysis', 'Significant Figures', 'Error Analysis', 'Physical Quantities'], targetDate: '2025-07-10' },
-        { id: 'p2', name: 'P2 Mathematical Tools', topics: ['Vectors', 'Scalars', 'Vector Addition', 'Dot Product', 'Cross Product'], targetDate: '2025-07-19' }
-      ],
-      12: [
-        { id: 'p3', name: 'P3 Electrostatics', topics: ['Electric Charge', 'Electric Field', 'Electric Potential', 'Capacitance'], targetDate: '2025-08-15' }
-      ]
-    }
+    Physics:{11:[{id:'P11-1', name:'Physical World', topics:['Units','Dimensions','Motion'], targetDate:'2025-11-15'}],12:[{id:'P12-1', name:'Electric Charges',topics:['Charge','Coulomb'], targetDate:'2025-12-15'}]},
+    Chemistry:{11:[{id:'C11-1', name:'Basic Concepts', topics:['Matter','Atoms'], targetDate:'2025-11-20'}],12:[{id:'C12-1', name:'Solutions', topics:['Concentration'], targetDate:'2025-12-05'}]},
+    Maths:{11:[{id:'M11-1', name:'Sets', topics:['Theory'], targetDate:'2025-11-25'}],12:[{id:'M12-1', name:'Functions', topics:['Types'], targetDate:'2025-12-10'}]},
+    Biology:{11:[{id:'B11-1', name:'Living World', topics:['Diversity'], targetDate:'2025-11-18'}],12:[{id:'B12-1', name:'Reproduction', topics:['Asexual'], targetDate:'2025-12-12'}]}
   };
 
-  // Initialize Firebase data only
+  // ----- initialize, listeners, and seeding -----
   useEffect(() => {
-    initializeFirebaseData();
+    let unsubP, unsubT, unsubC;
+    const init = async () => {
+      try {
+        const initDoc = await db.collection('system').doc('initialized').get();
+        if (!initDoc.exists) {
+          // seed
+          for (const t of TEACHERS_SEED) await db.collection('teachers').doc(t.afid).set(t);
+          await db.collection('meta').doc('curriculum').set(CURRICULUM_SEED);
+          await db.collection('system').doc('initialized').set({ date: new Date().toISOString() });
+          console.log('DB seeded');
+        }
+      } catch (e) { console.error('init error', e); }
+    };
+
+    unsubP = db.collection('chapterProgress').onSnapshot(snap => {
+      const map = {};
+      snap.docs.forEach(d => map[d.id] = d.data());
+      setChapterProgress(map);
+    });
+
+    unsubT = db.collection('teachers').onSnapshot(snap => {
+      setTeachers(snap.docs.map(d => d.data()));
+    });
+
+    unsubC = db.collection('meta').doc('curriculum').onSnapshot(doc => {
+      if (doc.exists) setCurriculum(doc.data());
+      else setCurriculum(CURRICULUM_SEED);
+    });
+
+    init();
+    return () => { if (unsubP) unsubP(); if (unsubT) unsubT(); if (unsubC) unsubC(); };
   }, []);
 
-  const initializeFirebaseData = async () => {
-    try {
-      // Check if teachers collection exists and initialize if empty
-      const teachersSnap = await db.collection('teachers').get();
-      if (teachersSnap.empty) {
-        console.log('Initializing teachers data...');
-        for (const teacher of TEACHERS_SEED) {
-          await db.collection('teachers').add(teacher);
-        }
-      }
-
-      // Check if curriculum exists and initialize if empty
-      const currSnap = await db.collection('curriculum').get();
-      if (currSnap.empty) {
-        console.log('Initializing curriculum data...');
-        await db.collection('curriculum').doc('data').set(CURRICULUM_SEED);
-      }
-
-      // Set up Firebase listeners
-      const unsubT = db.collection('teachers').onSnapshot(snap => {
-        const teacherList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setTeachers(teacherList);
-      });
-
-      const unsubC = db.collection('curriculum').onSnapshot(snap => {
-        const curriculumData = {};
-        snap.docs.forEach(doc => {
-          if (doc.id === 'data') {
-            Object.assign(curriculumData, doc.data());
-          }
-        });
-        setCurriculum(curriculumData);
-      });
-
-      const unsubP = db.collection('chapterProgress').onSnapshot(snap => {
-        const progressMap = {};
-        snap.docs.forEach(doc => progressMap[doc.id] = doc.data());
-        setChapterProgress(progressMap);
-      });
-
-      return () => {
-        unsubT();
-        unsubC();
-        unsubP();
-      };
-
-    } catch (error) {
-      console.error('Firebase initialization error:', error);
-      alert('Failed to connect to database. Please check your internet connection and try again.');
-    }
-  };
-
-  // Compute chapter status
+  // ----- helper: compute chapter status -----
   function computeChapterStatus(chapter = {}, progress = {}) {
+    // handles targetDate, completed, testConducted, completedTopics
     if (!chapter || !chapter.targetDate) return { label:'No target', key:'no-target', color:'bg-gray-100' };
-
     const target = new Date(chapter.targetDate);
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    target.setHours(0, 0, 0, 0);
+    const today = new Date();
+    const compDate = progress.completionDate ? new Date(progress.completionDate) : null;
+    const topicsDone = (progress.completedTopics || []).length;
+    const topicsTotal = (chapter.topics || []).length;
 
-    const daysDiff = Math.floor((target - now) / (24*60*60*1000));
-    const isCompleted = progress.completed === 'Yes';
-    const isTestConducted = progress.testConducted === 'Yes';
-    const hasCompletedTopics = (progress.completedTopics || []).length > 0;
+    // If completed yes but test not conducted -> partial
+    if (progress.completed === 'Yes' && progress.testConducted !== 'Yes') {
+      // If target passed -> partial (but still delayed-like, show orange)
+      return { label:'Partially completed', key:'partial', color:'bg-orange-100' };
+    }
 
-    if (isCompleted && isTestConducted) return { label:'Completed', key:'completed', color:'bg-green-100' };
-    if (isCompleted && !isTestConducted) return { label:'Partially completed', key:'partial', color:'bg-yellow-100' };
-    if (!isCompleted && hasCompletedTopics) return { label:'Partially completed', key:'partial-topics', color:'bg-yellow-100' };
-    if (daysDiff < 0) return { label:'Delayed', key:'delayed', color:'bg-red-100' };
-    if (daysDiff <= 7) return { label:'Due Soon', key:'due-soon', color:'bg-orange-100' };
-    if (daysDiff <= 14) return { label:'On Track', key:'ontrack', color:'bg-blue-100' };
-    return { label:'Ahead', key:'ahead', color:'bg-green-100' };
+    // Not completed
+    if (progress.completed !== 'Yes') {
+      // partial topics
+      if (topicsDone > 0 && topicsDone < topicsTotal) {
+        return { label:'Partially done', key:'partial-topics', color:'bg-orange-100' };
+      }
+      // not started and overdue
+      if (today > target) return { label:'Delayed', key:'delayed', color:'bg-red-100' };
+      return { label:'Pending', key:'pending', color:'bg-yellow-100' };
+    }
+
+    // If completed === 'Yes' AND test conducted === 'Yes'
+    if (compDate) {
+      if (compDate > target) return { label:'Delayed', key:'delayed', color:'bg-red-100' };
+      if (compDate.toDateString() === target.toDateString()) return { label:'On Track', key:'ontrack', color:'bg-green-100' };
+      if (compDate < target) return { label:'Ahead — Good job', key:'ahead', color:'bg-green-100' };
+      return { label:'Completed', key:'completed', color:'bg-green-100' };
+    }
+
+    // fallback
+    return { label:'Completed', key:'completed', color:'bg-green-100' };
   }
 
-  // Firebase-only authentication
-  const handleLogin = async () => {
-    if (!loginForm.afid || !loginForm.password) {
-      alert('Please fill all fields');
+  // ----- analytics compute -----
+  useEffect(() => {
+    if (!curriculum) return;
+    const schoolStatus = {};
+    const teacherMap = {};
+    let totalChapters = 0, totalCompleted = 0;
+
+    Object.keys(curriculum).forEach(subject => {
+      Object.keys(curriculum[subject]).forEach(grade => {
+        (curriculum[subject][grade] || []).forEach(ch => {
+          totalChapters++;
+          const prog = chapterProgress[ch.id] || {};
+          const st = computeChapterStatus(ch, prog);
+          if (st.key === 'completed') totalCompleted++;
+          teachers.forEach(t => {
+            if (t.subject === subject) {
+              teacherMap[t.afid] = teacherMap[t.afid] || { afid: t.afid, name: t.name, school: t.school, completed:0, total:0 };
+              teacherMap[t.afid].total++;
+              if (st.key === 'completed') teacherMap[t.afid].completed++;
+            }
+            // school accum
+            schoolStatus[t.school] = schoolStatus[t.school] || { delayed:0, ontrack:0, total:0 };
+            schoolStatus[t.school].total++;
+            if (st.key === 'delayed') schoolStatus[t.school].delayed++;
+            else if (['ontrack','ahead','completed'].includes(st.key)) schoolStatus[t.school].ontrack++;
+          });
+        });
+      });
+    });
+
+    const teacherArr = Object.values(teacherMap).map(t => ({ ...t, percent: t.total ? Math.round((t.completed / t.total) * 100) : 0 }));
+    teacherArr.sort((a,b) => b.percent - a.percent);
+    setAnalyticsData({ totalChapters, totalCompleted, teacherArr, schoolStatus });
+  }, [curriculum, chapterProgress, teachers]);
+
+  // ----- Chart rendering -----
+  useEffect(() => {
+    if (!analyticsData) {
+      destroyAllCharts();
       return;
     }
-
-    setLoading(true);
-
-    try {
-      // Query Firebase for teacher
-      const teachersSnap = await db.collection('teachers').where('afid', '==', loginForm.afid).get();
-
-      if (teachersSnap.empty) {
-        alert('Teacher not found');
-        setLoading(false);
-        return;
-      }
-
-      const teacherDoc = teachersSnap.docs[0];
-      const teacher = teacherDoc.data();
-
-      if (teacher.password !== loginForm.password) {
-        alert('Invalid password');
-        setLoading(false);
-        return;
-      }
-
-      // Successful login
-      setCurrentUser({ id: teacherDoc.id, ...teacher });
-      setIsAdmin(teacher.isAdmin || false);
-      setLoginForm({ afid: '', password: '' });
-
-      // Birthday check and confetti
-      if (teacher.dob) {
-        const dob = new Date(teacher.dob);
-        const today = new Date();
-        if (dob.getMonth() === today.getMonth() && dob.getDate() === today.getDate()) {
-          setShowConfetti(true);
-          setShowSparkles(true);
-          setTimeout(() => {
-            setShowConfetti(false);
-            setShowSparkles(false);
-          }, 5000);
-        }
-      }
-
-    } catch (error) {
-      console.error('Login error:', error);
-      alert('Login failed. Please check your internet connection and try again.');
+    // Doughnut
+    const completed = analyticsData.totalCompleted || 0;
+    const pending = Math.max(0, (analyticsData.totalChapters || 0) - completed);
+    if (pieRef.current) {
+      if (charts.current?.pie) charts.current.pie.destroy();
+      charts.current.pie = new Chart(pieRef.current.getContext('2d'), {
+        type:'doughnut',
+        data:{ labels:['Completed','Pending'], datasets:[{ data:[completed,pending], backgroundColor:['#10B981','#F97316'] }] },
+        options:{ plugins:{ legend:{ position:'bottom' } }, cutout: '65%' }
+      });
     }
 
+    // Bar (teacher)
+    if (barRef.current) {
+      if (charts.current.bar) charts.current.bar.destroy();
+      const top = analyticsData.teacherArr.slice(0,8);
+      charts.current.bar = new Chart(barRef.current.getContext('2d'), {
+        type:'bar',
+        data:{ labels: top.map(t => `${t.name} (${t.afid})`), datasets:[{ label:'Completion %', data: top.map(t=>t.percent), backgroundColor:'#6366F1' }] },
+        options:{ indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{ min:0, max:100, ticks:{ callback:v => v + '%' } } } }
+      });
+    }
+
+    // School stacked
+    if (schoolRef.current) {
+      if (charts.current.school) charts.current.school.destroy();
+      const schools = Object.keys(analyticsData.schoolStatus || {});
+      const ontrack = schools.map(s => analyticsData.schoolStatus[s].ontrack || 0);
+      const delayed = schools.map(s => analyticsData.schoolStatus[s].delayed || 0);
+      charts.current.school = new Chart(schoolRef.current.getContext('2d'), {
+        type:'bar',
+        data:{ labels: schools, datasets: [{ label:'On track', data:ontrack, backgroundColor:'#10B981' }, { label:'Delayed', data:delayed, backgroundColor:'#EF4444' }] },
+        options:{ plugins:{ legend:{ position:'bottom' } }, scales:{ x:{ stacked:true }, y:{ stacked:true } } }
+      });
+    }
+
+  }, [analyticsData]);
+
+  function destroyAllCharts() { Object.values(charts.current || {}).forEach(c => { if (c && c.destroy) c.destroy(); }); charts.current = {}; }
+
+  // ----- login (mocked) -----
+  const handleLogin = async () => {
+    setLoading(true);
+    try {
+      const afid = (loginForm.afid || '').trim().toUpperCase();
+      if (!afid) { alert('Enter AFID'); setLoading(false); return; }
+      // admin hidden - no hint on UI
+      if (afid === 'ADMIN' && loginForm.password === 'admin123') {
+        setIsAdmin(true);
+        setCurrentUser({ name:'Administrator', afid:'ADMIN' });
+        setActiveTab('admin');
+        setLoading(false);
+        return;
+      }
+      const doc = await db.collection('teachers').doc(afid).get();
+      if (!doc.exists) { alert('Invalid AFID or password'); setLoading(false); return; }
+      const t = doc.data();
+      if (t.password === loginForm.password) {
+        setCurrentUser(t);
+        setIsAdmin(false);
+        setActiveTab('overview');
+        // birthday confetti
+        if (t.dob) {
+          const d = new Date(t.dob); const now = new Date();
+          if (d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) setShowConfetti(true);
+        }
+      } else { alert('Invalid AFID or password'); }
+    } catch (e) { console.error('login error', e); alert('Login failed'); }
     setLoading(false);
   };
 
-  // Firebase-only chapter progress update
+  // ----- update chapter progress (write to firestore) -----
   const updateChapterProgress = async (chapterId, field, value) => {
     try {
-      const currentData = chapterProgress[chapterId] || {};
-      const updatedData = { ...currentData, [field]: value };
-
-      // Auto-set completion date when chapter is completed
+      // if clearing date, set null
+      const updateObj = { [field]: value };
+      // special-case: if completed set to No -> clear completionDate
+      if (field === 'completed' && value === 'No') updateObj['completionDate'] = null;
+      await db.collection('chapterProgress').doc(chapterId).set(updateObj, { merge: true });
+      // optimistic local update
+      setChapterProgress(prev => ({ ...prev, [chapterId]: { ...(prev[chapterId]||{}), ...updateObj } }));
+      // confetti logic: if completed yes and testconducted yes -> show confetti
       if (field === 'completed' && value === 'Yes') {
-        updatedData.completionDate = new Date().toISOString().split('T')[0];
-
-        // Show enhanced confetti for completion
-        const testConducted = updatedData.testConducted === 'Yes';
-        if (testConducted) {
+        // read current testConducted after update (optimistic)
+        const cur = chapterProgress[chapterId] || {};
+        if (cur.testConducted === 'Yes' || updateObj.testConducted === 'Yes') {
           setShowConfetti(true);
-          setShowSparkles(true);
-          setTimeout(() => {
-            setShowConfetti(false);
-            setShowSparkles(false);
-          }, 4000);
+          setTimeout(() => setShowConfetti(false), 3500);
         }
-      } else if (field === 'completed' && value === 'No') {
-        updatedData.completionDate = null;
       }
-
-      // Save to Firebase only
-      await db.collection('chapterProgress').doc(chapterId).set(updatedData, { merge: true });
-
-    } catch (error) {
-      console.error('Update error:', error);
-      alert('Failed to update progress. Please check your internet connection.');
+    } catch (e) {
+      console.error('update error', e);
+      alert('Failed to update. Check Firestore rules and network.');
     }
   };
 
-  // Toggle expand chapters
+  // manual toggle expand for topics
   const toggleExpand = (id) => setExpandedChapters(prev => ({ ...prev, [id]: !prev[id] }));
 
-  // Get today's birthdays
+  // flip state on card
+  const toggleFlip = (id) => setFlipState(prev => ({ ...prev, [id]: !prev[id] }));
+
+  // export analytics CSV
+  const exportCSV = () => {
+    if (!analyticsData) return alert('No analytics yet');
+    const rows = [['AFID','Name','School','Completed','Total','Percent']];
+    analyticsData.teacherArr.forEach(t => rows.push([t.afid, t.name, t.school, t.completed, t.total, t.percent + '%']));
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download = `analytics_${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
+
+  // todays birthdays list
   const todaysBirthdays = teachers.filter(t => {
     if (!t.dob) return false;
-    const d = new Date(t.dob);
-    const now = new Date();
-    return d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+    const d = new Date(t.dob); const now = new Date();
+    return d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
   });
 
-  // Login screen (without demo credentials)
+  // upcoming week/month birthdays
+  const upcoming = (period='week') => {
+    const now = new Date();
+    return teachers.filter(t => {
+      if (!t.dob) return false;
+      const d = new Date(t.dob);
+      const next = new Date(now.getFullYear(), d.getMonth(), d.getDate());
+      const diff = Math.ceil((next - now)/(1000*60*60*24));
+      if (period === 'week') return diff >=0 && diff <= 7;
+      return diff >=0 && diff <= 30;
+    });
+  };
+
+  // ----- Admin CRUD helpers -----
+  const addOrUpdateTeacher = async (teacherObj) => {
+    if (!teacherObj.afid) return alert('AFID required');
+    const id = teacherObj.afid.toUpperCase();
+    try {
+      await db.collection('teachers').doc(id).set({ ...teacherObj, afid: id }, { merge: true });
+      alert('Saved teacher');
+    } catch (e) { console.error('save teacher err', e); alert('Save failed'); }
+  };
+
+  const deleteTeacher = async (afid) => {
+    if (!confirm('Delete teacher ' + afid + '?')) return;
+    try { await db.collection('teachers').doc(afid).delete(); alert('Deleted'); } catch (e) { console.error(e); alert('Delete failed'); }
+  };
+
+  const saveCurriculum = async (newCurr) => {
+    try { await db.collection('meta').doc('curriculum').set(newCurr); alert('Curriculum updated'); } catch (e) { console.error(e); alert('Failed'); }
+  };
+
+  const addChapterAdmin = async (subject, grade, chapter) => {
+    const newCurr = { ...(curriculum || {}) };
+    newCurr[subject] = newCurr[subject] || {};
+    newCurr[subject][grade] = newCurr[subject][grade] || [];
+    chapter.id = chapter.id || (subject.charAt(0).toUpperCase() + grade + '-' + (newCurr[subject][grade].length + 1) + '-' + Date.now().toString().slice(-4));
+    newCurr[subject][grade].push(chapter);
+    await saveCurriculum(newCurr);
+  };
+
+  const updateChapterAdmin = async (subject, grade, chapterId, updates) => {
+    try {
+      const newCurr = { ...(curriculum || {}) };
+      const arr = newCurr[subject][grade];
+      const idx = arr.findIndex(x => x.id === chapterId);
+      if (idx === -1) return;
+      arr[idx] = { ...arr[idx], ...updates };
+      await saveCurriculum(newCurr);
+    } catch (e) { console.error(e); alert('Failed update'); }
+  };
+
+  const deleteChapterAdmin = async (subject, grade, id) => {
+    if (!confirm('Delete chapter?')) return;
+    try {
+      const newCurr = { ...(curriculum || {}) };
+      newCurr[subject][grade] = newCurr[subject][grade].filter(ch => ch.id !== id);
+      await saveCurriculum(newCurr);
+    } catch (e) { console.error(e); alert('Delete failed'); }
+  };
+
+  // ----- UI Components render -----
   if (!currentUser) {
+    // Login UI - remove demo credentials
     return (
-      <div className="min-h-screen animated-bg flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md chapter-box">
-          <div className="text-center mb-8">
-            <div className="text-4xl mb-4">📚</div>
+      <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-red-500 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+          <div className="text-center mb-6">
+            <div className="text-6xl">📚</div>
             <h1 className="text-3xl font-bold text-gray-800">Curriculum Tracker</h1>
-            <p className="text-gray-600 mt-2">Modern Educational Management</p>
+            <p className="text-gray-600 mt-2">Login to continue</p>
           </div>
 
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">AFID</label>
-              <input
-                type="text"
-                value={loginForm.afid}
-                onChange={e => setLoginForm(prev => ({ ...prev, afid: e.target.value }))}
-                className="w-full border border-gray-300 px-4 py-3 rounded-lg transition-all duration-200"
-                placeholder="Enter your AFID"
-                autoCapitalize="none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-              <input
-                type="password"
-                value={loginForm.password}
-                onChange={e => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                className="w-full border border-gray-300 px-4 py-3 rounded-lg transition-all duration-200"
-                placeholder="Enter your password"
-                onKeyPress={e => e.key === 'Enter' && handleLogin()}
-              />
-            </div>
-            <button
-              onClick={handleLogin}
-              disabled={loading}
-              className="w-full modern-button bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-4 rounded-lg font-medium"
-            >
-              {loading ? (
-                <div className="flex items-center justify-center">
-                  <div className="loading-spinner border-2 border-white border-t-transparent rounded-full w-5 h-5 mr-2"></div>
-                  Logging in...
-                </div>
-              ) : (
-                'Login'
-              )}
-            </button>
+            <input className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg" value={loginForm.afid} onChange={e => setLoginForm({...loginForm, afid: e.target.value})} placeholder="AFID" />
+            <input type="password" className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} placeholder="Password" />
+            <button onClick={handleLogin} disabled={loading} className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-semibold">{loading ? 'Logging in...' : 'Login'}</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // Enhanced Confetti Component
+  // Confetti component
   function Confetti() {
-    const confettiColors = ['🎉','✨','🎊','💫','🌟','🎈','🎁','🎀','🌈','⭐'];
-    const sparkleColors = ['✨','💫','🌟','⭐','💎','🔮','🦄'];
-
+    const colors = ['🎉','✨','🎊','🥳','🎈'];
     return (
-      <>
-        <div className="fixed inset-0 pointer-events-none z-50">
-          {Array.from({length: 60}).map((_,i) => (
-            <div key={i} className="confetti-piece" style={{
-              left: `${Math.random()*100}%`,
-              top: `${Math.random()*5}%`,
-              animationDelay: `${Math.random()*2}s`,
-              fontSize: `${16 + Math.random()*12}px`,
-              animationDuration: `${3 + Math.random()*2}s`
-            }}>{confettiColors[i % confettiColors.length]}</div>
-          ))}
-        </div>
-
-        {showSparkles && (
-          <div className="fixed inset-0 pointer-events-none z-50">
-            {Array.from({length: 30}).map((_,i) => (
-              <div key={i} className="sparkle-piece" style={{
-                left: `${Math.random()*100}%`,
-                top: `${Math.random()*100}%`,
-                animationDelay: `${Math.random()*2}s`,
-                fontSize: `${12 + Math.random()*8}px`
-              }}>{sparkleColors[i % sparkleColors.length]}</div>
-            ))}
-          </div>
-        )}
-      </>
+      <div className="fixed inset-0 pointer-events-none z-50">
+        {Array.from({length: 40}).map((_,i) => (
+          <div key={i} className="confetti-piece" style={{
+            left: `${Math.random()*100}%`,
+            top: `${Math.random()*8}%`,
+            animationDelay: `${Math.random()*1.5}s`,
+            fontSize: `${12 + Math.random()*18}px`
+          }}>{colors[i % colors.length]}</div>
+        ))}
+      </div>
     );
   }
 
-  // Overview Component
+  // Overview for teachers
   const Overview = () => {
     const subjects = Object.keys(curriculum || {});
     return (
       <div className="space-y-6">
-        <h2 className="text-3xl font-bold flex items-center gap-3">
-          📊 Overview
-          <span className="text-lg font-normal text-gray-500">Welcome back, {currentUser.name}!</span>
-        </h2>
+        <h2 className="text-3xl font-bold">📊 Overview</h2>
         <div className="grid md:grid-cols-2 gap-6">
-          {[11,12].map(grade => (
-            <div key={grade} className="chapter-box bg-white rounded-xl shadow-lg p-6" style={{animationDelay: `${grade*0.1}s`}}>
-              <h3 className="text-xl font-semibold mb-4 text-purple-700">Class {grade}th</h3>
+          {[11,12].map(g => (
+            <div key={g} className="bg-white rounded-xl shadow p-6">
+              <h3 className="text-xl font-semibold mb-4">Class {g}th</h3>
               <div className="space-y-3">
-                {subjects.map(subject => {
-                  const chapters = (curriculum[subject] && curriculum[subject][grade]) || [];
+                {subjects.map(s => {
+                  const chapters = (curriculum[s] && curriculum[s][g]) || [];
                   const completedCount = chapters.filter(ch => (chapterProgress[ch.id]?.completed === 'Yes' && chapterProgress[ch.id]?.testConducted === 'Yes')).length;
+                  const percentage = chapters.length ? Math.round((completedCount / chapters.length) * 100) : 0;
                   return (
-                    <div key={subject} className="flex justify-between items-center p-3 rounded-lg bg-gradient-to-r from-purple-50 to-pink-50">
-                      <div className="font-semibold text-gray-800">{subject}</div>
-                      <div className="text-sm text-gray-600">{completedCount} / {chapters.length} chapters completed</div>
+                    <div key={s} className="p-3 border rounded">
+                      <div className="flex justify-between"><div className="font-medium">{s}</div><div className="font-bold">{percentage}%</div></div>
+                      <div className="h-3 bg-gray-200 rounded mt-2"><div className="h-3 rounded bg-green-500" style={{ width: `${percentage}%` }}></div></div>
+                      <div className="text-sm text-gray-500 mt-1">{completedCount} / {chapters.length} chapters completed (test done)</div>
                     </div>
                   );
                 })}
               </div>
             </div>
           ))}
+
+          <div className="bg-white rounded-xl shadow p-6">
+            <h3 className="text-xl font-semibold">Birthdays</h3>
+            <div className="mt-3 space-y-3">
+              <div className="p-3 border rounded">
+                <div className="font-semibold">This Week</div>
+                <div className="text-sm text-gray-600 mt-2">{upcoming('week').length ? upcoming('week').map(t => <div key={t.afid} className="flex justify-between"><div>{t.name} ({t.afid})</div><div className="text-sm">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>) : <div className="text-gray-500">No birthdays this week</div>}</div>
+              </div>
+
+              <div className="p-3 border rounded">
+                <div className="font-semibold">This Month</div>
+                <div className="text-sm text-gray-600 mt-2">{upcoming('month').length ? upcoming('month').map(t => <div key={t.afid} className="flex justify-between"><div>{t.name} ({t.afid})</div><div className="text-sm">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>) : <div className="text-gray-500">No birthdays this month</div>}</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
   };
 
-  // Enhanced Chapters Component
+  // Chapters page for teacher
   const Chapters = () => {
-    const subjects = Object.keys(curriculum || {});
-    if (!subjects.length) return <div className="text-gray-500 text-center py-12">No curriculum data available</div>;
-
-    const currentSubject = subjects.find(s => s === currentUser.subject) || subjects[0];
-    const classes = Object.keys(curriculum[currentSubject] || {});
+    const [selectedGrade, setSelectedGrade] = useState(11);
+    const subj = currentUser.subject;
+    const chapters = (curriculum[subj] && curriculum[subj][selectedGrade]) || [];
 
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold flex items-center gap-3 mb-2">
-            📚 Chapters - {currentSubject}
-            <div className="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded-full">
-              {currentUser.school}
-            </div>
-          </h2>
-          <p className="text-gray-600">Track your chapter progress and completion status</p>
+        <h2 className="text-3xl font-bold">📘 Chapters - {subj}</h2>
+        <div className="flex gap-3 mb-4">
+          <button onClick={() => setSelectedGrade(11)} className={`px-4 py-2 rounded ${selectedGrade===11 ? 'bg-purple-600 text-white' : 'bg-white'}`}>Class 11th</button>
+          <button onClick={() => setSelectedGrade(12)} className={`px-4 py-2 rounded ${selectedGrade===12 ? 'bg-purple-600 text-white' : 'bg-white'}`}>Class 12th</button>
         </div>
 
-        <div className="flex gap-2 mb-6">
-          {classes.map(cls => (
-            <button key={cls} className="px-6 py-2 rounded-lg modern-button bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-              Class {cls}th
-            </button>
-          ))}
-        </div>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {chapters.map(ch => {
+            const prog = chapterProgress[ch.id] || {};
+            const status = computeChapterStatus(ch, prog);
+            const colorClass = status.key === 'delayed' ? 'bg-red-50 border-red-400' : (status.key === 'partial' || status.key === 'partial-topics') ? 'bg-orange-50 border-orange-400' : (['ontrack','ahead','completed'].includes(status.key) ? 'bg-green-50 border-green-400' : 'bg-white border-gray-200');
+            const completedTopics = prog.completedTopics || [];
+            const isFlipped = !!flipState[ch.id];
 
-        {classes.map(cls => {
-          const chapters = curriculum[currentSubject][cls] || [];
-          return (
-            <div key={cls} className="space-y-4">
-              <h3 className="text-2xl font-semibold text-gray-800">Class {cls}th</h3>
+            return (
+              <div key={ch.id} className={`flip-card ${isFlipped ? 'flip' : ''} ${colorClass} border-2 rounded-xl shadow p-4`} >
+                <div className="flip-card-inner relative">
+                  {/* FRONT */}
+                  <div className="flip-card-front p-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-lg font-semibold">{ch.name}</h3>
+                        <div className="text-sm text-gray-600 mt-1">Topics: <span className="font-semibold">{completedTopics.length}/{(ch.topics||[]).length}</span></div>
+                        <div className="text-sm text-gray-600">Target: <span className="font-semibold">{ch.targetDate || '—'}</span></div>
+                      </div>
+                      <div className="text-sm text-gray-600">{status.label}</div>
+                    </div>
 
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {chapters.map((ch, index) => {
-                  const prog = chapterProgress[ch.id] || {};
-                  const status = computeChapterStatus(ch, prog);
-                  const completedTopics = prog.completedTopics || [];
-                  const isCompleted = prog.completed === 'Yes';
-                  const completionDate = prog.completionDate;
+                    <hr className="my-3" />
 
-                  let colorClass = 'bg-white border-gray-200';
-                  if (status.key === 'delayed') colorClass = 'bg-red-50 border-red-300';
-                  else if (status.key === 'partial' || status.key === 'partial-topics') colorClass = 'bg-orange-50 border-orange-300';
-                  else if (['ontrack','ahead','completed'].includes(status.key)) colorClass = 'bg-green-50 border-green-300';
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Chapter Test Conducted?</label>
+                        <select value={prog.testConducted || 'No'} onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value)} className="w-full border px-3 py-2 rounded mt-1">
+                          <option>No</option><option>Yes</option>
+                        </select>
+                      </div>
 
-                  return (
-                    <div 
-                      key={ch.id} 
-                      className={`chapter-box ${colorClass} border-2 rounded-xl shadow-lg p-6 relative overflow-hidden`}
-                      style={{animationDelay: `${index*0.1}s`}}
-                    >
-                      {/* Completion Badge */}
-                      {isCompleted && (
-                        <div className="absolute top-4 right-4">
-                          <div className="completion-badge bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-                            ✓ DONE
-                          </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Chapter Completed?</label>
+                        <select value={prog.completed || 'No'} onChange={e => {
+                          const val = e.target.value;
+                          if (val === 'No') {
+                            updateChapterProgress(ch.id, 'completed', 'No');
+                            updateChapterProgress(ch.id, 'completionDate', null);
+                          } else {
+                            updateChapterProgress(ch.id, 'completed', 'Yes');
+                            const todayStr = new Date().toISOString().split('T')[0];
+                            updateChapterProgress(ch.id, 'completionDate', todayStr);
+                            // show confetti only after verifying test conducted (handled by compute and listener)
+                            const cur = chapterProgress[ch.id] || {};
+                            if (cur.testConducted === 'Yes') { setShowConfetti(true); setTimeout(()=>setShowConfetti(false), 3500); }
+                          }
+                        }} className="w-full border px-3 py-2 rounded mt-1">
+                          <option>No</option><option>Yes</option>
+                        </select>
+                        <div className="text-xs text-gray-500 mt-1">Note: If test is not conducted, marking Completed will show as <span className="font-semibold">Partially completed</span>.</div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Method</label>
+                        <select value={prog.method || 'Online'} onChange={e => updateChapterProgress(ch.id, 'method', e.target.value)} className="w-full border px-3 py-2 rounded mt-1">
+                          <option>Online</option><option>Offline</option>
+                        </select>
+                      </div>
+
+                      { (chapterProgress[ch.id] && chapterProgress[ch.id].method === 'Offline') && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Notes (Why offline?)</label>
+                          <textarea value={chapterProgress[ch.id].notes || ''} onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value)} className="w-full border px-3 py-2 rounded mt-1" rows="2" placeholder="Reason for offline teaching..." />
                         </div>
                       )}
 
-                      {/* Chapter Header */}
-                      <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-2">{ch.name}</h3>
-                        <div className="flex justify-between items-center text-sm">
-                          <div className="text-gray-600">
-                            Topics: <span className="font-semibold text-purple-600">{completedTopics.length}/{(ch.topics||[]).length}</span>
-                          </div>
-                          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            status.key === 'completed' ? 'bg-green-100 text-green-700' :
-                            status.key === 'delayed' ? 'bg-red-100 text-red-700' :
-                            status.key === 'partial' || status.key === 'partial-topics' ? 'bg-orange-100 text-orange-700' :
-                            'bg-blue-100 text-blue-700'
-                          }`}>
-                            {status.label}
-                          </div>
-                        </div>
-                        <div className="text-sm text-gray-600 mt-1">
-                          Target: <span className="font-semibold">{ch.targetDate || '—'}</span>
-                        </div>
-
-                        {/* Completion Date Display */}
-                        {completionDate && (
-                          <div className="mt-2 p-2 bg-green-100 rounded-lg">
-                            <div className="text-sm font-medium text-green-700 flex items-center gap-2">
-                              🎉 Completed on: <span className="font-bold">{new Date(completionDate).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <hr className="my-4 border-gray-200" />
-
-                      {/* Controls */}
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Chapter Test Conducted?</label>
-                          <select 
-                            value={prog.testConducted || 'No'} 
-                            onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value)} 
-                            className="w-full border border-gray-300 px-3 py-2 rounded-lg"
-                          >
-                            <option>No</option>
-                            <option>Yes</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Chapter Completed?</label>
-                          <select 
-                            value={prog.completed || 'No'} 
-                            onChange={e => {
-                              const val = e.target.value;
-                              updateChapterProgress(ch.id, 'completed', val);
-                            }} 
-                            className="w-full border border-gray-300 px-3 py-2 rounded-lg"
-                          >
-                            <option>No</option>
-                            <option>Yes</option>
-                          </select>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Note: If test is not conducted, marking Completed will show as <span className="font-semibold">Partially completed</span>.
+                      {/* Expand/minimize topics manual */}
+                      <div>
+                        <div className="flex justify-between items-center">
+                          <div className="font-semibold text-sm text-purple-700">Topics ({completedTopics.length}/{(ch.topics||[]).length})</div>
+                          <div className="flex gap-2">
+                            <button onClick={() => toggleExpand(ch.id)} className="text-sm text-gray-600 underline">{expandedChapters[ch.id] ? 'Minimize' : 'Expand'}</button>
+                            <button onClick={() => toggleFlip(ch.id)} className="text-sm text-gray-600 underline">Flip</button>
                           </div>
                         </div>
 
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Method</label>
-                          <select 
-                            value={prog.method || 'Online'} 
-                            onChange={e => updateChapterProgress(ch.id, 'method', e.target.value)} 
-                            className="w-full border border-gray-300 px-3 py-2 rounded-lg"
-                          >
-                            <option>Online</option>
-                            <option>Offline</option>
-                          </select>
-                        </div>
-
-                        {prog.method === 'Offline' && (
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Notes (Why offline?)</label>
-                            <textarea 
-                              value={prog.notes || ''} 
-                              onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value)} 
-                              className="w-full border border-gray-300 px-3 py-2 rounded-lg" 
-                              rows="2" 
-                              placeholder="Reason for offline teaching..."
-                            />
+                        { expandedChapters[ch.id] && (
+                          <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
+                            { (ch.topics || []).map((t, idx) => {
+                              const checked = (chapterProgress[ch.id] && (chapterProgress[ch.id].completedTopics || []).includes(t));
+                              return (
+                                <label key={idx} className="flex items-center gap-2 p-2 rounded hover:bg-purple-50 cursor-pointer">
+                                  <input type="checkbox" checked={checked} onChange={e => {
+                                    const prev = (chapterProgress[ch.id] && chapterProgress[ch.id].completedTopics) || [];
+                                    const updated = e.target.checked ? [...prev, t] : prev.filter(x=>x!==t);
+                                    updateChapterProgress(ch.id, 'completedTopics', updated);
+                                    // DO NOT auto-collapse
+                                  }} className="w-4 h-4" />
+                                  <span className={checked ? 'line-through text-gray-500' : ''}>{t}</span>
+                                </label>
+                              );
+                            })}
                           </div>
                         )}
-
-                        {/* Topics Section */}
-                        <div>
-                          <div className="flex justify-between items-center mb-2">
-                            <div className="font-semibold text-sm text-purple-700">
-                              Topics ({completedTopics.length}/{(ch.topics||[]).length})
-                            </div>
-                            <button 
-                              onClick={() => toggleExpand(ch.id)} 
-                              className="text-sm text-purple-600 hover:text-purple-800 font-medium"
-                            >
-                              {expandedChapters[ch.id] ? 'Minimize ▲' : 'Expand ▼'}
-                            </button>
-                          </div>
-
-                          {expandedChapters[ch.id] && (
-                            <div className="mt-3 space-y-2 max-h-48 overflow-y-auto bg-gray-50 rounded-lg p-3">
-                              {(ch.topics || []).map((topic, idx) => {
-                                const checked = completedTopics.includes(topic);
-                                return (
-                                  <label key={idx} className="flex items-center gap-3 p-2 rounded hover:bg-white cursor-pointer transition-all">
-                                    <input 
-                                      type="checkbox" 
-                                      checked={checked} 
-                                      onChange={e => {
-                                        const prev = completedTopics;
-                                        const updated = e.target.checked ? [...prev, topic] : prev.filter(x=>x!==topic);
-                                        updateChapterProgress(ch.id, 'completedTopics', updated);
-                                      }} 
-                                      className="w-4 h-4 text-purple-600 rounded" 
-                                    />
-                                    <span className={checked ? 'line-through text-gray-500' : 'text-gray-700'}>{topic}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
                       </div>
                     </div>
-                  );
-                })}
+                  </div>
+
+                  {/* BACK of card - allow teacher notes / quick stats */}
+                  <div className="flip-card-back p-3 bg-white rounded">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-lg font-semibold">Details — {ch.name}</h3>
+                        <div className="text-sm text-gray-600 mt-1">Target: <span className="font-semibold">{ch.targetDate}</span></div>
+                        <div className="text-sm text-gray-600 mt-2">Topics:</div>
+                        <ul className="list-disc ml-5 mt-2 text-sm text-gray-700 max-h-36 overflow-y-auto">
+                          { (ch.topics||[]).map((t, i) => <li key={i}>{t}</li>) }
+                        </ul>
+                      </div>
+                      <div>
+                        <button onClick={() => toggleFlip(ch.id)} className="px-3 py-1 bg-purple-600 text-white rounded">Back</button>
+                      </div>
+                    </div>
+
+                    <hr className="my-3" />
+                    <div className="text-sm text-gray-700">
+                      <div><strong>Completed topics:</strong> {(chapterProgress[ch.id] && (chapterProgress[ch.id].completedTopics||[]).length) || 0} / {(ch.topics||[]).length}</div>
+                      <div className="mt-2"><strong>Test Conducted:</strong> {(chapterProgress[ch.id] && chapterProgress[ch.id].testConducted) || 'No'}</div>
+                      <div className="mt-2"><strong>Completion Date:</strong> {(chapterProgress[ch.id] && chapterProgress[ch.id].completionDate) || '—'}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     );
   };
 
-  // Profile Component
+  // Profile
   const Profile = () => (
     <div className="space-y-6">
       <h2 className="text-3xl font-bold">👤 Profile</h2>
-      <div className="chapter-box bg-white p-6 rounded-xl shadow-lg">
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div className="p-4 bg-purple-50 rounded-lg">
-              <div className="text-sm text-purple-600 font-medium">Name</div>
-              <div className="text-lg font-semibold">{currentUser.name}</div>
-            </div>
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <div className="text-sm text-blue-600 font-medium">AFID</div>
-              <div className="text-lg font-semibold">{currentUser.afid}</div>
-            </div>
-            <div className="p-4 bg-green-50 rounded-lg">
-              <div className="text-sm text-green-600 font-medium">Subject</div>
-              <div className="text-lg font-semibold">{currentUser.subject}</div>
-            </div>
-          </div>
-          <div className="space-y-4">
-            <div className="p-4 bg-orange-50 rounded-lg">
-              <div className="text-sm text-orange-600 font-medium">School</div>
-              <div className="text-lg font-semibold">{currentUser.school}</div>
-            </div>
-            <div className="p-4 bg-pink-50 rounded-lg">
-              <div className="text-sm text-pink-600 font-medium">Date of Birth</div>
-              <div className="text-lg font-semibold">{currentUser.dob ? new Date(currentUser.dob).toLocaleDateString() : '—'}</div>
-            </div>
-            <div className="p-4 bg-indigo-50 rounded-lg">
-              <div className="text-sm text-indigo-600 font-medium">Email</div>
-              <div className="text-lg font-semibold">{currentUser.email || '—'}</div>
-            </div>
-          </div>
+      <div className="bg-white p-6 rounded shadow">
+        <div className="grid md:grid-cols-2 gap-4">
+          <div><div className="text-sm text-gray-500">Name</div><div className="font-semibold">{currentUser.name}</div></div>
+          <div><div className="text-sm text-gray-500">AFID</div><div className="font-semibold">{currentUser.afid}</div></div>
+          <div><div className="text-sm text-gray-500">Subject</div><div className="font-semibold">{currentUser.subject}</div></div>
+          <div><div className="text-sm text-gray-500">School</div><div className="font-semibold">{currentUser.school}</div></div>
+          <div><div className="text-sm text-gray-500">DOB</div><div className="font-semibold">{currentUser.dob ? new Date(currentUser.dob).toLocaleDateString() : '—'}</div></div>
+          <div><div className="text-sm text-gray-500">Email</div><div className="font-semibold">{currentUser.email || '—'}</div></div>
         </div>
       </div>
     </div>
   );
 
-  // Simple admin dashboard
-  const AdminDashboard = () => (
-    <div className="space-y-6">
-      <h2 className="text-3xl font-bold">⚙️ Admin Dashboard</h2>
-      <div className="chapter-box bg-white p-6 rounded-xl shadow-lg">
-        <div className="grid md:grid-cols-3 gap-6">
-          <div className="p-6 bg-blue-50 rounded-lg text-center">
-            <div className="text-3xl font-bold text-blue-600">{teachers.length}</div>
-            <div className="text-blue-600 font-medium">Total Teachers</div>
-          </div>
-          <div className="p-6 bg-green-50 rounded-lg text-center">
-            <div className="text-3xl font-bold text-green-600">{Object.keys(curriculum).length}</div>
-            <div className="text-green-600 font-medium">Subjects</div>
-          </div>
-          <div className="p-6 bg-purple-50 rounded-lg text-center">
-            <div className="text-3xl font-bold text-purple-600">{Object.keys(chapterProgress).length}</div>
-            <div className="text-purple-600 font-medium">Chapters Tracked</div>
-          </div>
+  // Admin - Teachers management
+  function AdminTeachers() {
+    const [editing, setEditing] = useState(null);
+    const [form, setForm] = useState({ afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' });
+
+    useEffect(() => setForm(editing || { afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' }), [editing]);
+
+    const save = async () => {
+      if (!form.afid) return alert('AFID required');
+      await addOrUpdateTeacher(form);
+      setEditing(null);
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h3 className="text-2xl font-bold">Teacher Directory</h3>
+          <button onClick={() => setEditing({})} className="px-4 py-2 bg-blue-600 text-white rounded">+ Add Teacher</button>
         </div>
 
-        <div className="mt-8">
-          <h3 className="text-xl font-semibold mb-4">Teachers List</h3>
-          <div className="space-y-2">
-            {teachers.map((teacher, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+        <div className="bg-white p-4 rounded shadow overflow-x-auto">
+          <table className="w-full">
+            <thead><tr className="bg-gray-50"><th className="p-2">AFID</th><th className="p-2">Name</th><th className="p-2">Subject</th><th className="p-2">School</th><th className="p-2">Phone</th><th className="p-2">Actions</th></tr></thead>
+            <tbody>
+              {teachers.map(t => (
+                <tr key={t.afid} className="border-b hover:bg-gray-50">
+                  <td className="p-2 font-mono">{t.afid}</td>
+                  <td className="p-2">{t.name}</td>
+                  <td className="p-2">{t.subject}</td>
+                  <td className="p-2">{t.school}</td>
+                  <td className="p-2">{t.phone}</td>
+                  <td className="p-2">
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditing(t)} className="px-2 py-1 bg-yellow-400 rounded">Edit</button>
+                      <button onClick={() => deleteTeacher(t.afid)} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        { editing !== null && (
+          <div className="bg-white p-4 rounded shadow">
+            <h4 className="font-semibold mb-3">{editing.afid ? 'Edit Teacher' : 'Add Teacher'}</h4>
+            <div className="grid md:grid-cols-2 gap-3">
+              {['afid','name','subject','school','dob','email','phone','password'].map(k => (
+                <div key={k}><label className="text-sm text-gray-600">{k.toUpperCase()}</label><input value={form[k] || ''} onChange={e => setForm({...form, [k]: e.target.value})} className="w-full border px-2 py-2 rounded" /></div>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button onClick={save} className="px-4 py-2 bg-green-600 text-white rounded">Save</button>
+              <button onClick={() => setEditing(null)} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Admin - Curriculum
+  function AdminCurriculum() {
+    const [subject, setSubject] = useState(Object.keys(curriculum || {})[0] || 'Physics');
+    const [grade, setGrade] = useState(11);
+    const [newChapter, setNewChapter] = useState({ name:'', topics:'', targetDate:'' });
+
+    useEffect(() => { if (!subject) setSubject(Object.keys(curriculum||{})[0]||'Physics'); }, [curriculum]);
+
+    const addNew = async () => {
+      if (!newChapter.name) return alert('Name required');
+      await addChapterAdmin(subject, grade, { name: newChapter.name, topics: newChapter.topics ? newChapter.topics.split(',').map(x=>x.trim()) : [], targetDate: newChapter.targetDate || '' });
+      setNewChapter({ name:'', topics:'', targetDate:'' });
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <h3 className="text-2xl font-bold">Curriculum</h3>
+          <select value={subject} onChange={e=>setSubject(e.target.value)} className="border px-2 py-1 rounded">
+            {Object.keys(curriculum || {}).map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={grade} onChange={e=>setGrade(Number(e.target.value))} className="border px-2 py-1 rounded">
+            <option value={11}>Class 11</option><option value={12}>Class 12</option>
+          </select>
+        </div>
+
+        <div className="bg-white p-4 rounded shadow">
+          <h4 className="font-semibold mb-2">Add New Chapter</h4>
+          <div className="grid md:grid-cols-3 gap-2">
+            <input placeholder="Chapter name" value={newChapter.name} onChange={e => setNewChapter({...newChapter, name: e.target.value})} className="border px-2 py-2 rounded" />
+            <input placeholder="Topics (comma separated)" value={newChapter.topics} onChange={e=>setNewChapter({...newChapter, topics: e.target.value})} className="border px-2 py-2 rounded" />
+            <input type="date" value={newChapter.targetDate} onChange={e=>setNewChapter({...newChapter, targetDate: e.target.value})} className="border px-2 py-2 rounded" />
+          </div>
+          <div className="mt-3"><button onClick={addNew} className="px-4 py-2 bg-blue-600 text-white rounded">Add Chapter</button></div>
+        </div>
+
+        <div className="space-y-3">
+          { (curriculum[subject] && (curriculum[subject][grade] || []).map(ch => {
+            const prog = chapterProgress[ch.id] || {};
+            const status = computeChapterStatus(ch, prog);
+            return (
+              <div key={ch.id} className={`p-3 rounded border ${status.key==='delayed' ? 'border-red-300' : status.key.includes('partial') ? 'border-orange-300' : 'border-gray-200'} bg-white flex justify-between items-center`}>
                 <div>
-                  <div className="font-semibold">{teacher.name}</div>
-                  <div className="text-sm text-gray-600">{teacher.afid} • {teacher.school}</div>
+                  <div className="font-semibold">{ch.name} <span className="text-xs text-gray-500">({ch.id})</span></div>
+                  <div className="text-sm text-gray-600">{(ch.topics||[]).join(', ')}</div>
+                  <div className="text-sm mt-1">Target: {ch.targetDate || '—'}</div>
                 </div>
-                <div className="text-sm">
-                  <span className={`px-2 py-1 rounded-full ${teacher.isAdmin ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                    {teacher.isAdmin ? 'Admin' : teacher.subject}
-                  </span>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="text-sm">{status.label}</div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { const n = prompt('Edit name', ch.name); if (n !== null) updateChapterAdmin(subject, grade, ch.id, { name: n }); }} className="px-2 py-1 bg-yellow-300 rounded">Edit</button>
+                    <button onClick={() => { const t = prompt('Set target (YYYY-MM-DD)', ch.targetDate || ''); if (t !== null) updateChapterAdmin(subject, grade, ch.id, { targetDate: t }); }} className="px-2 py-1 bg-blue-300 rounded">Set Target</button>
+                    <button onClick={() => { const ts = prompt('Edit topics (comma separated)', (ch.topics||[]).join(', ')); if (ts !== null) updateChapterAdmin(subject, grade, ch.id, { topics: ts.split(',').map(x=>x.trim()) }); }} className="px-2 py-1 bg-green-300 rounded">Edit Topics</button>
+                    <button onClick={() => deleteChapterAdmin(subject, grade, ch.id)} className="px-2 py-1 bg-red-500 text-white rounded">Delete</button>
+                  </div>
                 </div>
               </div>
-            ))}
+            );
+          })) || <div className="text-gray-500">No chapters for this selection</div> }
+        </div>
+      </div>
+    );
+  }
+
+  // Admin Analytics
+  function AdminAnalytics() {
+    const data = analyticsData;
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h3 className="text-2xl font-bold">Analytics</h3>
+          <div className="flex gap-2">
+            <button onClick={exportCSV} className="px-3 py-2 bg-green-600 text-white rounded">Export CSV</button>
+            <button onClick={() => alert('Analytics refreshes automatically')} className="px-3 py-2 bg-gray-200 rounded">Refresh</button>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-6">
+          <div className="bg-white p-4 rounded shadow text-center">
+            <div className="text-sm text-gray-500">Total Chapters</div>
+            <div className="text-3xl font-bold mt-2">{data ? data.totalChapters : '—'}</div>
+            <div className="text-sm text-gray-500 mt-1">Completed: {data ? data.totalCompleted : '—'}</div>
+          </div>
+
+          <div className="bg-white p-4 rounded shadow text-center">
+            <div className="text-sm text-gray-500">Syllabus Completion</div>
+            { data ? <canvas ref={pieRef} width="220" height="160"></canvas> : <div className="text-gray-500 mt-6">No data</div> }
+          </div>
+
+          <div className="bg-white p-4 rounded shadow">
+            <div className="text-sm text-gray-500">Top Teachers</div>
+            <div className="mt-3 space-y-2">
+              { data && data.teacherArr.length ? data.teacherArr.slice(0,6).map(t => (
+                <div key={t.afid} className="flex justify-between">
+                  <div><div className="font-medium">{t.name} <span className="text-xs text-gray-500">({t.afid})</span></div><div className="text-xs text-gray-500">{t.school}</div></div>
+                  <div className="text-sm font-bold">{t.percent}%</div>
+                </div>
+              )) : <div className="text-gray-500">No data</div> }
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded shadow">
+          <div className="text-sm text-gray-500 mb-2">Teacher Completion % (Top 8)</div>
+          { data ? <canvas ref={barRef} width="800" height="300"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">No data</div> }
+        </div>
+
+        <div className="bg-white p-4 rounded shadow">
+          <div className="text-sm text-gray-500 mb-2">Schools - On Track vs Delayed</div>
+          { data ? <canvas ref={schoolRef} width="800" height="240"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">No data</div> }
+        </div>
+
+        <div className="bg-white p-4 rounded shadow">
+          <div className="text-sm text-gray-500 mb-2">Detailed Teacher Table</div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50"><tr><th className="p-2">AFID</th><th className="p-2">Name</th><th className="p-2">School</th><th className="p-2">Completed</th><th className="p-2">Total</th><th className="p-2">Percent</th></tr></thead>
+              <tbody>{ data && data.teacherArr.length ? data.teacherArr.map(t => (<tr key={t.afid} className="border-b hover:bg-gray-50"><td className="p-2 font-mono">{t.afid}</td><td className="p-2">{t.name}</td><td className="p-2">{t.school}</td><td className="p-2">{t.completed}</td><td className="p-2">{t.total}</td><td className="p-2">{t.percent}%</td></tr>)) : <tr><td colSpan="6" className="p-4 text-gray-500">No data</td></tr> }</tbody>
+            </table>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
-  // Main App Layout
+  // Admin Dashboard
+  function AdminDashboard() {
+    const [tab, setTab] = useState('overview');
+    return (
+      <div className="space-y-6">
+        <h2 className="text-3xl font-bold">📈 Admin Dashboard</h2>
+        <div className="flex gap-2 mb-4">
+          {['overview','teachers','curriculum','analytics','settings'].map(t => <button key={t} onClick={()=>setTab(t)} className={`px-3 py-2 rounded ${tab===t ? 'bg-purple-600 text-white' : 'bg-white'}`}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>)}
+        </div>
+
+        { tab === 'overview' && (
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="bg-white p-4 rounded shadow text-center">
+              <div className="text-sm text-gray-500">Total Teachers</div>
+              <div className="text-2xl font-bold mt-2">{teachers.length}</div>
+            </div>
+            <div className="bg-white p-4 rounded shadow text-center">
+              <div className="text-sm text-gray-500">Total Schools</div>
+              <div className="text-2xl font-bold mt-2">{[...new Set(teachers.map(t=>t.school))].length}</div>
+            </div>
+            <div className="bg-white p-4 rounded shadow text-center">
+              <div className="text-sm text-gray-500">Chapters Tracked</div>
+              <div className="text-2xl font-bold mt-2">{Object.keys(chapterProgress || {}).length}</div>
+            </div>
+          </div>
+        )}
+
+        { tab === 'teachers' && <AdminTeachers /> }
+        { tab === 'curriculum' && <AdminCurriculum /> }
+        { tab === 'analytics' && <AdminAnalytics /> }
+        { tab === 'settings' && <div className="bg-white p-4 rounded shadow">Admin settings will be here</div> }
+      </div>
+    );
+  }
+
+  // ----- main render layout -----
   return (
-    <div className="min-h-screen animated-bg">
-      <nav className="bg-white shadow-lg sticky top-0 z-40">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-red-50">
+      <nav className="bg-white shadow sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="text-2xl">📚</div>
             <div>
-              <div className="font-bold text-xl text-gray-800">Curriculum Tracker</div>
-              <div className="text-sm text-gray-500">
-                {isAdmin ? 'Administrator' : `${currentUser.name} - ${currentUser.school}`}
-              </div>
+              <div className="font-bold text-lg">Curriculum Tracker</div>
+              <div className="text-sm text-gray-500">{isAdmin ? 'Administrator' : `${currentUser.name} - ${currentUser.school}`}</div>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button 
-              onClick={() => { 
-                setCurrentUser(null); 
-                setIsAdmin(false); 
-                setActiveTab('overview'); 
-              }} 
-              className="modern-button px-4 py-2 bg-red-500 text-white rounded-lg"
-            >
-              Logout
-            </button>
+            <button onClick={() => { setCurrentUser(null); setIsAdmin(false); setActiveTab('overview'); }} className="px-3 py-2 bg-red-500 text-white rounded">Logout</button>
           </div>
         </div>
       </nav>
 
-      {/* Birthday Banner */}
-      {todaysBirthdays.length > 0 && (
+      {/* Birthday banner top-right */}
+      { todaysBirthdays.length > 0 && (
         <div className="fixed top-6 right-6 z-50">
-          <div className="chapter-box bg-white border border-yellow-300 p-4 rounded-xl shadow-lg flex items-center gap-3">
+          <div className="bg-white border p-3 rounded shadow flex items-center gap-3">
             <div className="text-2xl">🎂</div>
             <div>
               <div className="font-semibold">Happy Birthday!</div>
@@ -824,78 +899,35 @@ function App() {
       )}
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Navigation Tabs */}
         <div className="mb-6">
-          {!isAdmin && (
+          { !isAdmin && (
             <div className="flex gap-2">
-              <button 
-                onClick={() => setActiveTab('overview')} 
-                className={`modern-button px-6 py-3 rounded-lg font-medium transition-all ${
-                  activeTab==='overview' ? 
-                  'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 
-                  'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                🏠 Overview
-              </button>
-              <button 
-                onClick={() => setActiveTab('chapters')} 
-                className={`modern-button px-6 py-3 rounded-lg font-medium transition-all ${
-                  activeTab==='chapters' ? 
-                  'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 
-                  'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                📖 Chapters
-              </button>
-              <button 
-                onClick={() => setActiveTab('profile')} 
-                className={`modern-button px-6 py-3 rounded-lg font-medium transition-all ${
-                  activeTab==='profile' ? 
-                  'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 
-                  'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                👤 Profile
-              </button>
+              <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 rounded ${activeTab==='overview' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 'bg-white'}`}>🏠 Overview</button>
+              <button onClick={() => setActiveTab('chapters')} className={`px-4 py-2 rounded ${activeTab==='chapters' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 'bg-white'}`}>📖 Chapters</button>
+              <button onClick={() => setActiveTab('profile')} className={`px-4 py-2 rounded ${activeTab==='profile' ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white' : 'bg-white'}`}>👤 Profile</button>
             </div>
           )}
 
-          {isAdmin && (
+          { isAdmin && (
             <div className="flex gap-2">
-              <button 
-                onClick={() => setActiveTab('admin')} 
-                className="modern-button px-6 py-3 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium"
-              >
-                ⚙️ Admin Dashboard
-              </button>
+              <button onClick={() => setActiveTab('admin')} className="px-4 py-2 rounded bg-white">Admin Dashboard</button>
             </div>
           )}
         </div>
 
-        {/* Content Area */}
         <div>
-          {isAdmin && <AdminDashboard />}
-          {!isAdmin && activeTab === 'overview' && <Overview />}
-          {!isAdmin && activeTab === 'chapters' && <Chapters />}
-          {!isAdmin && activeTab === 'profile' && <Profile />}
+          { isAdmin && <AdminDashboard /> }
+          { !isAdmin && activeTab === 'overview' && <Overview /> }
+          { !isAdmin && activeTab === 'chapters' && <Chapters /> }
+          { !isAdmin && activeTab === 'profile' && <Profile /> }
         </div>
       </div>
 
-      {/* Enhanced Footer */}
-      <footer className="bg-white mt-16 py-8 border-t border-gray-200">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="text-center">
-            <div className="text-2xl mb-2">📚</div>
-            <div className="text-gray-600 text-lg font-medium">© 2025 Curriculum Tracker</div>
-            <div className="text-gray-500 text-sm mt-1">Modern Educational Management System</div>
-            <div className="text-gray-400 text-xs mt-2">Built with ❤️ for educators</div>
-          </div>
-        </div>
+      <footer className="bg-white mt-12 py-6">
+        <div className="max-w-7xl mx-auto px-4 text-center text-gray-600">© 2025 Curriculum Tracker</div>
       </footer>
 
-      {/* Enhanced Confetti */}
-      {(showConfetti || showSparkles) && <Confetti />}
+      { showConfetti && <Confetti /> }
     </div>
   );
 }
