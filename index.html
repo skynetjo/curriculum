@@ -210,7 +210,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-/* Final Production-Ready Curriculum Tracker */
+/* Final Production-Ready Curriculum Tracker - FIXED VERSION */
 
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
@@ -224,9 +224,23 @@ const firebaseConfig = {
   appId: "1:706387632109:web:06c78a304fdbdc12f391e4"
 };
 
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+// Primary app for admin and regular operations
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 const db = firebase.firestore();
 const auth = firebase.auth();
+
+// Secondary app for creating new users without affecting admin session
+let secondaryApp;
+let secondaryAuth;
+try {
+  secondaryApp = firebase.app('Secondary');
+  secondaryAuth = secondaryApp.auth();
+} catch (e) {
+  secondaryApp = firebase.initializeApp(firebaseConfig, 'Secondary');
+  secondaryAuth = secondaryApp.auth();
+}
 
 // Constants
 const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology'];
@@ -308,7 +322,6 @@ function App() {
         if (doc.exists) {
           setSchools(doc.data().list || DEFAULT_SCHOOLS);
         } else {
-          // Initialize with default schools
           await db.collection('meta').doc('schools').set({ list: DEFAULT_SCHOOLS });
           setSchools(DEFAULT_SCHOOLS);
         }
@@ -569,7 +582,6 @@ function App() {
       }
       
       await auth.signInWithEmailAndPassword(email, password);
-      // Auth state observer will handle the rest
     } catch (e) { 
       console.error('login error', e); 
       if (e.code === 'auth/user-not-found') {
@@ -606,23 +618,23 @@ function App() {
         updateObj['completionDate'] = null;
       }
       
-      // Immediate optimistic update to prevent blinking
+      // Immediate optimistic update
       setChapterProgress(prev => ({ 
         ...prev, 
         [chapterId]: { ...(prev[chapterId]||{}), ...updateObj } 
       }));
       
-      // Clear existing timeout for this chapter
+      // Clear existing timeout
       if (updateTimeouts.current[chapterId]) {
         clearTimeout(updateTimeouts.current[chapterId]);
       }
       
-      // Debounce Firebase update by 300ms to batch rapid changes
+      // Debounce Firebase update
       updateTimeouts.current[chapterId] = setTimeout(async () => {
         try {
           await db.collection('chapterProgress').doc(chapterId).set(updateObj, { merge: true });
           
-          // Check confetti conditions
+          // Check confetti
           const currentProg = chapterProgress[chapterId] || {};
           const newProg = { ...currentProg, ...updateObj };
           
@@ -690,26 +702,23 @@ function App() {
     return subjects.filter(s => curriculum[s]);
   }, [currentUser, teachers, curriculum]);
 
-  // Admin functions
+  // FIXED: Admin functions with secondary auth
   const createUserAccount = async (email, password, teacherData) => {
     try {
-      // Create Firebase Auth user
-      const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+      // IMPORTANT: Use secondaryAuth to create user without logging out admin
+      const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
       
-      // Save teacher data to Firestore
+      // Save teacher data to Firestore (using primary db connection)
       await db.collection('teachers').doc(teacherData.afid).set({
         ...teacherData,
         email: email,
         uid: userCredential.user.uid
       });
       
-      // Sign out the newly created user so admin can stay logged in
-      await auth.signOut();
+      // Sign out from secondary auth (doesn't affect admin session)
+      await secondaryAuth.signOut();
       
-      // Sign admin back in
-      await auth.signInWithEmailAndPassword('admin@avantifellows.org', 'admin123');
-      
-      alert('Teacher account created successfully!');
+      alert('Teacher account created successfully! They can now login with their email and password.');
       return true;
     } catch (e) {
       console.error('Create user error', e);
@@ -734,13 +743,12 @@ function App() {
     const email = teacherObj.email.toLowerCase();
     
     try {
-      // Check if this is a new teacher (has password)
       if (password) {
-        // Create Firebase Auth account
+        // Create new account with password
         const success = await createUserAccount(email, password, { ...teacherObj, afid: id });
         if (!success) return;
       } else {
-        // Just update Firestore data
+        // Just update Firestore
         await db.collection('teachers').doc(id).set({ ...teacherObj, afid: id, email: email }, { merge: true });
         alert('Teacher data updated');
       }
@@ -827,7 +835,7 @@ function App() {
     }
   };
 
-  // CSV Import functionality
+  // CSV Import
   const handleCSVImport = (file, subject, grade) => {
     Papa.parse(file, {
       complete: async (results) => {
@@ -887,7 +895,7 @@ function App() {
     });
   };
 
-  // Modern Confetti Component
+  // Modern Confetti
   function Confetti() {
     const shapes = ['●', '■', '▲', '★', '♦', '♥', '✦', '✧'];
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
@@ -1093,7 +1101,7 @@ function App() {
     );
   };
 
-  // STABLE Chapters Component with persistent grade selection
+  // STABLE Chapters Component
   const Chapters = React.memo(() => {
     const [selectedGrade, setSelectedGrade] = useState(11);
     const subj = currentUser.subject;
@@ -1553,8 +1561,8 @@ function App() {
             </div>
             {isNewTeacher && (
               <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700">
-                <strong>Note:</strong> This will create a Firebase Authentication account with the provided email and password. 
-                The teacher can then login using these credentials.
+                <strong>✅ FIXED:</strong> Admin stays logged in. The new teacher account is created using a separate Firebase instance, 
+                so you won't be logged out. The teacher can then login with their email and password.
               </div>
             )}
           </div>
@@ -1570,7 +1578,6 @@ function App() {
     const [newChapter, setNewChapter] = useState({ name:'', topics:'', targetDate:'' });
     const fileInputRef = useRef(null);
 
-    // Update subject when curriculum changes
     useEffect(() => {
       const keys = Object.keys(curriculum || {});
       if (keys.length > 0 && !subject) {
@@ -1633,7 +1640,6 @@ function App() {
           </select>
         </div>
 
-        {/* CSV Import Section */}
         <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-6 rounded-2xl shadow-lg border-2 border-blue-200">
           <h4 className="font-bold text-lg mb-3 text-blue-900 flex items-center gap-2">
             <span>📊</span> Import Curriculum from CSV
@@ -1667,7 +1673,6 @@ function App() {
           </div>
         </div>
 
-        {/* Manual Entry Section */}
         <div className="bg-white p-6 rounded-2xl shadow-lg">
           <h4 className="font-bold text-lg mb-3">Or Add Manually</h4>
           <div className="grid md:grid-cols-3 gap-3">
@@ -1873,7 +1878,6 @@ function App() {
     );
   }
 
-  // Settings Component
   function AdminSettings() {
     const [newSchool, setNewSchool] = useState('');
 
@@ -1904,7 +1908,7 @@ function App() {
               <div>Total Teachers: <strong>{teachers.length}</strong></div>
               <div>Total Chapters: <strong>{analyticsData?.totalChapters || 0}</strong></div>
               <div>Total Schools: <strong>{schools.length}</strong></div>
-              <div>Version: <strong>2.0 - Production</strong></div>
+              <div>Version: <strong>2.1 - FIXED</strong></div>
             </div>
           </div>
 
@@ -1948,27 +1952,16 @@ function App() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-lg">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-              <span>🔑</span> Admin Account
+          <div className="bg-green-50 border-2 border-green-300 p-6 rounded-2xl shadow-lg md:col-span-2">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2 text-green-800">
+              <span>✅</span> Bug Fixes - Version 2.1
             </h4>
             <div className="text-sm text-gray-700 space-y-2">
-              <p>Admin email: <strong>admin@avantifellows.org</strong></p>
-              <p className="text-xs text-gray-500 mt-2">
-                Note: To create the admin account, use Firebase Console to manually create a user with this email.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-2xl shadow-lg">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-              <span>ℹ️</span> Instructions
-            </h4>
-            <div className="text-sm text-gray-700 space-y-2">
-              <p>• Teachers login with email/password</p>
-              <p>• Admin creates accounts with passwords</p>
-              <p>• Grade selection persists during updates</p>
-              <p>• All updates are auto-saved</p>
+              <p>• <strong>FIXED:</strong> Admin no longer gets logged out when creating teacher accounts</p>
+              <p>• <strong>FIXED:</strong> Teacher accounts are created using secondary Firebase instance</p>
+              <p>• <strong>FIXED:</strong> "Teacher profile not found" error resolved</p>
+              <p>• All teacher accounts save correctly to Firestore</p>
+              <p>• Teachers can login immediately after account creation</p>
             </div>
           </div>
         </div>
@@ -2051,7 +2044,6 @@ function App() {
         </div>
       </nav>
 
-      {/* Birthday Banner */}
       {todaysBirthdays.length > 0 && (
         <div className="fixed top-20 right-4 z-50 max-w-xs">
           <div className="bg-white border-4 border-purple-400 p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce">
