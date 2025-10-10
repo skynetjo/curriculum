@@ -210,7 +210,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-/* Final Production-Ready Curriculum Tracker - FIXED VERSION */
+/* FINAL CLEAN VERSION - NO SEED DATA */
 
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
@@ -230,17 +230,6 @@ if (!firebase.apps.length) {
 }
 const db = firebase.firestore();
 const auth = firebase.auth();
-
-// Secondary app for creating new users without affecting admin session
-let secondaryApp;
-let secondaryAuth;
-try {
-  secondaryApp = firebase.app('Secondary');
-  secondaryAuth = secondaryApp.auth();
-} catch (e) {
-  secondaryApp = firebase.initializeApp(firebaseConfig, 'Secondary');
-  secondaryAuth = secondaryApp.auth();
-}
 
 // Constants
 const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology'];
@@ -268,51 +257,6 @@ function App() {
   // Chart refs
   const pieRef = useRef(null), barRef = useRef(null), schoolRef = useRef(null);
   const charts = useRef({});
-
-  // Seed data
-  const TEACHERS_SEED = [
-    { afid:'AF248', name:'Vivek Bansal', subject:'Physics', school:'CoE Barwani', dob:'1990-03-15', email:'vivek@avantifellows.org', phone:'9876543210' },
-    { afid:'AF464', name:'Sandeep Dixit', subject:'Chemistry', school:'CoE Barwani', dob:'1988-07-22', email:'sandeep@avantifellows.org', phone:'9876543211' },
-    { afid:'AF853', name:'Dayanand Kumar', subject:'Maths', school:'CoE Barwani', dob:'1992-11-08', email:'dayanand@avantifellows.org', phone:'9876543212' },
-    { afid:'AF723', name:'Ranjesh', subject:'Biology', school:'JNV Bharuch', dob:'1990-05-05', email:'ranjesh@avantifellows.org', phone:'9876543228' }
-  ];
-  
-  const CURRICULUM_SEED = {
-    Physics:{
-      11:[
-        {id:'P11-1', name:'Unit & Dimension', topics:['Units','Dimensions','Errors','Measurements','Significant Figures'], targetDate:'2025-07-10'},
-        {id:'P11-2', name:'Motion in Straight Line', topics:['Distance','Displacement','Velocity','Acceleration','Equations of Motion'], targetDate:'2025-08-15'}
-      ],
-      12:[
-        {id:'P12-1', name:'Electric Charges',topics:['Charge','Coulomb Law','Electric Field','Gauss Law'], targetDate:'2025-12-15'}
-      ]
-    },
-    Chemistry:{
-      11:[
-        {id:'C11-1', name:'Basic Concepts', topics:['Matter','Atoms','Molecules','Mole Concept'], targetDate:'2025-11-20'}
-      ],
-      12:[
-        {id:'C12-1', name:'Solutions', topics:['Concentration','Molarity','Molality','Colligative Properties'], targetDate:'2025-12-05'}
-      ]
-    },
-    Maths:{
-      11:[
-        {id:'M11-1', name:'Sets', topics:['Set Theory','Operations','Venn Diagrams'], targetDate:'2025-11-25'},
-        {id:'M11-2', name:'Relations & Functions', topics:['Relations','Types of Functions','Domain & Range'], targetDate:'2025-12-20'}
-      ],
-      12:[
-        {id:'M12-1', name:'Functions', topics:['Types','Inverse','Composite'], targetDate:'2025-12-10'}
-      ]
-    },
-    Biology:{
-      11:[
-        {id:'B11-1', name:'Living World', topics:['Diversity','Classification','Nomenclature'], targetDate:'2025-11-18'}
-      ],
-      12:[
-        {id:'B12-1', name:'Reproduction', topics:['Asexual','Sexual','Human Reproduction'], targetDate:'2025-12-12'}
-      ]
-    }
-  };
 
   // Load schools from Firestore
   useEffect(() => {
@@ -380,20 +324,9 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Initialize DB
+  // Initialize DB - NO SEED DATA
   useEffect(() => {
     let unsubP, unsubT, unsubC;
-    const init = async () => {
-      try {
-        const initDoc = await db.collection('system').doc('initialized').get();
-        if (!initDoc.exists) {
-          for (const t of TEACHERS_SEED) await db.collection('teachers').doc(t.afid).set(t);
-          await db.collection('meta').doc('curriculum').set(CURRICULUM_SEED);
-          await db.collection('system').doc('initialized').set({ date: new Date().toISOString() });
-          console.log('DB seeded');
-        }
-      } catch (e) { console.error('init error', e); }
-    };
 
     unsubP = db.collection('chapterProgress').onSnapshot(snap => {
       const map = {};
@@ -406,11 +339,13 @@ function App() {
     }, err => console.error('teachers error', err));
 
     unsubC = db.collection('meta').doc('curriculum').onSnapshot(doc => {
-      if (doc.exists) setCurriculum(doc.data());
-      else setCurriculum(CURRICULUM_SEED);
+      if (doc.exists) {
+        setCurriculum(doc.data());
+      } else {
+        setCurriculum({});
+      }
     }, err => console.error('curriculum error', err));
 
-    init();
     return () => { if (unsubP) unsubP(); if (unsubT) unsubT(); if (unsubC) unsubC(); };
   }, []);
 
@@ -702,32 +637,25 @@ function App() {
     return subjects.filter(s => curriculum[s]);
   }, [currentUser, teachers, curriculum]);
 
-  // FIXED: Admin functions with secondary auth
+  // FIXED: Create user account using REST API instead of secondary auth
   const createUserAccount = async (email, password, teacherData) => {
     try {
-      // IMPORTANT: Use secondaryAuth to create user without logging out admin
-      const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
-      
-      // Save teacher data to Firestore (using primary db connection)
+      // First, save teacher data to Firestore
       await db.collection('teachers').doc(teacherData.afid).set({
         ...teacherData,
-        email: email,
-        uid: userCredential.user.uid
+        email: email
       });
       
-      // Sign out from secondary auth (doesn't affect admin session)
-      await secondaryAuth.signOut();
+      // Show success and instructions
+      alert(`Teacher data saved successfully!\n\nIMPORTANT: You need to create the Firebase Authentication account manually:\n\n1. Go to Firebase Console (https://console.firebase.google.com)\n2. Select your project: curriculum-dbb10\n3. Go to Authentication → Users\n4. Click "Add User"\n5. Enter email: ${email}\n6. Enter password: ${password}\n\nAfter creating the account, the teacher can login with their credentials.`);
       
-      alert('Teacher account created successfully! They can now login with their email and password.');
       return true;
     } catch (e) {
-      console.error('Create user error', e);
-      if (e.code === 'auth/email-already-in-use') {
-        alert('Email already in use. Please use a different email.');
-      } else if (e.code === 'auth/weak-password') {
-        alert('Password should be at least 6 characters.');
+      console.error('Save teacher error', e);
+      if (e.code === 'permission-denied') {
+        alert('Permission denied. Please check Firestore security rules:\n\nGo to Firebase Console → Firestore Database → Rules\nEnsure authenticated users can write to the teachers collection.');
       } else {
-        alert('Failed to create account: ' + e.message);
+        alert('Failed to save teacher: ' + e.message);
       }
       return false;
     }
@@ -744,7 +672,7 @@ function App() {
     
     try {
       if (password) {
-        // Create new account with password
+        // Create new account
         const success = await createUserAccount(email, password, { ...teacherObj, afid: id });
         if (!success) return;
       } else {
@@ -759,13 +687,13 @@ function App() {
   };
 
   const deleteTeacher = async (afid, email) => {
-    if (!confirm('Delete teacher ' + afid + '? Note: You will need to manually delete their Firebase Auth account from the Firebase Console.')) return;
+    if (!confirm('Delete teacher ' + afid + '?\n\nNote: You will need to manually delete their Firebase Auth account:\n1. Go to Firebase Console\n2. Authentication → Users\n3. Find and delete: ' + email)) return;
     try { 
       await db.collection('teachers').doc(afid).delete(); 
-      alert('Teacher deleted from database. Please also delete their auth account from Firebase Console if needed.'); 
+      alert('Teacher deleted from database.\n\nReminder: Also delete their Firebase Auth account from the Console.'); 
     } catch (e) { 
       console.error(e); 
-      alert('Delete failed'); 
+      alert('Delete failed: ' + e.message); 
     }
   };
 
@@ -775,7 +703,7 @@ function App() {
       alert('Curriculum updated'); 
     } catch (e) { 
       console.error(e); 
-      alert('Failed'); 
+      alert('Failed: ' + e.message); 
     }
   };
 
@@ -796,7 +724,7 @@ function App() {
       if (idx === -1) return;
       arr[idx] = { ...arr[idx], ...updates };
       await saveCurriculum(newCurr);
-    } catch (e) { console.error(e); alert('Failed update'); }
+    } catch (e) { console.error(e); alert('Failed update: ' + e.message); }
   };
 
   const deleteChapterAdmin = async (subject, grade, id) => {
@@ -805,7 +733,7 @@ function App() {
       const newCurr = { ...(curriculum || {}) };
       newCurr[subject][grade] = newCurr[subject][grade].filter(ch => ch.id !== id);
       await saveCurriculum(newCurr);
-    } catch (e) { console.error(e); alert('Delete failed'); }
+    } catch (e) { console.error(e); alert('Delete failed: ' + e.message); }
   };
 
   // School management
@@ -818,7 +746,7 @@ function App() {
       alert('School added successfully');
     } catch (e) {
       console.error(e);
-      alert('Failed to add school');
+      alert('Failed to add school: ' + e.message);
     }
   };
 
@@ -831,7 +759,7 @@ function App() {
       alert('School deleted');
     } catch (e) {
       console.error(e);
-      alert('Failed to delete school');
+      alert('Failed to delete school: ' + e.message);
     }
   };
 
@@ -885,7 +813,7 @@ function App() {
           alert(`Successfully imported ${chapters.length} chapters!`);
         } catch (e) {
           console.error('Import error:', e);
-          alert('Failed to import CSV. Please check the format.');
+          alert('Failed to import CSV: ' + e.message);
         }
       },
       error: (error) => {
@@ -965,7 +893,7 @@ function App() {
                 className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg transition-all focus:border-purple-500" 
                 value={loginForm.email} 
                 onChange={e => setLoginForm({...loginForm, email: e.target.value})} 
-                placeholder="Email (e.g. vivek@avantifellows.org)" 
+                placeholder="Email (e.g. admin@avantifellows.org)" 
               />
             </div>
             <div>
@@ -995,8 +923,11 @@ function App() {
             </button>
           </div>
           
-          <div className="mt-6 text-center text-sm text-gray-600">
-            <p>Need help? Contact admin@avantifellows.org</p>
+          <div className="mt-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl text-sm">
+            <p className="font-bold text-yellow-800 mb-2">🔧 First Time Setup:</p>
+            <p className="text-gray-700">Create admin account in Firebase Console:</p>
+            <p className="text-gray-600 mt-1">Email: admin@avantifellows.org</p>
+            <p className="text-gray-600">Password: (your choice)</p>
           </div>
         </div>
       </div>
@@ -1013,90 +944,98 @@ function App() {
           📊 Overview
         </h2>
         
-        <div className="grid md:grid-cols-2 gap-6 grid-responsive">
-          {[11,12].map(g => (
-            <div key={g} className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-              <h3 className="text-2xl font-bold mb-4 text-gray-800">Class {g}th</h3>
-              <div className="space-y-4">
-                {subjects.map(s => {
-                  const chapters = (curriculum[s] && curriculum[s][g]) || [];
-                  const completedCount = chapters.filter(ch => {
-                    const prog = chapterProgress[ch.id];
-                    return prog?.completed === 'Yes' && prog?.testConducted === 'Yes';
-                  }).length;
-                  const percentage = chapters.length ? Math.round((completedCount / chapters.length) * 100) : 0;
-                  
-                  return (
-                    <div key={s} className="p-4 border-2 rounded-xl hover:border-purple-300 transition-colors">
-                      <div className="flex justify-between items-center mb-2">
-                        <div className="font-bold text-lg text-gray-800">{s}</div>
-                        <div className="text-2xl font-bold text-purple-600">{percentage}%</div>
-                      </div>
-                      <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-3 rounded-full bg-gradient-to-r from-green-400 to-emerald-500 progress-bar" 
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                      <div className="text-sm text-gray-600 mt-2">
-                        {completedCount} / {chapters.length} chapters completed
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-            <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <span>🎂</span> Birthdays
-            </h3>
-            <div className="space-y-4">
-              <div className="p-4 border-2 rounded-xl bg-gradient-to-r from-purple-50 to-pink-50">
-                <div className="font-bold text-lg mb-3 text-purple-700">This Week</div>
-                <div className="space-y-2">
-                  {upcoming('week').length ? (
-                    upcoming('week').map(t => (
-                      <div key={t.afid} className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
-                        <div>
-                          <div className="font-medium">{t.name}</div>
-                          <div className="text-sm text-gray-500">({t.afid})</div>
+        {subjects.length === 0 ? (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <div className="text-6xl mb-4">📚</div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Curriculum Added Yet</h3>
+            <p className="text-gray-600">Admin needs to add curriculum in the Admin Dashboard</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-6 grid-responsive">
+            {[11,12].map(g => (
+              <div key={g} className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+                <h3 className="text-2xl font-bold mb-4 text-gray-800">Class {g}th</h3>
+                <div className="space-y-4">
+                  {subjects.map(s => {
+                    const chapters = (curriculum[s] && curriculum[s][g]) || [];
+                    const completedCount = chapters.filter(ch => {
+                      const prog = chapterProgress[ch.id];
+                      return prog?.completed === 'Yes' && prog?.testConducted === 'Yes';
+                    }).length;
+                    const percentage = chapters.length ? Math.round((completedCount / chapters.length) * 100) : 0;
+                    
+                    return (
+                      <div key={s} className="p-4 border-2 rounded-xl hover:border-purple-300 transition-colors">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="font-bold text-lg text-gray-800">{s}</div>
+                          <div className="text-2xl font-bold text-purple-600">{percentage}%</div>
                         </div>
-                        <div className="text-sm font-semibold text-purple-600">
-                          {new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}
+                        <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-3 rounded-full bg-gradient-to-r from-green-400 to-emerald-500 progress-bar" 
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <div className="text-sm text-gray-600 mt-2">
+                          {completedCount} / {chapters.length} chapters completed
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-gray-500 text-center py-3">No birthdays this week</div>
-                  )}
+                    );
+                  })}
                 </div>
               </div>
+            ))}
 
-              <div className="p-4 border-2 rounded-xl bg-gradient-to-r from-blue-50 to-cyan-50">
-                <div className="font-bold text-lg mb-3 text-blue-700">This Month</div>
-                <div className="space-y-2">
-                  {upcoming('month').length ? (
-                    upcoming('month').slice(0, 5).map(t => (
-                      <div key={t.afid} className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
-                        <div>
-                          <div className="font-medium">{t.name}</div>
-                          <div className="text-sm text-gray-500">({t.afid})</div>
+            <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+              <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <span>🎂</span> Birthdays
+              </h3>
+              <div className="space-y-4">
+                <div className="p-4 border-2 rounded-xl bg-gradient-to-r from-purple-50 to-pink-50">
+                  <div className="font-bold text-lg mb-3 text-purple-700">This Week</div>
+                  <div className="space-y-2">
+                    {upcoming('week').length ? (
+                      upcoming('week').map(t => (
+                        <div key={t.afid} className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
+                          <div>
+                            <div className="font-medium">{t.name}</div>
+                            <div className="text-sm text-gray-500">({t.afid})</div>
+                          </div>
+                          <div className="text-sm font-semibold text-purple-600">
+                            {new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}
+                          </div>
                         </div>
-                        <div className="text-sm font-semibold text-blue-600">
-                          {new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}
+                      ))
+                    ) : (
+                      <div className="text-gray-500 text-center py-3">No birthdays this week</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 border-2 rounded-xl bg-gradient-to-r from-blue-50 to-cyan-50">
+                  <div className="font-bold text-lg mb-3 text-blue-700">This Month</div>
+                  <div className="space-y-2">
+                    {upcoming('month').length ? (
+                      upcoming('month').slice(0, 5).map(t => (
+                        <div key={t.afid} className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
+                          <div>
+                            <div className="font-medium">{t.name}</div>
+                            <div className="text-sm text-gray-500">({t.afid})</div>
+                          </div>
+                          <div className="text-sm font-semibold text-blue-600">
+                            {new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}
+                          </div>
                         </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-gray-500 text-center py-3">No birthdays this month</div>
-                  )}
+                      ))
+                    ) : (
+                      <div className="text-gray-500 text-center py-3">No birthdays this month</div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     );
   };
@@ -1108,6 +1047,21 @@ function App() {
     const chapters = useMemo(() => {
       return (curriculum[subj] && curriculum[subj][selectedGrade]) || [];
     }, [curriculum, subj, selectedGrade]);
+
+    if (!subj || !curriculum[subj]) {
+      return (
+        <div className="space-y-6 fade-in">
+          <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+            📘 Chapters
+          </h2>
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <div className="text-6xl mb-4">📚</div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Curriculum Available</h3>
+            <p className="text-gray-600">Contact admin to add curriculum for your subject</p>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="space-y-6 fade-in no-flicker">
@@ -1138,187 +1092,195 @@ function App() {
           </button>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 grid-responsive">
-          {chapters.map(ch => {
-            const prog = chapterProgress[ch.id] || {};
-            const status = computeChapterStatus(ch, prog);
-            const completedTopics = prog.completedTopics || [];
-            const isExpanded = !!expandedChapters[ch.id];
-            const topicsPercent = ch.topics?.length ? Math.round((completedTopics.length / ch.topics.length) * 100) : 0;
+        {chapters.length === 0 ? (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <div className="text-6xl mb-4">📖</div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
+            <p className="text-gray-600">Admin needs to add chapters for Class {selectedGrade}</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 grid-responsive">
+            {chapters.map(ch => {
+              const prog = chapterProgress[ch.id] || {};
+              const status = computeChapterStatus(ch, prog);
+              const completedTopics = prog.completedTopics || [];
+              const isExpanded = !!expandedChapters[ch.id];
+              const topicsPercent = ch.topics?.length ? Math.round((completedTopics.length / ch.topics.length) * 100) : 0;
 
-            return (
-              <div 
-                key={ch.id} 
-                className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5 no-flicker`}
-              >
-                <div className="mb-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-xl font-bold text-gray-800 pr-2">{ch.name}</h3>
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${status.textColor} ${status.key === 'ahead' ? 'status-badge-ahead' : ''}`}>
-                      {status.label}
-                    </span>
-                  </div>
-                  
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between text-gray-700">
-                      <span className="font-medium">Topics Progress:</span>
-                      <span className="font-bold text-purple-600">{completedTopics.length}/{ch.topics?.length || 0}</span>
+              return (
+                <div 
+                  key={ch.id} 
+                  className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5 no-flicker`}
+                >
+                  <div className="mb-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="text-xl font-bold text-gray-800 pr-2">{ch.name}</h3>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${status.textColor} ${status.key === 'ahead' ? 'status-badge-ahead' : ''}`}>
+                        {status.label}
+                      </span>
                     </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className="h-2 bg-gradient-to-r from-purple-500 to-pink-500 progress-bar" 
-                        style={{ width: `${topicsPercent}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-gray-600 mt-2">
-                      <span>Target Date:</span>
-                      <span className="font-semibold">{ch.targetDate || '—'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <hr className="my-4 border-gray-300" />
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Chapter Test Conducted?
-                    </label>
-                    <select 
-                      value={prog.testConducted || 'No'} 
-                      onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value)} 
-                      className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-purple-400"
-                    >
-                      <option>No</option>
-                      <option>Yes</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Chapter Completed?
-                    </label>
-                    <select 
-                      value={prog.completed || 'No'} 
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (val === 'No') {
-                          updateChapterProgress(ch.id, 'completed', 'No');
-                          updateChapterProgress(ch.id, 'completionDate', null);
-                        } else {
-                          updateChapterProgress(ch.id, 'completed', 'Yes');
-                          if (!prog.completionDate) {
-                            const todayStr = new Date().toISOString().split('T')[0];
-                            updateChapterProgress(ch.id, 'completionDate', todayStr);
-                          }
-                        }
-                      }} 
-                      className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-purple-400"
-                    >
-                      <option>No</option>
-                      <option>Yes</option>
-                    </select>
-                    <div className="text-xs text-gray-600 mt-2 bg-yellow-50 p-2 rounded">
-                      Note: Without test, shows as "Partially Completed"
+                    
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-gray-700">
+                        <span className="font-medium">Topics Progress:</span>
+                        <span className="font-bold text-purple-600">{completedTopics.length}/{ch.topics?.length || 0}</span>
+                      </div>
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-2 bg-gradient-to-r from-purple-500 to-pink-500 progress-bar" 
+                          style={{ width: `${topicsPercent}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-gray-600 mt-2">
+                        <span>Target Date:</span>
+                        <span className="font-semibold">{ch.targetDate || '—'}</span>
+                      </div>
                     </div>
                   </div>
 
-                  {prog.completed === 'Yes' && (
-                    <div className="bg-purple-50 p-3 rounded-xl border border-purple-200">
-                      <label className="block text-sm font-bold text-purple-900 mb-2">
-                        Completion Date
-                      </label>
-                      <input 
-                        type="date" 
-                        value={prog.completionDate || ''} 
-                        onChange={e => updateChapterProgress(ch.id, 'completionDate', e.target.value)} 
-                        className="w-full border-2 border-purple-300 px-4 py-2 rounded-lg"
-                      />
-                    </div>
-                  )}
+                  <hr className="my-4 border-gray-300" />
 
-                  <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                      Teaching Method
-                    </label>
-                    <select 
-                      value={prog.method || 'Online'} 
-                      onChange={e => updateChapterProgress(ch.id, 'method', e.target.value)} 
-                      className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-purple-400"
-                    >
-                      <option>Online</option>
-                      <option>Offline</option>
-                    </select>
-                  </div>
-
-                  {prog.method === 'Offline' && (
+                  <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-2">
-                        Notes (Why offline?)
+                        Chapter Test Conducted?
                       </label>
-                      <textarea 
-                        value={prog.notes || ''} 
-                        onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value)} 
-                        className="w-full border-2 border-gray-300 px-4 py-2 rounded-xl" 
-                        rows="2" 
-                        placeholder="Reason for offline teaching..."
-                      />
-                    </div>
-                  )}
-
-                  <div className="border-t pt-4">
-                    <button 
-                      onClick={() => toggleExpand(ch.id)}
-                      className="w-full flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl hover:from-purple-100 hover:to-pink-100 transition-all"
-                    >
-                      <span className="font-bold text-purple-700 flex items-center gap-2">
-                        <span>📋</span>
-                        Topics ({completedTopics.length}/{ch.topics?.length || 0})
-                      </span>
-                      <svg 
-                        className={`w-5 h-5 text-purple-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                        fill="none" 
-                        stroke="currentColor" 
-                        viewBox="0 0 24 24"
+                      <select 
+                        value={prog.testConducted || 'No'} 
+                        onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value)} 
+                        className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-purple-400"
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
+                        <option>No</option>
+                        <option>Yes</option>
+                      </select>
+                    </div>
 
-                    <div className={`topics-container ${isExpanded ? 'topics-expanded' : 'topics-collapsed'}`}>
-                      <div className="mt-3 space-y-2 max-h-64 overflow-y-auto px-1">
-                        {(ch.topics || []).map((t, idx) => {
-                          const checked = completedTopics.includes(t);
-                          return (
-                            <label 
-                              key={idx} 
-                              className="flex items-center gap-3 p-3 rounded-xl hover:bg-purple-50 cursor-pointer transition-colors group"
-                            >
-                              <input 
-                                type="checkbox" 
-                                checked={checked} 
-                                onChange={e => {
-                                  const updated = e.target.checked 
-                                    ? [...completedTopics, t] 
-                                    : completedTopics.filter(x => x !== t);
-                                  updateChapterProgress(ch.id, 'completedTopics', updated);
-                                }} 
-                              />
-                              <span className={`flex-1 ${checked ? 'line-through text-gray-500' : 'text-gray-800 font-medium'}`}>
-                                {t}
-                              </span>
-                              {checked && <span className="text-green-500 text-xl">✓</span>}
-                            </label>
-                          );
-                        })}
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">
+                        Chapter Completed?
+                      </label>
+                      <select 
+                        value={prog.completed || 'No'} 
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === 'No') {
+                            updateChapterProgress(ch.id, 'completed', 'No');
+                            updateChapterProgress(ch.id, 'completionDate', null);
+                          } else {
+                            updateChapterProgress(ch.id, 'completed', 'Yes');
+                            if (!prog.completionDate) {
+                              const todayStr = new Date().toISOString().split('T')[0];
+                              updateChapterProgress(ch.id, 'completionDate', todayStr);
+                            }
+                          }
+                        }} 
+                        className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-purple-400"
+                      >
+                        <option>No</option>
+                        <option>Yes</option>
+                      </select>
+                      <div className="text-xs text-gray-600 mt-2 bg-yellow-50 p-2 rounded">
+                        Note: Without test, shows as "Partially Completed"
+                      </div>
+                    </div>
+
+                    {prog.completed === 'Yes' && (
+                      <div className="bg-purple-50 p-3 rounded-xl border border-purple-200">
+                        <label className="block text-sm font-bold text-purple-900 mb-2">
+                          Completion Date
+                        </label>
+                        <input 
+                          type="date" 
+                          value={prog.completionDate || ''} 
+                          onChange={e => updateChapterProgress(ch.id, 'completionDate', e.target.value)} 
+                          className="w-full border-2 border-purple-300 px-4 py-2 rounded-lg"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">
+                        Teaching Method
+                      </label>
+                      <select 
+                        value={prog.method || 'Online'} 
+                        onChange={e => updateChapterProgress(ch.id, 'method', e.target.value)} 
+                        className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-purple-400"
+                      >
+                        <option>Online</option>
+                        <option>Offline</option>
+                      </select>
+                    </div>
+
+                    {prog.method === 'Offline' && (
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                          Notes (Why offline?)
+                        </label>
+                        <textarea 
+                          value={prog.notes || ''} 
+                          onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value)} 
+                          className="w-full border-2 border-gray-300 px-4 py-2 rounded-xl" 
+                          rows="2" 
+                          placeholder="Reason for offline teaching..."
+                        />
+                      </div>
+                    )}
+
+                    <div className="border-t pt-4">
+                      <button 
+                        onClick={() => toggleExpand(ch.id)}
+                        className="w-full flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl hover:from-purple-100 hover:to-pink-100 transition-all"
+                      >
+                        <span className="font-bold text-purple-700 flex items-center gap-2">
+                          <span>📋</span>
+                          Topics ({completedTopics.length}/{ch.topics?.length || 0})
+                        </span>
+                        <svg 
+                          className={`w-5 h-5 text-purple-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+
+                      <div className={`topics-container ${isExpanded ? 'topics-expanded' : 'topics-collapsed'}`}>
+                        <div className="mt-3 space-y-2 max-h-64 overflow-y-auto px-1">
+                          {(ch.topics || []).map((t, idx) => {
+                            const checked = completedTopics.includes(t);
+                            return (
+                              <label 
+                                key={idx} 
+                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-purple-50 cursor-pointer transition-colors group"
+                              >
+                                <input 
+                                  type="checkbox" 
+                                  checked={checked} 
+                                  onChange={e => {
+                                    const updated = e.target.checked 
+                                      ? [...completedTopics, t] 
+                                      : completedTopics.filter(x => x !== t);
+                                    updateChapterProgress(ch.id, 'completedTopics', updated);
+                                  }} 
+                                />
+                                <span className={`flex-1 ${checked ? 'line-through text-gray-500' : 'text-gray-800 font-medium'}`}>
+                                  {t}
+                                </span>
+                                {checked && <span className="text-green-500 text-xl">✓</span>}
+                              </label>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   });
@@ -1393,53 +1355,72 @@ function App() {
           </button>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl shadow-lg overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gradient-to-r from-purple-50 to-pink-50">
-                <th className="p-3 text-left font-bold">AFID</th>
-                <th className="p-3 text-left font-bold">Name</th>
-                <th className="p-3 text-left font-bold">Email</th>
-                <th className="p-3 text-left font-bold">Subject</th>
-                <th className="p-3 text-left font-bold">School</th>
-                <th className="p-3 text-left font-bold">Phone</th>
-                <th className="p-3 text-left font-bold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teachers.map(t => (
-                <tr key={t.afid} className="border-b hover:bg-purple-50 transition-colors">
-                  <td className="p-3 font-mono font-semibold">{t.afid}</td>
-                  <td className="p-3">{t.name}</td>
-                  <td className="p-3 text-sm">{t.email}</td>
-                  <td className="p-3">{t.subject}</td>
-                  <td className="p-3">{t.school}</td>
-                  <td className="p-3">{t.phone}</td>
-                  <td className="p-3">
-                    <div className="flex gap-2 flex-wrap">
-                      <button 
-                        onClick={() => { setEditing(t); setIsNewTeacher(false); }} 
-                        className="px-3 py-1 bg-yellow-400 rounded-lg hover:bg-yellow-500 transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        onClick={() => deleteTeacher(t.afid, t.email)} 
-                        className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
+        {teachers.length === 0 ? (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <div className="text-6xl mb-4">👥</div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Teachers Yet</h3>
+            <p className="text-gray-600">Click "+ Add Teacher" to get started</p>
+          </div>
+        ) : (
+          <div className="bg-white p-4 rounded-2xl shadow-lg overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gradient-to-r from-purple-50 to-pink-50">
+                  <th className="p-3 text-left font-bold">AFID</th>
+                  <th className="p-3 text-left font-bold">Name</th>
+                  <th className="p-3 text-left font-bold">Email</th>
+                  <th className="p-3 text-left font-bold">Subject</th>
+                  <th className="p-3 text-left font-bold">School</th>
+                  <th className="p-3 text-left font-bold">Phone</th>
+                  <th className="p-3 text-left font-bold">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {teachers.map(t => (
+                  <tr key={t.afid} className="border-b hover:bg-purple-50 transition-colors">
+                    <td className="p-3 font-mono font-semibold">{t.afid}</td>
+                    <td className="p-3">{t.name}</td>
+                    <td className="p-3 text-sm">{t.email}</td>
+                    <td className="p-3">{t.subject}</td>
+                    <td className="p-3">{t.school}</td>
+                    <td className="p-3">{t.phone}</td>
+                    <td className="p-3">
+                      <div className="flex gap-2 flex-wrap">
+                        <button 
+                          onClick={() => { setEditing(t); setIsNewTeacher(false); }} 
+                          className="px-3 py-1 bg-yellow-400 rounded-lg hover:bg-yellow-500 transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => deleteTeacher(t.afid, t.email)} 
+                          className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {(editing !== null || isNewTeacher) && (
           <div className="bg-white p-6 rounded-2xl shadow-lg">
             <h4 className="font-bold text-xl mb-4">{isNewTeacher ? 'Add New Teacher' : 'Edit Teacher'}</h4>
+            
+            <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg text-sm">
+              <p className="font-bold text-blue-900 mb-2">📝 Instructions:</p>
+              <ol className="list-decimal list-inside text-gray-700 space-y-1">
+                <li>Fill in all required fields below</li>
+                <li>Click "Save Teacher Data"</li>
+                <li>Follow the popup instructions to create Firebase Auth account</li>
+                <li>Teacher can then login with their credentials</li>
+              </ol>
+            </div>
+
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-1 block">
@@ -1534,6 +1515,7 @@ function App() {
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-1 block">
                     PASSWORD <span className="text-red-500">*</span>
+                    <span className="text-xs text-gray-500"> (Save this!)</span>
                   </label>
                   <input 
                     type="password"
@@ -1550,7 +1532,7 @@ function App() {
                 onClick={save} 
                 className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
               >
-                {isNewTeacher ? 'Create Account' : 'Update'}
+                {isNewTeacher ? 'Save Teacher Data' : 'Update'}
               </button>
               <button 
                 onClick={() => { setEditing(null); setIsNewTeacher(false); }} 
@@ -1559,12 +1541,6 @@ function App() {
                 Cancel
               </button>
             </div>
-            {isNewTeacher && (
-              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700">
-                <strong>✅ FIXED:</strong> Admin stays logged in. The new teacher account is created using a separate Firebase instance, 
-                so you won't be logged out. The teacher can then login with their email and password.
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -1627,8 +1603,8 @@ function App() {
             onChange={e=>setSubject(e.target.value)} 
             className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium bg-white"
           >
-            {curriculumKeys.length === 0 && <option value="">Loading...</option>}
-            {curriculumKeys.map(s => <option key={s} value={s}>{s}</option>)}
+            <option value="">Select Subject</option>
+            {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <select 
             value={grade} 
@@ -1706,71 +1682,83 @@ function App() {
           </div>
         </div>
 
-        <div className="space-y-3">
-          {subject && curriculum[subject] && (curriculum[subject][grade] || []).map(ch => {
-            const prog = chapterProgress[ch.id] || {};
-            const status = computeChapterStatus(ch, prog);
-            
-            return (
-              <div 
-                key={ch.id} 
-                className={`p-4 rounded-xl border-2 ${status.color} flex justify-between items-center flex-wrap gap-3`}
-              >
-                <div>
-                  <div className="font-bold text-lg">
-                    {ch.name} <span className="text-xs text-gray-500">({ch.id})</span>
+        {subject ? (
+          <div className="space-y-3">
+            {curriculum[subject] && curriculum[subject][grade] && curriculum[subject][grade].length > 0 ? (
+              curriculum[subject][grade].map(ch => {
+                const prog = chapterProgress[ch.id] || {};
+                const status = computeChapterStatus(ch, prog);
+                
+                return (
+                  <div 
+                    key={ch.id} 
+                    className={`p-4 rounded-xl border-2 ${status.color} flex justify-between items-center flex-wrap gap-3`}
+                  >
+                    <div>
+                      <div className="font-bold text-lg">
+                        {ch.name} <span className="text-xs text-gray-500">({ch.id})</span>
+                      </div>
+                      <div className="text-sm text-gray-700 mt-1">{(ch.topics||[]).join(', ')}</div>
+                      <div className="text-sm mt-1">Target: <span className="font-semibold">{ch.targetDate || '—'}</span></div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <div className={`text-sm font-semibold px-3 py-1 rounded-full ${status.textColor}`}>
+                        {status.label}
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        <button 
+                          onClick={() => { 
+                            const n = prompt('Edit name', ch.name); 
+                            if (n !== null) updateChapterAdmin(subject, grade, ch.id, { name: n }); 
+                          }} 
+                          className="px-3 py-1 bg-yellow-300 rounded-lg hover:bg-yellow-400 transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => { 
+                            const t = prompt('Set target (YYYY-MM-DD)', ch.targetDate || ''); 
+                            if (t !== null) updateChapterAdmin(subject, grade, ch.id, { targetDate: t }); 
+                          }} 
+                          className="px-3 py-1 bg-blue-300 rounded-lg hover:bg-blue-400 transition-colors"
+                        >
+                          Set Target
+                        </button>
+                        <button 
+                          onClick={() => { 
+                            const ts = prompt('Edit topics (comma separated)', (ch.topics||[]).join(', ')); 
+                            if (ts !== null) updateChapterAdmin(subject, grade, ch.id, { topics: ts.split(',').map(x=>x.trim()) }); 
+                          }} 
+                          className="px-3 py-1 bg-green-300 rounded-lg hover:bg-green-400 transition-colors"
+                        >
+                          Edit Topics
+                        </button>
+                        <button 
+                          onClick={() => deleteChapterAdmin(subject, grade, ch.id)} 
+                          className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-700 mt-1">{(ch.topics||[]).join(', ')}</div>
-                  <div className="text-sm mt-1">Target: <span className="font-semibold">{ch.targetDate || '—'}</span></div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <div className={`text-sm font-semibold px-3 py-1 rounded-full ${status.textColor}`}>
-                    {status.label}
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <button 
-                      onClick={() => { 
-                        const n = prompt('Edit name', ch.name); 
-                        if (n !== null) updateChapterAdmin(subject, grade, ch.id, { name: n }); 
-                      }} 
-                      className="px-3 py-1 bg-yellow-300 rounded-lg hover:bg-yellow-400 transition-colors"
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      onClick={() => { 
-                        const t = prompt('Set target (YYYY-MM-DD)', ch.targetDate || ''); 
-                        if (t !== null) updateChapterAdmin(subject, grade, ch.id, { targetDate: t }); 
-                      }} 
-                      className="px-3 py-1 bg-blue-300 rounded-lg hover:bg-blue-400 transition-colors"
-                    >
-                      Set Target
-                    </button>
-                    <button 
-                      onClick={() => { 
-                        const ts = prompt('Edit topics (comma separated)', (ch.topics||[]).join(', ')); 
-                        if (ts !== null) updateChapterAdmin(subject, grade, ch.id, { topics: ts.split(',').map(x=>x.trim()) }); 
-                      }} 
-                      className="px-3 py-1 bg-green-300 rounded-lg hover:bg-green-400 transition-colors"
-                    >
-                      Edit Topics
-                    </button>
-                    <button 
-                      onClick={() => deleteChapterAdmin(subject, grade, ch.id)} 
-                      className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
+                );
+              })
+            ) : (
+              <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+                <div className="text-6xl mb-4">📖</div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
+                <p className="text-gray-600">Add your first chapter above</p>
               </div>
-            );
-          })}
-          {!subject && <div className="text-gray-500 text-center py-6">Please select a subject</div>}
-          {subject && (!curriculum[subject] || !curriculum[subject][grade] || curriculum[subject][grade].length === 0) && (
-            <div className="text-gray-500 text-center py-6">No chapters for this selection</div>
-          )}
-        </div>
+            )}
+          </div>
+        ) : (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <div className="text-6xl mb-4">📚</div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">Select a Subject</h3>
+            <p className="text-gray-600">Choose a subject from the dropdown above</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -1792,88 +1780,98 @@ function App() {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 grid-responsive">
-          <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-2xl shadow-lg text-center">
-            <div className="text-sm opacity-90 mb-2">Total Chapters</div>
-            <div className="text-5xl font-bold">{data ? data.totalChapters : '—'}</div>
-            <div className="text-sm opacity-90 mt-2">Completed: {data ? data.totalCompleted : '—'}</div>
+        {teachers.length === 0 ? (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <div className="text-6xl mb-4">📊</div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Data Yet</h3>
+            <p className="text-gray-600">Add teachers and curriculum to see analytics</p>
           </div>
+        ) : (
+          <>
+            <div className="grid md:grid-cols-3 gap-6 grid-responsive">
+              <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-2xl shadow-lg text-center">
+                <div className="text-sm opacity-90 mb-2">Total Chapters</div>
+                <div className="text-5xl font-bold">{data ? data.totalChapters : '—'}</div>
+                <div className="text-sm opacity-90 mt-2">Completed: {data ? data.totalCompleted : '—'}</div>
+              </div>
 
-          <div className="bg-white p-4 rounded-2xl shadow-lg text-center">
-            <div className="text-sm text-gray-600 mb-2">Syllabus Completion</div>
-            {data ? <canvas ref={pieRef} width="220" height="160"></canvas> : <div className="text-gray-500 mt-6">Loading...</div>}
-          </div>
+              <div className="bg-white p-4 rounded-2xl shadow-lg text-center">
+                <div className="text-sm text-gray-600 mb-2">Syllabus Completion</div>
+                {data ? <canvas ref={pieRef} width="220" height="160"></canvas> : <div className="text-gray-500 mt-6">Loading...</div>}
+              </div>
 
-          <div className="bg-white p-4 rounded-2xl shadow-lg">
-            <div className="text-sm text-gray-600 mb-3 font-bold">Top Teachers</div>
-            <div className="space-y-2">
-              {data && data.teacherArr.length ? (
-                data.teacherArr.slice(0,5).map((t, idx) => (
-                  <div key={t.afid} className="flex justify-between items-center p-2 rounded-lg hover:bg-purple-50">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-purple-600">{idx + 1}.</span>
-                      <div>
-                        <div className="font-medium">{t.name}</div>
-                        <div className="text-xs text-gray-500">{t.school}</div>
+              <div className="bg-white p-4 rounded-2xl shadow-lg">
+                <div className="text-sm text-gray-600 mb-3 font-bold">Top Teachers</div>
+                <div className="space-y-2">
+                  {data && data.teacherArr.length ? (
+                    data.teacherArr.slice(0,5).map((t, idx) => (
+                      <div key={t.afid} className="flex justify-between items-center p-2 rounded-lg hover:bg-purple-50">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-purple-600">{idx + 1}.</span>
+                          <div>
+                            <div className="font-medium">{t.name}</div>
+                            <div className="text-xs text-gray-500">{t.school}</div>
+                          </div>
+                        </div>
+                        <div className="text-lg font-bold text-purple-600">{t.percent}%</div>
                       </div>
-                    </div>
-                    <div className="text-lg font-bold text-purple-600">{t.percent}%</div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-gray-500">No data</div>
-              )}
+                    ))
+                  ) : (
+                    <div className="text-gray-500">No data</div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-lg">
-          <div className="text-sm text-gray-600 mb-4 font-bold">Teacher Completion % (Top 8)</div>
-          {data ? <canvas ref={barRef} width="800" height="300"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">Loading...</div>}
-        </div>
+            <div className="bg-white p-6 rounded-2xl shadow-lg">
+              <div className="text-sm text-gray-600 mb-4 font-bold">Teacher Completion % (Top 8)</div>
+              {data ? <canvas ref={barRef} width="800" height="300"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">Loading...</div>}
+            </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-lg">
-          <div className="text-sm text-gray-600 mb-4 font-bold">Schools - On Track vs Delayed</div>
-          {data ? <canvas ref={schoolRef} width="800" height="240"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">Loading...</div>}
-        </div>
+            <div className="bg-white p-6 rounded-2xl shadow-lg">
+              <div className="text-sm text-gray-600 mb-4 font-bold">Schools - On Track vs Delayed</div>
+              {data ? <canvas ref={schoolRef} width="800" height="240"></canvas> : <div className="h-40 flex items-center justify-center text-gray-500">Loading...</div>}
+            </div>
 
-        <div className="bg-white p-4 rounded-2xl shadow-lg overflow-x-auto">
-          <div className="text-sm text-gray-600 mb-3 font-bold">Detailed Teacher Statistics</div>
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-purple-50 to-pink-50">
-              <tr>
-                <th className="p-3 text-left font-bold">AFID</th>
-                <th className="p-3 text-left font-bold">Name</th>
-                <th className="p-3 text-left font-bold">School</th>
-                <th className="p-3 text-left font-bold">Completed</th>
-                <th className="p-3 text-left font-bold">Total</th>
-                <th className="p-3 text-left font-bold">Percent</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data && data.teacherArr.length ? (
-                data.teacherArr.map(t => (
-                  <tr key={t.afid} className="border-b hover:bg-purple-50 transition-colors">
-                    <td className="p-3 font-mono font-semibold">{t.afid}</td>
-                    <td className="p-3">{t.name}</td>
-                    <td className="p-3">{t.school}</td>
-                    <td className="p-3 text-green-600 font-bold">{t.completed}</td>
-                    <td className="p-3 font-semibold">{t.total}</td>
-                    <td className="p-3">
-                      <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full font-bold">
-                        {t.percent}%
-                      </span>
-                    </td>
+            <div className="bg-white p-4 rounded-2xl shadow-lg overflow-x-auto">
+              <div className="text-sm text-gray-600 mb-3 font-bold">Detailed Teacher Statistics</div>
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-purple-50 to-pink-50">
+                  <tr>
+                    <th className="p-3 text-left font-bold">AFID</th>
+                    <th className="p-3 text-left font-bold">Name</th>
+                    <th className="p-3 text-left font-bold">School</th>
+                    <th className="p-3 text-left font-bold">Completed</th>
+                    <th className="p-3 text-left font-bold">Total</th>
+                    <th className="p-3 text-left font-bold">Percent</th>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="6" className="p-4 text-gray-500 text-center">No data</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {data && data.teacherArr.length ? (
+                    data.teacherArr.map(t => (
+                      <tr key={t.afid} className="border-b hover:bg-purple-50 transition-colors">
+                        <td className="p-3 font-mono font-semibold">{t.afid}</td>
+                        <td className="p-3">{t.name}</td>
+                        <td className="p-3">{t.school}</td>
+                        <td className="p-3 text-green-600 font-bold">{t.completed}</td>
+                        <td className="p-3 font-semibold">{t.total}</td>
+                        <td className="p-3">
+                          <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full font-bold">
+                            {t.percent}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="6" className="p-4 text-gray-500 text-center">No data</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -1908,7 +1906,7 @@ function App() {
               <div>Total Teachers: <strong>{teachers.length}</strong></div>
               <div>Total Chapters: <strong>{analyticsData?.totalChapters || 0}</strong></div>
               <div>Total Schools: <strong>{schools.length}</strong></div>
-              <div>Version: <strong>2.1 - FIXED</strong></div>
+              <div>Version: <strong>3.0 - Clean Start</strong></div>
             </div>
           </div>
 
@@ -1952,16 +1950,24 @@ function App() {
             </div>
           </div>
 
-          <div className="bg-green-50 border-2 border-green-300 p-6 rounded-2xl shadow-lg md:col-span-2">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2 text-green-800">
-              <span>✅</span> Bug Fixes - Version 2.1
+          <div className="bg-yellow-50 border-2 border-yellow-300 p-6 rounded-2xl shadow-lg md:col-span-2">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2 text-yellow-800">
+              <span>⚠️</span> Important: Manual Firebase Setup Required
             </h4>
-            <div className="text-sm text-gray-700 space-y-2">
-              <p>• <strong>FIXED:</strong> Admin no longer gets logged out when creating teacher accounts</p>
-              <p>• <strong>FIXED:</strong> Teacher accounts are created using secondary Firebase instance</p>
-              <p>• <strong>FIXED:</strong> "Teacher profile not found" error resolved</p>
-              <p>• All teacher accounts save correctly to Firestore</p>
-              <p>• Teachers can login immediately after account creation</p>
+            <div className="text-sm text-gray-700 space-y-3">
+              <p className="font-bold">To create teacher accounts, you must manually create Firebase Auth accounts:</p>
+              <ol className="list-decimal list-inside space-y-2 pl-4">
+                <li>When you add a teacher, their data is saved to Firestore</li>
+                <li>You'll see a popup with instructions</li>
+                <li>Go to <a href="https://console.firebase.google.com" target="_blank" className="text-blue-600 underline">Firebase Console</a></li>
+                <li>Select your project: <strong>curriculum-dbb10</strong></li>
+                <li>Go to Authentication → Users</li>
+                <li>Click "Add User" and enter the email and password shown in the popup</li>
+                <li>The teacher can then login with those credentials</li>
+              </ol>
+              <p className="text-xs text-gray-600 mt-3 p-3 bg-white rounded">
+                <strong>Why manual?</strong> Firebase security restrictions prevent creating auth accounts directly from the client for security reasons. This is the proper way to handle user creation in a production environment.
+              </p>
             </div>
           </div>
         </div>
