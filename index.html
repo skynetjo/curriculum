@@ -3317,14 +3317,24 @@ function App() {
                 🏠 Overview
               </button>
               <button 
-                onClick={() => setActiveTab('chapters')} 
+                onClick={() => setActiveTab('chapters11')} 
                 className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                  activeTab==='chapters' 
+                  activeTab==='chapters11' 
                     ? 'avanti-gradient text-white shadow-lg' 
                     : 'bg-white text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                📖 Chapters
+                📖 Class 11th
+              </button>
+              <button 
+                onClick={() => setActiveTab('chapters12')} 
+                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  activeTab==='chapters12' 
+                    ? 'avanti-gradient text-white shadow-lg' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                📖 Class 12th
               </button>
               <button 
                 onClick={() => setActiveTab('profile')} 
