@@ -265,7 +265,7 @@ const auth = firebase.auth();
 const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology'];
 const DEFAULT_SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Bundi', 'CoE Mahisagar', 'EMRS Bhopal', 'JNV Bharuch'];
 
-const AVANTI_LOGO = 'data:image/jpeg;base64,/9j/4AAQSkZJRg...';
+const AVANTI_LOGO = '/mnt/user-data/uploads/Avanti_Fellows-logo.png';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -1233,30 +1233,23 @@ function App() {
     );
   };
 
-  const Chapters = () => {
-    const [localGrade, setLocalGrade] = useState(() => {
-  const saved = sessionStorage.getItem('selectedGrade');
-  return saved ? parseInt(saved) : 11;
-});
-
-useEffect(() => {
-  sessionStorage.setItem('selectedGrade', localGrade.toString());
-}, [localGrade]);
+  // NEW: Chapters component that accepts grade as prop
+  const Chapters = ({ grade }) => {
     const subj = currentUser.subject;
     
     const chapters = useMemo(() => {
-      if (!curriculum || !curriculum[subj] || !curriculum[subj][localGrade]) {
+      if (!curriculum || !curriculum[subj] || !curriculum[subj][grade]) {
         return [];
       }
-      return curriculum[subj][localGrade];
-    }, [curriculum, subj, localGrade]);
+      return curriculum[subj][grade];
+    }, [curriculum, subj, grade]);
 
     if (!subj || !curriculum[subj]) {
       return (
         <div className="space-y-6 fade-in">
           <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
             <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-            Chapters
+            Class {grade}th - {subj}
           </h2>
           <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
             <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
@@ -1271,37 +1264,14 @@ useEffect(() => {
       <div className="space-y-6 fade-in">
         <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
           <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-          Chapters - {subj}
+          Class {grade}th - {subj}
         </h2>
-        
-        <div className="flex gap-3 mb-6">
-          <button 
-            onClick={() => setLocalGrade(11)} 
-            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-              localGrade === 11
-                ? 'avanti-gradient text-white shadow-lg scale-105' 
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Class 11th
-          </button>
-          <button 
-            onClick={() => setLocalGrade(12)} 
-            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-              localGrade === 12
-                ? 'avanti-gradient text-white shadow-lg scale-105' 
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Class 12th
-          </button>
-        </div>
 
         {chapters.length === 0 ? (
           <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
             <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
             <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
-            <p className="text-gray-600">Admin needs to add chapters for Class {localGrade}</p>
+            <p className="text-gray-600">Admin needs to add chapters for Class {grade}</p>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 grid-responsive">
@@ -1403,7 +1373,545 @@ useEffect(() => {
                             ⚠️ All topics must be completed before marking chapter as completed
                           </div>
                         )}
-                      </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+                <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
+                <p className="text-gray-600">Add your first chapter above</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">Select a Subject</h3>
+            <p className="text-gray-600">Choose a subject from the dropdown above</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function AdminAnalytics() {
+    const data = analyticsData;
+
+    if (!chartRefs.current.adminSchool) chartRefs.current.adminSchool = React.createRef();
+    if (!chartRefs.current.adminSubject) chartRefs.current.adminSubject = React.createRef();
+    if (!chartRefs.current.adminTeacher) chartRefs.current.adminTeacher = React.createRef();
+    if (!chartRefs.current.adminPending) chartRefs.current.adminPending = React.createRef();
+    if (!chartRefs.current.adminCompletion) chartRefs.current.adminCompletion = React.createRef();
+    if (!chartRefs.current.adminDays) chartRefs.current.adminDays = React.createRef();
+
+    useEffect(() => {
+      if (!data || !chartRefs.current.adminSchool?.current) return;
+
+      const schoolNames = Object.keys(data.schoolStatus || {});
+      const completionData = schoolNames.map(s => {
+        const school = data.schoolStatus[s];
+        return school.total ? Math.round((school.completed / school.total) * 100) : 0;
+      });
+
+      createChart('adminSchool', {
+        type: 'bar',
+        data: {
+          labels: schoolNames,
+          datasets: [{
+            label: 'Completion %',
+            data: completionData,
+            backgroundColor: '#C8342E',
+            borderRadius: 8
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'School-wise Completion Rate' }
+          },
+          scales: {
+            x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
+          }
+        }
+      });
+    }, [data, createChart]);
+
+    useEffect(() => {
+      if (!data || !chartRefs.current.adminSubject?.current) return;
+
+      const subjects = Object.keys(data.subjectStats || {});
+      const completedData = subjects.map(s => data.subjectStats[s].completed);
+
+      createChart('adminSubject', {
+        type: 'pie',
+        data: {
+          labels: subjects,
+          datasets: [{
+            data: completedData,
+            backgroundColor: ['#F4B41A', '#E8B039', '#C8342E', '#10B981'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: 'Completed Chapters by Subject' }
+          }
+        }
+      });
+    }, [data, createChart]);
+
+    useEffect(() => {
+      if (!data || !chartRefs.current.adminTeacher?.current) return;
+
+      const topTeachers = data.teacherArr.slice(0, 10);
+
+      createChart('adminTeacher', {
+        type: 'bar',
+        data: {
+          labels: topTeachers.map(t => t.name),
+          datasets: [{
+            label: 'Completion %',
+            data: topTeachers.map(t => t.percent),
+            backgroundColor: '#10B981',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'Top 10 Teachers by Completion %' }
+          },
+          scales: {
+            x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
+          }
+        }
+      });
+    }, [data, createChart]);
+
+    useEffect(() => {
+      if (!data || !chartRefs.current.adminPending?.current) return;
+
+      const schoolNames = Object.keys(data.schoolStatus || {});
+      const pendingData = schoolNames.map(s => data.schoolStatus[s].pendingTests);
+
+      createChart('adminPending', {
+        type: 'bar',
+        data: {
+          labels: schoolNames,
+          datasets: [{
+            label: 'Pending Tests',
+            data: pendingData,
+            backgroundColor: '#F59E0B',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'Pending Tests by School' }
+          }
+        }
+      });
+    }, [data, createChart]);
+
+    useEffect(() => {
+      if (!data || !chartRefs.current.adminCompletion?.current) return;
+
+      createChart('adminCompletion', {
+        type: 'doughnut',
+        data: {
+          labels: ['Completed', 'Remaining'],
+          datasets: [{
+            data: [data.totalCompleted, data.totalChapters - data.totalCompleted],
+            backgroundColor: ['#10B981', '#E5E7EB'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: `Overall Progress: ${Math.round((data.totalCompleted / data.totalChapters) * 100)}%` }
+          }
+        }
+      });
+    }, [data, createChart]);
+
+    useEffect(() => {
+      if (!data || !chartRefs.current.adminDays?.current) return;
+
+      const teachersWithDays = data.teacherArr.filter(t => t.avgDaysPerChapter > 0).slice(0, 10);
+
+      createChart('adminDays', {
+        type: 'bar',
+        data: {
+          labels: teachersWithDays.map(t => t.name),
+          datasets: [{
+            label: 'Avg Days/Chapter',
+            data: teachersWithDays.map(t => t.avgDaysPerChapter),
+            backgroundColor: '#60A5FA',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'Average Days per Chapter (Top 10)' }
+          }
+        }
+      });
+    }, [data, createChart]);
+    
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center flex-wrap gap-3">
+          <h3 className="text-2xl font-bold">Analytics Dashboard</h3>
+          <button 
+            onClick={exportCSV} 
+            className="px-4 py-2 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
+          >
+            📊 Export CSV
+          </button>
+        </div>
+
+        {teachers.length === 0 ? (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Data Yet</h3>
+            <p className="text-gray-600">Add teachers and curriculum to see analytics</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="stat-card avanti-gradient text-white">
+                <div className="text-sm opacity-90 mb-1">Total Chapters</div>
+                <div className="text-3xl font-bold">{data.totalChapters}</div>
+              </div>
+              <div className="stat-card bg-gradient-to-br from-green-500 to-emerald-500 text-white">
+                <div className="text-sm opacity-90 mb-1">Completed</div>
+                <div className="text-3xl font-bold">{data.totalCompleted}</div>
+              </div>
+              <div className="stat-card bg-gradient-to-br from-orange-500 to-red-500 text-white">
+                <div className="text-sm opacity-90 mb-1">Pending Tests</div>
+                <div className="text-3xl font-bold">{data.totalPendingTests}</div>
+              </div>
+              <div className="stat-card bg-gradient-to-br from-blue-500 to-cyan-500 text-white">
+                <div className="text-sm opacity-90 mb-1">Avg Days/Ch</div>
+                <div className="text-3xl font-bold">{data.avgDaysPerChapter}</div>
+              </div>
+              <div className="stat-card bg-gradient-to-br from-indigo-500 to-purple-500 text-white">
+                <div className="text-sm opacity-90 mb-1">Est. Classes</div>
+                <div className="text-3xl font-bold">{data.estimatedClassesRemaining}</div>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminSchool} height="200"></canvas>
+              </div>
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminSubject} height="200"></canvas>
+              </div>
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminTeacher} height="200"></canvas>
+              </div>
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminPending} height="200"></canvas>
+              </div>
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminCompletion} height="200"></canvas>
+              </div>
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminDays} height="200"></canvas>
+              </div>
+            </div>
+
+            <div className="stat-card overflow-x-auto">
+              <div className="text-sm text-gray-600 mb-3 font-bold">Detailed Teacher Statistics</div>
+              <table className="w-full">
+                <thead className="avanti-gradient-light">
+                  <tr>
+                    <th className="p-3 text-left font-bold">AFID</th>
+                    <th className="p-3 text-left font-bold">Name</th>
+                    <th className="p-3 text-left font-bold">School</th>
+                    <th className="p-3 text-left font-bold">Subject</th>
+                    <th className="p-3 text-left font-bold">Completed</th>
+                    <th className="p-3 text-left font-bold">Total</th>
+                    <th className="p-3 text-left font-bold">%</th>
+                    <th className="p-3 text-left font-bold">Avg Days</th>
+                    <th className="p-3 text-left font-bold">Pending Tests</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.teacherArr.map(t => (
+                    <tr key={t.afid} className="border-b hover:bg-yellow-50 transition-colors">
+                      <td className="p-3 font-mono font-semibold">{t.afid}</td>
+                      <td className="p-3">{t.name}</td>
+                      <td className="p-3">{t.school}</td>
+                      <td className="p-3">{t.subject}</td>
+                      <td className="p-3 text-green-600 font-bold">{t.completed}</td>
+                      <td className="p-3 font-semibold">{t.total}</td>
+                      <td className="p-3">
+                        <span className="px-3 py-1 avanti-gradient-light rounded-full font-bold" style={{color: 'var(--avanti-red)'}}>
+                          {t.percent}%
+                        </span>
+                      </td>
+                      <td className="p-3">{t.avgDaysPerChapter || '—'}</td>
+                      <td className="p-3 text-orange-600 font-semibold">{t.pendingTests}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  function AdminSettings() {
+    const [newSchool, setNewSchool] = useState('');
+
+    return (
+      <div className="space-y-6">
+        <h3 className="text-2xl font-bold">Settings</h3>
+        
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="stat-card">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>📋</span> Data Management
+            </h4>
+            <div className="space-y-3">
+              <button 
+                onClick={exportCSV}
+                className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-left"
+              >
+                Export Analytics Data (CSV)
+              </button>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>👥</span> System Info
+            </h4>
+            <div className="text-sm text-gray-700 space-y-2">
+              <div>Total Teachers: <strong>{teachers.length}</strong></div>
+              <div>Total Chapters: <strong>{analyticsData?.totalChapters || 0}</strong></div>
+              <div>Total Schools: <strong>{schools.length}</strong></div>
+              <div>Version: <strong>7.0 - Fixed Grade Navigation</strong></div>
+            </div>
+          </div>
+
+          <div className="stat-card md:col-span-2">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>🏫</span> School Management
+            </h4>
+            
+            <div className="mb-4">
+              <label className="text-sm font-medium text-gray-700 mb-2 block">Add New School</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  value={newSchool}
+                  onChange={e => setNewSchool(e.target.value)}
+                  placeholder="School name"
+                  className="flex-1 border-2 border-gray-300 px-3 py-2 rounded-lg"
+                />
+                <button 
+                  onClick={() => { addSchool(newSchool); setNewSchool(''); }}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-700 mb-2">Current Schools:</div>
+              {schools.map(school => (
+                <div key={school} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium">{school}</span>
+                  <button 
+                    onClick={() => deleteSchool(school)}
+                    className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function AdminDashboard() {
+    const [tab, setTab] = useState('overview');
+    
+    return (
+      <div className="space-y-6 fade-in">
+        <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+          <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+          Admin Dashboard
+        </h2>
+        
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+          {['overview','teachers','curriculum','analytics','settings'].map(t => (
+            <button 
+              key={t} 
+              onClick={()=>setTab(t)} 
+              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                tab===t 
+                  ? 'avanti-gradient text-white shadow-lg' 
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'overview' && (
+          <div className="grid md:grid-cols-3 gap-6 grid-responsive">
+            <div className="avanti-gradient text-white p-6 rounded-2xl shadow-lg text-center">
+              <div className="text-sm opacity-90 mb-2">Total Teachers</div>
+              <div className="text-5xl font-bold">{teachers.length}</div>
+            </div>
+            <div className="bg-gradient-to-br from-green-500 to-emerald-500 text-white p-6 rounded-2xl shadow-lg text-center">
+              <div className="text-sm opacity-90 mb-2">Total Schools</div>
+              <div className="text-5xl font-bold">{schools.length}</div>
+            </div>
+            <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-2xl shadow-lg text-center">
+              <div className="text-sm opacity-90 mb-2">Chapters Tracked</div>
+              <div className="text-5xl font-bold">{Object.keys(chapterProgress || {}).length}</div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'teachers' && <AdminTeachers />}
+        {tab === 'curriculum' && <AdminCurriculum />}
+        {tab === 'analytics' && <AdminAnalytics />}
+        {tab === 'settings' && <AdminSettings />}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 animated-gradient">
+      <nav className="bg-white shadow-lg sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <img src={AVANTI_LOGO} alt="Avanti Fellows" className="avanti-logo-small" />
+            <div>
+              <div className="font-bold text-xl text-gray-800">
+                Curriculum Tracker
+              </div>
+              <div className="text-sm text-gray-600">
+                {isAdmin ? 'Administrator' : `${currentUser.name} - ${currentUser.school}`}
+              </div>
+            </div>
+          </div>
+          <button 
+            onClick={handleLogout} 
+            className="px-5 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+          >
+            Logout
+          </button>
+        </div>
+      </nav>
+
+      {todaysBirthdays.length > 0 && (
+        <div className="fixed top-20 right-4 z-50 max-w-xs">
+          <div className="bg-white border-4 p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce" style={{borderColor: 'var(--avanti-red)'}}>
+            <div className="text-4xl">🎂</div>
+            <div>
+              <div className="font-bold" style={{color: 'var(--avanti-red)'}}>Happy Birthday!</div>
+              <div className="text-sm text-gray-700">{todaysBirthdays.map(t => t.name).join(', ')}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="main-content max-w-7xl mx-auto px-4 py-6">
+        <div className="mb-6">
+          {!isAdmin && (
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              <button 
+                onClick={() => setActiveTab('overview')} 
+                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  activeTab==='overview' 
+                    ? 'avanti-gradient text-white shadow-lg' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                🏠 Overview
+              </button>
+              <button 
+                onClick={() => setActiveTab('class11')} 
+                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  activeTab==='class11' 
+                    ? 'avanti-gradient text-white shadow-lg' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                📖 Class 11th
+              </button>
+              <button 
+                onClick={() => setActiveTab('class12')} 
+                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  activeTab==='class12' 
+                    ? 'avanti-gradient text-white shadow-lg' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                📖 Class 12th
+              </button>
+              <button 
+                onClick={() => setActiveTab('profile')} 
+                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  activeTab==='profile' 
+                    ? 'avanti-gradient text-white shadow-lg' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                👤 Profile
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div>
+          {isAdmin && <AdminDashboard />}
+          {!isAdmin && activeTab === 'overview' && <Overview />}
+          {!isAdmin && activeTab === 'class11' && <Chapters grade={11} />}
+          {!isAdmin && activeTab === 'class12' && <Chapters grade={12} />}
+          {!isAdmin && activeTab === 'profile' && <Profile />}
+        </div>
+      </div>
+
+      <footer className="avanti-gradient text-white py-6 mt-12">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <p className="font-medium">© 2025 Curriculum Tracker - Empowering Education</p>
+          <p className="text-sm opacity-90 mt-1">Made with ❤️ for Avanti Fellows</p>
+        </div>
+      </footer>
+
+      {showConfetti && <Confetti />}
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>    </div>
 
                       <div className="avanti-gradient-light p-3 rounded-xl border-2" style={{borderColor: 'var(--avanti-yellow)'}}>
                         <label className="block text-sm font-bold text-gray-800 mb-2">
@@ -1990,531 +2498,3 @@ useEffect(() => {
                         </div>
                       </div>
                     )}
-                  </div>
-                );
-              })
-            ) : (
-              <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-                <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
-                <p className="text-gray-600">Add your first chapter above</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">Select a Subject</h3>
-            <p className="text-gray-600">Choose a subject from the dropdown above</p>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  function AdminAnalytics() {
-    const data = analyticsData;
-
-    if (!chartRefs.current.adminSchool) chartRefs.current.adminSchool = React.createRef();
-    if (!chartRefs.current.adminSubject) chartRefs.current.adminSubject = React.createRef();
-    if (!chartRefs.current.adminTeacher) chartRefs.current.adminTeacher = React.createRef();
-    if (!chartRefs.current.adminPending) chartRefs.current.adminPending = React.createRef();
-    if (!chartRefs.current.adminCompletion) chartRefs.current.adminCompletion = React.createRef();
-    if (!chartRefs.current.adminDays) chartRefs.current.adminDays = React.createRef();
-
-    useEffect(() => {
-      if (!data || !chartRefs.current.adminSchool?.current) return;
-
-      const schoolNames = Object.keys(data.schoolStatus || {});
-      const completionData = schoolNames.map(s => {
-        const school = data.schoolStatus[s];
-        return school.total ? Math.round((school.completed / school.total) * 100) : 0;
-      });
-
-      createChart('adminSchool', {
-        type: 'bar',
-        data: {
-          labels: schoolNames,
-          datasets: [{
-            label: 'Completion %',
-            data: completionData,
-            backgroundColor: '#C8342E',
-            borderRadius: 8
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          plugins: {
-            legend: { display: false },
-            title: { display: true, text: 'School-wise Completion Rate' }
-          },
-          scales: {
-            x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
-          }
-        }
-      });
-    }, [data, createChart]);
-
-    useEffect(() => {
-      if (!data || !chartRefs.current.adminSubject?.current) return;
-
-      const subjects = Object.keys(data.subjectStats || {});
-      const completedData = subjects.map(s => data.subjectStats[s].completed);
-
-      createChart('adminSubject', {
-        type: 'pie',
-        data: {
-          labels: subjects,
-          datasets: [{
-            data: completedData,
-            backgroundColor: ['#F4B41A', '#E8B039', '#C8342E', '#10B981'],
-            borderWidth: 2,
-            borderColor: '#fff'
-          }]
-        },
-        options: {
-          plugins: {
-            legend: { position: 'bottom' },
-            title: { display: true, text: 'Completed Chapters by Subject' }
-          }
-        }
-      });
-    }, [data, createChart]);
-
-    useEffect(() => {
-      if (!data || !chartRefs.current.adminTeacher?.current) return;
-
-      const topTeachers = data.teacherArr.slice(0, 10);
-
-      createChart('adminTeacher', {
-        type: 'bar',
-        data: {
-          labels: topTeachers.map(t => t.name),
-          datasets: [{
-            label: 'Completion %',
-            data: topTeachers.map(t => t.percent),
-            backgroundColor: '#10B981',
-            borderRadius: 6
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          plugins: {
-            legend: { display: false },
-            title: { display: true, text: 'Top 10 Teachers by Completion %' }
-          },
-          scales: {
-            x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
-          }
-        }
-      });
-    }, [data, createChart]);
-
-    useEffect(() => {
-      if (!data || !chartRefs.current.adminPending?.current) return;
-
-      const schoolNames = Object.keys(data.schoolStatus || {});
-      const pendingData = schoolNames.map(s => data.schoolStatus[s].pendingTests);
-
-      createChart('adminPending', {
-        type: 'bar',
-        data: {
-          labels: schoolNames,
-          datasets: [{
-            label: 'Pending Tests',
-            data: pendingData,
-            backgroundColor: '#F59E0B',
-            borderRadius: 6
-          }]
-        },
-        options: {
-          plugins: {
-            legend: { display: false },
-            title: { display: true, text: 'Pending Tests by School' }
-          }
-        }
-      });
-    }, [data, createChart]);
-
-    useEffect(() => {
-      if (!data || !chartRefs.current.adminCompletion?.current) return;
-
-      createChart('adminCompletion', {
-        type: 'doughnut',
-        data: {
-          labels: ['Completed', 'Remaining'],
-          datasets: [{
-            data: [data.totalCompleted, data.totalChapters - data.totalCompleted],
-            backgroundColor: ['#10B981', '#E5E7EB'],
-            borderWidth: 0
-          }]
-        },
-        options: {
-          plugins: {
-            legend: { position: 'bottom' },
-            title: { display: true, text: `Overall Progress: ${Math.round((data.totalCompleted / data.totalChapters) * 100)}%` }
-          }
-        }
-      });
-    }, [data, createChart]);
-
-    useEffect(() => {
-      if (!data || !chartRefs.current.adminDays?.current) return;
-
-      const teachersWithDays = data.teacherArr.filter(t => t.avgDaysPerChapter > 0).slice(0, 10);
-
-      createChart('adminDays', {
-        type: 'bar',
-        data: {
-          labels: teachersWithDays.map(t => t.name),
-          datasets: [{
-            label: 'Avg Days/Chapter',
-            data: teachersWithDays.map(t => t.avgDaysPerChapter),
-            backgroundColor: '#60A5FA',
-            borderRadius: 6
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          plugins: {
-            legend: { display: false },
-            title: { display: true, text: 'Average Days per Chapter (Top 10)' }
-          }
-        }
-      });
-    }, [data, createChart]);
-    
-    return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center flex-wrap gap-3">
-          <h3 className="text-2xl font-bold">Analytics Dashboard</h3>
-          <button 
-            onClick={exportCSV} 
-            className="px-4 py-2 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
-          >
-            📊 Export CSV
-          </button>
-        </div>
-
-        {teachers.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Data Yet</h3>
-            <p className="text-gray-600">Add teachers and curriculum to see analytics</p>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="stat-card avanti-gradient text-white">
-                <div className="text-sm opacity-90 mb-1">Total Chapters</div>
-                <div className="text-3xl font-bold">{data.totalChapters}</div>
-              </div>
-              <div className="stat-card bg-gradient-to-br from-green-500 to-emerald-500 text-white">
-                <div className="text-sm opacity-90 mb-1">Completed</div>
-                <div className="text-3xl font-bold">{data.totalCompleted}</div>
-              </div>
-              <div className="stat-card bg-gradient-to-br from-orange-500 to-red-500 text-white">
-                <div className="text-sm opacity-90 mb-1">Pending Tests</div>
-                <div className="text-3xl font-bold">{data.totalPendingTests}</div>
-              </div>
-              <div className="stat-card bg-gradient-to-br from-blue-500 to-cyan-500 text-white">
-                <div className="text-sm opacity-90 mb-1">Avg Days/Ch</div>
-                <div className="text-3xl font-bold">{data.avgDaysPerChapter}</div>
-              </div>
-              <div className="stat-card bg-gradient-to-br from-indigo-500 to-purple-500 text-white">
-                <div className="text-sm opacity-90 mb-1">Est. Classes</div>
-                <div className="text-3xl font-bold">{data.estimatedClassesRemaining}</div>
-              </div>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminSchool} height="200"></canvas>
-              </div>
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminSubject} height="200"></canvas>
-              </div>
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminTeacher} height="200"></canvas>
-              </div>
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminPending} height="200"></canvas>
-              </div>
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminCompletion} height="200"></canvas>
-              </div>
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminDays} height="200"></canvas>
-              </div>
-            </div>
-
-            <div className="stat-card overflow-x-auto">
-              <div className="text-sm text-gray-600 mb-3 font-bold">Detailed Teacher Statistics</div>
-              <table className="w-full">
-                <thead className="avanti-gradient-light">
-                  <tr>
-                    <th className="p-3 text-left font-bold">AFID</th>
-                    <th className="p-3 text-left font-bold">Name</th>
-                    <th className="p-3 text-left font-bold">School</th>
-                    <th className="p-3 text-left font-bold">Subject</th>
-                    <th className="p-3 text-left font-bold">Completed</th>
-                    <th className="p-3 text-left font-bold">Total</th>
-                    <th className="p-3 text-left font-bold">%</th>
-                    <th className="p-3 text-left font-bold">Avg Days</th>
-                    <th className="p-3 text-left font-bold">Pending Tests</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.teacherArr.map(t => (
-                    <tr key={t.afid} className="border-b hover:bg-yellow-50 transition-colors">
-                      <td className="p-3 font-mono font-semibold">{t.afid}</td>
-                      <td className="p-3">{t.name}</td>
-                      <td className="p-3">{t.school}</td>
-                      <td className="p-3">{t.subject}</td>
-                      <td className="p-3 text-green-600 font-bold">{t.completed}</td>
-                      <td className="p-3 font-semibold">{t.total}</td>
-                      <td className="p-3">
-                        <span className="px-3 py-1 avanti-gradient-light rounded-full font-bold" style={{color: 'var(--avanti-red)'}}>
-                          {t.percent}%
-                        </span>
-                      </td>
-                      <td className="p-3">{t.avgDaysPerChapter || '—'}</td>
-                      <td className="p-3 text-orange-600 font-semibold">{t.pendingTests}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </div>
-    );
-  }
-
-  function AdminSettings() {
-    const [newSchool, setNewSchool] = useState('');
-
-    return (
-      <div className="space-y-6">
-        <h3 className="text-2xl font-bold">Settings</h3>
-        
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="stat-card">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-              <span>📋</span> Data Management
-            </h4>
-            <div className="space-y-3">
-              <button 
-                onClick={exportCSV}
-                className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-left"
-              >
-                Export Analytics Data (CSV)
-              </button>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-              <span>👥</span> System Info
-            </h4>
-            <div className="text-sm text-gray-700 space-y-2">
-              <div>Total Teachers: <strong>{teachers.length}</strong></div>
-              <div>Total Chapters: <strong>{analyticsData?.totalChapters || 0}</strong></div>
-              <div>Total Schools: <strong>{schools.length}</strong></div>
-              <div>Version: <strong>6.0 - All Fixed</strong></div>
-            </div>
-          </div>
-
-          <div className="stat-card md:col-span-2">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-              <span>🏫</span> School Management
-            </h4>
-            
-            <div className="mb-4">
-              <label className="text-sm font-medium text-gray-700 mb-2 block">Add New School</label>
-              <div className="flex gap-2">
-                <input 
-                  type="text"
-                  value={newSchool}
-                  onChange={e => setNewSchool(e.target.value)}
-                  placeholder="School name"
-                  className="flex-1 border-2 border-gray-300 px-3 py-2 rounded-lg"
-                />
-                <button 
-                  onClick={() => { addSchool(newSchool); setNewSchool(''); }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all"
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-700 mb-2">Current Schools:</div>
-              {schools.map(school => (
-                <div key={school} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">{school}</span>
-                  <button 
-                    onClick={() => deleteSchool(school)}
-                    className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function AdminDashboard() {
-    const [tab, setTab] = useState('overview');
-    
-    return (
-      <div className="space-y-6 fade-in">
-        <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
-          <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-          Admin Dashboard
-        </h2>
-        
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          {['overview','teachers','curriculum','analytics','settings'].map(t => (
-            <button 
-              key={t} 
-              onClick={()=>setTab(t)} 
-              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                tab===t 
-                  ? 'avanti-gradient text-white shadow-lg' 
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {tab === 'overview' && (
-          <div className="grid md:grid-cols-3 gap-6 grid-responsive">
-            <div className="avanti-gradient text-white p-6 rounded-2xl shadow-lg text-center">
-              <div className="text-sm opacity-90 mb-2">Total Teachers</div>
-              <div className="text-5xl font-bold">{teachers.length}</div>
-            </div>
-            <div className="bg-gradient-to-br from-green-500 to-emerald-500 text-white p-6 rounded-2xl shadow-lg text-center">
-              <div className="text-sm opacity-90 mb-2">Total Schools</div>
-              <div className="text-5xl font-bold">{schools.length}</div>
-            </div>
-            <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-2xl shadow-lg text-center">
-              <div className="text-sm opacity-90 mb-2">Chapters Tracked</div>
-              <div className="text-5xl font-bold">{Object.keys(chapterProgress || {}).length}</div>
-            </div>
-          </div>
-        )}
-
-        {tab === 'teachers' && <AdminTeachers />}
-        {tab === 'curriculum' && <AdminCurriculum />}
-        {tab === 'analytics' && <AdminAnalytics />}
-        {tab === 'settings' && <AdminSettings />}
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 animated-gradient">
-      <nav className="bg-white shadow-lg sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <img src={AVANTI_LOGO} alt="Avanti Fellows" className="avanti-logo-small" />
-            <div>
-              <div className="font-bold text-xl text-gray-800">
-                Curriculum Tracker
-              </div>
-              <div className="text-sm text-gray-600">
-                {isAdmin ? 'Administrator' : `${currentUser.name} - ${currentUser.school}`}
-              </div>
-            </div>
-          </div>
-          <button 
-            onClick={handleLogout} 
-            className="px-5 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
-          >
-            Logout
-          </button>
-        </div>
-      </nav>
-
-      {todaysBirthdays.length > 0 && (
-        <div className="fixed top-20 right-4 z-50 max-w-xs">
-          <div className="bg-white border-4 p-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce" style={{borderColor: 'var(--avanti-red)'}}>
-            <div className="text-4xl">🎂</div>
-            <div>
-              <div className="font-bold" style={{color: 'var(--avanti-red)'}}>Happy Birthday!</div>
-              <div className="text-sm text-gray-700">{todaysBirthdays.map(t => t.name).join(', ')}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="main-content max-w-7xl mx-auto px-4 py-6">
-        <div className="mb-6">
-          {!isAdmin && (
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              <button 
-                onClick={() => setActiveTab('overview')} 
-                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                  activeTab==='overview' 
-                    ? 'avanti-gradient text-white shadow-lg' 
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                🏠 Overview
-              </button>
-              <button 
-                onClick={() => setActiveTab('chapters')} 
-                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                  activeTab==='chapters' 
-                    ? 'avanti-gradient text-white shadow-lg' 
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                📖 Chapters
-              </button>
-              <button 
-                onClick={() => setActiveTab('profile')} 
-                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                  activeTab==='profile' 
-                    ? 'avanti-gradient text-white shadow-lg' 
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                👤 Profile
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div>
-          {isAdmin && <AdminDashboard />}
-          {!isAdmin && activeTab === 'overview' && <Overview />}
-          {!isAdmin && activeTab === 'chapters' && <Chapters />}
-          {!isAdmin && activeTab === 'profile' && <Profile />}
-        </div>
-      </div>
-
-      <footer className="avanti-gradient text-white py-6 mt-12">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="font-medium">© 2025 Curriculum Tracker - Empowering Education</p>
-          <p className="text-sm opacity-90 mt-1">Made with ❤️ for Avanti Fellows</p>
-        </div>
-      </footer>
-
-      {showConfetti && <Confetti />}
-    </div>
-  );
-}
-
-ReactDOM.render(<App />, document.getElementById('root'));
-  </script>
-</body>
-</html>
