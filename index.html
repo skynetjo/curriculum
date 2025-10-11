@@ -265,7 +265,7 @@ const auth = firebase.auth();
 const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology'];
 const DEFAULT_SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Bundi', 'CoE Mahisagar', 'EMRS Bhopal', 'JNV Bharuch'];
 
-const AVANTI_LOGO = '/mnt/user-data/uploads/Avanti_Fellows-logo.png';
+const AVANTI_LOGO = 'data:image/jpeg;base64,/9j/4AAQSkZJRg...';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -1234,7 +1234,14 @@ function App() {
   };
 
   const Chapters = () => {
-    const [localGrade, setLocalGrade] = useState(11);
+    const [localGrade, setLocalGrade] = useState(() => {
+  const saved = sessionStorage.getItem('selectedGrade');
+  return saved ? parseInt(saved) : 11;
+});
+
+useEffect(() => {
+  sessionStorage.setItem('selectedGrade', localGrade.toString());
+}, [localGrade]);
     const subj = currentUser.subject;
     
     const chapters = useMemo(() => {
