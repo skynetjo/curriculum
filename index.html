@@ -39,11 +39,95 @@
       50% { opacity: 1; }
       100% { transform: translateY(100vh) rotate(720deg) scale(0.5); opacity: 0; }
     }
+    @keyframes confetti-swing {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-25px); }
+      75% { transform: translateX(25px); }
+    }
     .confetti-piece {
       position: fixed;
       pointer-events: none;
       z-index: 9999;
-      animation: confetti-fall 4s ease-out forwards;
+      animation: confetti-fall 4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards, 
+                 confetti-swing 1.5s ease-in-out infinite;
+    }
+    
+    .chapter-card {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+    .chapter-card.collapsed {
+      max-height: 180px;
+    }
+    .chapter-card.expanded {
+      max-height: none;
+    }
+    
+    .chapter-details {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+      opacity: 0;
+    }
+    .chapter-details.show {
+      max-height: 3000px;
+      opacity: 1;
+    }
+    
+    .chapter-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      transition: left 0.5s;
+    }
+    .chapter-card:hover::before {
+      left: 100%;
+    }
+    .chapter-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.2);
+    }
+    
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(244, 180, 26, 0.2);
+      border-color: var(--avanti-yellow);
+      transition: all 0.2s;
+    }
+    
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      50% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+    }
+    .status-badge-ahead {
+      animation: pulse-glow 2s infinite;
+    }
+    
+    .fade-in {
+      animation: fadeIn 0.5s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .progress-bar {
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    @keyframes gradient-shift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .animated-gradient {
+      background-size: 200% 200%;
+      animation: gradient-shift 15s ease infinite;
     }
     
     .avanti-gradient {
@@ -54,33 +138,38 @@
       background: linear-gradient(135deg, rgba(244, 180, 26, 0.1) 0%, rgba(232, 176, 57, 0.1) 50%, rgba(200, 52, 46, 0.1) 100%);
     }
     
-    .chapter-card {
+    html, body { height: 100%; margin: 0; }
+    #root { display: flex; flex-direction: column; min-height: 100vh; }
+    .main-content { flex: 1 0 auto; }
+    footer { flex-shrink: 0; }
+    
+    @media (max-width: 768px) {
+      .chapter-card {
+        margin-bottom: 1rem;
+      }
+      .grid-responsive {
+        grid-template-columns: 1fr !important;
+      }
+    }
+    
+    @keyframes skeleton-loading {
+      0% { background-position: -200px 0; }
+      100% { background-position: calc(200px + 100%) 0; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200px 100%;
+      animation: skeleton-loading 1.5s ease-in-out infinite;
+    }
+    
+    .btn-primary {
       transition: all 0.3s ease;
       position: relative;
       overflow: hidden;
     }
-    
-    .chapter-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.2);
-    }
-    
-    .chapter-details {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.4s ease, opacity 0.3s ease;
-      opacity: 0;
-    }
-    .chapter-details.show {
-      max-height: 2000px;
-      opacity: 1;
-    }
-    
-    .expand-btn {
-      transition: transform 0.3s ease;
-    }
-    .expand-btn.rotated {
-      transform: rotate(180deg);
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(244, 180, 26, 0.3);
     }
     
     input[type="checkbox"] {
@@ -92,6 +181,7 @@
       cursor: pointer;
       transition: all 0.2s;
       position: relative;
+      flex-shrink: 0;
     }
     input[type="checkbox"]:checked {
       background: var(--avanti-red);
@@ -106,7 +196,21 @@
       left: 50%;
       transform: translate(-50%, -50%);
     }
+
+    .file-upload-btn {
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .file-upload-btn:hover {
+      background: var(--avanti-dark-red);
+    }
     
+    .no-flicker {
+      will-change: contents;
+      backface-visibility: hidden;
+      transform: translateZ(0);
+    }
+
     .stat-card {
       background: white;
       border-radius: 1rem;
@@ -119,11 +223,33 @@
       box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     }
     
-    @keyframes pulse-glow {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-      50% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+    .avanti-logo {
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
     }
-    .status-badge-ahead {
+    .avanti-logo-small {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+    }
+    
+    .expand-btn {
+      transition: transform 0.3s ease;
+    }
+    .expand-btn.rotated {
+      transform: rotate(180deg);
+    }
+
+    .birthday-card {
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      border: 3px solid #FF6347;
+      animation: pulse-glow 2s infinite;
+    }
+
+    .anniversary-card {
+      background: linear-gradient(135deg, #4169E1, #1E90FF);
+      border: 3px solid #0000CD;
       animation: pulse-glow 2s infinite;
     }
   </style>
@@ -132,7 +258,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-const { useState, useEffect, useCallback, useMemo, useRef } = React;
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 const firebaseConfig = {
   apiKey: "AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",
@@ -152,18 +278,26 @@ const auth = firebase.auth();
 const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology'];
 const DEFAULT_SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Bundi', 'CoE Mahisagar', 'EMRS Bhopal', 'JNV Bharuch'];
 
+const AVANTI_LOGO = '/mnt/user-data/uploads/Avanti_Fellows-logo.png';
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const [teachers, setTeachers] = useState([]);
   const [curriculum, setCurriculum] = useState({});
   const [chapterProgress, setChapterProgress] = useState({});
-  const [teachers, setTeachers] = useState([]);
+  const [analyticsData, setAnalyticsData] = useState(null);
   const [schools, setSchools] = useState(DEFAULT_SCHOOLS);
+
   const [expandedChapters, setExpandedChapters] = useState({});
   const [showConfetti, setShowConfetti] = useState(false);
-  const [analyticsData, setAnalyticsData] = useState(null);
+  const [celebrationMessage, setCelebrationMessage] = useState('');
+
   const chartRefs = useRef({});
   const charts = useRef({});
 
@@ -173,9 +307,13 @@ function App() {
         const doc = await db.collection('meta').doc('schools').get();
         if (doc.exists) {
           setSchools(doc.data().list || DEFAULT_SCHOOLS);
+        } else {
+          await db.collection('meta').doc('schools').set({ list: DEFAULT_SCHOOLS });
+          setSchools(DEFAULT_SCHOOLS);
         }
       } catch (e) {
         console.error('Error loading schools', e);
+        setSchools(DEFAULT_SCHOOLS);
       }
     };
     loadSchools();
@@ -200,15 +338,36 @@ function App() {
             setIsAdmin(false);
             setActiveTab('overview');
             
+            // Check for birthday
             if (teacherData.dob) {
-              const d = new Date(teacherData.dob);
+              const d = new Date(teacherData.dob); 
               const now = new Date();
               if (d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) {
                 setShowConfetti(true);
-                setTimeout(() => setShowConfetti(false), 5000);
+                setCelebrationMessage(`🎂 Happy Birthday, ${teacherData.name}!`);
+                setTimeout(() => {
+                  setShowConfetti(false);
+                  setCelebrationMessage('');
+                }, 8000);
+              }
+            }
+
+            // Check for work anniversary
+            if (teacherData.joiningDate) {
+              const j = new Date(teacherData.joiningDate);
+              const now = new Date();
+              if (j.getMonth() === now.getMonth() && j.getDate() === now.getDate() && j.getFullYear() < now.getFullYear()) {
+                const years = now.getFullYear() - j.getFullYear();
+                setShowConfetti(true);
+                setCelebrationMessage(`🎉 Happy ${years} Year Work Anniversary, ${teacherData.name}!`);
+                setTimeout(() => {
+                  setShowConfetti(false);
+                  setCelebrationMessage('');
+                }, 8000);
               }
             }
           } else {
+            console.error('Teacher data not found for email:', user.email);
             alert('Teacher profile not found. Please contact admin.');
             await auth.signOut();
           }
@@ -224,27 +383,27 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const unsubP = db.collection('chapterProgress').onSnapshot(snap => {
+    let unsubP, unsubT, unsubC;
+
+    unsubP = db.collection('chapterProgress').onSnapshot(snap => {
       const map = {};
       snap.docs.forEach(d => map[d.id] = d.data());
       setChapterProgress(map);
-    });
+    }, err => console.error('chapterProgress error', err));
 
-    const unsubT = db.collection('teachers').onSnapshot(snap => {
+    unsubT = db.collection('teachers').onSnapshot(snap => {
       setTeachers(snap.docs.map(d => d.data()));
-    });
+    }, err => console.error('teachers error', err));
 
-    const unsubC = db.collection('meta').doc('curriculum').onSnapshot(doc => {
+    unsubC = db.collection('meta').doc('curriculum').onSnapshot(doc => {
       if (doc.exists) {
         setCurriculum(doc.data());
+      } else {
+        setCurriculum({});
       }
-    });
+    }, err => console.error('curriculum error', err));
 
-    return () => { 
-      unsubP(); 
-      unsubT(); 
-      unsubC(); 
-    };
+    return () => { if (unsubP) unsubP(); if (unsubT) unsubT(); if (unsubC) unsubC(); };
   }, []);
 
   const computeChapterStatus = useCallback((chapter = {}, progress = {}) => {
@@ -287,9 +446,11 @@ function App() {
   useEffect(() => {
     if (!curriculum) return;
     
+    const schoolStatus = {};
     const teacherMap = {};
     const subjectStats = {};
     let totalChapters = 0, totalCompleted = 0, totalPendingTests = 0;
+    let totalDaysSpent = 0, chaptersWithDates = 0;
 
     Object.keys(curriculum).forEach(subject => {
       subjectStats[subject] = { total: 0, completed: 0 };
@@ -305,6 +466,14 @@ function App() {
           if (st.key === 'completed' || st.key === 'ahead') {
             totalCompleted++;
             subjectStats[subject].completed++;
+            
+            if (prog.completionDate && ch.targetDate) {
+              const start = new Date(ch.targetDate);
+              const end = new Date(prog.completionDate);
+              const days = Math.abs(Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+              totalDaysSpent += days;
+              chaptersWithDates++;
+            }
           }
           
           if (prog.completed === 'Yes' && prog.testConducted !== 'Yes') {
@@ -315,16 +484,48 @@ function App() {
             if (t.subject === subject) {
               teacherMap[t.afid] = teacherMap[t.afid] || { 
                 afid: t.afid, name: t.name, school: t.school, subject: t.subject,
-                completed: 0, total: 0, pendingTests: 0
+                completed: 0, total: 0, pendingTests: 0, daysSpent: 0, chaptersWithDays: 0
               };
               teacherMap[t.afid].total++;
               
               if (st.key === 'completed' || st.key === 'ahead') {
                 teacherMap[t.afid].completed++;
+                
+                if (prog.completionDate && ch.targetDate) {
+                  const start = new Date(ch.targetDate);
+                  const end = new Date(prog.completionDate);
+                  const days = Math.abs(Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+                  teacherMap[t.afid].daysSpent += days;
+                  teacherMap[t.afid].chaptersWithDays++;
+                }
               }
               
               if (prog.completed === 'Yes' && prog.testConducted !== 'Yes') {
                 teacherMap[t.afid].pendingTests++;
+              }
+              
+              schoolStatus[t.school] = schoolStatus[t.school] || { 
+                delayed: 0, ontrack: 0, total: 0, completed: 0, pendingTests: 0,
+                subjectProgress: {}
+              };
+              schoolStatus[t.school].total++;
+              
+              // Track subject progress per school
+              if (!schoolStatus[t.school].subjectProgress[t.subject]) {
+                schoolStatus[t.school].subjectProgress[t.subject] = { total: 0, completed: 0 };
+              }
+              schoolStatus[t.school].subjectProgress[t.subject].total++;
+              
+              if (st.key.includes('delayed')) {
+                schoolStatus[t.school].delayed++;
+              } else if (['ahead','completed'].includes(st.key)) {
+                schoolStatus[t.school].ontrack++;
+                schoolStatus[t.school].completed++;
+                schoolStatus[t.school].subjectProgress[t.subject].completed++;
+              }
+              
+              if (prog.completed === 'Yes' && prog.testConducted !== 'Yes') {
+                schoolStatus[t.school].pendingTests++;
               }
             }
           });
@@ -334,18 +535,30 @@ function App() {
 
     const teacherArr = Object.values(teacherMap).map(t => ({ 
       ...t, 
-      percent: t.total ? Math.round((t.completed / t.total) * 100) : 0
+      percent: t.total ? Math.round((t.completed / t.total) * 100) : 0,
+      avgDaysPerChapter: t.chaptersWithDays ? Math.round(t.daysSpent / t.chaptersWithDays) : 0
     }));
     teacherArr.sort((a,b) => b.percent - a.percent);
+    
+    const avgDaysPerChapter = chaptersWithDates ? Math.round(totalDaysSpent / chaptersWithDates) : 0;
+    const estimatedClassesRemaining = (totalChapters - totalCompleted) * 5;
 
     setAnalyticsData({ 
       totalChapters, 
       totalCompleted, 
       totalPendingTests,
       teacherArr, 
-      subjectStats
+      schoolStatus,
+      subjectStats,
+      avgDaysPerChapter,
+      estimatedClassesRemaining
     });
   }, [curriculum, chapterProgress, teachers, computeChapterStatus]);
+
+  function destroyAllCharts() { 
+    Object.values(charts.current || {}).forEach(c => { if (c && c.destroy) c.destroy(); }); 
+    charts.current = {}; 
+  }
 
   const createChart = useCallback((refKey, config) => {
     if (chartRefs.current[refKey]?.current) {
@@ -356,6 +569,47 @@ function App() {
     }
   }, []);
 
+  const handleLogin = async () => {
+    setAuthLoading(true);
+    try {
+      const email = (loginForm.email || '').trim().toLowerCase();
+      const password = loginForm.password;
+      
+      if (!email || !password) { 
+        alert('Please enter email and password'); 
+        setAuthLoading(false); 
+        return; 
+      }
+      
+      await auth.signInWithEmailAndPassword(email, password);
+    } catch (e) { 
+      console.error('login error', e); 
+      if (e.code === 'auth/user-not-found') {
+        alert('User not found. Please contact admin.');
+      } else if (e.code === 'auth/wrong-password') {
+        alert('Incorrect password.');
+      } else if (e.code === 'auth/invalid-email') {
+        alert('Invalid email format.');
+      } else if (e.code === 'auth/invalid-credential') {
+        alert('Invalid credentials. Please check your email and password.');
+      } else {
+        alert('Login failed: ' + e.message);
+      }
+    }
+    setAuthLoading(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      setActiveTab('overview');
+    } catch (e) {
+      console.error('logout error', e);
+    }
+  };
+
+  const updateTimeouts = useRef({});
+  
   const updateChapterProgress = useCallback(async (chapterId, field, value, chapter) => {
     try {
       const currentProg = chapterProgress[chapterId] || {};
@@ -375,15 +629,42 @@ function App() {
         }
       }
 
-      await db.collection('chapterProgress').doc(chapterId).set({ [field]: value }, { merge: true });
+      const updateObj = { [field]: value };
       
-      const newProg = { ...currentProg, [field]: value };
-      if (newProg.completed === 'Yes' && newProg.testConducted === 'Yes') {
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 5000);
+      if (field === 'completed' && value === 'No') {
+        updateObj['completionDate'] = null;
       }
+      
+      if (updateTimeouts.current[chapterId]) {
+        clearTimeout(updateTimeouts.current[chapterId]);
+      }
+      
+      setChapterProgress(prev => ({ 
+        ...prev, 
+        [chapterId]: { ...(prev[chapterId]||{}), ...updateObj } 
+      }));
+      
+      updateTimeouts.current[chapterId] = setTimeout(async () => {
+        try {
+          await db.collection('chapterProgress').doc(chapterId).set(updateObj, { merge: true });
+          
+          const newProg = { ...currentProg, ...updateObj };
+          
+          if (newProg.completed === 'Yes' && newProg.testConducted === 'Yes') {
+            setShowConfetti(true);
+            setCelebrationMessage('🎉 Chapter Completed Successfully!');
+            setTimeout(() => {
+              setShowConfetti(false);
+              setCelebrationMessage('');
+            }, 5000);
+          }
+        } catch (e) {
+          console.error('Firebase update error', e);
+        }
+      }, 300);
+      
     } catch (e) {
-      console.error('Update error', e);
+      console.error('update error', e);
       alert('Failed to update');
     }
   }, [chapterProgress]);
@@ -394,56 +675,102 @@ function App() {
 
   const exportCSV = () => {
     if (!analyticsData) return alert('No analytics yet');
-    const rows = [['AFID','Name','School','Subject','Completed','Total','Percent','Pending Tests']];
+    const rows = [['AFID','Name','School','Subject','Completed','Total','Percent','Avg Days/Chapter','Pending Tests']];
     analyticsData.teacherArr.forEach(t => rows.push([
-      t.afid, t.name, t.school, t.subject, t.completed, t.total, t.percent + '%', t.pendingTests
+      t.afid, t.name, t.school, t.subject, t.completed, t.total, 
+      t.percent + '%', t.avgDaysPerChapter, t.pendingTests
     ]));
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href=url;
-    a.download = `analytics_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
+    const a = document.createElement('a'); 
+    a.href=url; 
+    a.download = `analytics_${new Date().toISOString().slice(0,10)}.csv`; 
+    a.click(); 
     URL.revokeObjectURL(url);
   };
 
+  const getBirthdays = useCallback((period='week') => {
+    const now = new Date();
+    return teachers.filter(t => {
+      if (!t.dob) return false;
+      const d = new Date(t.dob);
+      const thisYear = new Date(now.getFullYear(), d.getMonth(), d.getDate());
+      const diff = Math.ceil((thisYear - now)/(1000*60*60*24));
+      
+      if (period === 'today') {
+        return d.getDate() === now.getDate() && d.getMonth() === now.getMonth();
+      } else if (period === 'week') {
+        return diff >= 0 && diff <= 7;
+      } else if (period === 'month') {
+        return d.getMonth() === now.getMonth();
+      }
+      return false;
+    });
+  }, [teachers]);
+
+  const getAnniversaries = useCallback((period='week') => {
+    const now = new Date();
+    return teachers.filter(t => {
+      if (!t.joiningDate) return false;
+      const j = new Date(t.joiningDate);
+      if (j.getFullYear() >= now.getFullYear()) return false;
+      
+      const thisYear = new Date(now.getFullYear(), j.getMonth(), j.getDate());
+      const diff = Math.ceil((thisYear - now)/(1000*60*60*24));
+      
+      if (period === 'today') {
+        return j.getDate() === now.getDate() && j.getMonth() === now.getMonth();
+      } else if (period === 'week') {
+        return diff >= 0 && diff <= 7;
+      } else if (period === 'month') {
+        return j.getMonth() === now.getMonth();
+      }
+      return false;
+    });
+  }, [teachers]);
+
   const addOrUpdateTeacher = async (teacherObj, password = null) => {
-    if (!teacherObj.afid || !teacherObj.email || !teacherObj.subject || !teacherObj.school) {
-      return alert('All required fields must be filled');
-    }
+    if (!teacherObj.afid) return alert('AFID required');
+    if (!teacherObj.email) return alert('Email required');
+    if (!teacherObj.subject) return alert('Subject required');
+    if (!teacherObj.school) return alert('School required');
     
     const id = teacherObj.afid.toUpperCase();
     const email = teacherObj.email.toLowerCase();
     
     try {
-      await db.collection('teachers').doc(id).set({ ...teacherObj, afid: id, email: email }, { merge: !password });
       if (password) {
-        alert(`Teacher data saved!\n\nNOW CREATE FIREBASE AUTH:\n1. Firebase Console → Authentication → Users\n2. Add User: ${email}\n3. Password: ${password}`);
+        await db.collection('teachers').doc(id).set({ ...teacherObj, afid: id, email: email });
+        alert(`Teacher data saved!\n\nNOW CREATE FIREBASE AUTH ACCOUNT:\n\n1. Go to Firebase Console\n2. Authentication → Users → Add User\n3. Email: ${email}\n4. Password: ${password}\n\nAfter this, teacher can login.`);
       } else {
-        alert('Teacher updated successfully');
+        await db.collection('teachers').doc(id).set({ ...teacherObj, afid: id, email: email }, { merge: true });
+        alert('Teacher data updated');
       }
-    } catch (e) {
-      alert('Save failed: ' + e.message);
+    } catch (e) { 
+      console.error('save teacher err', e); 
+      alert('Save failed: ' + e.message); 
     }
   };
 
-  const deleteTeacher = async (afid) => {
-    if (!confirm(`Delete teacher ${afid}?`)) return;
-    try {
-      await db.collection('teachers').doc(afid).delete();
-      alert('Teacher deleted');
-    } catch (e) {
-      alert('Delete failed: ' + e.message);
+  const deleteTeacher = async (afid, email) => {
+    if (!confirm(`Delete teacher ${afid}?\n\nREMINDER: Also delete their Firebase Auth account manually.`)) return;
+    try { 
+      await db.collection('teachers').doc(afid).delete(); 
+      alert('Teacher deleted from database.\n\nDon\'t forget to delete from Firebase Auth!'); 
+    } catch (e) { 
+      console.error(e); 
+      alert('Delete failed: ' + e.message); 
     }
   };
 
   const saveCurriculum = async (newCurr) => {
-    try {
-      await db.collection('meta').doc('curriculum').set(newCurr);
-      alert('Curriculum updated');
-    } catch (e) {
-      alert('Failed: ' + e.message);
+    try { 
+      await db.collection('meta').doc('curriculum').set(newCurr); 
+      alert('Curriculum updated'); 
+    } catch (e) { 
+      console.error(e); 
+      alert('Failed: ' + e.message); 
     }
   };
 
@@ -456,14 +783,49 @@ function App() {
     await saveCurriculum(newCurr);
   };
 
+  const updateChapterAdmin = async (subject, grade, chapterId, updates) => {
+    try {
+      const newCurr = { ...(curriculum || {}) };
+      const arr = newCurr[subject][grade];
+      const idx = arr.findIndex(x => x.id === chapterId);
+      if (idx === -1) return;
+      arr[idx] = { ...arr[idx], ...updates };
+      await saveCurriculum(newCurr);
+    } catch (e) { console.error(e); alert('Failed update: ' + e.message); }
+  };
+
   const deleteChapterAdmin = async (subject, grade, id) => {
     if (!confirm('Delete chapter?')) return;
     try {
       const newCurr = { ...(curriculum || {}) };
       newCurr[subject][grade] = newCurr[subject][grade].filter(ch => ch.id !== id);
       await saveCurriculum(newCurr);
+    } catch (e) { console.error(e); alert('Delete failed: ' + e.message); }
+  };
+
+  const addSchool = async (schoolName) => {
+    if (!schoolName || !schoolName.trim()) return alert('School name required');
+    try {
+      const newSchools = [...schools, schoolName.trim()];
+      await db.collection('meta').doc('schools').set({ list: newSchools });
+      setSchools(newSchools);
+      alert('School added successfully');
     } catch (e) {
-      alert('Delete failed: ' + e.message);
+      console.error(e);
+      alert('Failed to add school: ' + e.message);
+    }
+  };
+
+  const deleteSchool = async (schoolName) => {
+    if (!confirm(`Delete school "${schoolName}"?`)) return;
+    try {
+      const newSchools = schools.filter(s => s !== schoolName);
+      await db.collection('meta').doc('schools').set({ list: newSchools });
+      setSchools(newSchools);
+      alert('School deleted');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to delete school: ' + e.message);
     }
   };
 
@@ -504,33 +866,41 @@ function App() {
             chapters.push(currentChapter);
           }
           
+          if (chapters.length === 0) {
+            alert('No valid chapters found in CSV');
+            return;
+          }
+          
           for (const chapter of chapters) {
             await addChapterAdmin(subject, grade, chapter);
           }
           
           alert(`Successfully imported ${chapters.length} chapters!`);
         } catch (e) {
+          console.error('Import error:', e);
           alert('Failed to import CSV: ' + e.message);
         }
       },
       error: (error) => {
+        console.error('Parse error:', error);
         alert('Failed to parse CSV file');
       }
     });
   };
 
   function Confetti() {
-    const shapes = ['●', '■', '▲', '★'];
-    const colors = ['#F4B41A', '#E8B039', '#C8342E', '#10B981'];
+    const shapes = ['●', '■', '▲', '★', '♦', '♥', '✦', '✧'];
+    const colors = ['#F4B41A', '#E8B039', '#C8342E', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
     
     return (
       <div className="fixed inset-0 pointer-events-none z-[9999]">
-        {Array.from({length: 50}).map((_,i) => {
+        {Array.from({length: 60}).map((_,i) => {
           const shape = shapes[Math.floor(Math.random() * shapes.length)];
           const color = colors[Math.floor(Math.random() * colors.length)];
           const size = 12 + Math.random() * 20;
           const left = Math.random() * 100;
           const delay = Math.random() * 2;
+          const duration = 3 + Math.random() * 2;
           
           return (
             <div 
@@ -541,7 +911,9 @@ function App() {
                 top: '-50px',
                 color: color,
                 fontSize: `${size}px`,
-                animationDelay: `${delay}s`
+                animationDelay: `${delay}s`,
+                animationDuration: `${duration}s`,
+                opacity: 0.8 + Math.random() * 0.2
               }}
             >
               {shape}
@@ -554,20 +926,132 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50">
-        <div className="text-4xl font-bold text-gray-800">Loading...</div>
+      <div className="min-h-screen avanti-gradient animated-gradient flex items-center justify-center">
+        <div className="text-center">
+          <img src={AVANTI_LOGO} alt="Avanti Fellows" className="avanti-logo mx-auto mb-4 animate-bounce" />
+          <div className="text-white text-2xl font-bold">Loading...</div>
+        </div>
       </div>
     );
   }
 
   if (!currentUser) {
-    return <LoginScreen />;
+    return (
+      <div className="min-h-screen avanti-gradient animated-gradient flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl p-8 sm:p-10 w-full max-w-md transform transition-all hover:scale-105">
+          <div className="text-center mb-8 fade-in">
+            <img src={AVANTI_LOGO} alt="Avanti Fellows" className="avanti-logo mx-auto mb-4 animate-bounce" />
+            <h1 className="text-4xl font-bold text-gray-800 mb-2">
+              Curriculum Tracker
+            </h1>
+            <p className="text-gray-600 mt-3 text-lg font-semibold">Avanti Fellows</p>
+            <p className="text-gray-500 mt-1 text-sm">Login with your credentials</p>
+          </div>
+
+          <div className="space-y-5">
+            <div>
+              <input 
+                type="email"
+                className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg transition-all" 
+                value={loginForm.email} 
+                onChange={e => setLoginForm({...loginForm, email: e.target.value})} 
+                placeholder="Email" 
+              />
+            </div>
+            <div>
+              <input 
+                type="password" 
+                className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg transition-all" 
+                value={loginForm.password} 
+                onChange={e => setLoginForm({...loginForm, password: e.target.value})} 
+                placeholder="Password"
+                onKeyPress={e => e.key === 'Enter' && handleLogin()} 
+              />
+            </div>
+            <button 
+              onClick={handleLogin} 
+              disabled={authLoading} 
+              className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg btn-primary disabled:opacity-50"
+            >
+              {authLoading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                  </svg>
+                  Logging in...
+                </span>
+              ) : 'Login'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const Overview = () => {
-    if (!chartRefs.current.subjectBreakdown) {
-      chartRefs.current.subjectBreakdown = React.createRef();
-    }
+    if (!chartRefs.current.schoolComparison) chartRefs.current.schoolComparison = React.createRef();
+    if (!chartRefs.current.subjectBreakdown) chartRefs.current.subjectBreakdown = React.createRef();
+    if (!chartRefs.current.teacherPerformance) chartRefs.current.teacherPerformance = React.createRef();
+    if (!chartRefs.current.completionTrend) chartRefs.current.completionTrend = React.createRef();
+    if (!chartRefs.current.subjectClassesNeeded) chartRefs.current.subjectClassesNeeded = React.createRef();
+    if (!chartRefs.current.mySchoolSubjects) chartRefs.current.mySchoolSubjects = React.createRef();
+
+    const mySchool = currentUser.school;
+    const mySubject = currentUser.subject;
+
+    // Calculate classes needed per subject for user's centre
+    const subjectClassesData = useMemo(() => {
+      if (!analyticsData) return {};
+      const data = {};
+      SUBJECTS.forEach(subject => {
+        const remaining = (analyticsData.subjectStats[subject]?.total || 0) - 
+                         (analyticsData.subjectStats[subject]?.completed || 0);
+        data[subject] = remaining * 5; // 5 classes per chapter
+      });
+      return data;
+    }, [analyticsData]);
+
+    // Calculate subject progress for user's school
+    const mySchoolSubjectData = useMemo(() => {
+      if (!analyticsData || !analyticsData.schoolStatus[mySchool]) return {};
+      return analyticsData.schoolStatus[mySchool].subjectProgress || {};
+    }, [analyticsData, mySchool]);
+
+    useEffect(() => {
+      if (!analyticsData || !chartRefs.current.schoolComparison?.current) return;
+
+      const schoolNames = Object.keys(analyticsData.schoolStatus || {});
+      const completionData = schoolNames.map(s => {
+        const school = analyticsData.schoolStatus[s];
+        return school.total ? Math.round((school.completed / school.total) * 100) : 0;
+      });
+
+      createChart('schoolComparison', {
+        type: 'bar',
+        data: {
+          labels: schoolNames,
+          datasets: [{
+            label: 'Completion %',
+            data: completionData,
+            backgroundColor: schoolNames.map((_, idx) => 
+              mySchool === schoolNames[idx] ? '#C8342E' : '#E5E7EB'
+            ),
+            borderRadius: 8
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'School Comparison (Your school highlighted)', font: { size: 14, weight: 'bold' } }
+          },
+          scales: {
+            x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
+          }
+        }
+      });
+    }, [analyticsData, mySchool, createChart]);
 
     useEffect(() => {
       if (!analyticsData || !chartRefs.current.subjectBreakdown?.current) return;
@@ -598,7 +1082,7 @@ function App() {
         options: {
           plugins: {
             legend: { position: 'bottom' },
-            title: { display: true, text: 'Subject-wise Progress' }
+            title: { display: true, text: 'All Subjects Progress', font: { size: 14, weight: 'bold' } }
           },
           scales: {
             x: { stacked: true },
@@ -606,11 +1090,168 @@ function App() {
           }
         }
       });
+    }, [analyticsData, createChart]);
+
+    useEffect(() => {
+      if (!analyticsData || !chartRefs.current.teacherPerformance?.current) return;
+
+      const subjectTeachers = analyticsData.teacherArr.filter(t => t.subject === mySubject).slice(0, 10);
+      
+      createChart('teacherPerformance', {
+        type: 'bar',
+        data: {
+          labels: subjectTeachers.map(t => t.name),
+          datasets: [{
+            label: 'Completion %',
+            data: subjectTeachers.map(t => t.percent),
+            backgroundColor: subjectTeachers.map(t => 
+              t.afid === currentUser.afid ? '#C8342E' : '#60A5FA'
+            ),
+            borderRadius: 6
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: `${mySubject} Teachers Performance (You highlighted)`, font: { size: 14, weight: 'bold' } }
+          },
+          scales: {
+            x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
+          }
+        }
+      });
+    }, [analyticsData, mySubject, currentUser, createChart]);
+
+    useEffect(() => {
+      if (!analyticsData || !chartRefs.current.completionTrend?.current) return;
+
+      const myCompletion = analyticsData.teacherArr.find(t => t.afid === currentUser.afid)?.percent || 0;
+
+      createChart('completionTrend', {
+        type: 'doughnut',
+        data: {
+          labels: ['Completed', 'Remaining'],
+          datasets: [{
+            data: [myCompletion, 100 - myCompletion],
+            backgroundColor: ['#10B981', '#E5E7EB'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: `Your Progress: ${myCompletion}%`, font: { size: 14, weight: 'bold' } }
+          }
+        }
+      });
+    }, [analyticsData, currentUser, createChart]);
+
+    useEffect(() => {
+      if (!subjectClassesData || !chartRefs.current.subjectClassesNeeded?.current) return;
+
+      const subjects = Object.keys(subjectClassesData);
+      const classesData = subjects.map(s => subjectClassesData[s]);
+
+      createChart('subjectClassesNeeded', {
+        type: 'bar',
+        data: {
+          labels: subjects,
+          datasets: [{
+            label: 'Classes Needed',
+            data: classesData,
+            backgroundColor: subjects.map(s => s === mySubject ? '#C8342E' : '#3B82F6'),
+            borderRadius: 8
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'Classes Needed per Subject (Your subject highlighted)', font: { size: 14, weight: 'bold' } }
+          },
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: 'Number of Classes' } }
+          }
+        }
+      });
+    }, [subjectClassesData, mySubject, createChart]);
+
+    useEffect(() => {
+      if (!mySchoolSubjectData || Object.keys(mySchoolSubjectData).length === 0 || !chartRefs.current.mySchoolSubjects?.current) return;
+
+      const subjects = Object.keys(mySchoolSubjectData);
+      const completedData = subjects.map(s => mySchoolSubjectData[s].completed);
+      const remainingData = subjects.map(s => mySchoolSubjectData[s].total - mySchoolSubjectData[s].completed);
+
+      createChart('mySchoolSubjects', {
+        type: 'bar',
+        data: {
+          labels: subjects,
+          datasets: [
+            {
+              label: 'Completed',
+              data: completedData,
+              backgroundColor: '#10B981',
+              borderRadius: 6
+            },
+            {
+              label: 'Remaining',
+              data: remainingData,
+              backgroundColor: '#F59E0B',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: `${mySchool} - Subject Progress`, font: { size: 14, weight: 'bold' } }
+          },
+          scales: {
+            x: { stacked: true },
+            y: { stacked: true }
+          }
+        }
+      });
+    }, [mySchoolSubjectData, mySchool, createChart]);
+    
+    const schoolRankings = useMemo(() => {
+      if (!analyticsData) return [];
+      const rankings = Object.keys(analyticsData.schoolStatus).map(school => {
+        const data = analyticsData.schoolStatus[school];
+        const percent = data.total ? Math.round((data.completed / data.total) * 100) : 0;
+        return { school, percent, ...data };
+      });
+      rankings.sort((a, b) => b.percent - a.percent);
+      return rankings;
     }, [analyticsData]);
 
+    const mySchoolRank = useMemo(() => {
+      const index = schoolRankings.findIndex(s => s.school === mySchool);
+      return index >= 0 ? index + 1 : null;
+    }, [schoolRankings, mySchool]);
+
+    const laggingSubject = useMemo(() => {
+      if (!mySchoolSubjectData || Object.keys(mySchoolSubjectData).length === 0) return null;
+      let minPercent = 100;
+      let lagSubject = null;
+      Object.keys(mySchoolSubjectData).forEach(subject => {
+        const data = mySchoolSubjectData[subject];
+        const percent = data.total ? Math.round((data.completed / data.total) * 100) : 0;
+        if (percent < minPercent) {
+          minPercent = percent;
+          lagSubject = subject;
+        }
+      });
+      return { subject: lagSubject, percent: minPercent };
+    }, [mySchoolSubjectData]);
+    
     return (
-      <div className="space-y-6">
-        <h2 className="text-3xl font-bold text-gray-800">Dashboard Overview</h2>
+      <div className="space-y-6 fade-in">
+        <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+          <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+          Dashboard Overview
+        </h2>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="stat-card avanti-gradient text-white">
@@ -626,37 +1267,262 @@ function App() {
             <div className="text-3xl font-bold">{analyticsData?.totalPendingTests || 0}</div>
           </div>
           <div className="stat-card bg-gradient-to-br from-blue-500 to-cyan-500 text-white">
-            <div className="text-sm opacity-90 mb-1">Completion %</div>
-            <div className="text-3xl font-bold">
-              {analyticsData?.totalChapters ? Math.round((analyticsData.totalCompleted / analyticsData.totalChapters) * 100) : 0}%
+            <div className="text-sm opacity-90 mb-1">Avg Days/Chapter</div>
+            <div className="text-3xl font-bold">{analyticsData?.avgDaysPerChapter || 0}</div>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="stat-card avanti-gradient-light border-2 border-yellow-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-700 mb-1">📅 Your School Rank</div>
+                <div className="text-5xl font-bold" style={{color: 'var(--avanti-red)'}}>
+                  #{mySchoolRank || 'N/A'}
+                </div>
+                <div className="text-sm text-gray-600 mt-2">
+                  Out of {schoolRankings.length} schools
+                </div>
+              </div>
+              <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo opacity-20" />
+            </div>
+          </div>
+
+          <div className="stat-card bg-gradient-to-br from-purple-100 to-pink-100 border-2 border-purple-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-gray-700 mb-1">⚠️ Lagging Subject</div>
+                <div className="text-4xl font-bold text-purple-700">
+                  {laggingSubject?.subject || 'None'}
+                </div>
+                <div className="text-sm text-gray-600 mt-2">
+                  {laggingSubject ? `${laggingSubject.percent}% completed` : 'All good!'}
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {analyticsData && (
-          <div className="stat-card">
-            <canvas ref={chartRefs.current.subjectBreakdown} height="200"></canvas>
+        <div className="stat-card avanti-gradient-light border-2 border-yellow-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-gray-700 mb-1">📚 Classes Needed to Complete</div>
+              <div className="text-4xl font-bold" style={{color: 'var(--avanti-red)'}}>
+                {analyticsData?.estimatedClassesRemaining || 0} Classes
+              </div>
+              <div className="text-sm text-gray-600 mt-2">
+                Based on ~5 classes per chapter
+              </div>
+            </div>
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo opacity-20" />
           </div>
-        )}
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="stat-card">
+            <canvas ref={chartRefs.current.schoolComparison} height="250"></canvas>
+          </div>
+
+          <div className="stat-card">
+            <canvas ref={chartRefs.current.subjectBreakdown} height="250"></canvas>
+          </div>
+
+          <div className="stat-card">
+            <canvas ref={chartRefs.current.mySchoolSubjects} height="250"></canvas>
+          </div>
+
+          <div className="stat-card">
+            <canvas ref={chartRefs.current.subjectClassesNeeded} height="250"></canvas>
+          </div>
+
+          <div className="stat-card">
+            <canvas ref={chartRefs.current.teacherPerformance} height="250"></canvas>
+          </div>
+
+          <div className="stat-card">
+            <canvas ref={chartRefs.current.completionTrend} height="250"></canvas>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <h3 className="font-bold text-lg mb-4 text-gray-800">School Rankings & Detailed Statistics</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="avanti-gradient-light">
+                <tr>
+                  <th className="p-3 text-left font-bold">Rank</th>
+                  <th className="p-3 text-left font-bold">School</th>
+                  <th className="p-3 text-left font-bold">Total</th>
+                  <th className="p-3 text-left font-bold">Completed</th>
+                  <th className="p-3 text-left font-bold">On Track</th>
+                  <th className="p-3 text-left font-bold">Delayed</th>
+                  <th className="p-3 text-left font-bold">Pending Tests</th>
+                  <th className="p-3 text-left font-bold">Completion %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schoolRankings.map((school, index) => {
+                  const isMySchool = school.school === mySchool;
+                  
+                  return (
+                    <tr 
+                      key={school.school} 
+                      className={`border-b transition-colors ${isMySchool ? 'avanti-gradient-light font-bold' : 'hover:bg-yellow-50'}`}
+                    >
+                      <td className="p-3">
+                        <span className="px-2 py-1 rounded-full bg-gray-200 font-bold">
+                          {index + 1}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        {school.school} {isMySchool && <span style={{color: 'var(--avanti-red)'}}>★</span>}
+                      </td>
+                      <td className="p-3">{school.total}</td>
+                      <td className="p-3 text-green-600 font-semibold">{school.completed}</td>
+                      <td className="p-3 text-blue-600">{school.ontrack}</td>
+                      <td className="p-3 text-red-600">{school.delayed}</td>
+                      <td className="p-3 text-orange-600">{school.pendingTests}</td>
+                      <td className="p-3">
+                        <span className="px-3 py-1 avanti-gradient-light rounded-full font-bold" style={{color: 'var(--avanti-red)'}}>
+                          {school.percent}%
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+            <span>🎂</span> Birthdays & Anniversaries
+          </h3>
+          
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <div className="p-4 border-2 rounded-xl birthday-card text-white">
+              <div className="font-bold text-lg mb-3">🎂 Today's Birthdays</div>
+              <div className="space-y-2">
+                {getBirthdays('today').length ? (
+                  getBirthdays('today').map(t => (
+                    <div key={t.afid} className="flex justify-between items-center py-2 px-3 bg-white bg-opacity-90 rounded-lg text-gray-800">
+                      <div>
+                        <div className="font-medium">{t.name}</div>
+                        <div className="text-sm">({t.afid})</div>
+                      </div>
+                      <div className="text-2xl">🎉</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-3 bg-white bg-opacity-80 rounded-lg text-gray-600">No birthdays today</div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-2 rounded-xl anniversary-card text-white">
+              <div className="font-bold text-lg mb-3">🎉 Today's Anniversaries</div>
+              <div className="space-y-2">
+                {getAnniversaries('today').length ? (
+                  getAnniversaries('today').map(t => {
+                    const years = new Date().getFullYear() - new Date(t.joiningDate).getFullYear();
+                    return (
+                      <div key={t.afid} className="flex justify-between items-center py-2 px-3 bg-white bg-opacity-90 rounded-lg text-gray-800">
+                        <div>
+                          <div className="font-medium">{t.name}</div>
+                          <div className="text-sm">{years} Years</div>
+                        </div>
+                        <div className="text-2xl">🏆</div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-3 bg-white bg-opacity-80 rounded-lg text-gray-600">No anniversaries today</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="p-4 border-2 rounded-xl avanti-gradient-light">
+              <div className="font-bold text-lg mb-3" style={{color: 'var(--avanti-red)'}}>This Week's Birthdays</div>
+              <div className="space-y-2">
+                {getBirthdays('week').length ? (
+                  getBirthdays('week').map(t => (
+                    <div key={t.afid} className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
+                      <div>
+                        <div className="font-medium">{t.name}</div>
+                        <div className="text-sm text-gray-500">({t.afid})</div>
+                      </div>
+                      <div className="text-sm font-semibold" style={{color: 'var(--avanti-red)'}}>
+                        {new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-gray-500 text-center py-3">No birthdays this week</div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-2 rounded-xl bg-gradient-to-r from-blue-50 to-cyan-50">
+              <div className="font-bold text-lg mb-3 text-blue-700">This Month's Birthdays</div>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {getBirthdays('month').length ? (
+                  getBirthdays('month').map(t => (
+                    <div key={t.afid} className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
+                      <div>
+                        <div className="font-medium">{t.name}</div>
+                        <div className="text-sm text-gray-500">({t.afid})</div>
+                      </div>
+                      <div className="text-sm font-semibold text-blue-600">
+                        {new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-gray-500 text-center py-3">No birthdays this month</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
 
-  const Chapters = ({ grade }) => {
+  const Chapters = () => {
+    const [localGrade, setLocalGrade] = useState(11);
     const subj = currentUser.subject;
     
     const chapters = useMemo(() => {
-      if (!curriculum || !curriculum[subj] || !curriculum[subj][grade]) {
+      if (!curriculum || !curriculum[subj] || !curriculum[subj][localGrade]) {
         return [];
       }
-      return curriculum[subj][grade];
-    }, [curriculum, subj, grade]);
+      return curriculum[subj][localGrade];
+    }, [curriculum, subj, localGrade]);
+
+    const handleTopicToggle = useCallback((chapterId, topic, chapter) => {
+      const currentProg = chapterProgress[chapterId] || {};
+      const completedTopics = currentProg.completedTopics || [];
+      const isChecked = completedTopics.includes(topic);
+      
+      const updated = isChecked 
+        ? completedTopics.filter(x => x !== topic)
+        : [...completedTopics, topic];
+      
+      updateChapterProgress(chapterId, 'completedTopics', updated, chapter);
+    }, [chapterProgress, updateChapterProgress]);
 
     if (!subj || !curriculum[subj]) {
       return (
-        <div className="space-y-6">
-          <h2 className="text-3xl font-bold text-gray-800">Class {grade}th - {subj}</h2>
+        <div className="space-y-6 fade-in">
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+            Chapters
+          </h2>
           <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
             <h3 className="text-2xl font-bold text-gray-800 mb-2">No Curriculum Available</h3>
             <p className="text-gray-600">Contact admin to add curriculum for your subject</p>
           </div>
@@ -665,16 +1531,43 @@ function App() {
     }
 
     return (
-      <div className="space-y-6">
-        <h2 className="text-3xl font-bold text-gray-800">Class {grade}th - {subj}</h2>
+      <div className="space-y-6 fade-in">
+        <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+          <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+          Chapters - {subj}
+        </h2>
+        
+        <div className="flex gap-3 mb-6">
+          <button 
+            onClick={() => setLocalGrade(11)} 
+            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+              localGrade === 11
+                ? 'avanti-gradient text-white shadow-lg scale-105' 
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Class 11th
+          </button>
+          <button 
+            onClick={() => setLocalGrade(12)} 
+            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+              localGrade === 12
+                ? 'avanti-gradient text-white shadow-lg scale-105' 
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Class 12th
+          </button>
+        </div>
 
         {chapters.length === 0 ? (
           <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
             <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
-            <p className="text-gray-600">Admin needs to add chapters for Class {grade}</p>
+            <p className="text-gray-600">Admin needs to add chapters for Class {localGrade}</p>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 grid-responsive">
             {chapters.map(ch => {
               const prog = chapterProgress[ch.id] || {};
               const status = computeChapterStatus(ch, prog);
@@ -686,7 +1579,7 @@ function App() {
               return (
                 <div 
                   key={ch.id} 
-                  className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5`}
+                  className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5 ${isExpanded ? 'expanded' : 'collapsed'}`}
                 >
                   <div className="mb-4">
                     <div className="flex justify-between items-start mb-2">
@@ -703,7 +1596,7 @@ function App() {
                       </div>
                       <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div 
-                          className="h-2 avanti-gradient transition-all duration-500" 
+                          className="h-2 avanti-gradient progress-bar" 
                           style={{ width: `${topicsPercent}%` }}
                         />
                       </div>
@@ -722,7 +1615,7 @@ function App() {
                       {isExpanded ? 'Hide Details' : 'Show Details'}
                     </span>
                     <svg 
-                      className={`w-5 h-5 expand-btn ${isExpanded ? 'rotated' : ''}`} 
+                      className={`w-5 h-5 expand-btn transition-transform ${isExpanded ? 'rotated' : ''}`} 
                       fill="none" 
                       stroke="currentColor" 
                       viewBox="0 0 24 24"
@@ -748,17 +1641,12 @@ function App() {
                             return (
                               <label 
                                 key={idx} 
-                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-yellow-50 cursor-pointer"
+                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-yellow-50 cursor-pointer transition-colors group"
                               >
                                 <input 
                                   type="checkbox" 
-                                  checked={checked} 
-                                  onChange={e => {
-                                    const updated = e.target.checked 
-                                      ? [...completedTopics, t] 
-                                      : completedTopics.filter(x => x !== t);
-                                    updateChapterProgress(ch.id, 'completedTopics', updated, ch);
-                                  }} 
+                                  checked={checked}
+                                  onChange={() => handleTopicToggle(ch.id, t, ch)}
                                 />
                                 <span className={`flex-1 ${checked ? 'line-through text-gray-500' : 'text-gray-800 font-medium'}`}>
                                   {t}
@@ -798,10 +1686,10 @@ function App() {
                         <select 
                           value={prog.testConducted || 'No'} 
                           onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value, ch)} 
-                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl"
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
                         >
-                          <option>No</option>
-                          <option>Yes</option>
+                          <option value="No">No</option>
+                          <option value="Yes">Yes</option>
                         </select>
                       </div>
 
@@ -812,10 +1700,10 @@ function App() {
                         <select 
                           value={prog.completed || 'No'} 
                           onChange={e => updateChapterProgress(ch.id, 'completed', e.target.value, ch)} 
-                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl"
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
                         >
-                          <option>No</option>
-                          <option>Yes</option>
+                          <option value="No">No</option>
+                          <option value="Yes">Yes</option>
                         </select>
                         <div className="text-xs text-gray-600 mt-2 bg-yellow-50 p-2 rounded">
                           ⚠️ Requires: All topics ✓ + Completion date ✓
@@ -829,10 +1717,10 @@ function App() {
                         <select 
                           value={prog.method || 'Online'} 
                           onChange={e => updateChapterProgress(ch.id, 'method', e.target.value, ch)} 
-                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl"
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
                         >
-                          <option>Online</option>
-                          <option>Offline</option>
+                          <option value="Online">Online</option>
+                          <option value="Offline">Offline</option>
                         </select>
                       </div>
 
@@ -862,9 +1750,12 @@ function App() {
   };
 
   const Profile = () => (
-    <div className="space-y-6">
-      <h2 className="text-3xl font-bold text-gray-800">Profile</h2>
-      <div className="bg-white p-8 rounded-2xl shadow-lg">
+    <div className="space-y-6 fade-in">
+      <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+        <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+        Profile
+      </h2>
+      <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg hover:shadow-xl transition-shadow">
         <div className="grid md:grid-cols-2 gap-6">
           {[
             { label: 'Name', value: currentUser.name },
@@ -872,6 +1763,7 @@ function App() {
             { label: 'Subject', value: currentUser.subject },
             { label: 'School', value: currentUser.school },
             { label: 'Date of Birth', value: currentUser.dob ? new Date(currentUser.dob).toLocaleDateString() : '—' },
+            { label: 'Joining Date', value: currentUser.joiningDate ? new Date(currentUser.joiningDate).toLocaleDateString() : '—' },
             { label: 'Email', value: currentUser.email || '—' },
             { label: 'Phone', value: currentUser.phone || '—' }
           ].map(item => (
@@ -886,47 +1778,93 @@ function App() {
   );
 
   function AdminTeachers() {
-    const [form, setForm] = useState({ afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' });
+    const [editing, setEditing] = useState(null);
+    const [form, setForm] = useState({ afid:'', name:'', subject:'', school:'', dob:'', joiningDate:'', email:'', phone:'', password:'' });
     const [isNewTeacher, setIsNewTeacher] = useState(false);
+
+    useEffect(() => {
+      if (editing) {
+        setForm(editing);
+        setIsNewTeacher(false);
+      } else {
+        setForm({ afid:'', name:'', subject:'', school:'', dob:'', joiningDate:'', email:'', phone:'', password:'' });
+        setIsNewTeacher(true);
+      }
+    }, [editing]);
+
+    const save = async () => {
+      if (!form.afid) return alert('AFID required');
+      if (!form.email) return alert('Email required');
+      if (!form.subject) return alert('Subject required');
+      if (!form.school) return alert('School required');
+      
+      if (isNewTeacher && !form.password) {
+        return alert('Password required for new teacher');
+      }
+      
+      await addOrUpdateTeacher(form, isNewTeacher ? form.password : null);
+      setEditing(null);
+      setForm({ afid:'', name:'', subject:'', school:'', dob:'', joiningDate:'', email:'', phone:'', password:'' });
+    };
 
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center flex-wrap gap-3">
           <h3 className="text-2xl font-bold">Teacher Directory</h3>
           <button 
-            onClick={() => setIsNewTeacher(true)} 
-            className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700"
+            onClick={() => { setEditing(null); setIsNewTeacher(true); }} 
+            className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
           >
             + Add Teacher
           </button>
         </div>
 
-        {teachers.length > 0 && (
+        {teachers.length === 0 ? (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Teachers Yet</h3>
+            <p className="text-gray-600">Click "+ Add Teacher" to get started</p>
+          </div>
+        ) : (
           <div className="bg-white p-4 rounded-2xl shadow-lg overflow-x-auto">
             <table className="w-full">
-              <thead className="avanti-gradient-light">
-                <tr>
+              <thead>
+                <tr className="avanti-gradient-light">
                   <th className="p-3 text-left font-bold">AFID</th>
                   <th className="p-3 text-left font-bold">Name</th>
+                  <th className="p-3 text-left font-bold">Email</th>
                   <th className="p-3 text-left font-bold">Subject</th>
                   <th className="p-3 text-left font-bold">School</th>
+                  <th className="p-3 text-left font-bold">Joining Date</th>
+                  <th className="p-3 text-left font-bold">Phone</th>
                   <th className="p-3 text-left font-bold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {teachers.map(t => (
-                  <tr key={t.afid} className="border-b hover:bg-yellow-50">
-                    <td className="p-3 font-mono">{t.afid}</td>
+                  <tr key={t.afid} className="border-b hover:bg-yellow-50 transition-colors">
+                    <td className="p-3 font-mono font-semibold">{t.afid}</td>
                     <td className="p-3">{t.name}</td>
+                    <td className="p-3 text-sm">{t.email}</td>
                     <td className="p-3">{t.subject}</td>
                     <td className="p-3">{t.school}</td>
+                    <td className="p-3 text-sm">{t.joiningDate ? new Date(t.joiningDate).toLocaleDateString() : '—'}</td>
+                    <td className="p-3">{t.phone}</td>
                     <td className="p-3">
-                      <button 
-                        onClick={() => deleteTeacher(t.afid)} 
-                        className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                      >
-                        Delete
-                      </button>
+                      <div className="flex gap-2 flex-wrap">
+                        <button 
+                          onClick={() => { setEditing(t); setIsNewTeacher(false); }} 
+                          className="px-3 py-1 bg-yellow-400 rounded-lg hover:bg-yellow-500 transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => deleteTeacher(t.afid, t.email)} 
+                          className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -935,80 +1873,148 @@ function App() {
           </div>
         )}
 
-        {isNewTeacher && (
+        {(editing !== null || isNewTeacher) && (
           <div className="bg-white p-6 rounded-2xl shadow-lg">
-            <h4 className="font-bold text-xl mb-4">Add New Teacher</h4>
+            <h4 className="font-bold text-xl mb-4">{isNewTeacher ? 'Add New Teacher' : 'Edit Teacher'}</h4>
+            
+            <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg text-sm">
+              <p className="font-bold text-blue-900 mb-2">📝 Instructions:</p>
+              <ol className="list-decimal list-inside text-gray-700 space-y-1">
+                <li>Fill in all required fields below</li>
+                <li>Click "Save Teacher Data"</li>
+                <li>Follow the popup instructions to create Firebase Auth account</li>
+                <li>Teacher can then login with their credentials</li>
+              </ol>
+            </div>
+
             <div className="grid md:grid-cols-2 gap-4">
-              <input 
-                placeholder="AFID *"
-                value={form.afid} 
-                onChange={e => setForm({...form, afid: e.target.value})} 
-                className="border-2 border-gray-300 px-3 py-2 rounded-lg"
-              />
-              <input 
-                placeholder="Name *"
-                value={form.name} 
-                onChange={e => setForm({...form, name: e.target.value})} 
-                className="border-2 border-gray-300 px-3 py-2 rounded-lg"
-              />
-              <input 
-                placeholder="Email *"
-                type="email"
-                value={form.email} 
-                onChange={e => setForm({...form, email: e.target.value})} 
-                className="border-2 border-gray-300 px-3 py-2 rounded-lg"
-              />
-              <select 
-                value={form.subject} 
-                onChange={e => setForm({...form, subject: e.target.value})} 
-                className="border-2 border-gray-300 px-3 py-2 rounded-lg"
-              >
-                <option value="">Select Subject *</option>
-                {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <select 
-                value={form.school} 
-                onChange={e => setForm({...form, school: e.target.value})} 
-                className="border-2 border-gray-300 px-3 py-2 rounded-lg"
-              >
-                <option value="">Select School *</option>
-                {schools.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <input 
-                placeholder="Phone"
-                value={form.phone} 
-                onChange={e => setForm({...form, phone: e.target.value})} 
-                className="border-2 border-gray-300 px-3 py-2 rounded-lg"
-              />
-              <input 
-                placeholder="Date of Birth"
-                type="date"
-                value={form.dob} 
-                onChange={e => setForm({...form, dob: e.target.value})} 
-                className="border-2 border-gray-300 px-3 py-2 rounded-lg"
-              />
-              <input 
-                placeholder="Password *"
-                type="password"
-                value={form.password} 
-                onChange={e => setForm({...form, password: e.target.value})} 
-                className="border-2 border-gray-300 px-3 py-2 rounded-lg"
-              />
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  AFID <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text"
+                  value={form.afid || ''} 
+                  onChange={e => setForm({...form, afid: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                  disabled={!isNewTeacher}
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  NAME <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text"
+                  value={form.name || ''} 
+                  onChange={e => setForm({...form, name: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  EMAIL <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="email"
+                  value={form.email || ''} 
+                  onChange={e => setForm({...form, email: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  SUBJECT <span className="text-red-500">*</span>
+                </label>
+                <select 
+                  value={form.subject || ''} 
+                  onChange={e => setForm({...form, subject: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                >
+                  <option value="">Select Subject</option>
+                  {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  SCHOOL <span className="text-red-500">*</span>
+                </label>
+                <select 
+                  value={form.school || ''} 
+                  onChange={e => setForm({...form, school: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                >
+                  <option value="">Select School</option>
+                  {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  DATE OF BIRTH
+                </label>
+                <input 
+                  type="date"
+                  value={form.dob || ''} 
+                  onChange={e => setForm({...form, dob: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  JOINING DATE <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="date"
+                  value={form.joiningDate || ''} 
+                  onChange={e => setForm({...form, joiningDate: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  PHONE
+                </label>
+                <input 
+                  type="text"
+                  value={form.phone || ''} 
+                  onChange={e => setForm({...form, phone: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                />
+              </div>
+
+              {isNewTeacher && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    PASSWORD <span className="text-red-500">*</span>
+                    <span className="text-xs text-gray-500"> (Save this!)</span>
+                  </label>
+                  <input 
+                    type="password"
+                    value={form.password || ''} 
+                    onChange={e => setForm({...form, password: e.target.value})} 
+                    className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                    placeholder="Minimum 6 characters"
+                  />
+                </div>
+              )}
             </div>
             <div className="mt-5 flex gap-3">
               <button 
-                onClick={() => {
-                  addOrUpdateTeacher(form, form.password);
-                  setForm({ afid:'', name:'', subject:'', school:'', dob:'', email:'', phone:'', password:'' });
-                  setIsNewTeacher(false);
-                }} 
-                className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700"
+                onClick={save} 
+                className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
               >
-                Save Teacher
+                {isNewTeacher ? 'Save Teacher Data' : 'Update'}
               </button>
               <button 
-                onClick={() => setIsNewTeacher(false)} 
-                className="px-6 py-3 bg-gray-200 rounded-xl font-semibold hover:bg-gray-300"
+                onClick={() => { setEditing(null); setIsNewTeacher(false); }} 
+                className="px-6 py-3 bg-gray-200 rounded-xl font-semibold hover:bg-gray-300 transition-all"
               >
                 Cancel
               </button>
@@ -1020,36 +2026,88 @@ function App() {
   }
 
   function AdminCurriculum() {
-    const [subject, setSubject] = useState(SUBJECTS[0]);
+    const curriculumKeys = Object.keys(curriculum || {});
+    const [subject, setSubject] = useState(curriculumKeys.length > 0 ? curriculumKeys[0] : '');
     const [grade, setGrade] = useState(11);
     const [newChapter, setNewChapter] = useState({ name:'', topics:'', targetDate:'' });
+    const [editingChapter, setEditingChapter] = useState(null);
     const fileInputRef = useRef(null);
+
+    useEffect(() => {
+      const keys = Object.keys(curriculum || {});
+      if (keys.length > 0 && !subject) {
+        setSubject(keys[0]);
+      }
+    }, [curriculum, subject]);
 
     const addNew = async () => {
       if (!newChapter.name) return alert('Name required');
-      await addChapterAdmin(subject, grade, { 
-        name: newChapter.name, 
-        topics: newChapter.topics ? newChapter.topics.split(',').map(x=>x.trim()) : [], 
-        targetDate: newChapter.targetDate || '' 
-      });
+      if (!subject) return alert('Please select a subject');
+      await addChapterAdmin(
+        subject, 
+        grade, 
+        { 
+          name: newChapter.name, 
+          topics: newChapter.topics ? newChapter.topics.split(',').map(x=>x.trim()) : [], 
+          targetDate: newChapter.targetDate || '' 
+        }
+      );
       setNewChapter({ name:'', topics:'', targetDate:'' });
+    };
+
+    const handleFileUpload = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      if (!file.name.endsWith('.csv')) {
+        alert('Please upload a CSV file');
+        return;
+      }
+      
+      if (!subject) {
+        alert('Please select a subject first');
+        return;
+      }
+      
+      handleCSVImport(file, subject, grade);
+      e.target.value = '';
+    };
+
+    const startEditing = (ch) => {
+      setEditingChapter({
+        id: ch.id,
+        name: ch.name,
+        topics: (ch.topics || []).join(', '),
+        targetDate: ch.targetDate || ''
+      });
+    };
+
+    const saveEdit = async () => {
+      if (!editingChapter.name) return alert('Name required');
+      await updateChapterAdmin(subject, grade, editingChapter.id, {
+        name: editingChapter.name,
+        topics: editingChapter.topics.split(',').map(x => x.trim()).filter(x => x),
+        targetDate: editingChapter.targetDate
+      });
+      setEditingChapter(null);
     };
 
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <h3 className="text-2xl font-bold">Curriculum Management</h3>
           <select 
             value={subject} 
             onChange={e=>setSubject(e.target.value)} 
-            className="border-2 border-gray-300 px-4 py-2 rounded-lg bg-white"
+            className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium bg-white"
           >
+            <option value="">Select Subject</option>
             {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <select 
             value={grade} 
             onChange={e=>setGrade(Number(e.target.value))} 
-            className="border-2 border-gray-300 px-4 py-2 rounded-lg bg-white"
+            className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium bg-white"
           >
             <option value={11}>Class 11</option>
             <option value={12}>Class 12</option>
@@ -1057,31 +2115,40 @@ function App() {
         </div>
 
         <div className="avanti-gradient-light p-6 rounded-2xl shadow-lg border-2" style={{borderColor: 'var(--avanti-yellow)'}}>
-          <h4 className="font-bold text-lg mb-3">📊 Import from CSV</h4>
+          <h4 className="font-bold text-lg mb-3 flex items-center gap-2" style={{color: 'var(--avanti-red)'}}>
+            <span>📊</span> Import Curriculum from CSV
+          </h4>
           <p className="text-sm text-gray-700 mb-4">
-            Format: Column A = Chapter Name, Column B = Topic Name
+            Upload a CSV file with format: <strong>Column A = Chapter Name, Column B = Topic Name</strong><br/>
+            (Chapter name only on first row, then multiple topic rows)
           </p>
           <input 
             ref={fileInputRef}
             type="file" 
             accept=".csv" 
-            onChange={(e) => {
-              const file = e.target.files[0];
-              if (file) handleCSVImport(file, subject, grade);
-              e.target.value = '';
-            }}
+            onChange={handleFileUpload}
             className="hidden"
           />
           <button 
             onClick={() => fileInputRef.current?.click()}
-            className="px-5 py-3 avanti-gradient text-white rounded-xl font-semibold hover:shadow-lg"
+            disabled={!subject}
+            className="px-5 py-3 avanti-gradient text-white rounded-xl font-semibold hover:shadow-lg transition-all file-upload-btn flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            📂 Choose CSV File
+            <span>📂</span> Choose CSV File to Import
           </button>
+          <div className="mt-3 text-xs text-gray-600 bg-white p-3 rounded-lg">
+            <strong>Example CSV format:</strong><br/>
+            Chapter,Topic<br/>
+            Unit & Dimension,Units<br/>
+            ,Dimensions<br/>
+            ,Errors<br/>
+            Motion,Distance<br/>
+            ,Velocity
+          </div>
         </div>
 
         <div className="bg-white p-6 rounded-2xl shadow-lg">
-          <h4 className="font-bold text-lg mb-3">Add Chapter Manually</h4>
+          <h4 className="font-bold text-lg mb-3">Or Add Manually</h4>
           <div className="grid md:grid-cols-3 gap-3">
             <input 
               placeholder="Chapter name" 
@@ -1102,139 +2169,613 @@ function App() {
               className="border-2 border-gray-300 px-3 py-2 rounded-lg" 
             />
           </div>
-          <button 
-            onClick={addNew} 
-            className="mt-4 px-5 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700"
-          >
-            Add Chapter
-          </button>
+          <div className="mt-4">
+            <button 
+              onClick={addNew} 
+              disabled={!subject}
+              className="px-5 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Add Chapter
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-3">
-          {curriculum[subject] && curriculum[subject][grade] && curriculum[subject][grade].length > 0 ? (
-            curriculum[subject][grade].map(ch => {
-              const prog = chapterProgress[ch.id] || {};
-              const status = computeChapterStatus(ch, prog);
-              
-              return (
-                <div key={ch.id} className={`p-4 rounded-xl border-2 ${status.color}`}>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="font-bold text-lg">{ch.name}</div>
-                      <div className="text-sm text-gray-700">{(ch.topics||[]).join(', ')}</div>
-                      <div className="text-sm">Target: {ch.targetDate || '—'}</div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <div className={`text-sm font-semibold px-3 py-1 rounded-full ${status.textColor}`}>
-                        {status.label}
+        {subject ? (
+          <div className="space-y-3">
+            {curriculum[subject] && curriculum[subject][grade] && curriculum[subject][grade].length > 0 ? (
+              curriculum[subject][grade].map(ch => {
+                const prog = chapterProgress[ch.id] || {};
+                const status = computeChapterStatus(ch, prog);
+                const isEditing = editingChapter && editingChapter.id === ch.id;
+                
+                return (
+                  <div 
+                    key={ch.id} 
+                    className={`p-4 rounded-xl border-2 ${status.color}`}
+                  >
+                    {isEditing ? (
+                      <div className="space-y-3">
+                        <input 
+                          type="text"
+                          value={editingChapter.name}
+                          onChange={e => setEditingChapter({...editingChapter, name: e.target.value})}
+                          className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg font-bold"
+                          placeholder="Chapter name"
+                        />
+                        <textarea
+                          value={editingChapter.topics}
+                          onChange={e => setEditingChapter({...editingChapter, topics: e.target.value})}
+                          className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg"
+                          rows="3"
+                          placeholder="Topics (comma separated)"
+                        />
+                        <input 
+                          type="date"
+                          value={editingChapter.targetDate}
+                          onChange={e => setEditingChapter({...editingChapter, targetDate: e.target.value})}
+                          className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg"
+                        />
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={saveEdit}
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                          >
+                            Save Changes
+                          </button>
+                          <button 
+                            onClick={() => setEditingChapter(null)}
+                            className="px-4 py-2 bg-gray-300 rounded-lg hover:bg-gray-400"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
-                      <button 
-                        onClick={() => deleteChapterAdmin(subject, grade, ch.id)} 
-                        className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    ) : (
+                      <div className="flex justify-between items-center flex-wrap gap-3">
+                        <div>
+                          <div className="font-bold text-lg">
+                            {ch.name} <span className="text-xs text-gray-500">({ch.id})</span>
+                          </div>
+                          <div className="text-sm text-gray-700 mt-1">{(ch.topics||[]).join(', ')}</div>
+                          <div className="text-sm mt-1">Target: <span className="font-semibold">{ch.targetDate || '—'}</span></div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <div className={`text-sm font-semibold px-3 py-1 rounded-full ${status.textColor}`}>
+                            {status.label}
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            <button 
+                              onClick={() => startEditing(ch)}
+                              className="px-3 py-1 bg-yellow-300 rounded-lg hover:bg-yellow-400 transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => deleteChapterAdmin(subject, grade, ch.id)} 
+                              className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
-              <p className="text-gray-600">Add your first chapter above</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  function AdminAnalytics() {
-    return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h3 className="text-2xl font-bold">Analytics Dashboard</h3>
-          <button 
-            onClick={exportCSV} 
-            className="px-4 py-2 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700"
-          >
-            📊 Export CSV
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="stat-card avanti-gradient text-white">
-            <div className="text-sm opacity-90 mb-1">Total Chapters</div>
-            <div className="text-3xl font-bold">{analyticsData?.totalChapters || 0}</div>
+                );
+              })
+            ) : (
+              <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+                <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
+                <p className="text-gray-600">Add your first chapter above</p>
+              </div>
+            )}
           </div>
-          <div className="stat-card bg-gradient-to-br from-green-500 to-emerald-500 text-white">
-            <div className="text-sm opacity-90 mb-1">Completed</div>
-            <div className="text-3xl font-bold">{analyticsData?.totalCompleted || 0}</div>
-          </div>
-          <div className="stat-card bg-gradient-to-br from-orange-500 to-red-500 text-white">
-            <div className="text-sm opacity-90 mb-1">Pending Tests</div>
-            <div className="text-3xl font-bold">{analyticsData?.totalPendingTests || 0}</div>
-          </div>
-          <div className="stat-card bg-gradient-to-br from-blue-500 to-cyan-500 text-white">
-            <div className="text-sm opacity-90 mb-1">Teachers</div>
-            <div className="text-3xl font-bold">{teachers.length}</div>
-          </div>
-        </div>
-
-        {analyticsData && analyticsData.teacherArr.length > 0 && (
-          <div className="stat-card overflow-x-auto">
-            <h4 className="font-bold text-lg mb-4">Teacher Statistics</h4>
-            <table className="w-full">
-              <thead className="avanti-gradient-light">
-                <tr>
-                  <th className="p-3 text-left">AFID</th>
-                  <th className="p-3 text-left">Name</th>
-                  <th className="p-3 text-left">School</th>
-                  <th className="p-3 text-left">Subject</th>
-                  <th className="p-3 text-left">Completed</th>
-                  <th className="p-3 text-left">Total</th>
-                  <th className="p-3 text-left">%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {analyticsData.teacherArr.map(t => (
-                  <tr key={t.afid} className="border-b hover:bg-yellow-50">
-                    <td className="p-3 font-mono">{t.afid}</td>
-                    <td className="p-3">{t.name}</td>
-                    <td className="p-3">{t.school}</td>
-                    <td className="p-3">{t.subject}</td>
-                    <td className="p-3 text-green-600 font-bold">{t.completed}</td>
-                    <td className="p-3">{t.total}</td>
-                    <td className="p-3">
-                      <span className="px-3 py-1 avanti-gradient-light rounded-full font-bold" style={{color: 'var(--avanti-red)'}}>
-                        {t.percent}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        ) : (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">Select a Subject</h3>
+            <p className="text-gray-600">Choose a subject from the dropdown above</p>
           </div>
         )}
       </div>
     );
   }
 
-  function AdminDashboard() {
-    const [tab, setTab] = useState('teachers');
+  function AdminAnalytics() {
+    const [selectedSchool, setSelectedSchool] = useState('All Schools');
+    const data = analyticsData;
+
+    if (!chartRefs.current.adminSchool) chartRefs.current.adminSchool = React.createRef();
+    if (!chartRefs.current.adminSubject) chartRefs.current.adminSubject = React.createRef();
+    if (!chartRefs.current.adminTeacher) chartRefs.current.adminTeacher = React.createRef();
+    if (!chartRefs.current.adminPending) chartRefs.current.adminPending = React.createRef();
+    if (!chartRefs.current.adminCompletion) chartRefs.current.adminCompletion = React.createRef();
+    if (!chartRefs.current.adminDays) chartRefs.current.adminDays = React.createRef();
+    if (!chartRefs.current.adminSchoolSubjects) chartRefs.current.adminSchoolSubjects = React.createRef();
+    if (!chartRefs.current.adminSchoolClasses) chartRefs.current.adminSchoolClasses = React.createRef();
+
+    const filteredData = useMemo(() => {
+      if (!data || selectedSchool === 'All Schools') return data;
+      
+      const schoolTeachers = data.teacherArr.filter(t => t.school === selectedSchool);
+      const schoolData = data.schoolStatus[selectedSchool] || {};
+      
+      return {
+        ...data,
+        teacherArr: schoolTeachers,
+        selectedSchoolData: schoolData
+      };
+    }, [data, selectedSchool]);
+
+    const schoolClassesNeeded = useMemo(() => {
+      if (!data) return {};
+      const classesData = {};
+      Object.keys(data.schoolStatus).forEach(school => {
+        const schoolData = data.schoolStatus[school];
+        const remaining = schoolData.total - schoolData.completed;
+        classesData[school] = remaining * 5;
+      });
+      return classesData;
+    }, [data]);
+
+    useEffect(() => {
+      if (!filteredData || !chartRefs.current.adminSchool?.current) return;
+
+      const schoolNames = Object.keys(filteredData.schoolStatus || {});
+      const completionData = schoolNames.map(s => {
+        const school = filteredData.schoolStatus[s];
+        return school.total ? Math.round((school.completed / school.total) * 100) : 0;
+      });
+
+      createChart('adminSchool', {
+        type: 'bar',
+        data: {
+          labels: schoolNames,
+          datasets: [{
+            label: 'Completion %',
+            data: completionData,
+            backgroundColor: '#C8342E',
+            borderRadius: 8
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'School-wise Completion Rate', font: { size: 16, weight: 'bold' } }
+          },
+          scales: {
+            x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
+          }
+        }
+      });
+    }, [filteredData, createChart]);
+
+    useEffect(() => {
+      if (!filteredData || !chartRefs.current.adminSubject?.current) return;
+
+      const subjects = Object.keys(filteredData.subjectStats || {});
+      const completedData = subjects.map(s => filteredData.subjectStats[s].completed);
+
+      createChart('adminSubject', {
+        type: 'pie',
+        data: {
+          labels: subjects,
+          datasets: [{
+            data: completedData,
+            backgroundColor: ['#F4B41A', '#E8B039', '#C8342E', '#10B981'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: 'Completed Chapters by Subject', font: { size: 16, weight: 'bold' } }
+          }
+        }
+      });
+    }, [filteredData, createChart]);
+
+    useEffect(() => {
+      if (!filteredData || !chartRefs.current.adminTeacher?.current) return;
+
+      const topTeachers = filteredData.teacherArr.slice(0, 10);
+
+      createChart('adminTeacher', {
+        type: 'bar',
+        data: {
+          labels: topTeachers.map(t => t.name),
+          datasets: [{
+            label: 'Completion %',
+            data: topTeachers.map(t => t.percent),
+            backgroundColor: '#10B981',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: selectedSchool === 'All Schools' ? 'Top 10 Teachers by Completion %' : `${selectedSchool} - Top Teachers`, font: { size: 16, weight: 'bold' } }
+          },
+          scales: {
+            x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
+          }
+        }
+      });
+    }, [filteredData, selectedSchool, createChart]);
+
+    useEffect(() => {
+      if (!filteredData || !chartRefs.current.adminPending?.current) return;
+
+      const schoolNames = Object.keys(filteredData.schoolStatus || {});
+      const pendingData = schoolNames.map(s => filteredData.schoolStatus[s].pendingTests);
+
+      createChart('adminPending', {
+        type: 'bar',
+        data: {
+          labels: schoolNames,
+          datasets: [{
+            label: 'Pending Tests',
+            data: pendingData,
+            backgroundColor: '#F59E0B',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'Pending Tests by School', font: { size: 16, weight: 'bold' } }
+          }
+        }
+      });
+    }, [filteredData, createChart]);
+
+    useEffect(() => {
+      if (!filteredData || !chartRefs.current.adminCompletion?.current) return;
+
+      createChart('adminCompletion', {
+        type: 'doughnut',
+        data: {
+          labels: ['Completed', 'Remaining'],
+          datasets: [{
+            data: [filteredData.totalCompleted, filteredData.totalChapters - filteredData.totalCompleted],
+            backgroundColor: ['#10B981', '#E5E7EB'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: `Overall Progress: ${Math.round((filteredData.totalCompleted / filteredData.totalChapters) * 100)}%`, font: { size: 16, weight: 'bold' } }
+          }
+        }
+      });
+    }, [filteredData, createChart]);
+
+    useEffect(() => {
+      if (!filteredData || !chartRefs.current.adminDays?.current) return;
+
+      const teachersWithDays = filteredData.teacherArr.filter(t => t.avgDaysPerChapter > 0).slice(0, 10);
+
+      createChart('adminDays', {
+        type: 'bar',
+        data: {
+          labels: teachersWithDays.map(t => t.name),
+          datasets: [{
+            label: 'Avg Days/Chapter',
+            data: teachersWithDays.map(t => t.avgDaysPerChapter),
+            backgroundColor: '#60A5FA',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'Average Days per Chapter (Top 10)', font: { size: 16, weight: 'bold' } }
+          }
+        }
+      });
+    }, [filteredData, createChart]);
+
+    useEffect(() => {
+      if (!filteredData || selectedSchool === 'All Schools' || !chartRefs.current.adminSchoolSubjects?.current) return;
+      if (!filteredData.selectedSchoolData || !filteredData.selectedSchoolData.subjectProgress) return;
+
+      const subjectProgress = filteredData.selectedSchoolData.subjectProgress;
+      const subjects = Object.keys(subjectProgress);
+      const completedData = subjects.map(s => subjectProgress[s].completed);
+      const remainingData = subjects.map(s => subjectProgress[s].total - subjectProgress[s].completed);
+
+      createChart('adminSchoolSubjects', {
+        type: 'bar',
+        data: {
+          labels: subjects,
+          datasets: [
+            {
+              label: 'Completed',
+              data: completedData,
+              backgroundColor: '#10B981',
+              borderRadius: 6
+            },
+            {
+              label: 'Remaining',
+              data: remainingData,
+              backgroundColor: '#F59E0B',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: `${selectedSchool} - Subject Progress`, font: { size: 16, weight: 'bold' } }
+          },
+          scales: {
+            x: { stacked: true },
+            y: { stacked: true }
+          }
+        }
+      });
+    }, [filteredData, selectedSchool, createChart]);
+
+    useEffect(() => {
+      if (!schoolClassesNeeded || !chartRefs.current.adminSchoolClasses?.current) return;
+
+      const schools = Object.keys(schoolClassesNeeded);
+      const classesData = schools.map(s => schoolClassesNeeded[s]);
+
+      createChart('adminSchoolClasses', {
+        type: 'bar',
+        data: {
+          labels: schools,
+          datasets: [{
+            label: 'Classes Needed',
+            data: classesData,
+            backgroundColor: '#3B82F6',
+            borderRadius: 8
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'Classes Needed per School', font: { size: 16, weight: 'bold' } }
+          },
+          scales: {
+            x: { beginAtZero: true, title: { display: true, text: 'Number of Classes' } }
+          }
+        }
+      });
+    }, [schoolClassesNeeded, createChart]);
     
     return (
       <div className="space-y-6">
-        <h2 className="text-3xl font-bold text-gray-800">Admin Dashboard</h2>
+        <div className="flex justify-between items-center flex-wrap gap-3">
+          <h3 className="text-2xl font-bold">Analytics Dashboard</h3>
+          <div className="flex gap-3 items-center flex-wrap">
+            <select
+              value={selectedSchool}
+              onChange={e => setSelectedSchool(e.target.value)}
+              className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium bg-white"
+            >
+              <option value="All Schools">All Schools</option>
+              {schools.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <button 
+              onClick={exportCSV} 
+              className="px-4 py-2 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
+            >
+              📊 Export CSV
+            </button>
+          </div>
+        </div>
+
+        {teachers.length === 0 ? (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Data Yet</h3>
+            <p className="text-gray-600">Add teachers and curriculum to see analytics</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="stat-card avanti-gradient text-white">
+                <div className="text-sm opacity-90 mb-1">Total Chapters</div>
+                <div className="text-3xl font-bold">{data.totalChapters}</div>
+              </div>
+              <div className="stat-card bg-gradient-to-br from-green-500 to-emerald-500 text-white">
+                <div className="text-sm opacity-90 mb-1">Completed</div>
+                <div className="text-3xl font-bold">{data.totalCompleted}</div>
+              </div>
+              <div className="stat-card bg-gradient-to-br from-orange-500 to-red-500 text-white">
+                <div className="text-sm opacity-90 mb-1">Pending Tests</div>
+                <div className="text-3xl font-bold">{data.totalPendingTests}</div>
+              </div>
+              <div className="stat-card bg-gradient-to-br from-blue-500 to-cyan-500 text-white">
+                <div className="text-sm opacity-90 mb-1">Avg Days/Ch</div>
+                <div className="text-3xl font-bold">{data.avgDaysPerChapter}</div>
+              </div>
+              <div className="stat-card bg-gradient-to-br from-indigo-500 to-purple-500 text-white">
+                <div className="text-sm opacity-90 mb-1">Est. Classes</div>
+                <div className="text-3xl font-bold">{data.estimatedClassesRemaining}</div>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminSchool} height="200"></canvas>
+              </div>
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminSubject} height="200"></canvas>
+              </div>
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminTeacher} height="200"></canvas>
+              </div>
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminPending} height="200"></canvas>
+              </div>
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminCompletion} height="200"></canvas>
+              </div>
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminDays} height="200"></canvas>
+              </div>
+              {selectedSchool !== 'All Schools' && (
+                <div className="stat-card">
+                  <canvas ref={chartRefs.current.adminSchoolSubjects} height="200"></canvas>
+                </div>
+              )}
+              <div className="stat-card">
+                <canvas ref={chartRefs.current.adminSchoolClasses} height="200"></canvas>
+              </div>
+            </div>
+
+            <div className="stat-card overflow-x-auto">
+              <div className="text-sm text-gray-600 mb-3 font-bold">
+                {selectedSchool === 'All Schools' ? 'All Teachers Statistics' : `${selectedSchool} - Teachers Statistics`}
+              </div>
+              <table className="w-full">
+                <thead className="avanti-gradient-light">
+                  <tr>
+                    <th className="p-3 text-left font-bold">AFID</th>
+                    <th className="p-3 text-left font-bold">Name</th>
+                    <th className="p-3 text-left font-bold">School</th>
+                    <th className="p-3 text-left font-bold">Subject</th>
+                    <th className="p-3 text-left font-bold">Completed</th>
+                    <th className="p-3 text-left font-bold">Total</th>
+                    <th className="p-3 text-left font-bold">%</th>
+                    <th className="p-3 text-left font-bold">Avg Days</th>
+                    <th className="p-3 text-left font-bold">Pending Tests</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredData.teacherArr.map(t => (
+                    <tr key={t.afid} className="border-b hover:bg-yellow-50 transition-colors">
+                      <td className="p-3 font-mono font-semibold">{t.afid}</td>
+                      <td className="p-3">{t.name}</td>
+                      <td className="p-3">{t.school}</td>
+                      <td className="p-3">{t.subject}</td>
+                      <td className="p-3 text-green-600 font-bold">{t.completed}</td>
+                      <td className="p-3 font-semibold">{t.total}</td>
+                      <td className="p-3">
+                        <span className="px-3 py-1 avanti-gradient-light rounded-full font-bold" style={{color: 'var(--avanti-red)'}}>
+                          {t.percent}%
+                        </span>
+                      </td>
+                      <td className="p-3">{t.avgDaysPerChapter || '—'}</td>
+                      <td className="p-3 text-orange-600 font-semibold">{t.pendingTests}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  function AdminSettings() {
+    const [newSchool, setNewSchool] = useState('');
+
+    return (
+      <div className="space-y-6">
+        <h3 className="text-2xl font-bold">Settings</h3>
         
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {['teachers','curriculum','analytics'].map(t => (
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="stat-card">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>📋</span> Data Management
+            </h4>
+            <div className="space-y-3">
+              <button 
+                onClick={exportCSV}
+                className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-left"
+              >
+                Export Analytics Data (CSV)
+              </button>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>👥</span> System Info
+            </h4>
+            <div className="text-sm text-gray-700 space-y-2">
+              <div>Total Teachers: <strong>{teachers.length}</strong></div>
+              <div>Total Chapters: <strong>{analyticsData?.totalChapters || 0}</strong></div>
+              <div>Total Schools: <strong>{schools.length}</strong></div>
+              <div>Version: <strong>7.0 - Final Production</strong></div>
+            </div>
+          </div>
+
+          <div className="stat-card md:col-span-2">
+            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+              <span>🏫</span> School Management
+            </h4>
+            
+            <div className="mb-4">
+              <label className="text-sm font-medium text-gray-700 mb-2 block">Add New School</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  value={newSchool}
+                  onChange={e => setNewSchool(e.target.value)}
+                  placeholder="School name"
+                  className="flex-1 border-2 border-gray-300 px-3 py-2 rounded-lg"
+                />
+                <button 
+                  onClick={() => { addSchool(newSchool); setNewSchool(''); }}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-700 mb-2">Current Schools:</div>
+              {schools.map(school => (
+                <div key={school} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="font-medium">{school}</span>
+                  <button 
+                    onClick={() => deleteSchool(school)}
+                    className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function AdminDashboard() {
+    const [tab, setTab] = useState('overview');
+    
+    return (
+      <div className="space-y-6 fade-in">
+        <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+          <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+          Admin Dashboard
+        </h2>
+        
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+          {['overview','teachers','curriculum','analytics','settings'].map(t => (
             <button 
               key={t} 
               onClick={()=>setTab(t)} 
               className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                tab===t ? 'avanti-gradient text-white shadow-lg' : 'bg-white text-gray-700'
+                tab===t 
+                  ? 'avanti-gradient text-white shadow-lg' 
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
               }`}
             >
               {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -1242,75 +2783,108 @@ function App() {
           ))}
         </div>
 
+        {tab === 'overview' && (
+          <div className="grid md:grid-cols-3 gap-6 grid-responsive">
+            <div className="avanti-gradient text-white p-6 rounded-2xl shadow-lg text-center">
+              <div className="text-sm opacity-90 mb-2">Total Teachers</div>
+              <div className="text-5xl font-bold">{teachers.length}</div>
+            </div>
+            <div className="bg-gradient-to-br from-green-500 to-emerald-500 text-white p-6 rounded-2xl shadow-lg text-center">
+              <div className="text-sm opacity-90 mb-2">Total Schools</div>
+              <div className="text-5xl font-bold">{schools.length}</div>
+            </div>
+            <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-2xl shadow-lg text-center">
+              <div className="text-sm opacity-90 mb-2">Chapters Tracked</div>
+              <div className="text-5xl font-bold">{Object.keys(chapterProgress || {}).length}</div>
+            </div>
+          </div>
+        )}
+
         {tab === 'teachers' && <AdminTeachers />}
         {tab === 'curriculum' && <AdminCurriculum />}
         {tab === 'analytics' && <AdminAnalytics />}
+        {tab === 'settings' && <AdminSettings />}
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 min-h-screen">
+    <div className="bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 animated-gradient">
       <nav className="bg-white shadow-lg sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <div className="font-bold text-xl text-gray-800">Curriculum Tracker</div>
-            <div className="text-sm text-gray-600">
-              {isAdmin ? 'Administrator' : `${currentUser.name} - ${currentUser.school}`}
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <img src={AVANTI_LOGO} alt="Avanti Fellows" className="avanti-logo-small" />
+            <div>
+              <div className="font-bold text-xl text-gray-800">
+                Curriculum Tracker
+              </div>
+              <div className="text-sm text-gray-600">
+                {isAdmin ? 'Administrator' : `${currentUser.name} - ${currentUser.school}`}
+              </div>
             </div>
           </div>
           <button 
-            onClick={() => auth.signOut()} 
-            className="px-5 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg"
+            onClick={handleLogout} 
+            className="px-5 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
           >
             Logout
           </button>
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        {!isAdmin && (
-          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-            <button 
-              onClick={() => setActiveTab('overview')} 
-              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                activeTab==='overview' ? 'avanti-gradient text-white shadow-lg' : 'bg-white text-gray-700'
-              }`}
-            >
-              🏠 Overview
-            </button>
-            <button 
-              onClick={() => setActiveTab('class11')} 
-              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                activeTab==='class11' ? 'avanti-gradient text-white shadow-lg' : 'bg-white text-gray-700'
-              }`}
-            >
-              📖 Class 11th
-            </button>
-            <button 
-              onClick={() => setActiveTab('class12')} 
-              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                activeTab==='class12' ? 'avanti-gradient text-white shadow-lg' : 'bg-white text-gray-700'
-              }`}
-            >
-              📖 Class 12th
-            </button>
-            <button 
-              onClick={() => setActiveTab('profile')} 
-              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                activeTab==='profile' ? 'avanti-gradient text-white shadow-lg' : 'bg-white text-gray-700'
-              }`}
-            >
-              👤 Profile
-            </button>
+      {celebrationMessage && (
+        <div className="fixed top-20 right-4 z-50 max-w-xs">
+          <div className="bg-white border-4 p-4 rounded-2xl shadow-2xl animate-bounce" style={{borderColor: 'var(--avanti-red)'}}>
+            <div className="text-center">
+              <div className="text-4xl mb-2">{celebrationMessage.includes('Birthday') ? '🎂' : '🎉'}</div>
+              <div className="font-bold" style={{color: 'var(--avanti-red)'}}>{celebrationMessage}</div>
+            </div>
           </div>
-        )}
+        </div>
+      )}
+
+      <div className="main-content max-w-7xl mx-auto px-4 py-6">
+        <div className="mb-6">
+          {!isAdmin && (
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              <button 
+                onClick={() => setActiveTab('overview')} 
+                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  activeTab==='overview' 
+                    ? 'avanti-gradient text-white shadow-lg' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                🏠 Overview
+              </button>
+              <button 
+                onClick={() => setActiveTab('chapters')} 
+                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  activeTab==='chapters' 
+                    ? 'avanti-gradient text-white shadow-lg' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                📖 Chapters
+              </button>
+              <button 
+                onClick={() => setActiveTab('profile')} 
+                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                  activeTab==='profile' 
+                    ? 'avanti-gradient text-white shadow-lg' 
+                    : 'bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                👤 Profile
+              </button>
+            </div>
+          )}
+        </div>
 
         <div>
           {isAdmin && <AdminDashboard />}
           {!isAdmin && activeTab === 'overview' && <Overview />}
-          {!isAdmin && activeTab === 'class11' && <Chapters grade={11} />}
-          {!isAdmin && activeTab === 'class12' && <Chapters grade={12} />}
+          {!isAdmin && activeTab === 'chapters' && <Chapters />}
           {!isAdmin && activeTab === 'profile' && <Profile />}
         </div>
       </div>
@@ -1323,56 +2897,6 @@ function App() {
       </footer>
 
       {showConfetti && <Confetti />}
-    </div>
-  );
-}
-
-function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleLogin = async () => {
-    setLoading(true);
-    try {
-      await auth.signInWithEmailAndPassword(email.trim().toLowerCase(), password);
-    } catch (e) {
-      alert('Login failed: ' + e.message);
-    }
-    setLoading(false);
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md">
-        <h1 className="text-4xl font-bold text-gray-800 mb-2 text-center">Curriculum Tracker</h1>
-        <p className="text-gray-600 text-center mb-8">Avanti Fellows</p>
-        
-        <div className="space-y-5">
-          <input 
-            type="email"
-            value={email} 
-            onChange={e => setEmail(e.target.value)} 
-            placeholder="Email" 
-            className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg"
-          />
-          <input 
-            type="password" 
-            value={password} 
-            onChange={e => setPassword(e.target.value)} 
-            placeholder="Password"
-            onKeyPress={e => e.key === 'Enter' && handleLogin()} 
-            className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg"
-          />
-          <button 
-            onClick={handleLogin} 
-            disabled={loading} 
-            className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-50"
-          >
-            {loading ? 'Logging in...' : 'Login'}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
