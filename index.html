@@ -1491,16 +1491,475 @@ function App() {
     );
   };
 
-  const Chapters = () => {
-    const [localGrade, setLocalGrade] = useState(11);
+  const Chapters11 = () => {
     const subj = currentUser.subject;
+    const grade = 11;
     
     const chapters = useMemo(() => {
-      if (!curriculum || !curriculum[subj] || !curriculum[subj][localGrade]) {
+      if (!curriculum || !curriculum[subj] || !curriculum[subj][grade]) {
         return [];
       }
-      return curriculum[subj][localGrade];
-    }, [curriculum, subj, localGrade]);
+      return curriculum[subj][grade];
+    }, [curriculum, subj]);
+
+    const handleTopicToggle = useCallback((chapterId, topic, chapter) => {
+      const currentProg = chapterProgress[chapterId] || {};
+      const completedTopics = currentProg.completedTopics || [];
+      const isChecked = completedTopics.includes(topic);
+      
+      const updated = isChecked 
+        ? completedTopics.filter(x => x !== topic)
+        : [...completedTopics, topic];
+      
+      updateChapterProgress(chapterId, 'completedTopics', updated, chapter);
+    }, [chapterProgress, updateChapterProgress]);
+
+    if (!subj || !curriculum[subj]) {
+      return (
+        <div className="space-y-6 fade-in">
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+            Class 11th Chapters - {subj}
+          </h2>
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Curriculum Available</h3>
+            <p className="text-gray-600">Contact admin to add curriculum for your subject</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6 fade-in">
+        <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+          <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+          Class 11th - {subj}
+        </h2>
+
+        {chapters.length === 0 ? (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
+            <p className="text-gray-600">Admin needs to add chapters for Class 11th</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 grid-responsive">
+            {chapters.map(ch => {
+              const prog = chapterProgress[ch.id] || {};
+              const status = computeChapterStatus(ch, prog);
+              const completedTopics = prog.completedTopics || [];
+              const isExpanded = !!expandedChapters[ch.id];
+              const topicsPercent = ch.topics?.length ? Math.round((completedTopics.length / ch.topics.length) * 100) : 0;
+              const allTopicsCompleted = ch.topics?.length > 0 && completedTopics.length === ch.topics.length;
+
+              return (
+                <div 
+                  key={ch.id} 
+                  className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5 ${isExpanded ? 'expanded' : 'collapsed'}`}
+                >
+                  <div className="mb-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="text-xl font-bold text-gray-800 pr-2">{ch.name}</h3>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${status.textColor} ${status.key === 'ahead' ? 'status-badge-ahead' : ''}`}>
+                        {status.label}
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-gray-700">
+                        <span className="font-medium">Topics Progress:</span>
+                        <span className="font-bold" style={{color: 'var(--avanti-red)'}}>{completedTopics.length}/{ch.topics?.length || 0}</span>
+                      </div>
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-2 avanti-gradient progress-bar" 
+                          style={{ width: `${topicsPercent}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-gray-600 mt-2">
+                        <span>Target Date:</span>
+                        <span className="font-semibold">{ch.targetDate || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => toggleExpand(ch.id)}
+                    className="w-full flex justify-between items-center p-3 avanti-gradient-light rounded-xl hover:shadow-md transition-all mb-4"
+                  >
+                    <span className="font-bold" style={{color: 'var(--avanti-red)'}}>
+                      {isExpanded ? 'Hide Details' : 'Show Details'}
+                    </span>
+                    <svg 
+                      className={`w-5 h-5 expand-btn transition-transform ${isExpanded ? 'rotated' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                      style={{color: 'var(--avanti-red)'}}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  <div className={`chapter-details ${isExpanded ? 'show' : ''}`}>
+                    <hr className="my-4 border-gray-300" />
+
+                    <div className="space-y-4">
+                      <div className="border-2 rounded-xl p-4 avanti-gradient-light">
+                        <div className="font-bold text-gray-700 mb-3 flex items-center gap-2">
+                          <span>📋</span>
+                          Topics ({completedTopics.length}/{ch.topics?.length || 0})
+                          {allTopicsCompleted && <span className="text-green-500 text-xl">✓</span>}
+                        </div>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {(ch.topics || []).map((t, idx) => {
+                            const checked = completedTopics.includes(t);
+                            return (
+                              <label 
+                                key={idx} 
+                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-yellow-50 cursor-pointer transition-colors group"
+                              >
+                                <input 
+                                  type="checkbox" 
+                                  checked={checked}
+                                  onChange={() => handleTopicToggle(ch.id, t, ch)}
+                                />
+                                <span className={`flex-1 ${checked ? 'line-through text-gray-500' : 'text-gray-800 font-medium'}`}>
+                                  {t}
+                                </span>
+                                {checked && <span className="text-green-500 text-xl">✓</span>}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {!allTopicsCompleted && (
+                          <div className="mt-3 text-xs text-orange-700 bg-orange-50 p-2 rounded">
+                            ⚠️ All topics must be completed before marking chapter as completed
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="avanti-gradient-light p-3 rounded-xl border-2" style={{borderColor: 'var(--avanti-yellow)'}}>
+                        <label className="block text-sm font-bold text-gray-800 mb-2">
+                          Completion Date <span style={{color: 'var(--avanti-red)'}}>*</span>
+                        </label>
+                        <input 
+                          type="date" 
+                          value={prog.completionDate || ''} 
+                          onChange={e => updateChapterProgress(ch.id, 'completionDate', e.target.value, ch)} 
+                          className="w-full border-2 px-4 py-2 rounded-lg"
+                          style={{borderColor: 'var(--avanti-yellow)'}}
+                        />
+                        <div className="text-xs text-orange-700 mt-2">
+                          ⚠️ Required before marking as completed
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                          Chapter Test Conducted?
+                        </label>
+                        <select 
+                          value={prog.testConducted || 'No'} 
+                          onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value, ch)} 
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
+                        >
+                          <option value="No">No</option>
+                          <option value="Yes">Yes</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                          Chapter Completed?
+                        </label>
+                        <select 
+                          value={prog.completed || 'No'} 
+                          onChange={e => updateChapterProgress(ch.id, 'completed', e.target.value, ch)} 
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
+                        >
+                          <option value="No">No</option>
+                          <option value="Yes">Yes</option>
+                        </select>
+                        <div className="text-xs text-gray-600 mt-2 bg-yellow-50 p-2 rounded">
+                          ⚠️ Requires: All topics ✓ + Completion date ✓
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                          Teaching Method
+                        </label>
+                        <select 
+                          value={prog.method || 'Online'} 
+                          onChange={e => updateChapterProgress(ch.id, 'method', e.target.value, ch)} 
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
+                        >
+                          <option value="Online">Online</option>
+                          <option value="Offline">Offline</option>
+                        </select>
+                      </div>
+
+                      {prog.method === 'Offline' && (
+                        <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-2">
+                            Notes (Why offline?)
+                          </label>
+                          <textarea 
+                            value={prog.notes || ''} 
+                            onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value, ch)} 
+                            className="w-full border-2 border-gray-300 px-4 py-2 rounded-xl" 
+                            rows="2" 
+                            placeholder="Reason for offline teaching..."
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const Chapters12 = () => {
+    const subj = currentUser.subject;
+    const grade = 12;
+    
+    const chapters = useMemo(() => {
+      if (!curriculum || !curriculum[subj] || !curriculum[subj][grade]) {
+        return [];
+      }
+      return curriculum[subj][grade];
+    }, [curriculum, subj]);
+
+    const handleTopicToggle = useCallback((chapterId, topic, chapter) => {
+      const currentProg = chapterProgress[chapterId] || {};
+      const completedTopics = currentProg.completedTopics || [];
+      const isChecked = completedTopics.includes(topic);
+      
+      const updated = isChecked 
+        ? completedTopics.filter(x => x !== topic)
+        : [...completedTopics, topic];
+      
+      updateChapterProgress(chapterId, 'completedTopics', updated, chapter);
+    }, [chapterProgress, updateChapterProgress]);
+
+    if (!subj || !curriculum[subj]) {
+      return (
+        <div className="space-y-6 fade-in">
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+            Class 12th Chapters - {subj}
+          </h2>
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Curriculum Available</h3>
+            <p className="text-gray-600">Contact admin to add curriculum for your subject</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6 fade-in">
+        <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+          <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+          Class 12th - {subj}
+        </h2>
+
+        {chapters.length === 0 ? (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
+            <p className="text-gray-600">Admin needs to add chapters for Class 12th</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 grid-responsive">
+            {chapters.map(ch => {
+              const prog = chapterProgress[ch.id] || {};
+              const status = computeChapterStatus(ch, prog);
+              const completedTopics = prog.completedTopics || [];
+              const isExpanded = !!expandedChapters[ch.id];
+              const topicsPercent = ch.topics?.length ? Math.round((completedTopics.length / ch.topics.length) * 100) : 0;
+              const allTopicsCompleted = ch.topics?.length > 0 && completedTopics.length === ch.topics.length;
+
+              return (
+                <div 
+                  key={ch.id} 
+                  className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5 ${isExpanded ? 'expanded' : 'collapsed'}`}
+                >
+                  <div className="mb-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="text-xl font-bold text-gray-800 pr-2">{ch.name}</h3>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${status.textColor} ${status.key === 'ahead' ? 'status-badge-ahead' : ''}`}>
+                        {status.label}
+                      </span>
+                    </div>
+                    
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-gray-700">
+                        <span className="font-medium">Topics Progress:</span>
+                        <span className="font-bold" style={{color: 'var(--avanti-red)'}}>{completedTopics.length}/{ch.topics?.length || 0}</span>
+                      </div>
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-2 avanti-gradient progress-bar" 
+                          style={{ width: `${topicsPercent}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-gray-600 mt-2">
+                        <span>Target Date:</span>
+                        <span className="font-semibold">{ch.targetDate || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => toggleExpand(ch.id)}
+                    className="w-full flex justify-between items-center p-3 avanti-gradient-light rounded-xl hover:shadow-md transition-all mb-4"
+                  >
+                    <span className="font-bold" style={{color: 'var(--avanti-red)'}}>
+                      {isExpanded ? 'Hide Details' : 'Show Details'}
+                    </span>
+                    <svg 
+                      className={`w-5 h-5 expand-btn transition-transform ${isExpanded ? 'rotated' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                      style={{color: 'var(--avanti-red)'}}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  <div className={`chapter-details ${isExpanded ? 'show' : ''}`}>
+                    <hr className="my-4 border-gray-300" />
+
+                    <div className="space-y-4">
+                      <div className="border-2 rounded-xl p-4 avanti-gradient-light">
+                        <div className="font-bold text-gray-700 mb-3 flex items-center gap-2">
+                          <span>📋</span>
+                          Topics ({completedTopics.length}/{ch.topics?.length || 0})
+                          {allTopicsCompleted && <span className="text-green-500 text-xl">✓</span>}
+                        </div>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {(ch.topics || []).map((t, idx) => {
+                            const checked = completedTopics.includes(t);
+                            return (
+                              <label 
+                                key={idx} 
+                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-yellow-50 cursor-pointer transition-colors group"
+                              >
+                                <input 
+                                  type="checkbox" 
+                                  checked={checked}
+                                  onChange={() => handleTopicToggle(ch.id, t, ch)}
+                                />
+                                <span className={`flex-1 ${checked ? 'line-through text-gray-500' : 'text-gray-800 font-medium'}`}>
+                                  {t}
+                                </span>
+                                {checked && <span className="text-green-500 text-xl">✓</span>}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {!allTopicsCompleted && (
+                          <div className="mt-3 text-xs text-orange-700 bg-orange-50 p-2 rounded">
+                            ⚠️ All topics must be completed before marking chapter as completed
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="avanti-gradient-light p-3 rounded-xl border-2" style={{borderColor: 'var(--avanti-yellow)'}}>
+                        <label className="block text-sm font-bold text-gray-800 mb-2">
+                          Completion Date <span style={{color: 'var(--avanti-red)'}}>*</span>
+                        </label>
+                        <input 
+                          type="date" 
+                          value={prog.completionDate || ''} 
+                          onChange={e => updateChapterProgress(ch.id, 'completionDate', e.target.value, ch)} 
+                          className="w-full border-2 px-4 py-2 rounded-lg"
+                          style={{borderColor: 'var(--avanti-yellow)'}}
+                        />
+                        <div className="text-xs text-orange-700 mt-2">
+                          ⚠️ Required before marking as completed
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                          Chapter Test Conducted?
+                        </label>
+                        <select 
+                          value={prog.testConducted || 'No'} 
+                          onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value, ch)} 
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
+                        >
+                          <option value="No">No</option>
+                          <option value="Yes">Yes</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                          Chapter Completed?
+                        </label>
+                        <select 
+                          value={prog.completed || 'No'} 
+                          onChange={e => updateChapterProgress(ch.id, 'completed', e.target.value, ch)} 
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
+                        >
+                          <option value="No">No</option>
+                          <option value="Yes">Yes</option>
+                        </select>
+                        <div className="text-xs text-gray-600 mt-2 bg-yellow-50 p-2 rounded">
+                          ⚠️ Requires: All topics ✓ + Completion date ✓
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                          Teaching Method
+                        </label>
+                        <select 
+                          value={prog.method || 'Online'} 
+                          onChange={e => updateChapterProgress(ch.id, 'method', e.target.value, ch)} 
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
+                        >
+                          <option value="Online">Online</option>
+                          <option value="Offline">Offline</option>
+                        </select>
+                      </div>
+
+                      {prog.method === 'Offline' && (
+                        <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-2">
+                            Notes (Why offline?)
+                          </label>
+                          <textarea 
+                            value={prog.notes || ''} 
+                            onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value, ch)} 
+                            className="w-full border-2 border-gray-300 px-4 py-2 rounded-xl" 
+                            rows="2" 
+                            placeholder="Reason for offline teaching..."
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
     const handleTopicToggle = useCallback((chapterId, topic, chapter) => {
       const currentProg = chapterProgress[chapterId] || {};
