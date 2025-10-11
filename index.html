@@ -34,102 +34,6 @@
       --avanti-dark-red: #A82823;
     }
     
-    @keyframes confetti-fall {
-      0% { transform: translateY(-100vh) rotate(0deg) scale(1); opacity: 1; }
-      50% { opacity: 1; }
-      100% { transform: translateY(100vh) rotate(720deg) scale(0.5); opacity: 0; }
-    }
-    @keyframes confetti-swing {
-      0%, 100% { transform: translateX(0); }
-      25% { transform: translateX(-25px); }
-      75% { transform: translateX(25px); }
-    }
-    .confetti-piece {
-      position: fixed;
-      pointer-events: none;
-      z-index: 9999;
-      animation: confetti-fall 4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards, 
-                 confetti-swing 1.5s ease-in-out infinite;
-    }
-    
-    .chapter-card {
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      position: relative;
-      overflow: hidden;
-    }
-    .chapter-card.collapsed {
-      max-height: 180px;
-    }
-    .chapter-card.expanded {
-      max-height: none;
-    }
-    
-    .chapter-details {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
-      opacity: 0;
-    }
-    .chapter-details.show {
-      max-height: 2000px;
-      opacity: 1;
-    }
-    
-    .chapter-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-      transition: left 0.5s;
-    }
-    .chapter-card:hover::before {
-      left: 100%;
-    }
-    .chapter-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.2);
-    }
-    
-    input:focus, select:focus, textarea:focus {
-      outline: none;
-      box-shadow: 0 0 0 4px rgba(244, 180, 26, 0.2);
-      border-color: var(--avanti-yellow);
-      transition: all 0.2s;
-    }
-    
-    @keyframes pulse-glow {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-      50% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-    }
-    .status-badge-ahead {
-      animation: pulse-glow 2s infinite;
-    }
-    
-    .fade-in {
-      animation: fadeIn 0.5s ease-in;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .progress-bar {
-      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    @keyframes gradient-shift {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-    .animated-gradient {
-      background-size: 200% 200%;
-      animation: gradient-shift 15s ease infinite;
-    }
-    
     .avanti-gradient {
       background: linear-gradient(135deg, var(--avanti-yellow) 0%, var(--avanti-orange) 50%, var(--avanti-red) 100%);
     }
@@ -138,41 +42,26 @@
       background: linear-gradient(135deg, rgba(244, 180, 26, 0.1) 0%, rgba(232, 176, 57, 0.1) 50%, rgba(200, 52, 46, 0.1) 100%);
     }
     
-    html, body { height: 100%; margin: 0; }
-    #root { display: flex; flex-direction: column; min-height: 100vh; }
-    .main-content { flex: 1 0 auto; }
-    footer { flex-shrink: 0; }
-    
-    @media (max-width: 768px) {
-      .chapter-card {
-        margin-bottom: 1rem;
-      }
-      .grid-responsive {
-        grid-template-columns: 1fr !important;
-      }
+    .chapter-card {
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
     }
     
-    .stat-card {
-      background: white;
-      border-radius: 1rem;
-      padding: 1.5rem;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-      transition: all 0.3s;
-    }
-    .stat-card:hover {
+    .chapter-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.2);
     }
     
-    .avanti-logo {
-      width: 80px;
-      height: 80px;
-      object-fit: contain;
+    .chapter-details {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s ease, opacity 0.3s ease;
+      opacity: 0;
     }
-    .avanti-logo-small {
-      width: 40px;
-      height: 40px;
-      object-fit: contain;
+    .chapter-details.show {
+      max-height: 2000px;
+      opacity: 1;
     }
     
     .expand-btn {
@@ -205,13 +94,25 @@
       left: 50%;
       transform: translate(-50%, -50%);
     }
+    
+    .stat-card {
+      background: white;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s;
+    }
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
   </style>
 </head>
 <body>
   <div id="root"></div>
 
   <script type="text/babel">
-const { useState, useEffect, useRef, useCallback, useMemo } = React;
+const { useState, useEffect, useCallback, useMemo } = React;
 
 const firebaseConfig = {
   apiKey: "AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",
@@ -231,13 +132,14 @@ const auth = firebase.auth();
 const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology'];
 const DEFAULT_SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Bundi', 'CoE Mahisagar', 'EMRS Bhopal', 'JNV Bharuch'];
 
-const AVANTI_LOGO = '/mnt/user-data/uploads/Avanti_Fellows-logo.png';
-
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
+  const [curriculum, setCurriculum] = useState({});
+  const [chapterProgress, setChapterProgress] = useState({});
+  const [expandedChapters, setExpandedChapters] = useState({});
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -272,6 +174,38 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const unsubP = db.collection('chapterProgress').onSnapshot(snap => {
+      const map = {};
+      snap.docs.forEach(d => map[d.id] = d.data());
+      setChapterProgress(map);
+    });
+
+    const unsubC = db.collection('meta').doc('curriculum').onSnapshot(doc => {
+      if (doc.exists) {
+        setCurriculum(doc.data());
+      }
+    });
+
+    return () => { 
+      unsubP(); 
+      unsubC(); 
+    };
+  }, []);
+
+  const updateChapterProgress = useCallback(async (chapterId, field, value) => {
+    try {
+      await db.collection('chapterProgress').doc(chapterId).set({ [field]: value }, { merge: true });
+    } catch (e) {
+      console.error('Update error', e);
+      alert('Failed to update');
+    }
+  }, []);
+
+  const toggleExpand = useCallback((id) => {
+    setExpandedChapters(prev => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50">
@@ -286,6 +220,227 @@ function App() {
     return <LoginScreen />;
   }
 
+  const Chapters = ({ grade }) => {
+    const subj = currentUser.subject;
+    
+    const chapters = useMemo(() => {
+      if (!curriculum || !curriculum[subj] || !curriculum[subj][grade]) {
+        return [];
+      }
+      return curriculum[subj][grade];
+    }, [curriculum, subj, grade]);
+
+    if (!subj || !curriculum[subj]) {
+      return (
+        <div className="space-y-6">
+          <h2 className="text-3xl font-bold text-gray-800">Class {grade}th - {subj}</h2>
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Curriculum Available</h3>
+            <p className="text-gray-600">Contact admin to add curriculum for your subject</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        <h2 className="text-3xl font-bold text-gray-800">Class {grade}th - {subj}</h2>
+
+        {chapters.length === 0 ? (
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
+            <p className="text-gray-600">Admin needs to add chapters for Class {grade}</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {chapters.map(ch => {
+              const prog = chapterProgress[ch.id] || {};
+              const completedTopics = prog.completedTopics || [];
+              const isExpanded = !!expandedChapters[ch.id];
+              const topicsPercent = ch.topics?.length ? Math.round((completedTopics.length / ch.topics.length) * 100) : 0;
+
+              return (
+                <div 
+                  key={ch.id} 
+                  className="chapter-card bg-white border-2 rounded-2xl shadow-lg p-5"
+                >
+                  <div className="mb-4">
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">{ch.name}</h3>
+                    
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-gray-700">
+                        <span className="font-medium">Topics Progress:</span>
+                        <span className="font-bold" style={{color: 'var(--avanti-red)'}}>{completedTopics.length}/{ch.topics?.length || 0}</span>
+                      </div>
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className="h-2 avanti-gradient transition-all duration-500" 
+                          style={{ width: `${topicsPercent}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-gray-600 mt-2">
+                        <span>Target:</span>
+                        <span className="font-semibold">{ch.targetDate || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => toggleExpand(ch.id)}
+                    className="w-full flex justify-between items-center p-3 avanti-gradient-light rounded-xl hover:shadow-md transition-all mb-4"
+                  >
+                    <span className="font-bold" style={{color: 'var(--avanti-red)'}}>
+                      {isExpanded ? 'Hide Details' : 'Show Details'}
+                    </span>
+                    <svg 
+                      className={`w-5 h-5 expand-btn ${isExpanded ? 'rotated' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                      style={{color: 'var(--avanti-red)'}}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  <div className={`chapter-details ${isExpanded ? 'show' : ''}`}>
+                    <hr className="my-4 border-gray-300" />
+
+                    <div className="space-y-4">
+                      <div className="border-2 rounded-xl p-4 avanti-gradient-light">
+                        <div className="font-bold text-gray-700 mb-3">
+                          📋 Topics ({completedTopics.length}/{ch.topics?.length || 0})
+                        </div>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {(ch.topics || []).map((t, idx) => {
+                            const checked = completedTopics.includes(t);
+                            return (
+                              <label 
+                                key={idx} 
+                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-yellow-50 cursor-pointer"
+                              >
+                                <input 
+                                  type="checkbox" 
+                                  checked={checked} 
+                                  onChange={e => {
+                                    const updated = e.target.checked 
+                                      ? [...completedTopics, t] 
+                                      : completedTopics.filter(x => x !== t);
+                                    updateChapterProgress(ch.id, 'completedTopics', updated);
+                                  }} 
+                                />
+                                <span className={`flex-1 ${checked ? 'line-through text-gray-500' : 'text-gray-800 font-medium'}`}>
+                                  {t}
+                                </span>
+                                {checked && <span className="text-green-500 text-xl">✓</span>}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="avanti-gradient-light p-3 rounded-xl border-2" style={{borderColor: 'var(--avanti-yellow)'}}>
+                        <label className="block text-sm font-bold text-gray-800 mb-2">
+                          Completion Date <span style={{color: 'var(--avanti-red)'}}>*</span>
+                        </label>
+                        <input 
+                          type="date" 
+                          value={prog.completionDate || ''} 
+                          onChange={e => updateChapterProgress(ch.id, 'completionDate', e.target.value)} 
+                          className="w-full border-2 px-4 py-2 rounded-lg"
+                          style={{borderColor: 'var(--avanti-yellow)'}}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                          Chapter Test Conducted?
+                        </label>
+                        <select 
+                          value={prog.testConducted || 'No'} 
+                          onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value)} 
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl"
+                        >
+                          <option>No</option>
+                          <option>Yes</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                          Chapter Completed?
+                        </label>
+                        <select 
+                          value={prog.completed || 'No'} 
+                          onChange={e => updateChapterProgress(ch.id, 'completed', e.target.value)} 
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl"
+                        >
+                          <option>No</option>
+                          <option>Yes</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                          Teaching Method
+                        </label>
+                        <select 
+                          value={prog.method || 'Online'} 
+                          onChange={e => updateChapterProgress(ch.id, 'method', e.target.value)} 
+                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl"
+                        >
+                          <option>Online</option>
+                          <option>Offline</option>
+                        </select>
+                      </div>
+
+                      {prog.method === 'Offline' && (
+                        <div>
+                          <label className="block text-sm font-bold text-gray-700 mb-2">
+                            Notes (Why offline?)
+                          </label>
+                          <textarea 
+                            value={prog.notes || ''} 
+                            onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value)} 
+                            className="w-full border-2 border-gray-300 px-4 py-2 rounded-xl" 
+                            rows="2" 
+                            placeholder="Reason for offline teaching..."
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const Profile = () => (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold text-gray-800">Profile</h2>
+      <div className="bg-white p-8 rounded-2xl shadow-lg">
+        <div className="grid md:grid-cols-2 gap-6">
+          {[
+            { label: 'Name', value: currentUser.name },
+            { label: 'AFID', value: currentUser.afid },
+            { label: 'Subject', value: currentUser.subject },
+            { label: 'School', value: currentUser.school },
+            { label: 'Email', value: currentUser.email || '—' }
+          ].map(item => (
+            <div key={item.label} className="p-4 avanti-gradient-light rounded-xl">
+              <div className="text-sm font-medium text-gray-600 mb-1">{item.label}</div>
+              <div className="text-lg font-bold text-gray-800">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 min-h-screen">
       <nav className="bg-white shadow-lg sticky top-0 z-40">
@@ -298,7 +453,7 @@ function App() {
           </div>
           <button 
             onClick={() => auth.signOut()} 
-            className="px-5 py-2 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600"
+            className="px-5 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg"
           >
             Logout
           </button>
@@ -307,35 +462,35 @@ function App() {
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         {!isAdmin && (
-          <div className="flex gap-2 mb-6 overflow-x-auto">
+          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
             <button 
               onClick={() => setActiveTab('overview')} 
-              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap ${
-                activeTab==='overview' ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white' : 'bg-white'
+              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                activeTab==='overview' ? 'avanti-gradient text-white shadow-lg' : 'bg-white text-gray-700'
               }`}
             >
               🏠 Overview
             </button>
             <button 
               onClick={() => setActiveTab('class11')} 
-              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap ${
-                activeTab==='class11' ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white' : 'bg-white'
+              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                activeTab==='class11' ? 'avanti-gradient text-white shadow-lg' : 'bg-white text-gray-700'
               }`}
             >
               📖 Class 11th
             </button>
             <button 
               onClick={() => setActiveTab('class12')} 
-              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap ${
-                activeTab==='class12' ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white' : 'bg-white'
+              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                activeTab==='class12' ? 'avanti-gradient text-white shadow-lg' : 'bg-white text-gray-700'
               }`}
             >
               📖 Class 12th
             </button>
             <button 
               onClick={() => setActiveTab('profile')} 
-              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap ${
-                activeTab==='profile' ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white' : 'bg-white'
+              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                activeTab==='profile' ? 'avanti-gradient text-white shadow-lg' : 'bg-white text-gray-700'
               }`}
             >
               👤 Profile
@@ -343,11 +498,45 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'overview' && <div className="text-2xl font-bold">Overview Dashboard</div>}
-        {activeTab === 'class11' && <div className="text-2xl font-bold">Class 11th Chapters</div>}
-        {activeTab === 'class12' && <div className="text-2xl font-bold">Class 12th Chapters</div>}
-        {activeTab === 'profile' && <div className="text-2xl font-bold">Your Profile</div>}
+        <div>
+          {!isAdmin && activeTab === 'overview' && (
+            <div className="space-y-6">
+              <h2 className="text-3xl font-bold text-gray-800">Dashboard Overview</h2>
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="stat-card avanti-gradient text-white">
+                  <div className="text-sm opacity-90 mb-1">Total Chapters</div>
+                  <div className="text-3xl font-bold">
+                    {(curriculum[currentUser.subject]?.[11] || []).length + (curriculum[currentUser.subject]?.[12] || []).length}
+                  </div>
+                </div>
+                <div className="stat-card bg-gradient-to-br from-green-500 to-emerald-500 text-white">
+                  <div className="text-sm opacity-90 mb-1">Completed</div>
+                  <div className="text-3xl font-bold">
+                    {Object.values(chapterProgress).filter(p => p.completed === 'Yes').length}
+                  </div>
+                </div>
+                <div className="stat-card bg-gradient-to-br from-orange-500 to-red-500 text-white">
+                  <div className="text-sm opacity-90 mb-1">Pending</div>
+                  <div className="text-3xl font-bold">
+                    {Object.values(chapterProgress).filter(p => p.completed !== 'Yes').length}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {!isAdmin && activeTab === 'class11' && <Chapters grade={11} />}
+          {!isAdmin && activeTab === 'class12' && <Chapters grade={12} />}
+          {!isAdmin && activeTab === 'profile' && <Profile />}
+          {isAdmin && <div className="text-2xl font-bold">Admin Dashboard (Coming Soon)</div>}
+        </div>
       </div>
+
+      <footer className="avanti-gradient text-white py-6 mt-12">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <p className="font-medium">© 2025 Curriculum Tracker - Empowering Education</p>
+          <p className="text-sm opacity-90 mt-1">Made with ❤️ for Avanti Fellows</p>
+        </div>
+      </footer>
     </div>
   );
 }
@@ -370,7 +559,8 @@ function LoginScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md">
-        <h1 className="text-4xl font-bold text-gray-800 mb-8 text-center">Curriculum Tracker</h1>
+        <h1 className="text-4xl font-bold text-gray-800 mb-2 text-center">Curriculum Tracker</h1>
+        <p className="text-gray-600 text-center mb-8">Avanti Fellows</p>
         
         <div className="space-y-5">
           <input 
@@ -391,7 +581,7 @@ function LoginScreen() {
           <button 
             onClick={handleLogin} 
             disabled={loading} 
-            className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-white py-4 rounded-xl font-bold text-lg disabled:opacity-50"
+            className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-50"
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
