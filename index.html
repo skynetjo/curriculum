@@ -1491,16 +1491,15 @@ function App() {
     );
   };
 
-  const Chapters11 = () => {
+  const Chapters = ({ grade }) => {
     const subj = currentUser.subject;
-    const grade = 11;
     
     const chapters = useMemo(() => {
       if (!curriculum || !curriculum[subj] || !curriculum[subj][grade]) {
         return [];
       }
       return curriculum[subj][grade];
-    }, [curriculum, subj]);
+    }, [curriculum, subj, grade]);
 
     const handleTopicToggle = useCallback((chapterId, topic, chapter) => {
       const currentProg = chapterProgress[chapterId] || {};
@@ -1519,7 +1518,7 @@ function App() {
         <div className="space-y-6 fade-in">
           <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
             <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-            Class 11th Chapters - {subj}
+            Class {grade}th - {subj}
           </h2>
           <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
             <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
@@ -1534,496 +1533,14 @@ function App() {
       <div className="space-y-6 fade-in">
         <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
           <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-          Class 11th - {subj}
+          Class {grade}th - {subj}
         </h2>
 
         {chapters.length === 0 ? (
           <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
             <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
             <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
-            <p className="text-gray-600">Admin needs to add chapters for Class 11th</p>
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 grid-responsive">
-            {chapters.map(ch => {
-              const prog = chapterProgress[ch.id] || {};
-              const status = computeChapterStatus(ch, prog);
-              const completedTopics = prog.completedTopics || [];
-              const isExpanded = !!expandedChapters[ch.id];
-              const topicsPercent = ch.topics?.length ? Math.round((completedTopics.length / ch.topics.length) * 100) : 0;
-              const allTopicsCompleted = ch.topics?.length > 0 && completedTopics.length === ch.topics.length;
-
-              return (
-                <div 
-                  key={ch.id} 
-                  className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5 ${isExpanded ? 'expanded' : 'collapsed'}`}
-                >
-                  <div className="mb-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-xl font-bold text-gray-800 pr-2">{ch.name}</h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${status.textColor} ${status.key === 'ahead' ? 'status-badge-ahead' : ''}`}>
-                        {status.label}
-                      </span>
-                    </div>
-                    
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between text-gray-700">
-                        <span className="font-medium">Topics Progress:</span>
-                        <span className="font-bold" style={{color: 'var(--avanti-red)'}}>{completedTopics.length}/{ch.topics?.length || 0}</span>
-                      </div>
-                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-2 avanti-gradient progress-bar" 
-                          style={{ width: `${topicsPercent}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-gray-600 mt-2">
-                        <span>Target Date:</span>
-                        <span className="font-semibold">{ch.targetDate || '—'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button 
-                    onClick={() => toggleExpand(ch.id)}
-                    className="w-full flex justify-between items-center p-3 avanti-gradient-light rounded-xl hover:shadow-md transition-all mb-4"
-                  >
-                    <span className="font-bold" style={{color: 'var(--avanti-red)'}}>
-                      {isExpanded ? 'Hide Details' : 'Show Details'}
-                    </span>
-                    <svg 
-                      className={`w-5 h-5 expand-btn transition-transform ${isExpanded ? 'rotated' : ''}`} 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                      style={{color: 'var(--avanti-red)'}}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  <div className={`chapter-details ${isExpanded ? 'show' : ''}`}>
-                    <hr className="my-4 border-gray-300" />
-
-                    <div className="space-y-4">
-                      <div className="border-2 rounded-xl p-4 avanti-gradient-light">
-                        <div className="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                          <span>📋</span>
-                          Topics ({completedTopics.length}/{ch.topics?.length || 0})
-                          {allTopicsCompleted && <span className="text-green-500 text-xl">✓</span>}
-                        </div>
-                        <div className="space-y-2 max-h-64 overflow-y-auto">
-                          {(ch.topics || []).map((t, idx) => {
-                            const checked = completedTopics.includes(t);
-                            return (
-                              <label 
-                                key={idx} 
-                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-yellow-50 cursor-pointer transition-colors group"
-                              >
-                                <input 
-                                  type="checkbox" 
-                                  checked={checked}
-                                  onChange={() => handleTopicToggle(ch.id, t, ch)}
-                                />
-                                <span className={`flex-1 ${checked ? 'line-through text-gray-500' : 'text-gray-800 font-medium'}`}>
-                                  {t}
-                                </span>
-                                {checked && <span className="text-green-500 text-xl">✓</span>}
-                              </label>
-                            );
-                          })}
-                        </div>
-                        {!allTopicsCompleted && (
-                          <div className="mt-3 text-xs text-orange-700 bg-orange-50 p-2 rounded">
-                            ⚠️ All topics must be completed before marking chapter as completed
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="avanti-gradient-light p-3 rounded-xl border-2" style={{borderColor: 'var(--avanti-yellow)'}}>
-                        <label className="block text-sm font-bold text-gray-800 mb-2">
-                          Completion Date <span style={{color: 'var(--avanti-red)'}}>*</span>
-                        </label>
-                        <input 
-                          type="date" 
-                          value={prog.completionDate || ''} 
-                          onChange={e => updateChapterProgress(ch.id, 'completionDate', e.target.value, ch)} 
-                          className="w-full border-2 px-4 py-2 rounded-lg"
-                          style={{borderColor: 'var(--avanti-yellow)'}}
-                        />
-                        <div className="text-xs text-orange-700 mt-2">
-                          ⚠️ Required before marking as completed
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">
-                          Chapter Test Conducted?
-                        </label>
-                        <select 
-                          value={prog.testConducted || 'No'} 
-                          onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value, ch)} 
-                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
-                        >
-                          <option value="No">No</option>
-                          <option value="Yes">Yes</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">
-                          Chapter Completed?
-                        </label>
-                        <select 
-                          value={prog.completed || 'No'} 
-                          onChange={e => updateChapterProgress(ch.id, 'completed', e.target.value, ch)} 
-                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
-                        >
-                          <option value="No">No</option>
-                          <option value="Yes">Yes</option>
-                        </select>
-                        <div className="text-xs text-gray-600 mt-2 bg-yellow-50 p-2 rounded">
-                          ⚠️ Requires: All topics ✓ + Completion date ✓
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">
-                          Teaching Method
-                        </label>
-                        <select 
-                          value={prog.method || 'Online'} 
-                          onChange={e => updateChapterProgress(ch.id, 'method', e.target.value, ch)} 
-                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
-                        >
-                          <option value="Online">Online</option>
-                          <option value="Offline">Offline</option>
-                        </select>
-                      </div>
-
-                      {prog.method === 'Offline' && (
-                        <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-2">
-                            Notes (Why offline?)
-                          </label>
-                          <textarea 
-                            value={prog.notes || ''} 
-                            onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value, ch)} 
-                            className="w-full border-2 border-gray-300 px-4 py-2 rounded-xl" 
-                            rows="2" 
-                            placeholder="Reason for offline teaching..."
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const Chapters12 = () => {
-    const subj = currentUser.subject;
-    const grade = 12;
-    
-    const chapters = useMemo(() => {
-      if (!curriculum || !curriculum[subj] || !curriculum[subj][grade]) {
-        return [];
-      }
-      return curriculum[subj][grade];
-    }, [curriculum, subj]);
-
-    const handleTopicToggle = useCallback((chapterId, topic, chapter) => {
-      const currentProg = chapterProgress[chapterId] || {};
-      const completedTopics = currentProg.completedTopics || [];
-      const isChecked = completedTopics.includes(topic);
-      
-      const updated = isChecked 
-        ? completedTopics.filter(x => x !== topic)
-        : [...completedTopics, topic];
-      
-      updateChapterProgress(chapterId, 'completedTopics', updated, chapter);
-    }, [chapterProgress, updateChapterProgress]);
-
-    if (!subj || !curriculum[subj]) {
-      return (
-        <div className="space-y-6 fade-in">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
-            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-            Class 12th Chapters - {subj}
-          </h2>
-          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Curriculum Available</h3>
-            <p className="text-gray-600">Contact admin to add curriculum for your subject</p>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-6 fade-in">
-        <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
-          <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-          Class 12th - {subj}
-        </h2>
-
-        {chapters.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
-            <p className="text-gray-600">Admin needs to add chapters for Class 12th</p>
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 grid-responsive">
-            {chapters.map(ch => {
-              const prog = chapterProgress[ch.id] || {};
-              const status = computeChapterStatus(ch, prog);
-              const completedTopics = prog.completedTopics || [];
-              const isExpanded = !!expandedChapters[ch.id];
-              const topicsPercent = ch.topics?.length ? Math.round((completedTopics.length / ch.topics.length) * 100) : 0;
-              const allTopicsCompleted = ch.topics?.length > 0 && completedTopics.length === ch.topics.length;
-
-              return (
-                <div 
-                  key={ch.id} 
-                  className={`chapter-card ${status.color} border-2 rounded-2xl shadow-lg p-5 ${isExpanded ? 'expanded' : 'collapsed'}`}
-                >
-                  <div className="mb-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-xl font-bold text-gray-800 pr-2">{ch.name}</h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${status.textColor} ${status.key === 'ahead' ? 'status-badge-ahead' : ''}`}>
-                        {status.label}
-                      </span>
-                    </div>
-                    
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between text-gray-700">
-                        <span className="font-medium">Topics Progress:</span>
-                        <span className="font-bold" style={{color: 'var(--avanti-red)'}}>{completedTopics.length}/{ch.topics?.length || 0}</span>
-                      </div>
-                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-2 avanti-gradient progress-bar" 
-                          style={{ width: `${topicsPercent}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-gray-600 mt-2">
-                        <span>Target Date:</span>
-                        <span className="font-semibold">{ch.targetDate || '—'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button 
-                    onClick={() => toggleExpand(ch.id)}
-                    className="w-full flex justify-between items-center p-3 avanti-gradient-light rounded-xl hover:shadow-md transition-all mb-4"
-                  >
-                    <span className="font-bold" style={{color: 'var(--avanti-red)'}}>
-                      {isExpanded ? 'Hide Details' : 'Show Details'}
-                    </span>
-                    <svg 
-                      className={`w-5 h-5 expand-btn transition-transform ${isExpanded ? 'rotated' : ''}`} 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                      style={{color: 'var(--avanti-red)'}}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-
-                  <div className={`chapter-details ${isExpanded ? 'show' : ''}`}>
-                    <hr className="my-4 border-gray-300" />
-
-                    <div className="space-y-4">
-                      <div className="border-2 rounded-xl p-4 avanti-gradient-light">
-                        <div className="font-bold text-gray-700 mb-3 flex items-center gap-2">
-                          <span>📋</span>
-                          Topics ({completedTopics.length}/{ch.topics?.length || 0})
-                          {allTopicsCompleted && <span className="text-green-500 text-xl">✓</span>}
-                        </div>
-                        <div className="space-y-2 max-h-64 overflow-y-auto">
-                          {(ch.topics || []).map((t, idx) => {
-                            const checked = completedTopics.includes(t);
-                            return (
-                              <label 
-                                key={idx} 
-                                className="flex items-center gap-3 p-3 rounded-xl hover:bg-yellow-50 cursor-pointer transition-colors group"
-                              >
-                                <input 
-                                  type="checkbox" 
-                                  checked={checked}
-                                  onChange={() => handleTopicToggle(ch.id, t, ch)}
-                                />
-                                <span className={`flex-1 ${checked ? 'line-through text-gray-500' : 'text-gray-800 font-medium'}`}>
-                                  {t}
-                                </span>
-                                {checked && <span className="text-green-500 text-xl">✓</span>}
-                              </label>
-                            );
-                          })}
-                        </div>
-                        {!allTopicsCompleted && (
-                          <div className="mt-3 text-xs text-orange-700 bg-orange-50 p-2 rounded">
-                            ⚠️ All topics must be completed before marking chapter as completed
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="avanti-gradient-light p-3 rounded-xl border-2" style={{borderColor: 'var(--avanti-yellow)'}}>
-                        <label className="block text-sm font-bold text-gray-800 mb-2">
-                          Completion Date <span style={{color: 'var(--avanti-red)'}}>*</span>
-                        </label>
-                        <input 
-                          type="date" 
-                          value={prog.completionDate || ''} 
-                          onChange={e => updateChapterProgress(ch.id, 'completionDate', e.target.value, ch)} 
-                          className="w-full border-2 px-4 py-2 rounded-lg"
-                          style={{borderColor: 'var(--avanti-yellow)'}}
-                        />
-                        <div className="text-xs text-orange-700 mt-2">
-                          ⚠️ Required before marking as completed
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">
-                          Chapter Test Conducted?
-                        </label>
-                        <select 
-                          value={prog.testConducted || 'No'} 
-                          onChange={e => updateChapterProgress(ch.id, 'testConducted', e.target.value, ch)} 
-                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
-                        >
-                          <option value="No">No</option>
-                          <option value="Yes">Yes</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">
-                          Chapter Completed?
-                        </label>
-                        <select 
-                          value={prog.completed || 'No'} 
-                          onChange={e => updateChapterProgress(ch.id, 'completed', e.target.value, ch)} 
-                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
-                        >
-                          <option value="No">No</option>
-                          <option value="Yes">Yes</option>
-                        </select>
-                        <div className="text-xs text-gray-600 mt-2 bg-yellow-50 p-2 rounded">
-                          ⚠️ Requires: All topics ✓ + Completion date ✓
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">
-                          Teaching Method
-                        </label>
-                        <select 
-                          value={prog.method || 'Online'} 
-                          onChange={e => updateChapterProgress(ch.id, 'method', e.target.value, ch)} 
-                          className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium transition-all hover:border-yellow-400"
-                        >
-                          <option value="Online">Online</option>
-                          <option value="Offline">Offline</option>
-                        </select>
-                      </div>
-
-                      {prog.method === 'Offline' && (
-                        <div>
-                          <label className="block text-sm font-bold text-gray-700 mb-2">
-                            Notes (Why offline?)
-                          </label>
-                          <textarea 
-                            value={prog.notes || ''} 
-                            onChange={e => updateChapterProgress(ch.id, 'notes', e.target.value, ch)} 
-                            className="w-full border-2 border-gray-300 px-4 py-2 rounded-xl" 
-                            rows="2" 
-                            placeholder="Reason for offline teaching..."
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-    const handleTopicToggle = useCallback((chapterId, topic, chapter) => {
-      const currentProg = chapterProgress[chapterId] || {};
-      const completedTopics = currentProg.completedTopics || [];
-      const isChecked = completedTopics.includes(topic);
-      
-      const updated = isChecked 
-        ? completedTopics.filter(x => x !== topic)
-        : [...completedTopics, topic];
-      
-      updateChapterProgress(chapterId, 'completedTopics', updated, chapter);
-    }, [chapterProgress, updateChapterProgress]);
-
-    if (!subj || !curriculum[subj]) {
-      return (
-        <div className="space-y-6 fade-in">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
-            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-            Chapters
-          </h2>
-          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Curriculum Available</h3>
-            <p className="text-gray-600">Contact admin to add curriculum for your subject</p>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-6 fade-in">
-        <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
-          <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-          Chapters - {subj}
-        </h2>
-        
-        <div className="flex gap-3 mb-6">
-          <button 
-            onClick={() => setLocalGrade(11)} 
-            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-              localGrade === 11
-                ? 'avanti-gradient text-white shadow-lg scale-105' 
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Class 11th
-          </button>
-          <button 
-            onClick={() => setLocalGrade(12)} 
-            className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-              localGrade === 12
-                ? 'avanti-gradient text-white shadow-lg scale-105' 
-                : 'bg-white text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            Class 12th
-          </button>
-        </div>
-
-        {chapters.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
-            <p className="text-gray-600">Admin needs to add chapters for Class {localGrade}</p>
+            <p className="text-gray-600">Admin needs to add chapters for Class {grade}</p>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 grid-responsive">
@@ -2349,6 +1866,636 @@ function App() {
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  DATE OF BIRTH
+                </label>
+                <input 
+                  type="date"
+                  value={form.dob || ''} 
+                  onChange={e => setForm({...form, dob: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  JOINING DATE
+                </label>
+                <input 
+                  type="date"
+                  value={form.joiningDate || ''} 
+                  onChange={e => setForm({...form, joiningDate: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">
+                  PHONE
+                </label>
+                <input 
+                  type="text"
+                  value={form.phone || ''} 
+                  onChange={e => setForm({...form, phone: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                />
+              </div>
+
+              {isNewTeacher && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">
+                    PASSWORD <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    type="password"
+                    value={form.password || ''} 
+                    onChange={e => setForm({...form, password: e.target.value})} 
+                    className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
+                    placeholder="Set password for new teacher"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button 
+                onClick={save} 
+                className="px-6 py-3 avanti-gradient text-white rounded-xl font-semibold hover:opacity-90 transition-all"
+              >
+                Save Teacher Data
+              </button>
+              <button 
+                onClick={() => { setEditing(null); setIsNewTeacher(false); }} 
+                className="px-6 py-3 bg-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-400 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function AdminCurriculum() {
+    const [selectedSubject, setSelectedSubject] = useState('Physics');
+    const [selectedGrade, setSelectedGrade] = useState(11);
+    const [editingChapter, setEditingChapter] = useState(null);
+    const [chapterForm, setChapterForm] = useState({ name: '', topics: [], targetDate: '' });
+    const [newTopic, setNewTopic] = useState('');
+    const fileInputRef = useRef(null);
+
+    const chapters = useMemo(() => {
+      if (!curriculum || !curriculum[selectedSubject] || !curriculum[selectedSubject][selectedGrade]) {
+        return [];
+      }
+      return curriculum[selectedSubject][selectedGrade];
+    }, [curriculum, selectedSubject, selectedGrade]);
+
+    const handleAddChapter = async () => {
+      if (!chapterForm.name) return alert('Chapter name required');
+      await addChapterAdmin(selectedSubject, selectedGrade, chapterForm);
+      setChapterForm({ name: '', topics: [], targetDate: '' });
+      setEditingChapter(null);
+    };
+
+    const handleUpdateChapter = async () => {
+      if (!chapterForm.name) return alert('Chapter name required');
+      await updateChapterAdmin(selectedSubject, selectedGrade, editingChapter.id, chapterForm);
+      setChapterForm({ name: '', topics: [], targetDate: '' });
+      setEditingChapter(null);
+    };
+
+    const handleAddTopic = () => {
+      if (!newTopic.trim()) return;
+      setChapterForm({ ...chapterForm, topics: [...chapterForm.topics, newTopic.trim()] });
+      setNewTopic('');
+    };
+
+    const handleRemoveTopic = (index) => {
+      const updated = chapterForm.topics.filter((_, i) => i !== index);
+      setChapterForm({ ...chapterForm, topics: updated });
+    };
+
+    const handleCSVUpload = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        handleCSVImport(file, selectedSubject, selectedGrade);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <h3 className="text-2xl font-bold">Curriculum Management</h3>
+
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Subject</label>
+              <select 
+                value={selectedSubject} 
+                onChange={e => setSelectedSubject(e.target.value)} 
+                className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium"
+              >
+                {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Grade</label>
+              <select 
+                value={selectedGrade} 
+                onChange={e => setSelectedGrade(parseInt(e.target.value))} 
+                className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium"
+              >
+                <option value={11}>Class 11th</option>
+                <option value={12}>Class 12th</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-3 flex-wrap">
+            <button 
+              onClick={() => { setEditingChapter(null); setChapterForm({ name: '', topics: [], targetDate: '' }); }} 
+              className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
+            >
+              + Add New Chapter
+            </button>
+            <label className="px-5 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all cursor-pointer file-upload-btn">
+              📤 Import CSV
+              <input 
+                ref={fileInputRef}
+                type="file" 
+                accept=".csv" 
+                onChange={handleCSVUpload} 
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg text-sm">
+            <p className="font-bold text-blue-900 mb-2">📋 CSV Format:</p>
+            <p className="text-gray-700">Column 1: Chapter Name | Column 2: Topic Name</p>
+            <p className="text-gray-600 text-xs mt-1">Consecutive rows with same chapter name will be grouped as topics</p>
+          </div>
+        </div>
+
+        {(editingChapter !== null || chapterForm.name || chapterForm.topics.length > 0) && (
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h4 className="font-bold text-xl mb-4">{editingChapter ? 'Edit Chapter' : 'Add New Chapter'}</h4>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Chapter Name <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text"
+                  value={chapterForm.name || ''} 
+                  onChange={e => setChapterForm({...chapterForm, name: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl"
+                  placeholder="Enter chapter name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">
+                  Target Date
+                </label>
+                <input 
+                  type="date"
+                  value={chapterForm.targetDate || ''} 
+                  onChange={e => setChapterForm({...chapterForm, targetDate: e.target.value})} 
+                  className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Topics</label>
+                <div className="flex gap-2 mb-3">
+                  <input 
+                    type="text"
+                    value={newTopic} 
+                    onChange={e => setNewTopic(e.target.value)} 
+                    onKeyPress={e => e.key === 'Enter' && handleAddTopic()}
+                    className="flex-1 border-2 border-gray-300 px-4 py-3 rounded-xl"
+                    placeholder="Enter topic and press Add"
+                  />
+                  <button 
+                    onClick={handleAddTopic} 
+                    className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {chapterForm.topics.map((topic, idx) => (
+                    <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                      <span>{topic}</span>
+                      <button 
+                        onClick={() => handleRemoveTopic(idx)} 
+                        className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={editingChapter ? handleUpdateChapter : handleAddChapter} 
+                  className="px-6 py-3 avanti-gradient text-white rounded-xl font-semibold hover:opacity-90"
+                >
+                  {editingChapter ? 'Update Chapter' : 'Save Chapter'}
+                </button>
+                <button 
+                  onClick={() => { setEditingChapter(null); setChapterForm({ name: '', topics: [], targetDate: '' }); }} 
+                  className="px-6 py-3 bg-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <h4 className="font-bold text-xl mb-4">
+            {selectedSubject} - Class {selectedGrade}th ({chapters.length} chapters)
+          </h4>
+          
+          {chapters.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No chapters yet. Click "Add New Chapter" to get started.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {chapters.map(ch => (
+                <div key={ch.id} className="border-2 rounded-xl p-4 hover:bg-yellow-50 transition-colors">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <h5 className="font-bold text-lg">{ch.name}</h5>
+                      <p className="text-sm text-gray-600">
+                        Target: {ch.targetDate || 'Not set'} | Topics: {ch.topics?.length || 0}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => { setEditingChapter(ch); setChapterForm(ch); }} 
+                        className="px-3 py-1 bg-yellow-400 rounded-lg hover:bg-yellow-500"
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => deleteChapterAdmin(selectedSubject, selectedGrade, ch.id)} 
+                        className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  {ch.topics && ch.topics.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-sm font-semibold text-gray-700 mb-1">Topics:</p>
+                      <ul className="list-disc list-inside text-sm text-gray-600">
+                        {ch.topics.map((t, i) => <li key={i}>{t}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function AdminSchools() {
+    const [newSchool, setNewSchool] = useState('');
+
+    const handleAdd = async () => {
+      if (!newSchool.trim()) return alert('School name required');
+      await addSchool(newSchool.trim());
+      setNewSchool('');
+    };
+
+    return (
+      <div className="space-y-6">
+        <h3 className="text-2xl font-bold">School Management</h3>
+
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <h4 className="font-bold text-lg mb-4">Add New School</h4>
+          <div className="flex gap-3">
+            <input 
+              type="text"
+              value={newSchool} 
+              onChange={e => setNewSchool(e.target.value)} 
+              onKeyPress={e => e.key === 'Enter' && handleAdd()}
+              className="flex-1 border-2 border-gray-300 px-4 py-3 rounded-xl"
+              placeholder="Enter school name"
+            />
+            <button 
+              onClick={handleAdd} 
+              className="px-6 py-3 avanti-gradient text-white rounded-xl font-semibold hover:opacity-90"
+            >
+              Add School
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <h4 className="font-bold text-lg mb-4">Current Schools ({schools.length})</h4>
+          <div className="space-y-2">
+            {schools.map(school => (
+              <div key={school} className="flex justify-between items-center p-4 bg-gray-50 rounded-xl hover:bg-yellow-50 transition-colors">
+                <span className="font-medium">{school}</span>
+                <button 
+                  onClick={() => deleteSchool(school)} 
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function AdminAnalytics() {
+    if (!chartRefs.current.adminOverall) chartRefs.current.adminOverall = React.createRef();
+    if (!chartRefs.current.adminSubjects) chartRefs.current.adminSubjects = React.createRef();
+
+    useEffect(() => {
+      if (!analyticsData || !chartRefs.current.adminOverall?.current) return;
+
+      createChart('adminOverall', {
+        type: 'doughnut',
+        data: {
+          labels: ['Completed', 'Pending'],
+          datasets: [{
+            data: [analyticsData.totalCompleted, analyticsData.totalChapters - analyticsData.totalCompleted],
+            backgroundColor: ['#10B981', '#E5E7EB'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: 'Overall Progress', font: { size: 16, weight: 'bold' } }
+          }
+        }
+      });
+    }, [analyticsData, createChart]);
+
+    useEffect(() => {
+      if (!analyticsData || !chartRefs.current.adminSubjects?.current) return;
+
+      const subjects = Object.keys(analyticsData.subjectStats || {});
+      const completedData = subjects.map(s => analyticsData.subjectStats[s].completed);
+      const remainingData = subjects.map(s => analyticsData.subjectStats[s].total - analyticsData.subjectStats[s].completed);
+
+      createChart('adminSubjects', {
+        type: 'bar',
+        data: {
+          labels: subjects,
+          datasets: [
+            {
+              label: 'Completed',
+              data: completedData,
+              backgroundColor: '#10B981',
+              borderRadius: 6
+            },
+            {
+              label: 'Remaining',
+              data: remainingData,
+              backgroundColor: '#F59E0B',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          plugins: {
+            legend: { position: 'bottom' },
+            title: { display: true, text: 'Subject-wise Progress', font: { size: 16, weight: 'bold' } }
+          },
+          scales: {
+            x: { stacked: true },
+            y: { stacked: true }
+          }
+        }
+      });
+    }, [analyticsData, createChart]);
+
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h3 className="text-2xl font-bold">Analytics & Reports</h3>
+          <button 
+            onClick={exportCSV} 
+            className="px-5 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
+          >
+            📊 Export CSV
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="stat-card avanti-gradient text-white">
+            <div className="text-sm opacity-90 mb-1">Total Teachers</div>
+            <div className="text-3xl font-bold">{teachers.length}</div>
+          </div>
+          <div className="stat-card bg-gradient-to-br from-blue-500 to-cyan-500 text-white">
+            <div className="text-sm opacity-90 mb-1">Total Chapters</div>
+            <div className="text-3xl font-bold">{analyticsData?.totalChapters || 0}</div>
+          </div>
+          <div className="stat-card bg-gradient-to-br from-green-500 to-emerald-500 text-white">
+            <div className="text-sm opacity-90 mb-1">Completed</div>
+            <div className="text-3xl font-bold">{analyticsData?.totalCompleted || 0}</div>
+          </div>
+          <div className="stat-card bg-gradient-to-br from-orange-500 to-red-500 text-white">
+            <div className="text-sm opacity-90 mb-1">Pending Tests</div>
+            <div className="text-3xl font-bold">{analyticsData?.totalPendingTests || 0}</div>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="stat-card">
+            <canvas ref={chartRefs.current.adminOverall} height="200"></canvas>
+          </div>
+          <div className="stat-card">
+            <canvas ref={chartRefs.current.adminSubjects} height="200"></canvas>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <h4 className="font-bold text-xl mb-4">Teacher Performance Rankings</h4>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="avanti-gradient-light">
+                <tr>
+                  <th className="p-3 text-left font-bold">Rank</th>
+                  <th className="p-3 text-left font-bold">AFID</th>
+                  <th className="p-3 text-left font-bold">Name</th>
+                  <th className="p-3 text-left font-bold">School</th>
+                  <th className="p-3 text-left font-bold">Subject</th>
+                  <th className="p-3 text-left font-bold">Completed</th>
+                  <th className="p-3 text-left font-bold">Total</th>
+                  <th className="p-3 text-left font-bold">%</th>
+                  <th className="p-3 text-left font-bold">Avg Days</th>
+                  <th className="p-3 text-left font-bold">Pending Tests</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analyticsData?.teacherArr.map((t, idx) => (
+                  <tr key={t.afid} className="border-b hover:bg-yellow-50 transition-colors">
+                    <td className="p-3">
+                      <span className="px-2 py-1 rounded-full bg-gray-200 font-bold">
+                        {idx + 1}
+                      </span>
+                    </td>
+                    <td className="p-3 font-mono">{t.afid}</td>
+                    <td className="p-3">{t.name}</td>
+                    <td className="p-3">{t.school}</td>
+                    <td className="p-3">{t.subject}</td>
+                    <td className="p-3 text-green-600 font-semibold">{t.completed}</td>
+                    <td className="p-3">{t.total}</td>
+                    <td className="p-3">
+                      <span className="px-3 py-1 avanti-gradient-light rounded-full font-bold" style={{color: 'var(--avanti-red)'}}>
+                        {t.percent}%
+                      </span>
+                    </td>
+                    <td className="p-3">{t.avgDaysPerChapter}</td>
+                    <td className="p-3 text-orange-600">{t.pendingTests}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div id="root">
+      {showConfetti && <Confetti />}
+      
+      <div className="min-h-screen bg-gray-50">
+        <nav className="avanti-gradient shadow-lg sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-20">
+              <div className="flex items-center gap-4">
+                <img src={AVANTI_LOGO} alt="Avanti Fellows" className="avanti-logo-small" />
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-bold text-white">Curriculum Tracker</h1>
+                  <p className="text-sm text-white opacity-90">Avanti Fellows</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right hidden sm:block">
+                  <p className="text-white font-semibold">{currentUser.name}</p>
+                  <p className="text-sm text-white opacity-90">{currentUser.afid}</p>
+                </div>
+                <button 
+                  onClick={handleLogout} 
+                  className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold hover:bg-gray-100 transition-all"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        {celebrationMessage && (
+          <div className="avanti-gradient text-white text-center py-4 text-xl font-bold animate-pulse">
+            {celebrationMessage}
+          </div>
+        )}
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {!isAdmin ? (
+            <>
+              <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                {[
+                  { id: 'overview', label: '📊 Overview', icon: '📊' },
+                  { id: 'class11', label: '📚 Class 11th', icon: '📚' },
+                  { id: 'class12', label: '📖 Class 12th', icon: '📖' },
+                  { id: 'profile', label: '👤 Profile', icon: '👤' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-6 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${
+                      activeTab === tab.id
+                        ? 'avanti-gradient text-white shadow-lg scale-105'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="main-content">
+                {activeTab === 'overview' && <Overview />}
+                {activeTab === 'class11' && <Chapters grade={11} />}
+                {activeTab === 'class12' && <Chapters grade={12} />}
+                {activeTab === 'profile' && <Profile />}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                {[
+                  { id: 'admin', label: '👥 Teachers' },
+                  { id: 'curriculum', label: '📚 Curriculum' },
+                  { id: 'schools', label: '🏫 Schools' },
+                  { id: 'analytics', label: '📊 Analytics' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-6 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${
+                      activeTab === tab.id
+                        ? 'avanti-gradient text-white shadow-lg scale-105'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="main-content">
+                {activeTab === 'admin' && <AdminTeachers />}
+                {activeTab === 'curriculum' && <AdminCurriculum />}
+                {activeTab === 'schools' && <AdminSchools />}
+                {activeTab === 'analytics' && <AdminAnalytics />}
+              </div>
+            </>
+          )}
+        </div>
+
+        <footer className="avanti-gradient text-white text-center py-6 mt-12">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <img src={AVANTI_LOGO} alt="Avanti Fellows" className="avanti-logo-small" />
+            <p className="font-bold text-lg">Avanti Fellows</p>
+          </div>
+          <p className="text-sm opacity-90">Curriculum Tracker © 2024</p>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
                   AFID <span className="text-red-500">*</span>
                 </label>
                 <input 
@@ -2414,964 +2561,3 @@ function App() {
 
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-1 block">
-                  DATE OF BIRTH
-                </label>
-                <input 
-                  type="date"
-                  value={form.dob || ''} 
-                  onChange={e => setForm({...form, dob: e.target.value})} 
-                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">
-                  JOINING DATE <span className="text-red-500">*</span>
-                </label>
-                <input 
-                  type="date"
-                  value={form.joiningDate || ''} 
-                  onChange={e => setForm({...form, joiningDate: e.target.value})} 
-                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-1 block">
-                  PHONE
-                </label>
-                <input 
-                  type="text"
-                  value={form.phone || ''} 
-                  onChange={e => setForm({...form, phone: e.target.value})} 
-                  className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
-                />
-              </div>
-
-              {isNewTeacher && (
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">
-                    PASSWORD <span className="text-red-500">*</span>
-                    <span className="text-xs text-gray-500"> (Save this!)</span>
-                  </label>
-                  <input 
-                    type="password"
-                    value={form.password || ''} 
-                    onChange={e => setForm({...form, password: e.target.value})} 
-                    className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg transition-all hover:border-yellow-400"
-                    placeholder="Minimum 6 characters"
-                  />
-                </div>
-              )}
-            </div>
-            <div className="mt-5 flex gap-3">
-              <button 
-                onClick={save} 
-                className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
-              >
-                {isNewTeacher ? 'Save Teacher Data' : 'Update'}
-              </button>
-              <button 
-                onClick={() => { setEditing(null); setIsNewTeacher(false); }} 
-                className="px-6 py-3 bg-gray-200 rounded-xl font-semibold hover:bg-gray-300 transition-all"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  function AdminCurriculum() {
-    const curriculumKeys = Object.keys(curriculum || {});
-    const [subject, setSubject] = useState(curriculumKeys.length > 0 ? curriculumKeys[0] : '');
-    const [grade, setGrade] = useState(11);
-    const [newChapter, setNewChapter] = useState({ name:'', topics:'', targetDate:'' });
-    const [editingChapter, setEditingChapter] = useState(null);
-    const fileInputRef = useRef(null);
-
-    useEffect(() => {
-      const keys = Object.keys(curriculum || {});
-      if (keys.length > 0 && !subject) {
-        setSubject(keys[0]);
-      }
-    }, [curriculum, subject]);
-
-    const addNew = async () => {
-      if (!newChapter.name) return alert('Name required');
-      if (!subject) return alert('Please select a subject');
-      await addChapterAdmin(
-        subject, 
-        grade, 
-        { 
-          name: newChapter.name, 
-          topics: newChapter.topics ? newChapter.topics.split(',').map(x=>x.trim()) : [], 
-          targetDate: newChapter.targetDate || '' 
-        }
-      );
-      setNewChapter({ name:'', topics:'', targetDate:'' });
-    };
-
-    const handleFileUpload = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      if (!file.name.endsWith('.csv')) {
-        alert('Please upload a CSV file');
-        return;
-      }
-      
-      if (!subject) {
-        alert('Please select a subject first');
-        return;
-      }
-      
-      handleCSVImport(file, subject, grade);
-      e.target.value = '';
-    };
-
-    const startEditing = (ch) => {
-      setEditingChapter({
-        id: ch.id,
-        name: ch.name,
-        topics: (ch.topics || []).join(', '),
-        targetDate: ch.targetDate || ''
-      });
-    };
-
-    const saveEdit = async () => {
-      if (!editingChapter.name) return alert('Name required');
-      await updateChapterAdmin(subject, grade, editingChapter.id, {
-        name: editingChapter.name,
-        topics: editingChapter.topics.split(',').map(x => x.trim()).filter(x => x),
-        targetDate: editingChapter.targetDate
-      });
-      setEditingChapter(null);
-    };
-
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h3 className="text-2xl font-bold">Curriculum Management</h3>
-          <select 
-            value={subject} 
-            onChange={e=>setSubject(e.target.value)} 
-            className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium bg-white"
-          >
-            <option value="">Select Subject</option>
-            {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select 
-            value={grade} 
-            onChange={e=>setGrade(Number(e.target.value))} 
-            className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium bg-white"
-          >
-            <option value={11}>Class 11</option>
-            <option value={12}>Class 12</option>
-          </select>
-        </div>
-
-        <div className="avanti-gradient-light p-6 rounded-2xl shadow-lg border-2" style={{borderColor: 'var(--avanti-yellow)'}}>
-          <h4 className="font-bold text-lg mb-3 flex items-center gap-2" style={{color: 'var(--avanti-red)'}}>
-            <span>📊</span> Import Curriculum from CSV
-          </h4>
-          <p className="text-sm text-gray-700 mb-4">
-            Upload a CSV file with format: <strong>Column A = Chapter Name, Column B = Topic Name</strong><br/>
-            (Chapter name only on first row, then multiple topic rows)
-          </p>
-          <input 
-            ref={fileInputRef}
-            type="file" 
-            accept=".csv" 
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!subject}
-            className="px-5 py-3 avanti-gradient text-white rounded-xl font-semibold hover:shadow-lg transition-all file-upload-btn flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span>📂</span> Choose CSV File to Import
-          </button>
-          <div className="mt-3 text-xs text-gray-600 bg-white p-3 rounded-lg">
-            <strong>Example CSV format:</strong><br/>
-            Chapter,Topic<br/>
-            Unit & Dimension,Units<br/>
-            ,Dimensions<br/>
-            ,Errors<br/>
-            Motion,Distance<br/>
-            ,Velocity
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-2xl shadow-lg">
-          <h4 className="font-bold text-lg mb-3">Or Add Manually</h4>
-          <div className="grid md:grid-cols-3 gap-3">
-            <input 
-              placeholder="Chapter name" 
-              value={newChapter.name} 
-              onChange={e => setNewChapter({...newChapter, name: e.target.value})} 
-              className="border-2 border-gray-300 px-3 py-2 rounded-lg" 
-            />
-            <input 
-              placeholder="Topics (comma separated)" 
-              value={newChapter.topics} 
-              onChange={e=>setNewChapter({...newChapter, topics: e.target.value})} 
-              className="border-2 border-gray-300 px-3 py-2 rounded-lg" 
-            />
-            <input 
-              type="date" 
-              value={newChapter.targetDate} 
-              onChange={e=>setNewChapter({...newChapter, targetDate: e.target.value})} 
-              className="border-2 border-gray-300 px-3 py-2 rounded-lg" 
-            />
-          </div>
-          <div className="mt-4">
-            <button 
-              onClick={addNew} 
-              disabled={!subject}
-              className="px-5 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Add Chapter
-            </button>
-          </div>
-        </div>
-
-        {subject ? (
-          <div className="space-y-3">
-            {curriculum[subject] && curriculum[subject][grade] && curriculum[subject][grade].length > 0 ? (
-              curriculum[subject][grade].map(ch => {
-                const prog = chapterProgress[ch.id] || {};
-                const status = computeChapterStatus(ch, prog);
-                const isEditing = editingChapter && editingChapter.id === ch.id;
-                
-                return (
-                  <div 
-                    key={ch.id} 
-                    className={`p-4 rounded-xl border-2 ${status.color}`}
-                  >
-                    {isEditing ? (
-                      <div className="space-y-3">
-                        <input 
-                          type="text"
-                          value={editingChapter.name}
-                          onChange={e => setEditingChapter({...editingChapter, name: e.target.value})}
-                          className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg font-bold"
-                          placeholder="Chapter name"
-                        />
-                        <textarea
-                          value={editingChapter.topics}
-                          onChange={e => setEditingChapter({...editingChapter, topics: e.target.value})}
-                          className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg"
-                          rows="3"
-                          placeholder="Topics (comma separated)"
-                        />
-                        <input 
-                          type="date"
-                          value={editingChapter.targetDate}
-                          onChange={e => setEditingChapter({...editingChapter, targetDate: e.target.value})}
-                          className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg"
-                        />
-                        <div className="flex gap-2">
-                          <button 
-                            onClick={saveEdit}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                          >
-                            Save Changes
-                          </button>
-                          <button 
-                            onClick={() => setEditingChapter(null)}
-                            className="px-4 py-2 bg-gray-300 rounded-lg hover:bg-gray-400"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex justify-between items-center flex-wrap gap-3">
-                        <div>
-                          <div className="font-bold text-lg">
-                            {ch.name} <span className="text-xs text-gray-500">({ch.id})</span>
-                          </div>
-                          <div className="text-sm text-gray-700 mt-1">{(ch.topics||[]).join(', ')}</div>
-                          <div className="text-sm mt-1">Target: <span className="font-semibold">{ch.targetDate || '—'}</span></div>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <div className={`text-sm font-semibold px-3 py-1 rounded-full ${status.textColor}`}>
-                            {status.label}
-                          </div>
-                          <div className="flex gap-2 flex-wrap">
-                            <button 
-                              onClick={() => startEditing(ch)}
-                              className="px-3 py-1 bg-yellow-300 rounded-lg hover:bg-yellow-400 transition-colors"
-                            >
-                              Edit
-                            </button>
-                            <button 
-                              onClick={() => deleteChapterAdmin(subject, grade, ch.id)} 
-                              className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            ) : (
-              <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-                <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
-                <p className="text-gray-600">Add your first chapter above</p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">Select a Subject</h3>
-            <p className="text-gray-600">Choose a subject from the dropdown above</p>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  function AdminAnalytics() {
-    const [selectedSchool, setSelectedSchool] = useState('All Schools');
-    const data = analyticsData;
-
-    if (!chartRefs.current.adminSchool) chartRefs.current.adminSchool = React.createRef();
-    if (!chartRefs.current.adminSubject) chartRefs.current.adminSubject = React.createRef();
-    if (!chartRefs.current.adminTeacher) chartRefs.current.adminTeacher = React.createRef();
-    if (!chartRefs.current.adminPending) chartRefs.current.adminPending = React.createRef();
-    if (!chartRefs.current.adminCompletion) chartRefs.current.adminCompletion = React.createRef();
-    if (!chartRefs.current.adminDays) chartRefs.current.adminDays = React.createRef();
-    if (!chartRefs.current.adminSchoolSubjects) chartRefs.current.adminSchoolSubjects = React.createRef();
-    if (!chartRefs.current.adminSchoolClasses) chartRefs.current.adminSchoolClasses = React.createRef();
-
-    const filteredData = useMemo(() => {
-      if (!data || selectedSchool === 'All Schools') return data;
-      
-      const schoolTeachers = data.teacherArr.filter(t => t.school === selectedSchool);
-      const schoolData = data.schoolStatus[selectedSchool] || {};
-      
-      return {
-        ...data,
-        teacherArr: schoolTeachers,
-        selectedSchoolData: schoolData
-      };
-    }, [data, selectedSchool]);
-
-    const schoolClassesNeeded = useMemo(() => {
-      if (!data) return {};
-      const classesData = {};
-      Object.keys(data.schoolStatus).forEach(school => {
-        const schoolData = data.schoolStatus[school];
-        const remaining = schoolData.total - schoolData.completed;
-        classesData[school] = remaining * 5;
-      });
-      return classesData;
-    }, [data]);
-
-    useEffect(() => {
-      if (!filteredData || !chartRefs.current.adminSchool?.current) return;
-
-      const schoolNames = Object.keys(filteredData.schoolStatus || {});
-      const completionData = schoolNames.map(s => {
-        const school = filteredData.schoolStatus[s];
-        return school.total ? Math.round((school.completed / school.total) * 100) : 0;
-      });
-
-      createChart('adminSchool', {
-        type: 'bar',
-        data: {
-          labels: schoolNames,
-          datasets: [{
-            label: 'Completion %',
-            data: completionData,
-            backgroundColor: '#C8342E',
-            borderRadius: 8
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          plugins: {
-            legend: { display: false },
-            title: { display: true, text: 'School-wise Completion Rate', font: { size: 16, weight: 'bold' } }
-          },
-          scales: {
-            x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
-          }
-        }
-      });
-    }, [filteredData, createChart]);
-
-    useEffect(() => {
-      if (!filteredData || !chartRefs.current.adminSubject?.current) return;
-
-      const subjects = Object.keys(filteredData.subjectStats || {});
-      const completedData = subjects.map(s => filteredData.subjectStats[s].completed);
-
-      createChart('adminSubject', {
-        type: 'pie',
-        data: {
-          labels: subjects,
-          datasets: [{
-            data: completedData,
-            backgroundColor: ['#F4B41A', '#E8B039', '#C8342E', '#10B981'],
-            borderWidth: 2,
-            borderColor: '#fff'
-          }]
-        },
-        options: {
-          plugins: {
-            legend: { position: 'bottom' },
-            title: { display: true, text: 'Completed Chapters by Subject', font: { size: 16, weight: 'bold' } }
-          }
-        }
-      });
-    }, [filteredData, createChart]);
-
-    useEffect(() => {
-      if (!filteredData || !chartRefs.current.adminTeacher?.current) return;
-
-      const topTeachers = filteredData.teacherArr.slice(0, 10);
-
-      createChart('adminTeacher', {
-        type: 'bar',
-        data: {
-          labels: topTeachers.map(t => t.name),
-          datasets: [{
-            label: 'Completion %',
-            data: topTeachers.map(t => t.percent),
-            backgroundColor: '#10B981',
-            borderRadius: 6
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          plugins: {
-            legend: { display: false },
-            title: { display: true, text: selectedSchool === 'All Schools' ? 'Top 10 Teachers by Completion %' : `${selectedSchool} - Top Teachers`, font: { size: 16, weight: 'bold' } }
-          },
-          scales: {
-            x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
-          }
-        }
-      });
-    }, [filteredData, selectedSchool, createChart]);
-
-    useEffect(() => {
-      if (!filteredData || !chartRefs.current.adminPending?.current) return;
-
-      const schoolNames = Object.keys(filteredData.schoolStatus || {});
-      const pendingData = schoolNames.map(s => filteredData.schoolStatus[s].pendingTests);
-
-      createChart('adminPending', {
-        type: 'bar',
-        data: {
-          labels: schoolNames,
-          datasets: [{
-            label: 'Pending Tests',
-            data: pendingData,
-            backgroundColor: '#F59E0B',
-            borderRadius: 6
-          }]
-        },
-        options: {
-          plugins: {
-            legend: { display: false },
-            title: { display: true, text: 'Pending Tests by School', font: { size: 16, weight: 'bold' } }
-          }
-        }
-      });
-    }, [filteredData, createChart]);
-
-    useEffect(() => {
-      if (!filteredData || !chartRefs.current.adminCompletion?.current) return;
-
-      createChart('adminCompletion', {
-        type: 'doughnut',
-        data: {
-          labels: ['Completed', 'Remaining'],
-          datasets: [{
-            data: [filteredData.totalCompleted, filteredData.totalChapters - filteredData.totalCompleted],
-            backgroundColor: ['#10B981', '#E5E7EB'],
-            borderWidth: 0
-          }]
-        },
-        options: {
-          plugins: {
-            legend: { position: 'bottom' },
-            title: { display: true, text: `Overall Progress: ${Math.round((filteredData.totalCompleted / filteredData.totalChapters) * 100)}%`, font: { size: 16, weight: 'bold' } }
-          }
-        }
-      });
-    }, [filteredData, createChart]);
-
-    useEffect(() => {
-      if (!filteredData || !chartRefs.current.adminDays?.current) return;
-
-      const teachersWithDays = filteredData.teacherArr.filter(t => t.avgDaysPerChapter > 0).slice(0, 10);
-
-      createChart('adminDays', {
-        type: 'bar',
-        data: {
-          labels: teachersWithDays.map(t => t.name),
-          datasets: [{
-            label: 'Avg Days/Chapter',
-            data: teachersWithDays.map(t => t.avgDaysPerChapter),
-            backgroundColor: '#60A5FA',
-            borderRadius: 6
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          plugins: {
-            legend: { display: false },
-            title: { display: true, text: 'Average Days per Chapter (Top 10)', font: { size: 16, weight: 'bold' } }
-          }
-        }
-      });
-    }, [filteredData, createChart]);
-
-    useEffect(() => {
-      if (!filteredData || selectedSchool === 'All Schools' || !chartRefs.current.adminSchoolSubjects?.current) return;
-      if (!filteredData.selectedSchoolData || !filteredData.selectedSchoolData.subjectProgress) return;
-
-      const subjectProgress = filteredData.selectedSchoolData.subjectProgress;
-      const subjects = Object.keys(subjectProgress);
-      const completedData = subjects.map(s => subjectProgress[s].completed);
-      const remainingData = subjects.map(s => subjectProgress[s].total - subjectProgress[s].completed);
-
-      createChart('adminSchoolSubjects', {
-        type: 'bar',
-        data: {
-          labels: subjects,
-          datasets: [
-            {
-              label: 'Completed',
-              data: completedData,
-              backgroundColor: '#10B981',
-              borderRadius: 6
-            },
-            {
-              label: 'Remaining',
-              data: remainingData,
-              backgroundColor: '#F59E0B',
-              borderRadius: 6
-            }
-          ]
-        },
-        options: {
-          plugins: {
-            legend: { position: 'bottom' },
-            title: { display: true, text: `${selectedSchool} - Subject Progress`, font: { size: 16, weight: 'bold' } }
-          },
-          scales: {
-            x: { stacked: true },
-            y: { stacked: true }
-          }
-        }
-      });
-    }, [filteredData, selectedSchool, createChart]);
-
-    useEffect(() => {
-      if (!schoolClassesNeeded || !chartRefs.current.adminSchoolClasses?.current) return;
-
-      const schools = Object.keys(schoolClassesNeeded);
-      const classesData = schools.map(s => schoolClassesNeeded[s]);
-
-      createChart('adminSchoolClasses', {
-        type: 'bar',
-        data: {
-          labels: schools,
-          datasets: [{
-            label: 'Classes Needed',
-            data: classesData,
-            backgroundColor: '#3B82F6',
-            borderRadius: 8
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          plugins: {
-            legend: { display: false },
-            title: { display: true, text: 'Classes Needed per School', font: { size: 16, weight: 'bold' } }
-          },
-          scales: {
-            x: { beginAtZero: true, title: { display: true, text: 'Number of Classes' } }
-          }
-        }
-      });
-    }, [schoolClassesNeeded, createChart]);
-    
-    return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center flex-wrap gap-3">
-          <h3 className="text-2xl font-bold">Analytics Dashboard</h3>
-          <div className="flex gap-3 items-center flex-wrap">
-            <select
-              value={selectedSchool}
-              onChange={e => setSelectedSchool(e.target.value)}
-              className="border-2 border-gray-300 px-4 py-2 rounded-lg font-medium bg-white"
-            >
-              <option value="All Schools">All Schools</option>
-              {schools.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <button 
-              onClick={exportCSV} 
-              className="px-4 py-2 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all"
-            >
-              📊 Export CSV
-            </button>
-          </div>
-        </div>
-
-        {teachers.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Data Yet</h3>
-            <p className="text-gray-600">Add teachers and curriculum to see analytics</p>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="stat-card avanti-gradient text-white">
-                <div className="text-sm opacity-90 mb-1">Total Chapters</div>
-                <div className="text-3xl font-bold">{data.totalChapters}</div>
-              </div>
-              <div className="stat-card bg-gradient-to-br from-green-500 to-emerald-500 text-white">
-                <div className="text-sm opacity-90 mb-1">Completed</div>
-                <div className="text-3xl font-bold">{data.totalCompleted}</div>
-              </div>
-              <div className="stat-card bg-gradient-to-br from-orange-500 to-red-500 text-white">
-                <div className="text-sm opacity-90 mb-1">Pending Tests</div>
-                <div className="text-3xl font-bold">{data.totalPendingTests}</div>
-              </div>
-              <div className="stat-card bg-gradient-to-br from-blue-500 to-cyan-500 text-white">
-                <div className="text-sm opacity-90 mb-1">Avg Days/Ch</div>
-                <div className="text-3xl font-bold">{data.avgDaysPerChapter}</div>
-              </div>
-              <div className="stat-card bg-gradient-to-br from-indigo-500 to-purple-500 text-white">
-                <div className="text-sm opacity-90 mb-1">Est. Classes</div>
-                <div className="text-3xl font-bold">{data.estimatedClassesRemaining}</div>
-              </div>
-            </div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminSchool} height="200"></canvas>
-              </div>
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminSubject} height="200"></canvas>
-              </div>
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminTeacher} height="200"></canvas>
-              </div>
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminPending} height="200"></canvas>
-              </div>
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminCompletion} height="200"></canvas>
-              </div>
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminDays} height="200"></canvas>
-              </div>
-              {selectedSchool !== 'All Schools' && (
-                <div className="stat-card">
-                  <canvas ref={chartRefs.current.adminSchoolSubjects} height="200"></canvas>
-                </div>
-              )}
-              <div className="stat-card">
-                <canvas ref={chartRefs.current.adminSchoolClasses} height="200"></canvas>
-              </div>
-            </div>
-
-            <div className="stat-card overflow-x-auto">
-              <div className="text-sm text-gray-600 mb-3 font-bold">
-                {selectedSchool === 'All Schools' ? 'All Teachers Statistics' : `${selectedSchool} - Teachers Statistics`}
-              </div>
-              <table className="w-full">
-                <thead className="avanti-gradient-light">
-                  <tr>
-                    <th className="p-3 text-left font-bold">AFID</th>
-                    <th className="p-3 text-left font-bold">Name</th>
-                    <th className="p-3 text-left font-bold">School</th>
-                    <th className="p-3 text-left font-bold">Subject</th>
-                    <th className="p-3 text-left font-bold">Completed</th>
-                    <th className="p-3 text-left font-bold">Total</th>
-                    <th className="p-3 text-left font-bold">%</th>
-                    <th className="p-3 text-left font-bold">Avg Days</th>
-                    <th className="p-3 text-left font-bold">Pending Tests</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredData.teacherArr.map(t => (
-                    <tr key={t.afid} className="border-b hover:bg-yellow-50 transition-colors">
-                      <td className="p-3 font-mono font-semibold">{t.afid}</td>
-                      <td className="p-3">{t.name}</td>
-                      <td className="p-3">{t.school}</td>
-                      <td className="p-3">{t.subject}</td>
-                      <td className="p-3 text-green-600 font-bold">{t.completed}</td>
-                      <td className="p-3 font-semibold">{t.total}</td>
-                      <td className="p-3">
-                        <span className="px-3 py-1 avanti-gradient-light rounded-full font-bold" style={{color: 'var(--avanti-red)'}}>
-                          {t.percent}%
-                        </span>
-                      </td>
-                      <td className="p-3">{t.avgDaysPerChapter || '—'}</td>
-                      <td className="p-3 text-orange-600 font-semibold">{t.pendingTests}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </div>
-    );
-  }
-
-  function AdminSettings() {
-    const [newSchool, setNewSchool] = useState('');
-
-    return (
-      <div className="space-y-6">
-        <h3 className="text-2xl font-bold">Settings</h3>
-        
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="stat-card">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-              <span>📋</span> Data Management
-            </h4>
-            <div className="space-y-3">
-              <button 
-                onClick={exportCSV}
-                className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all text-left"
-              >
-                Export Analytics Data (CSV)
-              </button>
-            </div>
-          </div>
-
-          <div className="stat-card">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-              <span>👥</span> System Info
-            </h4>
-            <div className="text-sm text-gray-700 space-y-2">
-              <div>Total Teachers: <strong>{teachers.length}</strong></div>
-              <div>Total Chapters: <strong>{analyticsData?.totalChapters || 0}</strong></div>
-              <div>Total Schools: <strong>{schools.length}</strong></div>
-              <div>Version: <strong>7.0 - Final Production</strong></div>
-            </div>
-          </div>
-
-          <div className="stat-card md:col-span-2">
-            <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-              <span>🏫</span> School Management
-            </h4>
-            
-            <div className="mb-4">
-              <label className="text-sm font-medium text-gray-700 mb-2 block">Add New School</label>
-              <div className="flex gap-2">
-                <input 
-                  type="text"
-                  value={newSchool}
-                  onChange={e => setNewSchool(e.target.value)}
-                  placeholder="School name"
-                  className="flex-1 border-2 border-gray-300 px-3 py-2 rounded-lg"
-                />
-                <button 
-                  onClick={() => { addSchool(newSchool); setNewSchool(''); }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all"
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-700 mb-2">Current Schools:</div>
-              {schools.map(school => (
-                <div key={school} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium">{school}</span>
-                  <button 
-                    onClick={() => deleteSchool(school)}
-                    className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function AdminDashboard() {
-    const [tab, setTab] = useState('overview');
-    
-    return (
-      <div className="space-y-6 fade-in">
-        <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
-          <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-          Admin Dashboard
-        </h2>
-        
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-          {['overview','teachers','curriculum','analytics','settings'].map(t => (
-            <button 
-              key={t} 
-              onClick={()=>setTab(t)} 
-              className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                tab===t 
-                  ? 'avanti-gradient text-white shadow-lg' 
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {tab === 'overview' && (
-          <div className="grid md:grid-cols-3 gap-6 grid-responsive">
-            <div className="avanti-gradient text-white p-6 rounded-2xl shadow-lg text-center">
-              <div className="text-sm opacity-90 mb-2">Total Teachers</div>
-              <div className="text-5xl font-bold">{teachers.length}</div>
-            </div>
-            <div className="bg-gradient-to-br from-green-500 to-emerald-500 text-white p-6 rounded-2xl shadow-lg text-center">
-              <div className="text-sm opacity-90 mb-2">Total Schools</div>
-              <div className="text-5xl font-bold">{schools.length}</div>
-            </div>
-            <div className="bg-gradient-to-br from-purple-500 to-pink-500 text-white p-6 rounded-2xl shadow-lg text-center">
-              <div className="text-sm opacity-90 mb-2">Chapters Tracked</div>
-              <div className="text-5xl font-bold">{Object.keys(chapterProgress || {}).length}</div>
-            </div>
-          </div>
-        )}
-
-        {tab === 'teachers' && <AdminTeachers />}
-        {tab === 'curriculum' && <AdminCurriculum />}
-        {tab === 'analytics' && <AdminAnalytics />}
-        {tab === 'settings' && <AdminSettings />}
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 animated-gradient">
-      <nav className="bg-white shadow-lg sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <img src={AVANTI_LOGO} alt="Avanti Fellows" className="avanti-logo-small" />
-            <div>
-              <div className="font-bold text-xl text-gray-800">
-                Curriculum Tracker
-              </div>
-              <div className="text-sm text-gray-600">
-                {isAdmin ? 'Administrator' : `${currentUser.name} - ${currentUser.school}`}
-              </div>
-            </div>
-          </div>
-          <button 
-            onClick={handleLogout} 
-            className="px-5 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
-          >
-            Logout
-          </button>
-        </div>
-      </nav>
-
-      {celebrationMessage && (
-        <div className="fixed top-20 right-4 z-50 max-w-xs">
-          <div className="bg-white border-4 p-4 rounded-2xl shadow-2xl animate-bounce" style={{borderColor: 'var(--avanti-red)'}}>
-            <div className="text-center">
-              <div className="text-4xl mb-2">{celebrationMessage.includes('Birthday') ? '🎂' : '🎉'}</div>
-              <div className="font-bold" style={{color: 'var(--avanti-red)'}}>{celebrationMessage}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="main-content max-w-7xl mx-auto px-4 py-6">
-        <div className="mb-6">
-          {!isAdmin && (
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              <button 
-                onClick={() => setActiveTab('overview')} 
-                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                  activeTab==='overview' 
-                    ? 'avanti-gradient text-white shadow-lg' 
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                🏠 Overview
-              </button>
-              <button 
-                onClick={() => setActiveTab('chapters11')} 
-                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                  activeTab==='chapters11' 
-                    ? 'avanti-gradient text-white shadow-lg' 
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                📖 Class 11th
-              </button>
-              <button 
-                onClick={() => setActiveTab('chapters12')} 
-                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                  activeTab==='chapters12' 
-                    ? 'avanti-gradient text-white shadow-lg' 
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                📖 Class 12th
-              </button>
-              <button 
-                onClick={() => setActiveTab('profile')} 
-                className={`px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all ${
-                  activeTab==='profile' 
-                    ? 'avanti-gradient text-white shadow-lg' 
-                    : 'bg-white text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                👤 Profile
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div>
-          {isAdmin && <AdminDashboard />}
-          {!isAdmin && activeTab === 'overview' && <Overview />}
-          {!isAdmin && activeTab === 'chapters11' && <Chapters11 />}
-          {!isAdmin && activeTab === 'chapters12' && <Chapters12 />}
-          {!isAdmin && activeTab === 'profile' && <Profile />}
-        </div>
-      </div>
-
-      <footer className="avanti-gradient text-white py-6 mt-12">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="font-medium">© 2025 Curriculum Tracker - Empowering Education</p>
-          <p className="text-sm opacity-90 mt-1">Made with ❤️ for Avanti Fellows</p>
-        </div>
-      </footer>
-
-      {showConfetti && <Confetti />}
-    </div>
-  );
-}
-
-ReactDOM.render(<App />, document.getElementById('root'));
-  </script>
-</body>
-</html>
