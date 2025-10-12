@@ -2427,11 +2427,11 @@ function App() {
     const fileInputRef = useRef(null);
 
     const chapters = useMemo(() => {
-      if (!curriculum || !curriculum[selectedSubject] || !curriculum[selectedSubject][selectedGrade]) {
-        return [];
-      }
-      return curriculum[selectedSubject][selectedGrade];
-    }, [curriculum, selectedSubject, selectedGrade]);
+  if (!curriculum || !curriculum[selectedSchool] || !curriculum[selectedSchool][selectedSubject] || !curriculum[selectedSchool][selectedSubject][selectedGrade]) {
+    return [];
+  }
+  return curriculum[selectedSchool][selectedSubject][selectedGrade];
+}, [curriculum, selectedSchool, selectedSubject, selectedGrade]);
 
     const handleAddChapter = async () => {
       if (!chapterForm.name) return alert('Chapter name required');
