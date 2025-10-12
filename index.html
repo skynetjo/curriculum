@@ -870,7 +870,7 @@ function App() {
     }
   };
 
-  const handleCSVImport = (file, subject, grade) => {
+  const handleCSVImport = (file, school, subject, grade) => {
     Papa.parse(file, {
       complete: async (results) => {
         try {
@@ -913,7 +913,7 @@ function App() {
           }
           
           for (const chapter of chapters) {
-            await addChapterAdmin(subject, grade, chapter);
+            await addChapterAdmin(school, subject, grade, chapter);
           }
           
           alert(`Successfully imported ${chapters.length} chapters!`);
