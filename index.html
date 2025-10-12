@@ -793,15 +793,18 @@ function App() {
     }
   };
 
-  const saveCurriculum = async (newCurr) => {
-    try { 
-      await db.collection('meta').doc('curriculum').set(newCurr); 
-      alert('Curriculum updated'); 
-    } catch (e) { 
-      console.error(e); 
-      alert('Failed: ' + e.message); 
-    }
-  };
+  const saveCurriculum = async (school, subject, newSubjectCurr) => {
+  try {
+    const schoolDocRef = db.collection('curriculum').doc(school);
+    await schoolDocRef.set({
+      [subject]: newSubjectCurr
+    }, { merge: true });
+    alert('Curriculum updated');
+  } catch (e) {
+    console.error(e);
+    alert('Failed: ' + e.message);
+  }
+};
 
   const addChapterAdmin = async (subject, grade, chapter) => {
     const newCurr = { ...(curriculum || {}) };
