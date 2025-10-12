@@ -806,14 +806,17 @@ function App() {
   }
 };
 
-  const addChapterAdmin = async (subject, grade, chapter) => {
-    const newCurr = { ...(curriculum || {}) };
-    newCurr[subject] = newCurr[subject] || {};
-    newCurr[subject][grade] = newCurr[subject][grade] || [];
-    chapter.id = chapter.id || (subject.charAt(0).toUpperCase() + grade + '-' + (newCurr[subject][grade].length + 1) + '-' + Date.now().toString().slice(-4));
-    newCurr[subject][grade].push(chapter);
-    await saveCurriculum(newCurr);
-  };
+  const addChapterAdmin = async (school, subject, grade, chapter) => {
+  const schoolCurr = curriculum[school] || {};
+  const subjectCurr = schoolCurr[subject] || {};
+  const gradeCurr = subjectCurr[grade] || [];
+  
+  chapter.id = chapter.id || (subject.charAt(0).toUpperCase() + grade + '-' + (gradeCurr.length + 1) + '-' + Date.now().toString().slice(-4));
+  const newGradeCurr = [...gradeCurr, chapter];
+  
+  const newSubjectCurr = { ...subjectCurr, [grade]: newGradeCurr };
+  await saveCurriculum(school, subject, newSubjectCurr);
+};
 
   const updateChapterAdmin = async (subject, grade, chapterId, updates) => {
     try {
