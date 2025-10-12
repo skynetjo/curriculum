@@ -818,25 +818,31 @@ function App() {
   await saveCurriculum(school, subject, newSubjectCurr);
 };
 
-  const updateChapterAdmin = async (subject, grade, chapterId, updates) => {
-    try {
-      const newCurr = { ...(curriculum || {}) };
-      const arr = newCurr[subject][grade];
-      const idx = arr.findIndex(x => x.id === chapterId);
-      if (idx === -1) return;
-      arr[idx] = { ...arr[idx], ...updates };
-      await saveCurriculum(newCurr);
-    } catch (e) { console.error(e); alert('Failed update: ' + e.message); }
-  };
+  const updateChapterAdmin = async (school, subject, grade, chapterId, updates) => {
+  try {
+    const schoolCurr = curriculum[school] || {};
+    const subjectCurr = schoolCurr[subject] || {};
+    const arr = subjectCurr[grade] || [];
+    const idx = arr.findIndex(x => x.id === chapterId);
+    if (idx === -1) return;
+    arr[idx] = { ...arr[idx], ...updates };
+    
+    const newSubjectCurr = { ...subjectCurr, [grade]: arr };
+    await saveCurriculum(school, subject, newSubjectCurr);
+  } catch (e) { console.error(e); alert('Failed update: ' + e.message); }
+};
 
-  const deleteChapterAdmin = async (subject, grade, id) => {
-    if (!confirm('Delete chapter?')) return;
-    try {
-      const newCurr = { ...(curriculum || {}) };
-      newCurr[subject][grade] = newCurr[subject][grade].filter(ch => ch.id !== id);
-      await saveCurriculum(newCurr);
-    } catch (e) { console.error(e); alert('Delete failed: ' + e.message); }
-  };
+  const deleteChapterAdmin = async (school, subject, grade, id) => {
+  if (!confirm('Delete chapter?')) return;
+  try {
+    const schoolCurr = curriculum[school] || {};
+    const subjectCurr = schoolCurr[subject] || {};
+    const newGradeCurr = (subjectCurr[grade] || []).filter(ch => ch.id !== id);
+    
+    const newSubjectCurr = { ...subjectCurr, [grade]: newGradeCurr };
+    await saveCurriculum(school, subject, newSubjectCurr);
+  } catch (e) { console.error(e); alert('Delete failed: ' + e.message); }
+};
 
   const addSchool = async (schoolName) => {
     if (!schoolName || !schoolName.trim()) return alert('School name required');
