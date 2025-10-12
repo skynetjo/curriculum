@@ -1519,14 +1519,15 @@ function App() {
   };
 
   const Chapters = ({ grade }) => {
-    const subj = currentUser.subject;
-    
-    const chapters = useMemo(() => {
-      if (!curriculum || !curriculum[subj] || !curriculum[subj][grade]) {
-        return [];
-      }
-      return curriculum[subj][grade];
-    }, [curriculum, subj, grade]);
+  const mySchool = currentUser.school;
+  const mySubject = currentUser.subject;
+  
+  const chapters = useMemo(() => {
+    if (!curriculum || !curriculum[mySchool] || !curriculum[mySchool][mySubject] || !curriculum[mySchool][mySubject][grade]) {
+      return [];
+    }
+    return curriculum[mySchool][mySubject][grade];
+  }, [curriculum, mySchool, mySubject, grade]);
 
     const handleTopicToggle = useCallback((chapterId, topic, chapter) => {
       const currentProg = chapterProgress[chapterId] || {};
