@@ -673,9 +673,20 @@ function App() {
     
     const chapterDetailsForExport = [];
     
-    Object.keys(curriculum || {}).forEach(subject => {
-      Object.keys(curriculum[subject] || {}).forEach(grade => {
-        (curriculum[subject][grade] || []).forEach(ch => {
+    teachers.forEach(teacher => {
+  const school = teacher.school;
+  const subject = teacher.subject;
+  
+  if (filterSchool !== 'All' && teacher.school !== filterSchool) return;
+  if (filterSubject !== 'All' && subject !== filterSubject) return;
+  if (filterTeacher !== 'All' && teacher.afid !== filterTeacher) return;
+  
+  if (!curriculum[school] || !curriculum[school][subject]) return;
+  
+  Object.keys(curriculum[school][subject]).forEach(grade => {
+    if (filterGrade !== 'All' && parseInt(grade) !== parseInt(filterGrade)) return;
+    
+    (curriculum[school][subject][grade] || []).forEach(ch => {
           teachers.forEach(teacher => {
             if (teacher.subject !== subject) return;
             
