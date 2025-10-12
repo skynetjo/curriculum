@@ -393,13 +393,13 @@ function App() {
       setTeachers(snap.docs.map(d => d.data()));
     }, err => console.error('teachers error', err));
 
-    unsubC = db.collection('meta').doc('curriculum').onSnapshot(doc => {
-      if (doc.exists) {
-        setCurriculum(doc.data());
-      } else {
-        setCurriculum({});
-      }
-    }, err => console.error('curriculum error', err));
+    unsubC = db.collection('curriculum').onSnapshot(snap => {
+  const currMap = {};
+  snap.docs.forEach(doc => {
+    currMap[doc.id] = doc.data();
+  });
+  setCurriculum(currMap);
+}, err => console.error('curriculum error', err));
 
     return () => { if (unsubP) unsubP(); if (unsubT) unsubT(); if (unsubC) unsubC(); };
   }, []);
