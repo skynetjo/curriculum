@@ -1,771 +1,1002 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Curriculum Tracker</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:400,600,700&display=swap">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Curriculum Tracker - Avanti Fellows</title>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+  <!-- React -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- PapaParse -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
   <style>
-    /* Minimal styles used by the page (kept from original file) */
+    * { box-sizing: border-box; }
+    
     :root {
-      --bg: #f5f6f8;
-      --card: #fff;
-      --muted: #9aa3ad;
-      --accent: #2b6cb0;
-      --success: #38a169;
-      --danger: #e53e3e;
-      --shadow: 0 6px 20px rgba(27,40,60,0.08);
-      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      --avanti-yellow: #F4B41A;
+      --avanti-orange: #E8B039;
+      --avanti-red: #C8342E;
+      --avanti-dark-red: #A82823;
     }
-    body { margin:0; background:var(--bg); color:#222; font-size:14px; }
-    .container { max-width:1200px; margin:28px auto; padding:0 20px; }
-    .card { background:var(--card); border-radius:12px; padding:20px; box-shadow:var(--shadow); }
-    .filters { display:flex; gap:16px; align-items:center; margin-bottom:18px; }
-    .select { flex:1; }
-    .dashboard-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-top:12px; }
-    .stat { padding:18px; border-radius:12px; color:#fff; font-weight:700; }
-    .stat.blue { background:linear-gradient(90deg,#4f8cf8,#2fb8ff); }
-    .stat.green { background:linear-gradient(90deg,#2ecc71,#27ae60); }
-    .stat.orange { background:linear-gradient(90deg,#ff8966,#ff6b6b); }
-    .charts { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-top:18px; }
-    canvas { width:100% !important; height:260px !important; display:block; }
-    .footer { margin-top:36px; padding:18px; text-align:center; color:var(--muted); }
-    label { display:block; margin-bottom:6px; color:#444; font-weight:600; }
-    select, input, button, textarea { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e6edf3; background:white; font-size:14px; }
-    .row { display:flex; gap:12px; }
-    .col { flex:1; }
-    .btn { cursor:pointer; border:0; padding:10px 14px; border-radius:8px; font-weight:600; }
-    .btn.primary { background:var(--accent); color:white; }
-    .btn.ghost { background:transparent; border:1px solid #e6edf3; color:#333; }
-    .small { font-size:12px; color:var(--muted); }
-    .hidden { display:none; }
-    .mt10 { margin-top:10px; }
-    .mb6 { margin-bottom:6px; }
-    pre { white-space:pre-wrap; word-break:break-word; }
+    
+    @keyframes confetti-fall {
+      0% { transform: translateY(-100vh) rotate(0deg) scale(1); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg) scale(0.5); opacity: 0; }
+    }
+    
+    .confetti-piece {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      animation: confetti-fall 4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    }
+    
+    .chapter-card {
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .chapter-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.2);
+    }
+    
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(244, 180, 26, 0.2);
+      border-color: var(--avanti-yellow);
+    }
+    
+    .avanti-gradient {
+      background: linear-gradient(135deg, var(--avanti-yellow) 0%, var(--avanti-orange) 50%, var(--avanti-red) 100%);
+    }
+    
+    .avanti-gradient-light {
+      background: linear-gradient(135deg, rgba(244, 180, 26, 0.1) 0%, rgba(232, 176, 57, 0.1) 50%, rgba(200, 52, 46, 0.1) 100%);
+    }
+    
+    .stat-card {
+      background: white;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s;
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+    
+    input[type="checkbox"] {
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--avanti-red);
+      border-radius: 4px;
+      cursor: pointer;
+      position: relative;
+      flex-shrink: 0;
+    }
+    
+    input[type="checkbox"]:checked {
+      background: var(--avanti-red);
+    }
+    
+    input[type="checkbox"]:checked::after {
+      content: '✓';
+      position: absolute;
+      color: white;
+      font-size: 14px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    
+    .chapter-expanded {
+      max-height: none;
+    }
+    
+    .chapter-collapsed {
+      max-height: 200px;
+      overflow: hidden;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1 style="margin:0 0 14px 0">Curriculum Tracker — Admin</h1>
+  <div id="root"></div>
 
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div style="display:flex; gap:12px; align-items:center;">
-          <img src="" alt="logo" style="width:36px;height:36px;border-radius:8px;background:linear-gradient(90deg,#f6b042,#e2533a);"/>
-          <div>
-            <div style="font-weight:700">Avanti Fellows</div>
-            <div class="small">Curriculum Tracker</div>
-          </div>
-        </div>
+  <script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-        <div style="display:flex; gap:8px; align-items:center;">
-          <div class="small">Signed in as <strong>Admin</strong></div>
-          <button id="signOutBtn" class="btn ghost">Sign out</button>
-        </div>
-      </div>
-    </div>
+const firebaseConfig = {
+  apiKey: "AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",
+  authDomain: "curriculum-dbb10.firebaseapp.com",
+  projectId: "curriculum-dbb10",
+  storageBucket: "curriculum-dbb10.firebasestorage.app",
+  messagingSenderId: "706387632109",
+  appId: "1:706387632109:web:06c78a304fdbdc12f391e4"
+};
 
-    <div style="height:18px;"></div>
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 
-    <!-- Filters -->
-    <div class="card">
-      <div style="display:flex; align-items:center; justify-content:space-between;">
-        <div style="font-weight:700; font-size:18px;"><span>🔎</span> Filters</div>
-        <div class="small">Select a school to view school-specific chapters/analytics.</div>
-      </div>
+const db = firebase.firestore();
+const auth = firebase.auth();
 
-      <div style="height:12px;"></div>
+const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology'];
+const DEFAULT_SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Bundi', 'CoE Mahisagar', 'EMRS Bhopal', 'JNV Bharuch'];
+const AVANTI_LOGO = '/mnt/user-data/uploads/Avanti_Fellows-logo.png';
 
-      <div class="filters">
-        <div class="select">
-          <label class="mb6">School</label>
-          <select id="filterSchool">
-            <!-- options populated by JS -->
-          </select>
-        </div>
+function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
 
-        <div class="select">
-          <label class="mb6">Subject</label>
-          <select id="filterSubject">
-            <option value="All">All Subjects</option>
-          </select>
-        </div>
+  const [teachers, setTeachers] = useState([]);
+  const [curriculum, setCurriculum] = useState({});
+  const [chapterProgress, setChapterProgress] = useState({});
+  const [schools, setSchools] = useState(DEFAULT_SCHOOLS);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [celebrationMessage, setCelebrationMessage] = useState('');
 
-        <div class="select">
-          <label class="mb6">Grade</label>
-          <select id="filterGrade">
-            <option value="All">All Grades</option>
-          </select>
-        </div>
+  const chartRefs = useRef({});
+  const charts = useRef({});
 
-        <div class="select">
-          <label class="mb6">Teacher</label>
-          <select id="filterTeacher">
-            <option value="All">All Teachers</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick stats -->
-    <div class="dashboard-grid">
-      <div class="card">
-        <div class="small">Total Chapters</div>
-        <div style="font-size:28px;font-weight:800;margin-top:8px" id="statTotal">0</div>
-      </div>
-      <div class="card">
-        <div class="small">Completed</div>
-        <div style="font-size:28px;font-weight:800;margin-top:8px" id="statCompleted">0</div>
-      </div>
-      <div class="card">
-        <div class="small">Pending Tests</div>
-        <div style="font-size:28px;font-weight:800;margin-top:8px" id="statPending">0</div>
-      </div>
-    </div>
-
-    <!-- Charts -->
-    <div class="charts">
-      <div class="card">
-        <div style="font-weight:700;margin-bottom:10px">Overall Progress</div>
-        <canvas id="canvasOverall"></canvas>
-      </div>
-
-      <div class="card">
-        <div style="font-weight:700;margin-bottom:10px">Subject Completion %</div>
-        <canvas id="canvasSubject"></canvas>
-      </div>
-
-      <div class="card">
-        <div style="font-weight:700;margin-bottom:10px">Pending Tests by School</div>
-        <canvas id="canvasPendingBySchool"></canvas>
-      </div>
-    </div>
-
-    <div style="height:18px;"></div>
-
-    <!-- Chapter List and Editor -->
-    <div class="card" id="chapterArea">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div style="font-weight:700">Curriculum — Chapters</div>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <input type="file" id="csvFile" accept=".csv" />
-          <button id="importCsv" class="btn ghost">Import CSV</button>
-          <button id="addManualBtn" class="btn primary">Add Chapter Manually</button>
-        </div>
-      </div>
-
-      <div id="chapterList" style="margin-top:16px;"></div>
-
-      <div id="chapterEditor" class="mt10 hidden">
-        <h3 id="editorTitle">Add Chapter</h3>
-
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-          <div>
-            <label>School</label>
-            <select id="editorSchool"></select>
-          </div>
-
-          <div>
-            <label>Subject</label>
-            <select id="editorSubject">
-              <option>Maths</option>
-              <option>Physics</option>
-              <option>Chemistry</option>
-              <option>Biology</option>
-              <option>Computer</option>
-              <option>English</option>
-            </select>
-          </div>
-
-          <div>
-            <label>Grade</label>
-            <select id="editorGrade">
-              <option>6</option>
-              <option>7</option>
-              <option>8</option>
-              <option>9</option>
-              <option>10</option>
-            </select>
-          </div>
-
-          <div>
-            <label>Teacher</label>
-            <input id="editorTeacher" placeholder="Teacher name"/>
-          </div>
-
-          <div style="grid-column: 1 / span 2;">
-            <label>Chapter Title</label>
-            <input id="editorTitleInput" placeholder="Chapter title"/>
-          </div>
-
-          <div style="grid-column: 1 / span 2;">
-            <label>Notes / Description</label>
-            <textarea id="editorNotes" rows="4" placeholder="Optional notes"></textarea>
-          </div>
-        </div>
-
-        <div style="display:flex; gap:8px; margin-top:12px;">
-          <button id="saveChapterBtn" class="btn primary">Save</button>
-          <button id="cancelEditBtn" class="btn ghost">Cancel</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="footer card">
-      <div style="font-weight:700">Avanti Fellows — Curriculum Tracker</div>
-      <div class="small">© 2024</div>
-    </div>
-  </div>
-
-  <!-- Chart.js from CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-  <script>
-    /*************************************************************************
-     * NOTE:
-     * - This is the edited single-file version of your earlier index.html.
-     * - I adjusted the client-side logic so chapters are saved with a
-     *   `school` property and UI filters + charts respect the selected school.
-     * - Firebase configuration usage is preserved: the places where you
-     *   previously wrote to Firestore / Realtime DB are unmodified in shape,
-     *   except each created/updated chapter includes `school`.
-     *
-     * IMPORTANT:
-     * - Replace the firebaseConfig placeholders below with your project's config
-     *   if they're not already in your file. I did NOT change your firebase config.
-     *************************************************************************/
-
-    // ---------- Firebase initialization ----------
-    // If your original file included firebase config somewhere else, keep it.
-    // For safety, check if firebase is already present.
-    if (typeof firebase === 'undefined') {
-      // Load minimal Firebase libs if not present — these CDN links are kept
-      // as fallback. If you already included Firebase SDK in your original
-      // project (which you likely did), these lines will be skipped.
-      // NOTE: If you rely on modular SDK v9, you'll need to adapt this snippet.
-      console.warn('Firebase SDK not present. Please ensure your project includes Firebase scripts. This file preserves original firebase usage.');
-    }
-
-    // ---------- Sample local data store / Firestore calls ----------
-    // The platform uses Firestore in your original project; to keep this file
-    // working in case Firebase isn't available locally, we maintain a local
-    // in-memory dataset. When you deploy with Firebase, replace local read/write
-    // functions with your Firestore calls (I preserved names so you can switch).
-    (function(){
-      // Data model:
-      // chapters: array of {
-      //   id, school, subject, grade, teacher, title, notes, completed (boolean), testConducted (boolean)
-      // }
-
-      // If you have Firestore functions in your project, replace these with those functions.
-      window._localStore = {
-        chapters: [
-          // sample entries (so charts show something initially)
-          { id: 'c1', school: 'EMRS Bhopal', subject:'Maths', grade:'10', teacher:'R. Sharma', title:'Quadratic Equations', notes:'', completed:true, testConducted:true },
-          { id: 'c2', school: 'JNV Bharuch', subject:'Physics', grade:'9', teacher:'R. Patel', title:'Laws of Motion', notes:'', completed:false, testConducted:false },
-          { id: 'c3', school: 'CoE Bargarh', subject:'Chemistry', grade:'8', teacher:'S. Singh', title:'Acids & Bases', notes:'', completed:true, testConducted:true },
-          { id: 'c4', school: 'EMRS Bhopal', subject:'Biology', grade:'9', teacher:'A. Khan', title:'Plant Kingdom', notes:'', completed:false, testConducted:false },
-        ],
-        schools: [
-          // Your 6 schools, and specify extra subjects in two of them
-          { name: 'CoE Bargarh', subjects: ['Maths','Physics','Chemistry'] },
-          { name: 'CoE Mahisagar', subjects: ['Maths','Physics','Chemistry'] },
-          { name: 'CoE Bundi', subjects: ['Maths','Physics','Chemistry'] },
-          { name: 'JNV Bharuch', subjects: ['Maths','Physics','Chemistry','Biology'] },
-          { name: 'EMRS Bhopal', subjects: ['Maths','Physics','Chemistry','Biology'] },
-          { name: 'CoE Cuttack', subjects: ['Maths','Physics','Chemistry'] }
-        ]
-      };
-
-      // expose store helper functions (simulate async Firestore reads/writes)
-      window.storeApi = {
-        getSchools: async function(){
-          // Return array of school objects {name, subjects}
-          return JSON.parse(JSON.stringify(window._localStore.schools));
-        },
-        getChapters: async function(){
-          return JSON.parse(JSON.stringify(window._localStore.chapters));
-        },
-        addChapter: async function(ch){
-          ch.id = 'id_' + Math.random().toString(36).slice(2,9);
-          window._localStore.chapters.push(ch);
-          return ch;
-        },
-        updateChapter: async function(id, patch){
-          const idx = window._localStore.chapters.findIndex(c=>c.id===id);
-          if(idx>=0){
-            window._localStore.chapters[idx] = Object.assign({}, window._localStore.chapters[idx], patch);
-            return window._localStore.chapters[idx];
-          }
-          throw new Error('chapter not found');
-        },
-        deleteChapter: async function(id){
-          window._localStore.chapters = window._localStore.chapters.filter(c=>c.id!==id);
-          return true;
+  useEffect(() => {
+    const loadSchools = async () => {
+      try {
+        const doc = await db.collection('meta').doc('schools').get();
+        if (doc.exists) {
+          setSchools(doc.data().list || DEFAULT_SCHOOLS);
         }
-      };
-    })();
-
-    // ---------- UI logic ----------
-    (function(){
-      const $ = id => document.getElementById(id);
-
-      // DOM nodes
-      const filterSchool = $('filterSchool');
-      const filterSubject = $('filterSubject');
-      const filterGrade = $('filterGrade');
-      const filterTeacher = $('filterTeacher');
-
-      const statTotal = $('statTotal');
-      const statCompleted = $('statCompleted');
-      const statPending = $('statPending');
-
-      const canvasOverall = document.getElementById('canvasOverall');
-      const canvasSubject = document.getElementById('canvasSubject');
-      const canvasPendingBySchool = document.getElementById('canvasPendingBySchool');
-
-      const chapterList = $('chapterList');
-      const chapterEditor = $('chapterEditor');
-      const addManualBtn = $('addManualBtn');
-      const importCsv = $('importCsv');
-      const csvFile = $('csvFile');
-      const editorSchool = $('editorSchool');
-      const editorSubject = $('editorSubject');
-      const editorGrade = $('editorGrade');
-      const editorTeacher = $('editorTeacher');
-      const editorTitleInput = $('editorTitleInput');
-      const editorNotes = $('editorNotes');
-      const saveChapterBtn = $('saveChapterBtn');
-      const cancelEditBtn = $('cancelEditBtn');
-      const editorTitle = $('editorTitle');
-
-      let currentEditId = null;
-
-      // Chart instances
-      let chartOverall = null;
-      let chartSubject = null;
-      let chartPendingBySchool = null;
-
-      // state
-      let schools = [];
-      let chapters = [];
-
-      // Utility: populate school and subject selects
-      async function loadInitialData(){
-        schools = await window.storeApi.getSchools();
-        chapters = await window.storeApi.getChapters();
-
-        populateSchoolFilters();
-        populateEditorSchool();
-        refreshFiltersDependent();
-        renderChapters();
-        updateStatsAndCharts();
+      } catch (e) {
+        console.error('Error loading schools', e);
       }
+    };
+    loadSchools();
+  }, []);
 
-      function populateSchoolFilters(){
-        // filterSchool options
-        filterSchool.innerHTML = '';
-        const allOpt = document.createElement('option');
-        allOpt.value = 'All';
-        allOpt.textContent = 'All Schools';
-        filterSchool.appendChild(allOpt);
-
-        schools.forEach(s=>{
-          const o = document.createElement('option');
-          o.value = s.name;
-          o.textContent = s.name;
-          filterSchool.appendChild(o);
-        });
-      }
-
-      function populateEditorSchool(){
-        editorSchool.innerHTML = '';
-        schools.forEach(s=>{
-          const o = document.createElement('option');
-          o.value = s.name;
-          o.textContent = s.name;
-          editorSchool.appendChild(o);
-        });
-      }
-
-      function refreshFiltersDependent(){
-        // subjects depend on selected school: If All schools chosen, show union of subjects
-        const selectedSchool = filterSchool.value || 'All';
-        let subjectSet = new Set();
-        if(selectedSchool === 'All'){
-          schools.forEach(s => s.subjects.forEach(sub => subjectSet.add(sub)));
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        if (user.email === 'admin@avantifellows.org') {
+          setIsAdmin(true);
+          setCurrentUser({ name: 'Administrator', email: user.email, afid: 'ADMIN', school: 'Admin' });
+          setActiveTab('curriculum');
         } else {
-          const s = schools.find(x => x.name === selectedSchool);
-          if(s) s.subjects.forEach(sub => subjectSet.add(sub));
+          const teacherSnapshot = await db.collection('teachers')
+            .where('email', '==', user.email)
+            .limit(1)
+            .get();
+          
+          if (!teacherSnapshot.empty) {
+            const teacherData = teacherSnapshot.docs[0].data();
+            setCurrentUser(teacherData);
+            setIsAdmin(false);
+            setActiveTab('overview');
+            
+            if (teacherData.dob) {
+              const d = new Date(teacherData.dob);
+              const now = new Date();
+              if (d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) {
+                setShowConfetti(true);
+                setCelebrationMessage(`🎂 Happy Birthday, ${teacherData.name}!`);
+                setTimeout(() => {
+                  setShowConfetti(false);
+                  setCelebrationMessage('');
+                }, 8000);
+              }
+            }
+          } else {
+            alert('Teacher profile not found. Please contact admin.');
+            await auth.signOut();
+          }
         }
-
-        const subs = Array.from(subjectSet).sort();
-        filterSubject.innerHTML = '';
-        const allOpt = document.createElement('option');
-        allOpt.value = 'All';
-        allOpt.textContent = 'All Subjects';
-        filterSubject.appendChild(allOpt);
-        subs.forEach(sub => {
-          const o = document.createElement('option');
-          o.value = sub;
-          o.textContent = sub;
-          filterSubject.appendChild(o);
-        });
-
-        // Teachers and Grades - compute union across filtered chapters
-        const filteredChaps = getFilteredChaptersRaw();
-        const teacherSet = new Set(filteredChaps.map(c => c.teacher).filter(Boolean));
-        const teachers = Array.from(teacherSet).sort();
-        filterTeacher.innerHTML = '';
-        const allT = document.createElement('option');
-        allT.value = 'All';
-        allT.textContent = 'All Teachers';
-        filterTeacher.appendChild(allT);
-        teachers.forEach(t => {
-          const o = document.createElement('option'); o.value = t; o.textContent = t;
-          filterTeacher.appendChild(o);
-        });
-
-        const gradeSet = new Set(filteredChaps.map(c => c.grade).filter(Boolean));
-        const grades = Array.from(gradeSet).sort();
-        filterGrade.innerHTML = '';
-        const allG = document.createElement('option'); allG.value='All'; allG.textContent='All Grades';
-        filterGrade.appendChild(allG);
-        grades.forEach(g => {
-          const o = document.createElement('option'); o.value=g; o.textContent=g;
-          filterGrade.appendChild(o);
-        });
+      } else {
+        setCurrentUser(null);
+        setIsAdmin(false);
       }
+      setLoading(false);
+    });
 
-      // Get chapters filtered by top-level UI filters (school/subject/grade/teacher)
-      function getFilteredChaptersRaw(){
-        let list = chapters.slice();
-        const fSchool = filterSchool.value || 'All';
-        const fSub = filterSubject.value || 'All';
-        const fGrade = filterGrade.value || 'All';
-        const fTeacher = filterTeacher.value || 'All';
+    return () => unsubscribe();
+  }, []);
 
-        if(fSchool !== 'All'){
-          list = list.filter(c => (c.school || 'Unassigned') === fSchool);
-        }
-        if(fSub !== 'All'){
-          list = list.filter(c => c.subject === fSub);
-        }
-        if(fGrade !== 'All'){
-          list = list.filter(c => c.grade === fGrade);
-        }
-        if(fTeacher !== 'All'){
-          list = list.filter(c => c.teacher === fTeacher);
-        }
-        return list;
+  useEffect(() => {
+    const unsubProgress = db.collection('chapterProgress').onSnapshot(snap => {
+      const map = {};
+      snap.docs.forEach(d => map[d.id] = d.data());
+      setChapterProgress(map);
+    });
+
+    const unsubTeachers = db.collection('teachers').onSnapshot(snap => {
+      setTeachers(snap.docs.map(d => d.data()));
+    });
+
+    const unsubCurriculum = db.collection('curriculum').onSnapshot(snap => {
+      const currMap = {};
+      snap.docs.forEach(doc => {
+        currMap[doc.id] = doc.data();
+      });
+      setCurriculum(currMap);
+    });
+
+    return () => {
+      unsubProgress();
+      unsubTeachers();
+      unsubCurriculum();
+    };
+  }, []);
+
+  const handleLogin = async () => {
+    setAuthLoading(true);
+    try {
+      const email = (loginForm.email || '').trim().toLowerCase();
+      const password = loginForm.password;
+      
+      if (!email || !password) {
+        alert('Please enter email and password');
+        setAuthLoading(false);
+        return;
       }
+      
+      await auth.signInWithEmailAndPassword(email, password);
+    } catch (e) {
+      console.error('login error', e);
+      alert('Login failed: ' + e.message);
+    }
+    setAuthLoading(false);
+  };
 
-      // Render chapters in the list area
-      function renderChapters(){
-        const filtered = getFilteredChaptersRaw();
-        chapterList.innerHTML = '';
-        if(filtered.length === 0){
-          chapterList.innerHTML = '<div class="small">No chapters found for selected filters.</div>';
-          return;
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      setActiveTab('overview');
+    } catch (e) {
+      console.error('logout error', e);
+    }
+  };
+
+  const updateChapterProgress = useCallback(async (school, chapterId, field, value) => {
+    try {
+      const docId = `${school}_${chapterId}`;
+      await db.collection('chapterProgress').doc(docId).set({ [field]: value }, { merge: true });
+      
+      if (field === 'completed' && value === 'Yes') {
+        const testStatus = chapterProgress[docId]?.testConducted;
+        if (testStatus === 'Yes') {
+          setShowConfetti(true);
+          setCelebrationMessage('🎉 Chapter Completed Successfully!');
+          setTimeout(() => {
+            setShowConfetti(false);
+            setCelebrationMessage('');
+          }, 5000);
         }
+      }
+    } catch (e) {
+      console.error('Update error', e);
+      alert('Failed to update');
+    }
+  }, [chapterProgress]);
 
-        filtered.forEach(ch => {
-          const div = document.createElement('div');
-          div.className = 'card';
-          div.style.marginBottom = '10px';
-          div.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <div style="font-weight:700">${escapeHtml(ch.title || '(Untitled)')}</div>
-                <div class="small">School: ${escapeHtml(ch.school || 'Unassigned')} • Subject: ${escapeHtml(ch.subject || '')} • Grade: ${escapeHtml(ch.grade || '')}</div>
-                <div class="small">Teacher: ${escapeHtml(ch.teacher || '')}</div>
-                <div class="small" style="margin-top:6px">${escapeHtml(ch.notes || '')}</div>
+  const addChapter = async (school, subject, grade, chapter) => {
+    try {
+      const docId = `${school}_${subject}_${grade}`;
+      const doc = await db.collection('curriculum').doc(docId).get();
+      const existing = doc.exists ? (doc.data().chapters || []) : [];
+      
+      chapter.id = `${subject.charAt(0)}${grade}-${existing.length + 1}-${Date.now().toString().slice(-4)}`;
+      const updated = [...existing, chapter];
+      
+      await db.collection('curriculum').doc(docId).set({ chapters: updated });
+      alert('Chapter added successfully!');
+    } catch (e) {
+      console.error('Add error', e);
+      alert('Failed to add: ' + e.message);
+    }
+  };
+
+  const deleteChapter = async (school, subject, grade, chapterId) => {
+    if (!confirm('Delete this chapter?')) return;
+    try {
+      const docId = `${school}_${subject}_${grade}`;
+      const doc = await db.collection('curriculum').doc(docId).get();
+      const existing = doc.exists ? (doc.data().chapters || []) : [];
+      const updated = existing.filter(ch => ch.id !== chapterId);
+      
+      await db.collection('curriculum').doc(docId).set({ chapters: updated });
+      alert('Chapter deleted successfully');
+    } catch (e) {
+      console.error('Delete error', e);
+      alert('Failed to delete: ' + e.message);
+    }
+  };
+
+  function Confetti() {
+    const shapes = ['●', '■', '▲', '★', '♦', '♥', '✦', '✧'];
+    const colors = ['#F4B41A', '#E8B039', '#C8342E', '#FFA07A', '#98D8C8', '#F7DC6F'];
+    
+    return (
+      <div className="fixed inset-0 pointer-events-none z-[9999]">
+        {Array.from({length: 60}).map((_, i) => {
+          const shape = shapes[Math.floor(Math.random() * shapes.length)];
+          const color = colors[Math.floor(Math.random() * colors.length)];
+          const size = 12 + Math.random() * 20;
+          const left = Math.random() * 100;
+          const delay = Math.random() * 2;
+          
+          return (
+            <div 
+              key={i} 
+              className="confetti-piece" 
+              style={{
+                left: `${left}%`,
+                top: '-50px',
+                color: color,
+                fontSize: `${size}px`,
+                animationDelay: `${delay}s`
+              }}
+            >
+              {shape}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen avanti-gradient flex items-center justify-center">
+        <div className="text-center">
+          <img src={AVANTI_LOGO} alt="Avanti Fellows" className="w-20 h-20 mx-auto mb-4 animate-bounce" />
+          <div className="text-white text-2xl font-bold">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen avanti-gradient flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md">
+          <div className="text-center mb-8">
+            <img src={AVANTI_LOGO} alt="Avanti Fellows" className="w-20 h-20 mx-auto mb-4" />
+            <h1 className="text-4xl font-bold text-gray-800 mb-2">Curriculum Tracker</h1>
+            <p className="text-gray-600 mt-3">Avanti Fellows</p>
+          </div>
+
+          <div className="space-y-5">
+            <input 
+              type="email"
+              className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg" 
+              value={loginForm.email} 
+              onChange={e => setLoginForm({...loginForm, email: e.target.value})} 
+              placeholder="Email" 
+            />
+            <input 
+              type="password" 
+              className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg" 
+              value={loginForm.password} 
+              onChange={e => setLoginForm({...loginForm, password: e.target.value})} 
+              placeholder="Password"
+              onKeyPress={e => e.key === 'Enter' && handleLogin()} 
+            />
+            <button 
+              onClick={handleLogin} 
+              disabled={authLoading} 
+              className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-50"
+            >
+              {authLoading ? 'Logging in...' : 'Login'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {showConfetti && <Confetti />}
+        
+        <nav className="avanti-gradient shadow-lg sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12" />
+                <div>
+                  <h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1>
+                  <p className="text-sm text-white opacity-90">Avanti Fellows</p>
+                </div>
               </div>
-              <div style="display:flex; flex-direction:column; gap:8px;">
-                <div style="display:flex; gap:8px;">
-                  <button class="btn ghost" data-id="${ch.id}" data-action="edit">Edit</button>
-                  <button class="btn ghost" data-id="${ch.id}" data-action="toggleComplete">${ch.completed ? 'Mark Incomplete' : 'Mark Complete'}</button>
+              <div className="flex items-center gap-4">
+                <div className="text-right hidden sm:block">
+                  <p className="text-white font-semibold">{currentUser.name}</p>
+                  <p className="text-sm text-white opacity-90">{currentUser.school}</p>
                 </div>
-                <div style="display:flex; gap:8px;">
-                  <button class="btn ghost" data-id="${ch.id}" data-action="toggleTest">${ch.testConducted ? 'Test Done' : 'Mark Test'}</button>
-                  <button class="btn ghost" data-id="${ch.id}" data-action="delete">Delete</button>
-                </div>
+                <button 
+                  onClick={handleLogout} 
+                  className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold"
+                >
+                  Logout
+                </button>
               </div>
             </div>
-          `;
-          chapterList.appendChild(div);
-        });
+          </div>
+        </nav>
 
-        // attach handlers
-        chapterList.querySelectorAll('button').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            const id = btn.getAttribute('data-id');
-            const action = btn.getAttribute('data-action');
-            if(action === 'edit') openEditorFor(id);
-            if(action === 'toggleComplete') await toggleComplete(id);
-            if(action === 'toggleTest') await toggleTest(id);
-            if(action === 'delete') { if(confirm('Delete this chapter?')) await deleteChapter(id); }
+        {celebrationMessage && (
+          <div className="avanti-gradient text-white text-center py-4 text-xl font-bold">
+            {celebrationMessage}
+          </div>
+        )}
+
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <TeacherDashboard 
+            currentUser={currentUser}
+            curriculum={curriculum}
+            chapterProgress={chapterProgress}
+            updateChapterProgress={updateChapterProgress}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <nav className="avanti-gradient shadow-lg sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12" />
+              <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+            </div>
+            <button 
+              onClick={handleLogout} 
+              className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <AdminDashboard 
+          teachers={teachers}
+          curriculum={curriculum}
+          chapterProgress={chapterProgress}
+          schools={schools}
+          addChapter={addChapter}
+          deleteChapter={deleteChapter}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TeacherDashboard({ currentUser, curriculum, chapterProgress, updateChapterProgress }) {
+  const [activeGrade, setActiveGrade] = useState('11');
+  const [expandedChapters, setExpandedChapters] = useState({});
+  
+  const mySchool = currentUser.school;
+  const mySubject = currentUser.subject;
+  const docId = `${mySchool}_${mySubject}_${activeGrade}`;
+  const chapters = curriculum[docId]?.chapters || [];
+
+  const toggleExpand = (chapterId) => {
+    setExpandedChapters(prev => ({ ...prev, [chapterId]: !prev[chapterId] }));
+  };
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold">My Curriculum - {mySubject}</h2>
+      
+      <div className="flex gap-3">
+        <button
+          onClick={() => setActiveGrade('11')}
+          className={`px-6 py-3 rounded-xl font-semibold ${
+            activeGrade === '11' ? 'avanti-gradient text-white' : 'bg-white'
+          }`}
+        >
+          Class 11th
+        </button>
+        <button
+          onClick={() => setActiveGrade('12')}
+          className={`px-6 py-3 rounded-xl font-semibold ${
+            activeGrade === '12' ? 'avanti-gradient text-white' : 'bg-white'
+          }`}
+        >
+          Class 12th
+        </button>
+      </div>
+
+      {chapters.length === 0 ? (
+        <div className="bg-white p-8 rounded-2xl text-center">
+          <p className="text-gray-600">No chapters available yet. Contact admin to add curriculum.</p>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {chapters.map(chapter => {
+            const progressId = `${mySchool}_${chapter.id}`;
+            const prog = chapterProgress[progressId] || {};
+            const completedTopics = prog.completedTopics || [];
+            const allTopics = chapter.topics || [];
+            const progress = allTopics.length ? Math.round((completedTopics.length / allTopics.length) * 100) : 0;
+            const isExpanded = expandedChapters[chapter.id];
+
+            return (
+              <div key={chapter.id} className={`chapter-card bg-white rounded-2xl shadow-lg p-5 ${isExpanded ? 'chapter-expanded' : 'chapter-collapsed'}`}>
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="text-xl font-bold pr-2">{chapter.name}</h3>
+                  <button
+                    onClick={() => toggleExpand(chapter.id)}
+                    className="text-sm px-3 py-1 avanti-gradient-light rounded-lg font-semibold"
+                  >
+                    {isExpanded ? '▲' : '▼'}
+                  </button>
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span>Topics Progress</span>
+                      <span className="font-bold">{completedTopics.length}/{allTopics.length}</span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full">
+                      <div 
+                        className="h-2 avanti-gradient rounded-full transition-all" 
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {allTopics.map((topic, idx) => {
+                      const checked = completedTopics.includes(topic);
+                      return (
+                        <label key={idx} className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded">
+                          <input 
+                            type="checkbox" 
+                            checked={checked}
+                            onChange={() => {
+                              const updated = checked 
+                                ? completedTopics.filter(t => t !== topic)
+                                : [...completedTopics, topic];
+                              updateChapterProgress(mySchool, chapter.id, 'completedTopics', updated);
+                            }}
+                          />
+                          <span className={`text-sm ${checked ? 'line-through text-gray-500' : ''}`}>
+                            {topic}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {isExpanded && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-bold mb-1">Completion Date</label>
+                        <input 
+                          type="date" 
+                          value={prog.completionDate || ''} 
+                          onChange={e => updateChapterProgress(mySchool, chapter.id, 'completionDate', e.target.value)}
+                          className="w-full border-2 px-3 py-2 rounded-lg"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold mb-1">Test Conducted?</label>
+                        <select 
+                          value={prog.testConducted || 'No'} 
+                          onChange={e => updateChapterProgress(mySchool, chapter.id, 'testConducted', e.target.value)}
+                          className="w-full border-2 px-3 py-2 rounded-lg"
+                        >
+                          <option value="No">No</option>
+                          <option value="Yes">Yes</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold mb-1">Completed?</label>
+                        <select 
+                          value={prog.completed || 'No'} 
+                          onChange={e => updateChapterProgress(mySchool, chapter.id, 'completed', e.target.value)}
+                          className="w-full border-2 px-3 py-2 rounded-lg"
+                        >
+                          <option value="No">No</option>
+                          <option value="Yes">Yes</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminDashboard({ teachers, curriculum, chapterProgress, schools, addChapter, deleteChapter }) {
+  const [activeTab, setActiveTab] = useState('curriculum');
+  const [selectedSchool, setSelectedSchool] = useState(schools[0] || 'CoE Barwani');
+  const [selectedSubject, setSelectedSubject] = useState('Physics');
+  const [selectedGrade, setSelectedGrade] = useState('11');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [chapterForm, setChapterForm] = useState({ name: '', topics: [], targetDate: '' });
+  const [newTopic, setNewTopic] = useState('');
+
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+
+  const docId = `${selectedSchool}_${selectedSubject}_${selectedGrade}`;
+  const chapters = curriculum[docId]?.chapters || [];
+
+  const handleAddChapter = () => {
+    if (!chapterForm.name) {
+      alert('Chapter name is required');
+      return;
+    }
+    
+    addChapter(selectedSchool, selectedSubject, selectedGrade, chapterForm);
+    setChapterForm({ name: '', topics: [], targetDate: '' });
+    setShowAddForm(false);
+  };
+
+  const handleAddTopic = () => {
+    if (!newTopic.trim()) return;
+    setChapterForm({ ...chapterForm, topics: [...chapterForm.topics, newTopic.trim()] });
+    setNewTopic('');
+  };
+
+  const aggregatedData = useMemo(() => {
+    const schoolData = {};
+    
+    schools.forEach(school => {
+      let totalChapters = 0;
+      let completedChapters = 0;
+      
+      SUBJECTS.forEach(subject => {
+        ['11', '12'].forEach(grade => {
+          const docId = `${school}_${subject}_${grade}`;
+          const schoolChapters = curriculum[docId]?.chapters || [];
+          
+          schoolChapters.forEach(ch => {
+            totalChapters++;
+            const progressId = `${school}_${ch.id}`;
+            const prog = chapterProgress[progressId] || {};
+            if (prog.completed === 'Yes' && prog.testConducted === 'Yes') {
+              completedChapters++;
+            }
           });
         });
-      }
-
-      function escapeHtml(str){
-        if(!str) return '';
-        return String(str).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; });
-      }
-
-      // Editor handlers
-      addManualBtn.addEventListener('click', () => {
-        currentEditId = null;
-        editorTitle.textContent = 'Add Chapter';
-        editorTitleInput.value = '';
-        editorNotes.value = '';
-        editorTeacher.value = '';
-        editorGrade.value = editorGrade.options[0].value || '6';
-        // default editorSchool to filterSchool selection if specific, else first school
-        editorSchool.value = (filterSchool.value && filterSchool.value !== 'All') ? filterSchool.value : (schools[0] && schools[0].name);
-        editorSubject.value = editorSubject.options[0].value;
-        chapterEditor.classList.remove('hidden');
-        editorTitleInput.focus();
       });
-
-      cancelEditBtn.addEventListener('click', () => {
-        chapterEditor.classList.add('hidden');
-        currentEditId = null;
-      });
-
-      async function openEditorFor(id){
-        const ch = chapters.find(c=>c.id===id);
-        if(!ch) return alert('Chapter not found');
-        currentEditId = id;
-        editorTitle.textContent = 'Edit Chapter';
-        editorTitleInput.value = ch.title || '';
-        editorNotes.value = ch.notes || '';
-        editorTeacher.value = ch.teacher || '';
-        editorGrade.value = ch.grade || (editorGrade.options[0] && editorGrade.options[0].value);
-        editorSchool.value = ch.school || (schools[0] && schools[0].name);
-        // if subject exists in editor list, select it; otherwise add to editorSubject temporarily
-        let found = false;
-        for(let i=0;i<editorSubject.options.length;i++){
-          if(editorSubject.options[i].value === ch.subject){ editorSubject.selectedIndex = i; found = true; break; }
-        }
-        if(!found){
-          // add temporary option
-          const o = document.createElement('option'); o.value = ch.subject; o.textContent = ch.subject;
-          editorSubject.appendChild(o);
-          editorSubject.value = ch.subject;
-        }
-        chapterEditor.classList.remove('hidden');
-        editorTitleInput.focus();
-      }
-
-      saveChapterBtn.addEventListener('click', async () => {
-        const payload = {
-          school: editorSchool.value || null,
-          subject: editorSubject.value || '',
-          grade: editorGrade.value || '',
-          teacher: editorTeacher.value || '',
-          title: editorTitleInput.value || '',
-          notes: editorNotes.value || '',
-          completed: false,
-          testConducted: false
-        };
-        try{
-          if(currentEditId){
-            // update existing
-            await window.storeApi.updateChapter(currentEditId, payload);
-            // update local copy
-            chapters = chapters.map(c => c.id === currentEditId ? Object.assign({}, c, payload) : c);
-          } else {
-            const newCh = await window.storeApi.addChapter(payload);
-            chapters.push(newCh);
-          }
-          chapterEditor.classList.add('hidden');
-          currentEditId = null;
-          refreshFiltersDependent();
-          renderChapters();
-          updateStatsAndCharts();
-        } catch(err){
-          console.error(err);
-          alert('Save failed: ' + (err.message||err));
-        }
-      });
-
-      async function deleteChapter(id){
-        try{
-          await window.storeApi.deleteChapter(id);
-          chapters = chapters.filter(c => c.id !== id);
-          renderChapters();
-          updateStatsAndCharts();
-        } catch(err){
-          console.error(err);
-          alert('Delete failed');
-        }
-      }
-
-      async function toggleComplete(id){
-        const ch = chapters.find(c=>c.id===id);
-        if(!ch) return;
-        const pat = { completed: !ch.completed };
-        await window.storeApi.updateChapter(id, pat);
-        ch.completed = pat.completed;
-        renderChapters();
-        updateStatsAndCharts();
-      }
-
-      async function toggleTest(id){
-        const ch = chapters.find(c=>c.id===id);
-        if(!ch) return;
-        const pat = { testConducted: !ch.testConducted };
-        await window.storeApi.updateChapter(id, pat);
-        ch.testConducted = pat.testConducted;
-        renderChapters();
-        updateStatsAndCharts();
-      }
-
-      // CSV import
-      importCsv.addEventListener('click', async () => {
-        const file = csvFile.files[0];
-        if(!file) return alert('Select CSV file first');
-        const text = await file.text();
-        // parse naive CSV (first row headers expected: school,subject,grade,teacher,title,notes,completed,testConducted)
-        const rows = text.split(/\r?\n/).map(r=>r.trim()).filter(Boolean);
-        if(rows.length === 0) return alert('CSV empty');
-        const headers = rows[0].split(',').map(h=>h.trim());
-        const dataRows = rows.slice(1);
-        const created = [];
-        for(const r of dataRows){
-          const cols = r.split(',').map(c=>c.trim());
-          const obj = {};
-          headers.forEach((h, idx) => { obj[h] = cols[idx] || ''; });
-          // attach selected school if the csv doesn't include school
-          const schoolFromUi = (filterSchool.value && filterSchool.value !== 'All') ? filterSchool.value : (editorSchool.value || (schools[0] && schools[0].name));
-          const schoolVal = obj.school || schoolFromUi || 'Unassigned';
-          const chapter = {
-            school: schoolVal,
-            subject: obj.subject || '',
-            grade: obj.grade || '',
-            teacher: obj.teacher || '',
-            title: obj.title || '',
-            notes: obj.notes || '',
-            completed: (String(obj.completed||'').toLowerCase()==='true' || String(obj.completed||'').toLowerCase()==='yes'),
-            testConducted: (String(obj.testConducted||'').toLowerCase()==='true' || String(obj.testConducted||'').toLowerCase()==='yes')
-          };
-          const added = await window.storeApi.addChapter(chapter);
-          created.push(added);
-        }
-        chapters = chapters.concat(created);
-        csvFile.value = '';
-        refreshFiltersDependent();
-        renderChapters();
-        updateStatsAndCharts();
-        alert('Imported ' + created.length + ' chapters');
-      });
-
-      // Chart helpers
-      function getCountsForFiltered(){
-        const f = getFilteredChaptersRaw();
-        const total = f.length;
-        const completed = f.filter(c => c.completed).length;
-        const pending = f.filter(c => !c.completed).length;
-        return { total, completed, pending, items: f };
-      }
-
-      function computeSubjectDistribution(items){
-        const m = {};
-        items.forEach(it => {
-          const s = it.subject || 'Unknown';
-          if(!m[s]) m[s] = 0;
-          if(it.completed) m[s] += 1;
-        });
-        // compute total chapters per subject to derive %
-        const totalPerSub = {};
-        items.forEach(it=>{
-          const s = it.subject || 'Unknown';
-          totalPerSub[s] = (totalPerSub[s]||0) + 1;
-        });
-        const labels = Object.keys(totalPerSub);
-        const perc = labels.map(lbl => {
-          const tot = totalPerSub[lbl] || 0;
-          const comp = m[lbl] || 0;
-          return (tot === 0 ? 0 : Math.round((comp / tot) * 100));
-        });
-        return { labels, perc, totalPerSub, completedPerSub: m };
-      }
-
-      function computePendingBySchool(allChapters){
-        const map = {};
-        allChapters.forEach(c => {
-          const sc = c.school || 'Unassigned';
-          if(!map[sc]) map[sc] = 0;
-          if(!c.testConducted) map[sc] += 1;
-        });
-        const labels = Object.keys(map);
-        const vals = labels.map(l => map[l]);
-        return { labels, vals };
-      }
-
-      function updateStatsAndCharts(){
-        const counts = getCountsForFiltered();
-        statTotal.textContent = counts.total;
-        statCompleted.textContent = counts.completed;
-        statPending.textContent = counts.items.filter(it=>!it.testConducted).length;
-
-        // Overall progress doughnut: completed vs pending (for the filtered view)
-        const overallData = { labels: ['Completed','Pending'], datasets: [{ data: [counts.completed, Math.max(0, counts.total - counts.completed)], backgroundColor:['#38a169', '#e6eef3'] }]};
-        if(chartOverall) chartOverall.destroy();
-        chartOverall = new Chart(canvasOverall.getContext('2d'), { type:'doughnut', data: overallData, options:{ cutout: '70%', plugins:{legend:{display:true, position:'bottom'}} } });
-
-        // Subject completion: show percent completed per subject for the filtered view
-        const subj = computeSubjectDistribution(counts.items);
-        if(chartSubject) chartSubject.destroy();
-        chartSubject = new Chart(canvasSubject.getContext('2d'), { type:'pie', data:{ labels: subj.labels, datasets:[{ data: subj.perc }]}, options:{ plugins:{legend:{position:'bottom'}} } });
-
-        // Pending tests by school: this should reflect across all chapters, but also respect filterSchool selection.
-        // If filterSchool is 'All' then compute across all schools, otherwise just show for selected school.
-        const allChapsForPending = (filterSchool.value && filterSchool.value !== 'All') ? chapters.filter(c => (c.school || 'Unassigned') === filterSchool.value) : chapters;
-        const pendingBySchool = computePendingBySchool(allChapsForPending);
-        if(chartPendingBySchool) chartPendingBySchool.destroy();
-        chartPendingBySchool = new Chart(canvasPendingBySchool.getContext('2d'), {
-          type:'bar',
-          data:{ labels: pendingBySchool.labels, datasets:[{ label:'Pending Tests', data: pendingBySchool.vals }]},
-          options:{ plugins:{legend:{display:false}}, scales:{ x:{ ticks:{ autoSkip:false, maxRotation:45, minRotation:45 } } } }
-        });
-      }
-
-      // Wire filter change handlers
-      [filterSchool, filterSubject, filterGrade, filterTeacher].forEach(el=>{
-        el.addEventListener('change', () => {
-          refreshFiltersDependent();
-          renderChapters();
-          updateStatsAndCharts();
-        });
-      });
-
-      // Initial load
-      loadInitialData();
-
-      // Utility: sign out placeholder
-      $('signOutBtn').addEventListener('click', () => alert('Sign out flow — implement via Firebase auth as needed.'));
-
-      // ensure UI doesn't show any raw JS or code in footer: we avoid rendering raw script text anywhere
-      (function removeTrailingScriptText(){
-        // previously some script content was accidentally appended to the DOM; ensure not present
-        // (no-op here but left for safety)
-      })();
-
-      // Expose some helpers for debugging in console
-      window._ct = {
-        refresh: async () => { chapters = await window.storeApi.getChapters(); renderChapters(); updateStatsAndCharts(); refreshFiltersDependent(); },
-        addSample: async () => {
-          const sample = { school: schools[0].name, subject: schools[0].subjects[0], grade:'9', teacher:'Demo', title:'New Chapter '+Math.random().toString(36).slice(2,6), notes:'', completed:false, testConducted:false };
-          const added = await window.storeApi.addChapter(sample);
-          chapters.push(added);
-          renderChapters(); updateStatsAndCharts(); refreshFiltersDependent();
-        },
-        store: window._localStore
+      
+      schoolData[school] = { 
+        total: totalChapters, 
+        completed: completedChapters,
+        percentage: totalChapters ? Math.round((completedChapters / totalChapters) * 100) : 0
       };
-    })();
+    });
+    
+    return schoolData;
+  }, [curriculum, chapterProgress, schools]);
+
+  useEffect(() => {
+    if (activeTab === 'analytics' && chartRef.current) {
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+      }
+
+      const ctx = chartRef.current.getContext('2d');
+      chartInstance.current = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: schools,
+          datasets: [{
+            label: 'Completion %',
+            data: schools.map(s => aggregatedData[s]?.percentage || 0),
+            backgroundColor: '#C8342E',
+            borderRadius: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'School-wise Progress', font: { size: 16, weight: 'bold' } }
+          },
+          scales: {
+            y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
+          }
+        }
+      });
+    }
+
+    return () => {
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+      }
+    };
+  }, [activeTab, schools, aggregatedData]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-3">
+        <button
+          onClick={() => setActiveTab('curriculum')}
+          className={`px-6 py-3 rounded-xl font-semibold ${
+            activeTab === 'curriculum' ? 'avanti-gradient text-white' : 'bg-white'
+          }`}
+        >
+          Manage Curriculum
+        </button>
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`px-6 py-3 rounded-xl font-semibold ${
+            activeTab === 'analytics' ? 'avanti-gradient text-white' : 'bg-white'
+          }`}
+        >
+          View Analytics
+        </button>
+      </div>
+
+      {activeTab === 'curriculum' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h3 className="text-2xl font-bold mb-4">Curriculum Management</h3>
+            
+            <div className="grid md:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-bold mb-2">School</label>
+                <select 
+                  value={selectedSchool} 
+                  onChange={e => setSelectedSchool(e.target.value)}
+                  className="w-full border-2 px-4 py-3 rounded-xl"
+                >
+                  {schools.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-2">Subject</label>
+                <select 
+                  value={selectedSubject} 
+                  onChange={e => setSelectedSubject(e.target.value)}
+                  className="w-full border-2 px-4 py-3 rounded-xl"
+                >
+                  {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-2">Grade</label>
+                <select 
+                  value={selectedGrade} 
+                  onChange={e => setSelectedGrade(e.target.value)}
+                  className="w-full border-2 px-4 py-3 rounded-xl"
+                >
+                  <option value="11">Class 11th</option>
+                  <option value="12">Class 12th</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700"
+            >
+              {showAddForm ? 'Cancel' : '+ Add Chapter'}
+            </button>
+          </div>
+
+          {showAddForm && (
+            <div className="bg-white p-6 rounded-2xl shadow-lg">
+              <h4 className="text-xl font-bold mb-4">Add New Chapter</h4>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold mb-2">Chapter Name *</label>
+                  <input 
+                    type="text"
+                    value={chapterForm.name} 
+                    onChange={e => setChapterForm({...chapterForm, name: e.target.value})}
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                    placeholder="Enter chapter name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">Target Date</label>
+                  <input 
+                    type="date"
+                    value={chapterForm.targetDate} 
+                    onChange={e => setChapterForm({...chapterForm, targetDate: e.target.value})}
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">Topics</label>
+                  <div className="flex gap-2 mb-3">
+                    <input 
+                      type="text"
+                      value={newTopic} 
+                      onChange={e => setNewTopic(e.target.value)}
+                      onKeyPress={e => e.key === 'Enter' && handleAddTopic()}
+                      className="flex-1 border-2 px-4 py-3 rounded-xl"
+                      placeholder="Enter topic and click Add"
+                    />
+                    <button 
+                      onClick={handleAddTopic}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {chapterForm.topics.map((topic, idx) => (
+                      <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <span>{topic}</span>
+                        <button 
+                          onClick={() => {
+                            const updated = chapterForm.topics.filter((_, i) => i !== idx);
+                            setChapterForm({...chapterForm, topics: updated});
+                          }}
+                          className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleAddChapter}
+                  className="px-6 py-3 avanti-gradient text-white rounded-xl font-semibold"
+                >
+                  Save Chapter
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h4 className="text-xl font-bold mb-4">
+              {selectedSchool} - {selectedSubject} - Class {selectedGrade} ({chapters.length} chapters)
+            </h4>
+            
+            {chapters.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No chapters yet. Click "Add Chapter" to get started.</p>
+            ) : (
+              <div className="space-y-3">
+                {chapters.map(ch => (
+                  <div key={ch.id} className="border-2 rounded-xl p-4 hover:bg-gray-50">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h5 className="font-bold text-lg">{ch.name}</h5>
+                        <p className="text-sm text-gray-600">
+                          Target: {ch.targetDate || 'Not set'} | Topics: {ch.topics?.length || 0}
+                        </p>
+                        {ch.topics && ch.topics.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs font-semibold text-gray-700">Topics:</p>
+                            <ul className="text-xs text-gray-600 ml-4">
+                              {ch.topics.map((t, i) => <li key={i}>• {t}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => deleteChapter(selectedSchool, selectedSubject, selectedGrade, ch.id)}
+                        className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h3 className="text-2xl font-bold mb-4">School-wise Analytics</h3>
+            
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="stat-card avanti-gradient-light">
+                <div className="text-sm text-gray-600">Total Teachers</div>
+                <div className="text-3xl font-bold">{teachers.length}</div>
+              </div>
+              <div className="stat-card avanti-gradient-light">
+                <div className="text-sm text-gray-600">Total Schools</div>
+                <div className="text-3xl font-bold">{schools.length}</div>
+              </div>
+              <div className="stat-card avanti-gradient-light">
+                <div className="text-sm text-gray-600">Subjects</div>
+                <div className="text-3xl font-bold">{SUBJECTS.length}</div>
+              </div>
+            </div>
+
+            <div style={{ height: '400px' }}>
+              <canvas ref={chartRef}></canvas>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <h4 className="text-xl font-bold mb-4">School Details</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="avanti-gradient-light">
+                  <tr>
+                    <th className="p-3 text-left">School</th>
+                    <th className="p-3 text-left">Total Chapters</th>
+                    <th className="p-3 text-left">Completed</th>
+                    <th className="p-3 text-left">Progress</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {schools.map(school => (
+                    <tr key={school} className="border-b hover:bg-gray-50">
+                      <td className="p-3 font-medium">{school}</td>
+                      <td className="p-3">{aggregatedData[school]?.total || 0}</td>
+                      <td className="p-3 text-green-600 font-semibold">{aggregatedData[school]?.completed || 0}</td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-2 bg-gray-200 rounded-full">
+                            <div 
+                              className="h-2 avanti-gradient rounded-full"
+                              style={{ width: `${aggregatedData[school]?.percentage || 0}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-bold">{aggregatedData[school]?.percentage || 0}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
   </script>
 </body>
 </html>
