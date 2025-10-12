@@ -450,11 +450,14 @@ function App() {
     let totalChapters = 0, totalCompleted = 0, totalPendingTests = 0;
     let totalDaysSpent = 0, chaptersWithDates = 0;
 
-    Object.keys(curriculum).forEach(subject => {
-      subjectStats[subject] = { total: 0, completed: 0 };
-      
-      Object.keys(curriculum[subject]).forEach(grade => {
-        (curriculum[subject][grade] || []).forEach(ch => {
+    teachers.forEach(teacher => {
+  const school = teacher.school;
+  const subject = teacher.subject;
+  
+  if (!curriculum[school] || !curriculum[school][subject]) return;
+  
+  Object.keys(curriculum[school][subject]).forEach(grade => {
+    (curriculum[school][subject][grade] || []).forEach(ch => {
           totalChapters++;
           subjectStats[subject].total++;
           
