@@ -431,7 +431,7 @@ function App() {
       if (today > target) {
         return { label:'Delayed (In Progress)', key:'delayed-progress', color:'bg-red-100 border-red-300', textColor:'text-red-700' };
       }
-      return { label:`In Progress (${topicsDone}/${topicsTotal})`, key:'in-progress', color:'bg-blue-100 border-blue-300', textColor:'text-blue-700' };
+      return { label:'In Progress', key:'in-progress', color:'bg-blue-100 border-blue-300', textColor:'text-blue-700' };
     }
 
     if (today > target) {
@@ -1879,17 +1879,17 @@ function App() {
     }, [chapterDetails]);
 
     useEffect(() => {
-      if (!chapterDetails.length || !chartRefs.current.adminOverall?.current) return;
-
-      const completed = filteredStats.completed;
-      const total = filteredStats.total;
+      if (!chartRefs.current.adminOverall?.current) return;
+      
+      const completed = filteredStats.completed || 0;
+      const total = filteredStats.total || 1;
 
       createChart('adminOverall', {
         type: 'doughnut',
         data: {
           labels: ['Completed', 'Pending'],
           datasets: [{
-            data: [completed, total - completed],
+            data: [completed, Math.max(0, total - completed)],
             backgroundColor: ['#10B981', '#E5E7EB'],
             borderWidth: 0
           }]
@@ -1943,7 +1943,7 @@ function App() {
     }, [chapterDetails, createChart]);
 
     useEffect(() => {
-      if (!chapterDetails.length || !chartRefs.current.adminPending?.current) return;
+      if (!chartRefs.current.adminPending?.current) return;
 
       const schoolMap = {};
       chapterDetails.forEach(ch => {
@@ -1956,6 +1956,11 @@ function App() {
       });
 
       const schoolNames = Object.keys(schoolMap);
+      if (schoolNames.length === 0) {
+        schoolNames.push('No Data');
+        schoolMap['No Data'] = 0;
+      }
+      
       const pendingData = schoolNames.map(s => schoolMap[s]);
 
       createChart('adminPending', {
@@ -2857,7 +2862,7 @@ ReactDOM.render(<App />, document.getElementById('root'));
     }, [chapterDetails, createChart]);
 
     useEffect(() => {
-      if (!chapterDetails.length || !chartRefs.current.adminSchools?.current) return;
+      if (!chartRefs.current.adminSchools?.current) return;
 
       const schoolMap = {};
       chapterDetails.forEach(ch => {
@@ -2871,6 +2876,11 @@ ReactDOM.render(<App />, document.getElementById('root'));
       });
 
       const schoolNames = Object.keys(schoolMap);
+      if (schoolNames.length === 0) {
+        schoolNames.push('No Data');
+        schoolMap['No Data'] = { completed: 0, total: 1 };
+      }
+      
       const completionData = schoolNames.map(s => {
         return schoolMap[s].total ? Math.round((schoolMap[s].completed / schoolMap[s].total) * 100) : 0;
       });
@@ -2922,7 +2932,7 @@ ReactDOM.render(<App />, document.getElementById('root'));
             title: { display: true, text: 'Top Teachers Performance', font: { size: 16, weight: 'bold' } }
           },
           scales: {
-            x: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
+            x: { min: 0, max: 100, beginAtZero: true, ticks: { callback: v => v + '%' } }
           }
         }
       });
