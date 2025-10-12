@@ -2419,9 +2419,9 @@ function App() {
   }
 
   function AdminCurriculum() {
+    const [selectedSchool, setSelectedSchool] = useState(schools[0] || 'CoE Barwani');
     const [selectedSubject, setSelectedSubject] = useState('Physics');
     const [selectedGrade, setSelectedGrade] = useState(11);
-    const [editingChapter, setEditingChapter] = useState(null);
     const [chapterForm, setChapterForm] = useState({ name: '', topics: [], targetDate: '' });
     const [newTopic, setNewTopic] = useState('');
     const fileInputRef = useRef(null);
