@@ -86,7 +86,179 @@ function TeacherOverview({currentUser,curriculum,chapterProgress,teachers}){cons
 
 function TeacherAnalytics({currentUser,curriculum,chapterProgress}){const chartRef=useRef(null);const chartInstance=useRef(null);const mySchool=currentUser.school;const mySubject=currentUser.subject;const analyticsData=useMemo(()=>{const data={11:{total:0,completed:0},12:{total:0,completed:0}};let totalDays=0;let chaptersWithDates=0;['11','12'].forEach(grade=>{const docId=`${mySchool}_${mySubject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];chapters.forEach(ch=>{data[grade].total++;const progressId=`${mySchool}_${ch.id}`;const prog=chapterProgress[progressId]||{};if(prog.completed==='Yes'&&prog.testConducted==='Yes'){data[grade].completed++;if(prog.completionDate&&ch.targetDate){const target=new Date(ch.targetDate);const completion=new Date(prog.completionDate);const days=Math.abs(Math.ceil((completion-target)/(1000*60*60*24)));totalDays+=days;chaptersWithDates++}}})});const avgDays=chaptersWithDates?Math.round(totalDays/chaptersWithDates):0;return{...data,avgDays}},[curriculum,chapterProgress,mySchool,mySubject]);useEffect(()=>{if(chartRef.current){if(chartInstance.current){chartInstance.current.destroy()}const ctx=chartRef.current.getContext('2d');chartInstance.current=new Chart(ctx,{type:'bar',data:{labels:['Class 11','Class 12'],datasets:[{label:'Completed',data:[analyticsData[11].completed,analyticsData[12].completed],backgroundColor:'#10B981'},{label:'Pending',data:[analyticsData[11].total-analyticsData[11].completed,analyticsData[12].total-analyticsData[12].completed],backgroundColor:'#F59E0B'}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true}}}})}return()=>{if(chartInstance.current){chartInstance.current.destroy()}}},[analyticsData]);const handleExport=()=>{const exportData=[{Grade:'Class 11','Total Chapters':analyticsData[11].total,'Completed':analyticsData[11].completed,'Pending':analyticsData[11].total-analyticsData[11].completed,'Completion %':analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0},{Grade:'Class 12','Total Chapters':analyticsData[12].total,'Completed':analyticsData[12].completed,'Pending':analyticsData[12].total-analyticsData[12].completed,'Completion %':analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0}];exportToExcel(exportData,'my_analytics')};return(<div className="space-y-6"><div className="flex justify-between items-center"><h2 className="text-3xl font-bold">My Analytics</h2><button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">📊 Export to Excel</button></div><div className="grid grid-cols-3 gap-4"><div className="stat-card"><div className="text-sm text-gray-600">Avg Days per Chapter</div><div className="text-4xl font-bold">{analyticsData.avgDays}</div></div><div className="stat-card"><div className="text-sm text-gray-600">Class 11 Progress</div><div className="text-4xl font-bold">{analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0}%</div></div><div className="stat-card"><div className="text-sm text-gray-600">Class 12 Progress</div><div className="text-4xl font-bold">{analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0}%</div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}><canvas ref={chartRef}></canvas></div></div>)}
 
-function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateChapterProgress}){const[expandedChapters,setExpandedChapters]=useState({});const mySchool=currentUser.school;const mySubject=currentUser.subject;const docId=`${mySchool}_${mySubject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];const handleCompletedChange=(chapterId,value)=>{const progressId=`${mySchool}_${chapterId}`;const prog=chapterProgress[progressId]||{};if(value==='Yes'&&prog.testConducted!=='Yes'){alert('⚠️ Please conduct the chapter test before marking as completed!');return}updateChapterProgress(mySchool,chapterId,'completed',value)};return(<div className="space-y-6"><h2 className="text-3xl font-bold">Class {grade} - {mySubject}</h2>{chapters.length===0?<div className="bg-white p-8 rounded-2xl text-center"><p className="text-gray-600">No chapters available. Contact admin.</p></div>:<div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">{chapters.map(chapter=>{const progressId=`${mySchool}_${chapter.id}`;const prog=chapterProgress[progressId]||{};const completedTopics=prog.completedTopics||[];const allTopics=chapter.topics||[];const progress=allTopics.length?Math.round((completedTopics.length/allTopics.length)*100):0;const isExpanded=expandedChapters[chapter.id];const status=getChapterStatus(chapter,prog);return(<div key={chapter.id} className={`chapter-card ${status.color} rounded-2xl shadow-lg p-5`}><div className="flex justify-between items-start mb-3"><h3 className="text-xl font-bold pr-2">{chapter.name}</h3><button onClick={()=>setExpandedChapters(prev=>({...prev,[chapter.id]:!prev[chapter.id]}))} className="text-sm px-3 py-1 bg-white rounded-lg font-semibold">{isExpanded?'▲':'▼'}</button></div><div className={`status-badge ${status.class} mb-3`}>{status.label}</div><div className="space-y-3"><div><div className="flex justify-between text-sm mb-1"><span className="font-semibold">Topics</span><span className="font-bold">{completedTopics.length}/{allTopics.length}</span></div><div className="h-2 bg-gray-200 rounded-full"><div className="h-2 avanti-gradient rounded-full transition-all" style={{width:`${progress}%`}}/></div></div>{isExpanded&&<><div className="space-y-2 max-h-40 overflow-y-auto bg-white p-2 rounded-lg">{allTopics.map((topic,idx)=>{const checked=completedTopics.includes(topic);return(<label key={idx} className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded" onClick={e=>{e.preventDefault();const updated=checked?completedTopics.filter(t=>t!==topic):[...completedTopics,topic];updateChapterProgress(mySchool,chapter.id,'completedTopics',updated)}}><input type="checkbox" checked={checked} onChange={()=>{}} onClick={e=>e.stopPropagation()}/><span className={`text-sm ${checked?'line-through text-gray-500':'font-medium'}`}>{topic}</span></label>)})}</div><div className="bg-white p-3 rounded-lg"><label className="block text-sm font-bold mb-1">Target Date</label><div className="text-sm">{chapter.targetDate||'—'}</div></div><div className="bg-white p-3 rounded-lg"><label className="block text-sm font-bold mb-1">Completion Date *</label><input type="date" value={prog.completionDate||''} onChange={e=>updateChapterProgress(mySchool,chapter.id,'completionDate',e.target.value)} className="w-full border-2 px-3 py-2 rounded-lg"/></div><div className="bg-white p-3 rounded-lg"><label className="block text-sm font-bold mb-1">Test Conducted? *</label><select value={prog.testConducted||'No'} onChange={e=>updateChapterProgress(mySchool,chapter.id,'testConducted',e.target.value)} className="w-full border-2 px-3 py-2 rounded-lg"><option value="No">No</option><option value="Yes">Yes</option></select></div><div className="bg-white p-3 rounded-lg"><label className="block text-sm font-bold mb-1">Chapter Completed? *</label><select value={prog.completed||'No'} onChange={e=>handleCompletedChange(chapter.id,e.target.value)} className="w-full border-2 px-3 py-2 rounded-lg"><option value="No">No</option><option value="Yes">Yes</option></select></div><div className="bg-white p-3 rounded-lg"><label className="block text-sm font-bold mb-1">Notes</label><textarea value={prog.notes||''} onChange={e=>updateChapterProgress(mySchool,chapter.id,'notes',e.target.value)} className="w-full border-2 px-3 py-2 rounded-lg" rows="2" placeholder="Add notes..."/></div></>}</div></div>)})}</div>}</div>)}
+function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateChapterProgress}){
+  const[expandedChapters,setExpandedChapters]=useState({});
+  const mySchool=currentUser.school;
+  const mySubject=currentUser.subject;
+  const docId=`${mySchool}_${mySubject}_${grade}`;
+  const chapters=curriculum[docId]?.chapters||[];
+  
+  const handleCompletedChange=(chapterId,value)=>{
+    const progressId=`${mySchool}_${chapterId}`;
+    const prog=chapterProgress[progressId]||{};
+    if(value==='Yes'&&prog.testConducted!=='Yes'){
+      alert('⚠️ Please conduct the chapter test before marking as completed!');
+      return;
+    }
+    updateChapterProgress(mySchool,chapterId,'completed',value);
+  };
+
+  return(
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold">Class {grade} - {mySubject}</h2>
+      {chapters.length===0?
+        <div className="bg-white p-8 rounded-2xl text-center">
+          <p className="text-gray-600">No chapters available. Contact admin.</p>
+        </div>
+      :
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {chapters.map(chapter=>{
+            const progressId=`${mySchool}_${chapter.id}`;
+            const prog=chapterProgress[progressId]||{};
+            const completedTopics=prog.completedTopics||[];
+            const allTopics=chapter.topics||[];
+            const progress=allTopics.length?Math.round((completedTopics.length/allTopics.length)*100):0;
+            const isExpanded=expandedChapters[chapter.id];
+            const status=getChapterStatus(chapter,prog);
+
+            return(
+              <div key={chapter.id} className={`chapter-card ${status.color} rounded-2xl shadow-lg p-5`}>
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="text-xl font-bold pr-2">{chapter.name}</h3>
+                  <button 
+                    onClick={(e)=>{
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setExpandedChapters(prev=>({...prev,[chapter.id]:!prev[chapter.id]}));
+                    }} 
+                    className="text-sm px-3 py-1 bg-white rounded-lg font-semibold"
+                  >
+                    {isExpanded?'▲':'▼'}
+                  </button>
+                </div>
+                
+                <div className={`status-badge ${status.class} mb-3`}>{status.label}</div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="font-semibold">Topics</span>
+                      <span className="font-bold">{completedTopics.length}/{allTopics.length}</span>
+                    </div>
+                    <div className="h-2 bg-gray-200 rounded-full">
+                      <div className="h-2 avanti-gradient rounded-full transition-all" style={{width:`${progress}%`}}/>
+                    </div>
+                  </div>
+
+                  {isExpanded&&(
+                    <>
+                      <div className="space-y-2 max-h-40 overflow-y-auto bg-white p-2 rounded-lg">
+                        {allTopics.map((topic,idx)=>{
+                          const checked=completedTopics.includes(topic);
+                          return(
+                            <label 
+                              key={idx} 
+                              className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded"
+                              onClick={(e)=>{
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const updated=checked?completedTopics.filter(t=>t!==topic):[...completedTopics,topic];
+                                updateChapterProgress(mySchool,chapter.id,'completedTopics',updated);
+                              }}
+                            >
+                              <input 
+                                type="checkbox" 
+                                checked={checked}
+                                readOnly
+                              />
+                              <span className={`text-sm ${checked?'line-through text-gray-500':'font-medium'}`}>
+                                {topic}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      <div className="bg-white p-3 rounded-lg">
+                        <label className="block text-sm font-bold mb-1">Target Date</label>
+                        <div className="text-sm">{chapter.targetDate||'—'}</div>
+                      </div>
+
+                      <div className="bg-white p-3 rounded-lg">
+                        <label className="block text-sm font-bold mb-1">Completion Date *</label>
+                        <input 
+                          type="date" 
+                          value={prog.completionDate||''} 
+                          onChange={(e)=>{
+                            e.preventDefault();
+                            e.stopPropagation();
+                            updateChapterProgress(mySchool,chapter.id,'completionDate',e.target.value);
+                          }}
+                          onClick={(e)=>e.stopPropagation()}
+                          className="w-full border-2 px-3 py-2 rounded-lg"
+                        />
+                      </div>
+
+                      <div className="bg-white p-3 rounded-lg">
+                        <label className="block text-sm font-bold mb-1">Test Conducted? *</label>
+                        <select 
+                          value={prog.testConducted||'No'} 
+                          onChange={(e)=>{
+                            e.preventDefault();
+                            e.stopPropagation();
+                            updateChapterProgress(mySchool,chapter.id,'testConducted',e.target.value);
+                          }}
+                          onClick={(e)=>e.stopPropagation()}
+                          className="w-full border-2 px-3 py-2 rounded-lg"
+                        >
+                          <option value="No">No</option>
+                          <option value="Yes">Yes</option>
+                        </select>
+                      </div>
+
+                      <div className="bg-white p-3 rounded-lg">
+                        <label className="block text-sm font-bold mb-1">Chapter Completed? *</label>
+                        <select 
+                          value={prog.completed||'No'} 
+                          onChange={(e)=>{
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleCompletedChange(chapter.id,e.target.value);
+                          }}
+                          onClick={(e)=>e.stopPropagation()}
+                          className="w-full border-2 px-3 py-2 rounded-lg"
+                        >
+                          <option value="No">No</option>
+                          <option value="Yes">Yes</option>
+                        </select>
+                      </div>
+
+                      <div className="bg-white p-3 rounded-lg">
+                        <label className="block text-sm font-bold mb-1">Notes</label>
+                        <textarea 
+                          value={prog.notes||''} 
+                          onChange={(e)=>{
+                            e.preventDefault();
+                            e.stopPropagation();
+                            updateChapterProgress(mySchool,chapter.id,'notes',e.target.value);
+                          }}
+                          onClick={(e)=>e.stopPropagation()}
+                          className="w-full border-2 px-3 py-2 rounded-lg" 
+                          rows="2" 
+                          placeholder="Add notes..."
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      }
+    </div>
+  );
+}
 
 function BirthdaysPage({teachers}){const todayBirthdays=useMemo(()=>getBirthdays(teachers,'today'),[teachers]);const weekBirthdays=useMemo(()=>getBirthdays(teachers,'week'),[teachers]);const monthBirthdays=useMemo(()=>getBirthdays(teachers,'month'),[teachers]);const todayAnniversaries=useMemo(()=>getAnniversaries(teachers,'today'),[teachers]);const weekAnniversaries=useMemo(()=>getAnniversaries(teachers,'week'),[teachers]);return(<div className="space-y-6"><h2 className="text-3xl font-bold">🎉 Celebrations</h2><div className="grid md:grid-cols-2 gap-6">{todayBirthdays.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎂 Today's Birthdays</h3>{todayBirthdays.map(t=><div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{t.school}</div></div>)}</div>}{todayAnniversaries.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎉 Today's Anniversaries</h3>{todayAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{years} Years at Avanti</div></div>)})}</div>}</div><div className="grid md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Week's Birthdays</h3>{weekBirthdays.length===0?<p className="text-gray-500">No birthdays this week</p>:<div className="space-y-2">{weekBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month's Birthdays</h3>{monthBirthdays.length===0?<p className="text-gray-500">No birthdays this month</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div></div></div>)}
 
