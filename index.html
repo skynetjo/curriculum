@@ -2434,15 +2434,15 @@ function App() {
 }, [curriculum, selectedSchool, selectedSubject, selectedGrade]);
 
     const handleAddChapter = async () => {
-      if (!chapterForm.name) return alert('Chapter name required');
-      await addChapterAdmin(selectedSubject, selectedGrade, chapterForm);
+  if (!chapterForm.name) return alert('Chapter name required');
+  await addChapterAdmin(selectedSchool, selectedSubject, selectedGrade, chapterForm);
       setChapterForm({ name: '', topics: [], targetDate: '' });
       setEditingChapter(null);
     };
 
     const handleUpdateChapter = async () => {
-      if (!chapterForm.name) return alert('Chapter name required');
-      await updateChapterAdmin(selectedSubject, selectedGrade, editingChapter.id, chapterForm);
+  if (!chapterForm.name) return alert('Chapter name required');
+  await updateChapterAdmin(selectedSchool, selectedSubject, selectedGrade, editingChapter.id, chapterForm);
       setChapterForm({ name: '', topics: [], targetDate: '' });
       setEditingChapter(null);
     };
@@ -2459,9 +2459,9 @@ function App() {
     };
 
     const handleCSVUpload = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        handleCSVImport(file, selectedSubject, selectedGrade);
+  const file = e.target.files[0];
+  if (file) {
+    handleCSVImport(file, selectedSchool, selectedSubject, selectedGrade);
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
     };
@@ -2471,12 +2471,22 @@ function App() {
         <h3 className="text-2xl font-bold">Curriculum Management</h3>
 
         <div className="bg-white p-6 rounded-2xl shadow-lg">
-          <div className="grid md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Subject</label>
-              <select 
-                value={selectedSubject} 
-                onChange={e => setSelectedSubject(e.target.value)} 
+          <div className="grid md:grid-cols-3 gap-4 mb-4">
+  <div>
+    <label className="block text-sm font-bold text-gray-700 mb-2">School</label>
+    <select 
+      value={selectedSchool} 
+      onChange={e => setSelectedSchool(e.target.value)} 
+      className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium"
+    >
+      {schools.map(s => <option key={s} value={s}>{s}</option>)}
+    </select>
+  </div>
+  <div>
+    <label className="block text-sm font-bold text-gray-700 mb-2">Subject</label>
+    <select 
+      value={selectedSubject} 
+      onChange={e => setSelectedSubject(e.target.value)} 
                 className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium"
               >
                 {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
@@ -2497,7 +2507,7 @@ function App() {
 
           <div className="flex gap-3 flex-wrap">
             <button 
-              onClick={() => { setEditingChapter(null); setChapterForm({ name: '', topics: [], targetDate: '' }); }} 
+              onClick={() => { setEditingChapter(null); setChapterForm({ name: '', topics: [], targetDate: '' }); }}
               className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
             >
               + Add New Chapter
