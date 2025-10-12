@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -393,13 +394,13 @@ function App() {
       setTeachers(snap.docs.map(d => d.data()));
     }, err => console.error('teachers error', err));
 
-    unsubC = db.collection('curriculum').onSnapshot(snap => {
-  const currMap = {};
-  snap.docs.forEach(doc => {
-    currMap[doc.id] = doc.data();
-  });
-  setCurriculum(currMap);
-}, err => console.error('curriculum error', err));
+    unsubC = db.collection('meta').doc('curriculum').onSnapshot(doc => {
+      if (doc.exists) {
+        setCurriculum(doc.data());
+      } else {
+        setCurriculum({});
+      }
+    }, err => console.error('curriculum error', err));
 
     return () => { if (unsubP) unsubP(); if (unsubT) unsubT(); if (unsubC) unsubC(); };
   }, []);
@@ -450,14 +451,11 @@ function App() {
     let totalChapters = 0, totalCompleted = 0, totalPendingTests = 0;
     let totalDaysSpent = 0, chaptersWithDates = 0;
 
-    teachers.forEach(teacher => {
-  const school = teacher.school;
-  const subject = teacher.subject;
-  
-  if (!curriculum[school] || !curriculum[school][subject]) return;
-  
-  Object.keys(curriculum[school][subject]).forEach(grade => {
-    (curriculum[school][subject][grade] || []).forEach(ch => {
+    Object.keys(curriculum).forEach(subject => {
+      subjectStats[subject] = { total: 0, completed: 0 };
+      
+      Object.keys(curriculum[subject]).forEach(grade => {
+        (curriculum[subject][grade] || []).forEach(ch => {
           totalChapters++;
           subjectStats[subject].total++;
           
@@ -673,20 +671,9 @@ function App() {
     
     const chapterDetailsForExport = [];
     
-    teachers.forEach(teacher => {
-  const school = teacher.school;
-  const subject = teacher.subject;
-  
-  if (filterSchool !== 'All' && teacher.school !== filterSchool) return;
-  if (filterSubject !== 'All' && subject !== filterSubject) return;
-  if (filterTeacher !== 'All' && teacher.afid !== filterTeacher) return;
-  
-  if (!curriculum[school] || !curriculum[school][subject]) return;
-  
-  Object.keys(curriculum[school][subject]).forEach(grade => {
-    if (filterGrade !== 'All' && parseInt(grade) !== parseInt(filterGrade)) return;
-    
-    (curriculum[school][subject][grade] || []).forEach(ch => {
+    Object.keys(curriculum || {}).forEach(subject => {
+      Object.keys(curriculum[subject] || {}).forEach(grade => {
+        (curriculum[subject][grade] || []).forEach(ch => {
           teachers.forEach(teacher => {
             if (teacher.subject !== subject) return;
             
@@ -807,56 +794,44 @@ function App() {
     }
   };
 
-  const saveCurriculum = async (school, subject, newSubjectCurr) => {
-  try {
-    const schoolDocRef = db.collection('curriculum').doc(school);
-    await schoolDocRef.set({
-      [subject]: newSubjectCurr
-    }, { merge: true });
-    alert('Curriculum updated');
-  } catch (e) {
-    console.error(e);
-    alert('Failed: ' + e.message);
-  }
-};
+  const saveCurriculum = async (newCurr) => {
+    try { 
+      await db.collection('meta').doc('curriculum').set(newCurr); 
+      alert('Curriculum updated'); 
+    } catch (e) { 
+      console.error(e); 
+      alert('Failed: ' + e.message); 
+    }
+  };
 
-  const addChapterAdmin = async (school, subject, grade, chapter) => {
-  const schoolCurr = curriculum[school] || {};
-  const subjectCurr = schoolCurr[subject] || {};
-  const gradeCurr = subjectCurr[grade] || [];
-  
-  chapter.id = chapter.id || (subject.charAt(0).toUpperCase() + grade + '-' + (gradeCurr.length + 1) + '-' + Date.now().toString().slice(-4));
-  const newGradeCurr = [...gradeCurr, chapter];
-  
-  const newSubjectCurr = { ...subjectCurr, [grade]: newGradeCurr };
-  await saveCurriculum(school, subject, newSubjectCurr);
-};
+  const addChapterAdmin = async (subject, grade, chapter) => {
+    const newCurr = { ...(curriculum || {}) };
+    newCurr[subject] = newCurr[subject] || {};
+    newCurr[subject][grade] = newCurr[subject][grade] || [];
+    chapter.id = chapter.id || (subject.charAt(0).toUpperCase() + grade + '-' + (newCurr[subject][grade].length + 1) + '-' + Date.now().toString().slice(-4));
+    newCurr[subject][grade].push(chapter);
+    await saveCurriculum(newCurr);
+  };
 
-  const updateChapterAdmin = async (school, subject, grade, chapterId, updates) => {
-  try {
-    const schoolCurr = curriculum[school] || {};
-    const subjectCurr = schoolCurr[subject] || {};
-    const arr = subjectCurr[grade] || [];
-    const idx = arr.findIndex(x => x.id === chapterId);
-    if (idx === -1) return;
-    arr[idx] = { ...arr[idx], ...updates };
-    
-    const newSubjectCurr = { ...subjectCurr, [grade]: arr };
-    await saveCurriculum(school, subject, newSubjectCurr);
-  } catch (e) { console.error(e); alert('Failed update: ' + e.message); }
-};
+  const updateChapterAdmin = async (subject, grade, chapterId, updates) => {
+    try {
+      const newCurr = { ...(curriculum || {}) };
+      const arr = newCurr[subject][grade];
+      const idx = arr.findIndex(x => x.id === chapterId);
+      if (idx === -1) return;
+      arr[idx] = { ...arr[idx], ...updates };
+      await saveCurriculum(newCurr);
+    } catch (e) { console.error(e); alert('Failed update: ' + e.message); }
+  };
 
-  const deleteChapterAdmin = async (school, subject, grade, id) => {
-  if (!confirm('Delete chapter?')) return;
-  try {
-    const schoolCurr = curriculum[school] || {};
-    const subjectCurr = schoolCurr[subject] || {};
-    const newGradeCurr = (subjectCurr[grade] || []).filter(ch => ch.id !== id);
-    
-    const newSubjectCurr = { ...subjectCurr, [grade]: newGradeCurr };
-    await saveCurriculum(school, subject, newSubjectCurr);
-  } catch (e) { console.error(e); alert('Delete failed: ' + e.message); }
-};
+  const deleteChapterAdmin = async (subject, grade, id) => {
+    if (!confirm('Delete chapter?')) return;
+    try {
+      const newCurr = { ...(curriculum || {}) };
+      newCurr[subject][grade] = newCurr[subject][grade].filter(ch => ch.id !== id);
+      await saveCurriculum(newCurr);
+    } catch (e) { console.error(e); alert('Delete failed: ' + e.message); }
+  };
 
   const addSchool = async (schoolName) => {
     if (!schoolName || !schoolName.trim()) return alert('School name required');
@@ -884,7 +859,7 @@ function App() {
     }
   };
 
-  const handleCSVImport = (file, school, subject, grade) => {
+  const handleCSVImport = (file, subject, grade) => {
     Papa.parse(file, {
       complete: async (results) => {
         try {
@@ -927,7 +902,7 @@ function App() {
           }
           
           for (const chapter of chapters) {
-            await addChapterAdmin(school, subject, grade, chapter);
+            await addChapterAdmin(subject, grade, chapter);
           }
           
           alert(`Successfully imported ${chapters.length} chapters!`);
@@ -1545,15 +1520,14 @@ function App() {
   };
 
   const Chapters = ({ grade }) => {
-  const mySchool = currentUser.school;
-  const mySubject = currentUser.subject;
-  
-  const chapters = useMemo(() => {
-    if (!curriculum || !curriculum[mySchool] || !curriculum[mySchool][mySubject] || !curriculum[mySchool][mySubject][grade]) {
-      return [];
-    }
-    return curriculum[mySchool][mySubject][grade];
-  }, [curriculum, mySchool, mySubject, grade]);
+    const subj = currentUser.subject;
+    
+    const chapters = useMemo(() => {
+      if (!curriculum || !curriculum[subj] || !curriculum[subj][grade]) {
+        return [];
+      }
+      return curriculum[subj][grade];
+    }, [curriculum, subj, grade]);
 
     const handleTopicToggle = useCallback((chapterId, topic, chapter) => {
       const currentProg = chapterProgress[chapterId] || {};
@@ -1567,34 +1541,34 @@ function App() {
       updateChapterProgress(chapterId, 'completedTopics', updated, chapter);
     }, [chapterProgress, updateChapterProgress]);
 
-    if (!mySubject || !curriculum[mySchool] || !curriculum[mySchool][mySubject]) {
-  return (
-    <div className="space-y-6 fade-in">
-      <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
-        <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-        Class {grade}th - {mySubject}
-      </h2>
-      <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
-        <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
-        <h3 className="text-2xl font-bold text-gray-800 mb-2">No Curriculum Available</h3>
-        <p className="text-gray-600">Contact admin to add curriculum for your subject at {mySchool}</p>
-      </div>
-    </div>
-  );
-}
+    if (!subj || !curriculum[subj]) {
+      return (
+        <div className="space-y-6 fade-in">
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+            Class {grade}th - {subj}
+          </h2>
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
+            <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No Curriculum Available</h3>
+            <p className="text-gray-600">Contact admin to add curriculum for your subject</p>
+          </div>
+        </div>
+      );
+    }
 
     return (
-  <div className="space-y-6 fade-in">
-    <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
-      <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
-      Class {grade}th - {mySubject}
-    </h2>
+      <div className="space-y-6 fade-in">
+        <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 flex items-center gap-3">
+          <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo-small" />
+          Class {grade}th - {subj}
+        </h2>
 
         {chapters.length === 0 ? (
           <div className="bg-white p-8 rounded-2xl shadow-lg text-center">
             <img src={AVANTI_LOGO} alt="Avanti" className="avanti-logo mx-auto mb-4" />
             <h3 className="text-2xl font-bold text-gray-800 mb-2">No Chapters Yet</h3>
-            <p className="text-gray-600">Admin needs to add chapters for Class {grade} - {mySubject} at {mySchool}</p>
+            <p className="text-gray-600">Admin needs to add chapters for Class {grade}</p>
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 grid-responsive">
@@ -2446,30 +2420,30 @@ function App() {
   }
 
   function AdminCurriculum() {
-    const [selectedSchool, setSelectedSchool] = useState(schools[0] || 'CoE Barwani');
     const [selectedSubject, setSelectedSubject] = useState('Physics');
     const [selectedGrade, setSelectedGrade] = useState(11);
+    const [editingChapter, setEditingChapter] = useState(null);
     const [chapterForm, setChapterForm] = useState({ name: '', topics: [], targetDate: '' });
     const [newTopic, setNewTopic] = useState('');
     const fileInputRef = useRef(null);
 
     const chapters = useMemo(() => {
-  if (!curriculum || !curriculum[selectedSchool] || !curriculum[selectedSchool][selectedSubject] || !curriculum[selectedSchool][selectedSubject][selectedGrade]) {
-    return [];
-  }
-  return curriculum[selectedSchool][selectedSubject][selectedGrade];
-}, [curriculum, selectedSchool, selectedSubject, selectedGrade]);
+      if (!curriculum || !curriculum[selectedSubject] || !curriculum[selectedSubject][selectedGrade]) {
+        return [];
+      }
+      return curriculum[selectedSubject][selectedGrade];
+    }, [curriculum, selectedSubject, selectedGrade]);
 
     const handleAddChapter = async () => {
-  if (!chapterForm.name) return alert('Chapter name required');
-  await addChapterAdmin(selectedSchool, selectedSubject, selectedGrade, chapterForm);
+      if (!chapterForm.name) return alert('Chapter name required');
+      await addChapterAdmin(selectedSubject, selectedGrade, chapterForm);
       setChapterForm({ name: '', topics: [], targetDate: '' });
       setEditingChapter(null);
     };
 
     const handleUpdateChapter = async () => {
-  if (!chapterForm.name) return alert('Chapter name required');
-  await updateChapterAdmin(selectedSchool, selectedSubject, selectedGrade, editingChapter.id, chapterForm);
+      if (!chapterForm.name) return alert('Chapter name required');
+      await updateChapterAdmin(selectedSubject, selectedGrade, editingChapter.id, chapterForm);
       setChapterForm({ name: '', topics: [], targetDate: '' });
       setEditingChapter(null);
     };
@@ -2486,9 +2460,9 @@ function App() {
     };
 
     const handleCSVUpload = (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    handleCSVImport(file, selectedSchool, selectedSubject, selectedGrade);
+      const file = e.target.files[0];
+      if (file) {
+        handleCSVImport(file, selectedSubject, selectedGrade);
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
     };
@@ -2498,22 +2472,12 @@ function App() {
         <h3 className="text-2xl font-bold">Curriculum Management</h3>
 
         <div className="bg-white p-6 rounded-2xl shadow-lg">
-          <div className="grid md:grid-cols-3 gap-4 mb-4">
-  <div>
-    <label className="block text-sm font-bold text-gray-700 mb-2">School</label>
-    <select 
-      value={selectedSchool} 
-      onChange={e => setSelectedSchool(e.target.value)} 
-      className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium"
-    >
-      {schools.map(s => <option key={s} value={s}>{s}</option>)}
-    </select>
-  </div>
-  <div>
-    <label className="block text-sm font-bold text-gray-700 mb-2">Subject</label>
-    <select 
-      value={selectedSubject} 
-      onChange={e => setSelectedSubject(e.target.value)} 
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Subject</label>
+              <select 
+                value={selectedSubject} 
+                onChange={e => setSelectedSubject(e.target.value)} 
                 className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl font-medium"
               >
                 {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
@@ -2534,7 +2498,7 @@ function App() {
 
           <div className="flex gap-3 flex-wrap">
             <button 
-              onClick={() => { setEditingChapter(null); setChapterForm({ name: '', topics: [], targetDate: '' }); }}
+              onClick={() => { setEditingChapter(null); setChapterForm({ name: '', topics: [], targetDate: '' }); }} 
               className="px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
             >
               + Add New Chapter
@@ -2641,7 +2605,7 @@ function App() {
 
         <div className="bg-white p-6 rounded-2xl shadow-lg">
           <h4 className="font-bold text-xl mb-4">
-            {selectedSchool} - {selectedSubject} - Class {selectedGrade}th ({chapters.length} chapters)
+            {selectedSubject} - Class {selectedGrade}th ({chapters.length} chapters)
           </h4>
           
           {chapters.length === 0 ? (
@@ -2667,7 +2631,7 @@ function App() {
                         Edit
                       </button>
                       <button 
-                        onClick={() => deleteChapterAdmin(selectedSchool, selectedSubject, selectedGrade, ch.id)} 
+                        onClick={() => deleteChapterAdmin(selectedSubject, selectedGrade, ch.id)} 
                         className="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600"
                       >
                         Delete
