@@ -222,15 +222,14 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
                       <div className="bg-white p-3 rounded-lg">
                         <label className="block text-sm font-bold mb-1">Chapter Completed? *</label>
                         <select 
-                          value={prog.completed||'No'} 
-                          onChange={(e)=>{
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleCompletedChange(chapter.id,e.target.value);
-                          }}
-                          onClick={(e)=>e.stopPropagation()}
-                          className="w-full border-2 px-3 py-2 rounded-lg"
-                        >
+  value={prog.completed||'No'} 
+  onClick={(e)=>e.stopPropagation()}
+  onChange={(e)=>{
+    e.stopPropagation();
+    handleCompletedChange(chapter.id,e.target.value);
+  }}
+  className="w-full border-2 px-3 py-2 rounded-lg cursor-pointer"
+>
                           <option value="No">No</option>
                           <option value="Yes">Yes</option>
                         </select>
