@@ -162,20 +162,20 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
                           const checked=completedTopics.includes(topic);
                           return(
                             <label 
-                              key={idx} 
-                              className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded"
-                              onClick={(e)=>{
-                                e.preventDefault();
-                                e.stopPropagation();
-                                const updated=checked?completedTopics.filter(t=>t!==topic):[...completedTopics,topic];
-                                updateChapterProgress(mySchool,chapter.id,'completedTopics',updated);
-                              }}
-                            >
-                              <input 
-                                type="checkbox" 
-                                checked={checked}
-                                readOnly
-                              />
+  key={idx} 
+  className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded"
+  onClick={(e)=>e.stopPropagation()}
+>
+  <input 
+    type="checkbox" 
+    checked={checked}
+    onClick={(e)=>e.stopPropagation()}
+    onChange={(e)=>{
+      e.stopPropagation();
+      const updated=e.target.checked?[...completedTopics,topic]:completedTopics.filter(t=>t!==topic);
+      updateChapterProgress(mySchool,chapter.id,'completedTopics',updated);
+    }}
+  />
                               <span className={`text-sm ${checked?'line-through text-gray-500':'font-medium'}`}>
                                 {topic}
                               </span>
