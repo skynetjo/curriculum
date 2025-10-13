@@ -192,16 +192,15 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
                       <div className="bg-white p-3 rounded-lg">
                         <label className="block text-sm font-bold mb-1">Completion Date *</label>
                         <input 
-                          type="date" 
-                          value={prog.completionDate||''} 
-                          onChange={(e)=>{
-                            e.preventDefault();
-                            e.stopPropagation();
-                            updateChapterProgress(mySchool,chapter.id,'completionDate',e.target.value);
-                          }}
-                          onClick={(e)=>e.stopPropagation()}
-                          className="w-full border-2 px-3 py-2 rounded-lg"
-                        />
+  type="date" 
+  value={prog.completionDate||''} 
+  onClick={(e)=>e.stopPropagation()}
+  onChange={(e)=>{
+    e.stopPropagation();
+    updateChapterProgress(mySchool,chapter.id,'completionDate',e.target.value);
+  }}
+  className="w-full border-2 px-3 py-2 rounded-lg cursor-pointer"
+/>
                       </div>
 
                       <div className="bg-white p-3 rounded-lg">
