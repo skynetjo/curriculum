@@ -238,17 +238,16 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
                       <div className="bg-white p-3 rounded-lg">
                         <label className="block text-sm font-bold mb-1">Notes</label>
                         <textarea 
-                          value={prog.notes||''} 
-                          onChange={(e)=>{
-                            e.preventDefault();
-                            e.stopPropagation();
-                            updateChapterProgress(mySchool,chapter.id,'notes',e.target.value);
-                          }}
-                          onClick={(e)=>e.stopPropagation()}
-                          className="w-full border-2 px-3 py-2 rounded-lg" 
-                          rows="2" 
-                          placeholder="Add notes..."
-                        />
+  value={prog.notes||''} 
+  onClick={(e)=>e.stopPropagation()}
+  onChange={(e)=>{
+    e.stopPropagation();
+    updateChapterProgress(mySchool,chapter.id,'notes',e.target.value);
+  }}
+  className="w-full border-2 px-3 py-2 rounded-lg cursor-text" 
+  rows="2" 
+  placeholder="Add notes..."
+/>
                       </div>
                     </>
                   )}
