@@ -346,300 +346,403 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
     error:()=>alert('Failed to parse CSV')
   });
 };return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum Management</h2><div className="bg-white p-6 rounded-2xl shadow-lg"><div className="grid md:grid-cols-3 gap-4 mb-4"><div><label className="block text-sm font-bold mb-2">School</label><select value={selectedSchool} onChange={e=>setSelectedSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Subject</label><select value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Grade</label><select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"><option value="11">Class 11</option><option value="12">Class 12</option></select></div></div><div className="flex gap-3"><button onClick={()=>{setEditingChapter(null);setChapterForm({name:'',topics:[],targetDate:''});setShowAddForm(!showAddForm)}} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">{showAddForm?'Cancel':'+ Add Chapter'}</button><label className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer">📤 Import CSV<input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVImport} className="hidden"/></label></div></div>{showAddForm&&<div className="bg-white p-6 rounded-2xl shadow-lg"><h4 className="text-xl font-bold mb-4">{editingChapter?'Edit Chapter':'Add New Chapter'}</h4><div className="space-y-4"><div><label className="block text-sm font-bold mb-2">Chapter Name *</label><input type="text" value={chapterForm.name} onChange={e=>setChapterForm({...chapterForm,name:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/></div><div><label className="block text-sm font-bold mb-2">Target Date</label><input type="date" value={chapterForm.targetDate} onChange={e=>setChapterForm({...chapterForm,targetDate:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/></div><div><label className="block text-sm font-bold mb-2">Topics</label><div className="flex gap-2 mb-3"><input type="text" value={newTopic} onChange={e=>setNewTopic(e.target.value)} onKeyPress={e=>e.key==='Enter'&&handleAddTopic()} className="flex-1 border-2 px-4 py-3 rounded-xl" placeholder="Enter topic"/><button onClick={handleAddTopic} className="px-6 py-3 bg-blue-600 text-white rounded-xl">Add</button></div><div className="space-y-2">{chapterForm.topics.map((topic,idx)=><div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"><span>{topic}</span><button onClick={()=>{const updated=chapterForm.topics.filter((_,i)=>i!==idx);setChapterForm({...chapterForm,topics:updated})}} className="px-3 py-1 bg-red-500 text-white rounded-lg">Remove</button></div>)}</div></div><button onClick={handleSaveChapter} className="px-6 py-3 avanti-gradient text-white rounded-xl font-semibold">{editingChapter?'Update Chapter':'Save Chapter'}</button></div></div>}<div className="bg-white p-6 rounded-2xl shadow-lg"><h4 className="text-xl font-bold mb-4">{selectedSchool} - {selectedSubject} - Class {selectedGrade} ({chapters.length} chapters)</h4>{chapters.length===0?<p className="text-gray-500 text-center py-8">No chapters yet</p>:<div className="space-y-3">{chapters.map(ch=><div key={ch.id} className="border-2 rounded-xl p-4 hover:bg-gray-50"><div className="flex justify-between items-start"><div className="flex-1"><h5 className="font-bold text-lg">{ch.name}</h5><p className="text-sm text-gray-600">Target: {ch.targetDate||'Not set'} | Topics: {ch.topics?.length||0}</p>{ch.topics&&ch.topics.length>0&&<ul className="text-xs text-gray-600 ml-4 mt-2">{ch.topics.map((t,i)=><li key={i}>• {t}</li>)}</ul>}</div><div className="flex gap-2"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
-useEffect(()=>{
-  Object.values(chartInstances.current).forEach(chart=>{
-    if(chart)chart.destroy();
-  });
-  chartInstances.current={};
+function AdminAnalytics({teachers,curriculum,chapterProgress}){
+  const[filterSchool,setFilterSchool]=useState('All');
+  const[filterGrade,setFilterGrade]=useState('All');
+  const[filterTeacher,setFilterTeacher]=useState('All');
   
-  // Chart 1: School Completion Rate (Bar)
-  if(chart1Ref.current){
-    const ctx=chart1Ref.current.getContext('2d');
-    const schools=Object.keys(filteredData.schoolData);
-    chartInstances.current.chart1=new Chart(ctx,{
-      type:'bar',
-      data:{
-        labels:schools,
-        datasets:[{
-          label:'Completion %',
-          data:schools.map(s=>{
-            const d=filteredData.schoolData[s];
-            return d.total?Math.round((d.completed/d.total)*100):0;
-          }),
-          backgroundColor:'#C8342E',
-          borderRadius:8
-        }]
-      },
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{
-          datalabels:{
-            color:'#fff',
-            font:{weight:'bold',size:14},
-            formatter:(value)=>value+'%'
-          },
-          title:{display:true,text:'School-wise Completion %',font:{size:16,weight:'bold'}},
-          legend:{display:false}
-        },
-        scales:{y:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}
+  const chart1Ref=useRef(null);
+  const chart2Ref=useRef(null);
+  const chart3Ref=useRef(null);
+  const chart4Ref=useRef(null);
+  const chart5Ref=useRef(null);
+  const chart6Ref=useRef(null);
+  const chart7Ref=useRef(null);
+  const chart8Ref=useRef(null);
+  
+  const chartInstances=useRef({});
+  
+  const filteredData=useMemo(()=>{
+    const data={
+      totalChapters:0,
+      completedChapters:0,
+      delayedChapters:0,
+      aheadChapters:0,
+      testsCompleted:0,
+      testsPending:0,
+      schoolData:{},
+      subjectData:{},
+      gradeData:{},
+      teacherData:{},
+      statusData:{ahead:0,ontrack:0,delayed:0,pending:0}
+    };
+    
+    const schoolsToProcess=filterSchool==='All'?SCHOOLS:[filterSchool];
+    const gradesToProcess=filterGrade==='All'?['11','12']:[filterGrade];
+    const teachersFiltered=filterTeacher==='All'?teachers:teachers.filter(t=>t.afid===filterTeacher);
+    
+    schoolsToProcess.forEach(school=>{
+      if(!data.schoolData[school]){
+        data.schoolData[school]={total:0,completed:0,delayed:0,ahead:0,tests:0};
       }
-    });
-  }
-  
-  // Chart 2: Subject Distribution (Pie)
-  if(chart2Ref.current){
-    const ctx=chart2Ref.current.getContext('2d');
-    const subjects=Object.keys(filteredData.subjectData);
-    chartInstances.current.chart2=new Chart(ctx,{
-      type:'pie',
-      data:{
-        labels:subjects,
-        datasets:[{
-          data:subjects.map(s=>filteredData.subjectData[s].completed),
-          backgroundColor:['#F4B41A','#3B82F6','#10B981','#EF4444'],
-          borderWidth:2
-        }]
-      },
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{
-          datalabels:{
-            color:'#fff',
-            font:{weight:'bold',size:14},
-            formatter:(value,context)=>{
-              const total=context.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
-              const percentage=total?((value/total)*100).toFixed(1):0;
-              return value+'\n('+percentage+'%)';
-            }
-          },
-          title:{display:true,text:'Completed Chapters by Subject',font:{size:16,weight:'bold'}},
-          legend:{position:'bottom'}
+      
+      SUBJECTS.forEach(subject=>{
+        if(!data.subjectData[subject]){
+          data.subjectData[subject]={total:0,completed:0};
         }
-      }
-    });
-  }
-  
-  // Chart 3: Grade Comparison (Bar)
-  if(chart3Ref.current){
-    const ctx=chart3Ref.current.getContext('2d');
-    const grades=Object.keys(filteredData.gradeData);
-    chartInstances.current.chart3=new Chart(ctx,{
-      type:'bar',
-      data:{
-        labels:grades.map(g=>`Class ${g}`),
-        datasets:[
-          {
-            label:'Completed',
-            data:grades.map(g=>filteredData.gradeData[g].completed),
-            backgroundColor:'#10B981'
-          },
-          {
-            label:'Pending',
-            data:grades.map(g=>filteredData.gradeData[g].total-filteredData.gradeData[g].completed),
-            backgroundColor:'#F59E0B'
+        
+        gradesToProcess.forEach(grade=>{
+          if(!data.gradeData[grade]){
+            data.gradeData[grade]={total:0,completed:0};
           }
-        ]
-      },
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{
-          datalabels:{
-            color:'#fff',
-            font:{weight:'bold',size:14},
-            formatter:(value)=>value
-          },
-          title:{display:true,text:'Grade-wise Progress',font:{size:16,weight:'bold'}},
-          legend:{position:'bottom'}
-        },
-        scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}}
-      }
-    });
-  }
-  
-  // Chart 4: Overall Status (Doughnut)
-  if(chart4Ref.current){
-    const ctx=chart4Ref.current.getContext('2d');
-    chartInstances.current.chart4=new Chart(ctx,{
-      type:'doughnut',
-      data:{
-        labels:['Completed','Pending','Delayed'],
-        datasets:[{
-          data:[
-            filteredData.completedChapters,
-            filteredData.totalChapters-filteredData.completedChapters-filteredData.delayedChapters,
-            filteredData.delayedChapters
-          ],
-          backgroundColor:['#10B981','#F59E0B','#EF4444'],
-          borderWidth:0
-        }]
-      },
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{
-          datalabels:{
-            color:'#fff',
-            font:{weight:'bold',size:14},
-            formatter:(value,context)=>{
-              const total=context.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
-              const percentage=total?((value/total)*100).toFixed(1):0;
-              return value+'\n('+percentage+'%)';
+          
+          const docId=`${school}_${subject}_${grade}`;
+          const chapters=curriculum[docId]?.chapters||[];
+          
+          const relevantTeachers=teachersFiltered.filter(t=>t.school===school&&t.subject===subject);
+          if(filterTeacher!=='All'&&relevantTeachers.length===0)return;
+          
+          chapters.forEach(ch=>{
+            data.totalChapters++;
+            data.schoolData[school].total++;
+            data.subjectData[subject].total++;
+            data.gradeData[grade].total++;
+            
+            const progressId=`${school}_${ch.id}`;
+            const prog=chapterProgress[progressId]||{};
+            const status=getChapterStatus(ch,prog);
+            
+            if(prog.completed==='Yes'&&prog.testConducted==='Yes'){
+              data.completedChapters++;
+              data.schoolData[school].completed++;
+              data.subjectData[subject].completed++;
+              data.gradeData[grade].completed++;
+              
+              if(status.class==='status-ahead'){
+                data.aheadChapters++;
+                data.schoolData[school].ahead++;
+                data.statusData.ahead++;
+              }else if(status.class==='status-ontrack'){
+                data.statusData.ontrack++;
+              }
             }
-          },
-          title:{display:true,text:'Overall Chapter Status',font:{size:16,weight:'bold'}},
-          legend:{position:'bottom'}
-        }
-      }
-    });
-  }
-  
-  // Chart 5: Tests Status (Pie)
-  if(chart5Ref.current){
-    const ctx=chart5Ref.current.getContext('2d');
-    chartInstances.current.chart5=new Chart(ctx,{
-      type:'pie',
-      data:{
-        labels:['Tests Completed','Tests Pending'],
-        datasets:[{
-          data:[filteredData.testsCompleted,filteredData.testsPending],
-          backgroundColor:['#3B82F6','#F97316'],
-          borderWidth:2
-        }]
-      },
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{
-          datalabels:{
-            color:'#fff',
-            font:{weight:'bold',size:14},
-            formatter:(value,context)=>{
-              const total=context.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
-              const percentage=total?((value/total)*100).toFixed(1):0;
-              return value+'\n('+percentage+'%)';
+            
+            if(prog.testConducted==='Yes'){
+              data.testsCompleted++;
+              data.schoolData[school].tests++;
+            }else if(prog.completed==='Yes'){
+              data.testsPending++;
             }
-          },
-          title:{display:true,text:'Chapter Tests Status',font:{size:16,weight:'bold'}},
-          legend:{position:'bottom'}
-        }
-      }
-    });
-  }
-  
-  // Chart 6: Performance Status (Bar)
-  if(chart6Ref.current){
-    const ctx=chart6Ref.current.getContext('2d');
-    chartInstances.current.chart6=new Chart(ctx,{
-      type:'bar',
-      data:{
-        labels:['Ahead','On Track','Delayed','Pending'],
-        datasets:[{
-          label:'Chapters',
-          data:[
-            filteredData.statusData.ahead,
-            filteredData.statusData.ontrack,
-            filteredData.statusData.delayed,
-            filteredData.statusData.pending
-          ],
-          backgroundColor:['#10B981','#3B82F6','#F97316','#EF4444'],
-          borderRadius:8
-        }]
-      },
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{
-          datalabels:{
-            color:'#fff',
-            font:{weight:'bold',size:14},
-            formatter:(value)=>value
-          },
-          title:{display:true,text:'Performance Status Distribution',font:{size:16,weight:'bold'}},
-          legend:{display:false}
-        },
-        scales:{y:{beginAtZero:true}}
-      }
-    });
-  }
-  
-  // Chart 7: School Delayed Chapters (Horizontal Bar)
-  if(chart7Ref.current){
-    const ctx=chart7Ref.current.getContext('2d');
-    const schools=Object.keys(filteredData.schoolData);
-    chartInstances.current.chart7=new Chart(ctx,{
-      type:'bar',
-      data:{
-        labels:schools,
-        datasets:[{
-          label:'Delayed Chapters',
-          data:schools.map(s=>filteredData.schoolData[s].delayed),
-          backgroundColor:'#EF4444',
-          borderRadius:6
-        }]
-      },
-      options:{
-        indexAxis:'y',
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{
-          datalabels:{
-            color:'#fff',
-            font:{weight:'bold',size:14},
-            formatter:(value)=>value
-          },
-          title:{display:true,text:'Delayed Chapters by School',font:{size:16,weight:'bold'}},
-          legend:{display:false}
-        },
-        scales:{x:{beginAtZero:true}}
-      }
-    });
-  }
-  
-  // Chart 8: Subject Completion Rate (Doughnut)
-  if(chart8Ref.current){
-    const ctx=chart8Ref.current.getContext('2d');
-    const subjects=Object.keys(filteredData.subjectData);
-    chartInstances.current.chart8=new Chart(ctx,{
-      type:'doughnut',
-      data:{
-        labels:subjects.map(s=>`${s}`),
-        datasets:[{
-          data:subjects.map(s=>filteredData.subjectData[s].completed),
-          backgroundColor:['#F4B41A','#3B82F6','#10B981','#EF4444'],
-          borderWidth:2
-        }]
-      },
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{
-          datalabels:{
-            color:'#fff',
-            font:{weight:'bold',size:14},
-            formatter:(value,context)=>{
-              const label=context.chart.data.labels[context.dataIndex];
-              const subjectName=label.split(' - ')[0];
-              const subjectData=filteredData.subjectData[subjectName];
-              const percentage=subjectData&&subjectData.total?Math.round((subjectData.completed/subjectData.total)*100):0;
-              return value+'\n('+percentage+'%)';
+            
+            if(status.label.includes('Delayed')){
+              data.delayedChapters++;
+              data.schoolData[school].delayed++;
+              data.statusData.delayed++;
             }
-          },
-          title:{display:true,text:'Subject-wise Completion Rate',font:{size:16,weight:'bold'}},
-          legend:{position:'bottom'}
-        }
+            
+            if(status.label==='Pending'){
+              data.statusData.pending++;
+            }
+          });
+        });
+      });
+    });
+    
+    teachersFiltered.forEach(teacher=>{
+      if(!data.teacherData[teacher.afid]){
+        data.teacherData[teacher.afid]={name:teacher.name,total:0,completed:0};
       }
     });
-  }
+    
+    return data;
+  },[curriculum,chapterProgress,teachers,filterSchool,filterGrade,filterTeacher]);
   
-  return()=>{
+  useEffect(()=>{
     Object.values(chartInstances.current).forEach(chart=>{
       if(chart)chart.destroy();
     });
-  };
-},[filteredData]);
+    chartInstances.current={};
+    
+    if(chart1Ref.current){
+      const ctx=chart1Ref.current.getContext('2d');
+      const schools=Object.keys(filteredData.schoolData);
+      chartInstances.current.chart1=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:schools,
+          datasets:[{
+            label:'Completion %',
+            data:schools.map(s=>{
+              const d=filteredData.schoolData[s];
+              return d.total?Math.round((d.completed/d.total)*100):0;
+            }),
+            backgroundColor:'#C8342E',
+            borderRadius:8
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            datalabels:{
+              color:'#fff',
+              font:{weight:'bold',size:14},
+              formatter:(value)=>value+'%'
+            },
+            title:{display:true,text:'School-wise Completion %',font:{size:16,weight:'bold'}},
+            legend:{display:false}
+          },
+          scales:{y:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}
+        }
+      });
+    }
+    
+    if(chart2Ref.current){
+      const ctx=chart2Ref.current.getContext('2d');
+      const subjects=Object.keys(filteredData.subjectData);
+      chartInstances.current.chart2=new Chart(ctx,{
+        type:'pie',
+        data:{
+          labels:subjects,
+          datasets:[{
+            data:subjects.map(s=>filteredData.subjectData[s].completed),
+            backgroundColor:['#F4B41A','#3B82F6','#10B981','#EF4444'],
+            borderWidth:2
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            datalabels:{
+              color:'#fff',
+              font:{weight:'bold',size:14},
+              formatter:(value,context)=>{
+                const total=context.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+                const percentage=total?((value/total)*100).toFixed(1):0;
+                return value+'\n('+percentage+'%)';
+              }
+            },
+            title:{display:true,text:'Completed Chapters by Subject',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          }
+        }
+      });
+    }
+    
+    if(chart3Ref.current){
+      const ctx=chart3Ref.current.getContext('2d');
+      const grades=Object.keys(filteredData.gradeData);
+      chartInstances.current.chart3=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:grades.map(g=>`Class ${g}`),
+          datasets:[
+            {
+              label:'Completed',
+              data:grades.map(g=>filteredData.gradeData[g].completed),
+              backgroundColor:'#10B981'
+            },
+            {
+              label:'Pending',
+              data:grades.map(g=>filteredData.gradeData[g].total-filteredData.gradeData[g].completed),
+              backgroundColor:'#F59E0B'
+            }
+          ]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            datalabels:{
+              color:'#fff',
+              font:{weight:'bold',size:14},
+              formatter:(value)=>value
+            },
+            title:{display:true,text:'Grade-wise Progress',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          },
+          scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}}
+        }
+      });
+    }
+    
+    if(chart4Ref.current){
+      const ctx=chart4Ref.current.getContext('2d');
+      chartInstances.current.chart4=new Chart(ctx,{
+        type:'doughnut',
+        data:{
+          labels:['Completed','Pending','Delayed'],
+          datasets:[{
+            data:[
+              filteredData.completedChapters,
+              filteredData.totalChapters-filteredData.completedChapters-filteredData.delayedChapters,
+              filteredData.delayedChapters
+            ],
+            backgroundColor:['#10B981','#F59E0B','#EF4444'],
+            borderWidth:0
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            datalabels:{
+              color:'#fff',
+              font:{weight:'bold',size:14},
+              formatter:(value,context)=>{
+                const total=context.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+                const percentage=total?((value/total)*100).toFixed(1):0;
+                return value+'\n('+percentage+'%)';
+              }
+            },
+            title:{display:true,text:'Overall Chapter Status',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          }
+        }
+      });
+    }
+    
+    if(chart5Ref.current){
+      const ctx=chart5Ref.current.getContext('2d');
+      chartInstances.current.chart5=new Chart(ctx,{
+        type:'pie',
+        data:{
+          labels:['Tests Completed','Tests Pending'],
+          datasets:[{
+            data:[filteredData.testsCompleted,filteredData.testsPending],
+            backgroundColor:['#3B82F6','#F97316'],
+            borderWidth:2
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            datalabels:{
+              color:'#fff',
+              font:{weight:'bold',size:14},
+              formatter:(value,context)=>{
+                const total=context.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+                const percentage=total?((value/total)*100).toFixed(1):0;
+                return value+'\n('+percentage+'%)';
+              }
+            },
+            title:{display:true,text:'Chapter Tests Status',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          }
+        }
+      });
+    }
+    
+    if(chart6Ref.current){
+      const ctx=chart6Ref.current.getContext('2d');
+      chartInstances.current.chart6=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:['Ahead','On Track','Delayed','Pending'],
+          datasets:[{
+            label:'Chapters',
+            data:[
+              filteredData.statusData.ahead,
+              filteredData.statusData.ontrack,
+              filteredData.statusData.delayed,
+              filteredData.statusData.pending
+            ],
+            backgroundColor:['#10B981','#3B82F6','#F97316','#EF4444'],
+            borderRadius:8
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            datalabels:{
+              color:'#fff',
+              font:{weight:'bold',size:14},
+              formatter:(value)=>value
+            },
+            title:{display:true,text:'Performance Status Distribution',font:{size:16,weight:'bold'}},
+            legend:{display:false}
+          },
+          scales:{y:{beginAtZero:true}}
+        }
+      });
+    }
+    
+    if(chart7Ref.current){
+      const ctx=chart7Ref.current.getContext('2d');
+      const schools=Object.keys(filteredData.schoolData);
+      chartInstances.current.chart7=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:schools,
+          datasets:[{
+            label:'Delayed Chapters',
+            data:schools.map(s=>filteredData.schoolData[s].delayed),
+            backgroundColor:'#EF4444',
+            borderRadius:6
+          }]
+        },
+        options:{
+          indexAxis:'y',
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            datalabels:{
+              color:'#fff',
+              font:{weight:'bold',size:14},
+              formatter:(value)=>value
+            },
+            title:{display:true,text:'Delayed Chapters by School',font:{size:16,weight:'bold'}},
+            legend:{display:false}
+          },
+          scales:{x:{beginAtZero:true}}
+        }
+      });
+    }
+    
+    if(chart8Ref.current){
+      const ctx=chart8Ref.current.getContext('2d');
+      const subjects=Object.keys(filteredData.subjectData);
+      chartInstances.current.chart8=new Chart(ctx,{
+        type:'doughnut',
+        data:{
+          labels:subjects.map(s=>`${s}`),
+          datasets:[{
+            data:subjects.map(s=>filteredData.subjectData[s].completed),
+            backgroundColor:['#F4B41A','#3B82F6','#10B981','#EF4444'],
+            borderWidth:2
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            datalabels:{
+              color:'#fff',
+              font:{weight:'bold',size:14},
+              formatter:(value,context)=>{
+                const label=context.chart.data.labels[context.dataIndex];
+                const subjectName=label.split(' - ')[0];
+                const subjectData=filteredData.subjectData[subjectName];
+                const percentage=subjectData&&subjectData.total?Math.round((subjectData.completed/subjectData.total)*100):0;
+                return value+'\n('+percentage+'%)';
+              }
+            },
+            title:{display:true,text:'Subject-wise Completion Rate',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          }
+        }
+      });
+    }
+    
+    return()=>{
+      Object.values(chartInstances.current).forEach(chart=>{
+        if(chart)chart.destroy();
+      });
+    };
+  },[filteredData]);
   
   const handleExport=()=>{
     const exportData=Object.keys(filteredData.schoolData).map(school=>({
@@ -702,6 +805,55 @@ useEffect(()=>{
           </div>
         </div>
       </div>
+      
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="stat-card avanti-gradient text-white">
+          <div className="text-sm opacity-90">Total Chapters</div>
+          <div className="text-4xl font-bold">{filteredData.totalChapters}</div>
+        </div>
+        <div className="stat-card bg-green-500 text-white">
+          <div className="text-sm opacity-90">Completed</div>
+          <div className="text-4xl font-bold">{filteredData.completedChapters}</div>
+        </div>
+        <div className="stat-card bg-blue-500 text-white">
+          <div className="text-sm opacity-90">Ahead Schedule</div>
+          <div className="text-4xl font-bold">{filteredData.aheadChapters}</div>
+        </div>
+        <div className="stat-card bg-orange-500 text-white">
+          <div className="text-sm opacity-90">Delayed</div>
+          <div className="text-4xl font-bold">{filteredData.delayedChapters}</div>
+        </div>
+      </div>
+      
+      <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart1Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart2Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart3Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart4Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart5Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart6Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart7Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart8Ref}></canvas>
+        </div>
+      </div>
+    </div>
+  );
+}
       
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="stat-card avanti-gradient text-white">
