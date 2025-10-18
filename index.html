@@ -1418,23 +1418,6 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
     });
   },[teacherAttendance,filterSchool,filterMonth]);
 
-  const filteredStudentAttendance=useMemo(()=>{
-    return studentAttendance.filter(a=>{
-      if(filterSchool!=='All'&&a.school!==filterSchool)return false;
-      if(filterGrade!=='All'&&a.grade!==filterGrade)return false;
-      if(getMonthYear(a.date)!==filterMonth)return false;
-      return true;
-    });
-  },[studentAttendance,filterSchool,filterGrade,filterMonth]);
-
-  const filteredTeacherAttendance=useMemo(()=>{
-    return teacherAttendance.filter(a=>{
-      if(filterSchool!=='All'&&a.school!==filterSchool)return false;
-      if(getMonthYear(a.date)!==filterMonth)return false;
-      return true;
-    });
-  },[teacherAttendance,filterSchool,filterMonth]);
-
   const todayStats=useMemo(()=>{
     const studentRecords=studentAttendance.filter(a=>a.date===selectedDate);
     const teacherRecords=teacherAttendance.filter(a=>a.date===selectedDate);
