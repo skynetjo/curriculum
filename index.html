@@ -62,15 +62,94 @@ const db=firebase.firestore();
 const auth=firebase.auth();
 const SUBJECTS=['Physics','Chemistry','Maths','Biology'];
 const SCHOOLS=['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal','JNV Bharuch'];
+const LEAVE_REASONS=['Present','Personal Leave','Sick Leave','Weekly Off','Public Holiday','Organization Holiday','School Holiday','Emergency Leave'];
+const GENDERS=['Male','Female','Other'];    
 const AVANTI_LOGO='/mnt/user-data/uploads/Avanti_Fellows-logo.png';
 const exportToExcel=(data,filename)=>{const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Data");XLSX.writeFile(wb,`${filename}_${new Date().toISOString().slice(0,10)}.xlsx`)};
 const getBirthdays=(teachers,period='week')=>{const now=new Date();return teachers.filter(t=>{if(!t.dob)return false;const d=new Date(t.dob);const thisYear=new Date(now.getFullYear(),d.getMonth(),d.getDate());const diff=Math.ceil((thisYear-now)/(1000*60*60*24));if(period==='today'){return d.getDate()===now.getDate()&&d.getMonth()===now.getMonth()}else if(period==='week'){return diff>=0&&diff<=7}else if(period==='month'){return d.getMonth()===now.getMonth()}return false})};
 const getAnniversaries=(teachers,period='week')=>{const now=new Date();return teachers.filter(t=>{if(!t.joiningDate)return false;const j=new Date(t.joiningDate);if(j.getFullYear()>=now.getFullYear())return false;const thisYear=new Date(now.getFullYear(),j.getMonth(),j.getDate());const diff=Math.ceil((thisYear-now)/(1000*60*60*24));if(period==='today'){return j.getDate()===now.getDate()&&j.getMonth()===now.getMonth()}else if(period==='week'){return diff>=0&&diff<=7}else if(period==='month'){return j.getMonth()===now.getMonth()}return false})};
+const getTodayDate=()=>{
+const today=new Date();
+  return today.toISOString().split('T')[0];
+};
+
+const getMonthYear=(date)=>{
+  const d=new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+};
+
+const getAttendanceStats=(attendanceRecords,filterDate=null)=>{
+  if(filterDate){
+    const filtered=attendanceRecords.filter(r=>r.date===filterDate);
+    const present=filtered.filter(r=>r.status==='Present').length;
+    return{total:filtered.length,present,absent:filtered.length-present};
+  }
+  const present=attendanceRecords.filter(r=>r.status==='Present').length;
+  return{total:attendanceRecords.length,present,absent:attendanceRecords.length-present};
+};
+
+const getMonthlyAttendanceStats=(attendanceRecords,month)=>{
+  const filtered=attendanceRecords.filter(r=>getMonthYear(r.date)===month);
+  const dayStats={};
+  filtered.forEach(record=>{
+    if(!dayStats[record.date]){
+      dayStats[record.date]={present:0,absent:0};
+    }
+    if(record.status==='Present'){
+      dayStats[record.date].present++;
+    }else{
+      dayStats[record.date].absent++;
+    }
+  });
+  return dayStats;
+};
 const getChapterStatus=(chapter,progress)=>{if(!chapter.targetDate){return{label:'No Target',color:'pending',class:'status-delayed'}}const targetDate=new Date(chapter.targetDate);const today=new Date();const completionDate=progress.completionDate?new Date(progress.completionDate):null;if(progress.completed==='Yes'&&progress.testConducted==='Yes'){if(completionDate){if(completionDate<targetDate){return{label:'Ahead - Good Job! 🎉',color:'completed',class:'status-ahead'}}else if(completionDate.toDateString()===targetDate.toDateString()){return{label:'On Track ✓',color:'completed',class:'status-ontrack'}}else{return{label:'Completed (Late)',color:'delayed',class:'status-delayed'}}}return{label:'Completed ✓',color:'completed',class:'status-ahead'}}if(today>targetDate){return{label:'Delayed ⚠️',color:'delayed',class:'status-delayed'}}return{label:'Pending',color:'pending',class:'status-delayed'}};
 
-function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:''});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
+function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:''});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);
+const[studentAttendance,setStudentAttendance]=useState([]);
+const[teacherAttendance,setTeacherAttendance]=useState([]);const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
 useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){if(user.email==='admin@avantifellows.org'){setIsAdmin(true);setCurrentUser({name:'Administrator',email:user.email,afid:'ADMIN',school:'Admin'});setActiveTab('teachers')}else{const teacherSnapshot=await db.collection('teachers').where('email','==',user.email).limit(1).get();if(!teacherSnapshot.empty){const teacherData=teacherSnapshot.docs[0].data();setCurrentUser(teacherData);setIsAdmin(false);setActiveTab('overview');if(teacherData.dob){const d=new Date(teacherData.dob);const now=new Date();if(d.getMonth()===now.getMonth()&&d.getDate()===now.getDate()){setShowConfetti(true);setCelebrationMessage(`🎂 Happy Birthday, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}if(teacherData.joiningDate){const j=new Date(teacherData.joiningDate);const now=new Date();if(j.getMonth()===now.getMonth()&&j.getDate()===now.getDate()&&j.getFullYear()<now.getFullYear()){const years=now.getFullYear()-j.getFullYear();setShowConfetti(true);setCelebrationMessage(`🎉 Happy ${years} Year Work Anniversary, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}}else{alert('Teacher profile not found. Please contact admin.');await auth.signOut()}}}else{setCurrentUser(null);setIsAdmin(false)}setLoading(false)});return()=>unsubscribe()},[]);
-useEffect(()=>{const unsubProgress=db.collection('chapterProgress').onSnapshot(snap=>{const map={};snap.docs.forEach(d=>map[d.id]=d.data());setChapterProgress(map)});const unsubTeachers=db.collection('teachers').onSnapshot(snap=>{setTeachers(snap.docs.map(d=>({...d.data(),id:d.id})))});const unsubCurriculum=db.collection('curriculum').onSnapshot(snap=>{const currMap={};snap.docs.forEach(doc=>{currMap[doc.id]=doc.data()});setCurriculum(currMap)});return()=>{unsubProgress();unsubTeachers();unsubCurriculum()}},[]);
+useEffect(() => {
+  const unsubProgress = db.collection('chapterProgress').onSnapshot(snap => {
+    const map = {};
+    snap.docs.forEach(d => map[d.id] = d.data());
+    setChapterProgress(map);
+  });
+
+  const unsubTeachers = db.collection('teachers').onSnapshot(snap => {
+    setTeachers(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+  });
+
+  const unsubCurriculum = db.collection('curriculum').onSnapshot(snap => {
+    const currMap = {};
+    snap.docs.forEach(doc => { currMap[doc.id] = doc.data() });
+    setCurriculum(currMap);
+  });
+
+  // ✅ Add these 3 new subscriptions here:
+
+  const unsubStudents = db.collection('students').onSnapshot(snap => {
+    setStudents(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+  });
+
+  const unsubStudentAttendance = db.collection('studentAttendance').onSnapshot(snap => {
+    setStudentAttendance(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+  });
+
+  const unsubTeacherAttendance = db.collection('teacherAttendance').onSnapshot(snap => {
+    setTeacherAttendance(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+  });
+
+  return () => {
+    unsubProgress();
+    unsubTeachers();
+    unsubCurriculum();
+    // ✅ Cleanup the new ones too
+    unsubStudents();
+    unsubStudentAttendance();
+    unsubTeacherAttendance();
+  };
+}, []);
 const handleLogin=async()=>{setAuthLoading(true);try{const email=(loginForm.email||'').trim().toLowerCase();const password=loginForm.password;if(!email||!password){alert('Please enter email and password');setAuthLoading(false);return}await auth.signInWithEmailAndPassword(email,password)}catch(e){console.error('login error',e);alert('Login failed: '+e.message)}setAuthLoading(false)};
 const handleLogout=async()=>{try{await auth.signOut();setActiveTab('overview')}catch(e){console.error('logout error',e)}};
 const updateChapterProgress=useCallback(async(school,chapterId,field,value)=>{try{const docId=`${school}_${chapterId}`;await db.collection('chapterProgress').doc(docId).set({[field]:value},{merge:true});if(field==='completed'&&value==='Yes'){const testStatus=chapterProgress[docId]?.testConducted;if(testStatus==='Yes'){setShowConfetti(true);setCelebrationMessage('🎉 Chapter Completed Successfully!');setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},5000)}}}catch(e){console.error('Update error',e);alert('Failed to update: '+e.message)}},[chapterProgress]);
