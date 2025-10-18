@@ -943,8 +943,19 @@ function AdminBirthdays({teachers}){const todayBirthdays=useMemo(()=>getBirthday
 // ========================================
 function StudentManagement({students}){
   const[showModal,setShowModal]=useState(false);
+  const[editingStudent,setEditingStudent]=useState(null);
   const[form,setForm]=useState({school:'',grade:'',name:'',gender:''});
+  const[selectedStudents,setSelectedStudents]=useState([]);
+  const[filterSchool,setFilterSchool]=useState('All');
+  const[filterGrade,setFilterGrade]=useState('All');
+  const[selectAll,setSelectAll]=useState(false);
   const fileInputRef=useRef(null);
+
+  const filteredStudents=students.filter(s=>{
+    if(filterSchool!=='All'&&s.school!==filterSchool)return false;
+    if(filterGrade!=='All'&&s.grade!==filterGrade)return false;
+    return true;
+  });
 
   const handleSave=async()=>{
     if(!form.school||!form.grade||!form.name||!form.gender){
@@ -952,16 +963,135 @@ function StudentManagement({students}){
       return;
     }
     try{
-      await db.collection('students').add({
-        school:form.school,
-        grade:form.grade,
-        name:form.name,
-        gender:form.gender,
-        createdAt:new Date().toISOString()
-      });
-      alert('Student added!');
+      if(editingStudent){
+        await db.collection('students').doc(editingStudent.id).update({
+          school:form.school,
+          grade:form.grade,
+          name:form.name,
+          gender:form.gender,
+          updatedAt:new Date().toISOString()
+        });
+        alert('Student updated!');
+      }else{
+        await db.collection('students').add({
+          school:form.school,
+          grade:form.grade,
+          name:form.name,
+          gender:form.gender,
+          createdAt:new Date().toISOString()
+        });
+        alert('Student added!');
+      }
       setShowModal(false);
+      setEditingStudent(null);
       setForm({school:'',grade:'',name:'',gender:''});
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+  const openAddModal=()=>{
+    setEditingStudent(null);
+    setForm({school:'',grade:'',name:'',gender:''});
+    setShowModal(true);
+  };
+
+  const openEditModal=(student)=>{
+    setEditingStudent(student);
+    setForm({
+      school:student.school,
+      grade:student.grade,
+      name:student.name,
+      gender:student.gender
+    });
+    setShowModal(true);
+  };
+
+  const handleSelectAll=()=>{
+    if(selectAll){
+      setSelectedStudents([]);
+      setSelectAll(false);
+    }else{
+      setSelectedStudents(filteredStudents.map(s=>s.id));
+      setSelectAll(true);
+    }
+  };
+
+  const handleSelectStudent=(studentId)=>{
+    if(selectedStudents.includes(studentId)){
+      setSelectedStudents(selectedStudents.filter(id=>id!==studentId));
+    }else{
+      setSelectedStudents([...selectedStudents,studentId]);
+    }
+  };
+
+  const handleBulkDelete=async()=>{
+    if(selectedStudents.length===0){
+      alert('Please select students to delete');
+      return;
+    }
+    if(!confirm(`Delete ${selectedStudents.length} selected students?`))return;
+    
+    try{
+      const batch=db.batch();
+      selectedStudents.forEach(id=>{
+        batch.delete(db.collection('students').doc(id));
+      });
+      await batch.commit();
+      alert(`${selectedStudents.length} students deleted!`);
+      setSelectedStudents([]);
+      setSelectAll(false);
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const handleBulkUpdateSchool=async()=>{
+    if(selectedStudents.length===0){
+      alert('Please select students first');
+      return;
+    }
+    const newSchool=prompt('Enter new school name:');
+    if(!newSchool||!SCHOOLS.includes(newSchool)){
+      alert('Invalid school name');
+      return;
+    }
+    if(!confirm(`Update school to "${newSchool}" for ${selectedStudents.length} students?`))return;
+
+    try{
+      const batch=db.batch();
+      selectedStudents.forEach(id=>{
+        batch.update(db.collection('students').doc(id),{school:newSchool,updatedAt:new Date().toISOString()});
+      });
+      await batch.commit();
+      alert(`${selectedStudents.length} students updated!`);
+      setSelectedStudents([]);
+      setSelectAll(false);
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const handleBulkUpdateGrade=async()=>{
+    if(selectedStudents.length===0){
+      alert('Please select students first');
+      return;
+    }
+    const newGrade=prompt('Enter new grade (11 or 12):');
+    if(!newGrade||!['11','12'].includes(newGrade)){
+      alert('Invalid grade. Must be 11 or 12');
+      return;
+    }
+    if(!confirm(`Update grade to "${newGrade}" for ${selectedStudents.length} students?`))return;
+
+    try{
+      const batch=db.batch();
+      selectedStudents.forEach(id=>{
+        batch.update(db.collection('students').doc(id),{grade:newGrade,updatedAt:new Date().toISOString()});
+      });
+      await batch.commit();
+      alert(`${selectedStudents.length} students updated!`);
+      setSelectedStudents([]);
+      setSelectAll(false);
     }catch(e){
       alert('Failed: '+e.message);
     }
@@ -1035,7 +1165,7 @@ function StudentManagement({students}){
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold">Student Management</h2>
         <div className="flex gap-3">
-          <button onClick={()=>setShowModal(true)} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">
+          <button onClick={openAddModal} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">
             + Add Student
           </button>
           <label className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer">
@@ -1048,6 +1178,51 @@ function StudentManagement({students}){
         </div>
       </div>
 
+      {selectedStudents.length>0&&(
+        <div className="bg-blue-50 border-2 border-blue-300 p-4 rounded-xl">
+          <div className="flex justify-between items-center">
+            <div className="font-bold text-blue-800">
+              {selectedStudents.length} student(s) selected
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleBulkUpdateSchool} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">
+                🏫 Change School
+              </button>
+              <button onClick={handleBulkUpdateGrade} className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold">
+                📚 Change Grade
+              </button>
+              <button onClick={handleBulkDelete} className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold">
+                🗑️ Delete Selected
+              </button>
+              <button onClick={()=>{setSelectedStudents([]);setSelectAll(false)}} className="px-4 py-2 bg-gray-400 text-white rounded-lg font-semibold">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">🔍 Filters</h3>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">School</label>
+            <select value={filterSchool} onChange={e=>{setFilterSchool(e.target.value);setSelectedStudents([]);setSelectAll(false)}} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="All">All Schools</option>
+              {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Grade</label>
+            <select value={filterGrade} onChange={e=>{setFilterGrade(e.target.value);setSelectedStudents([]);setSelectAll(false)}} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="All">All Grades</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white p-4 rounded-xl border-2 border-gray-200">
         <p className="text-sm text-gray-600">
           <strong>CSV Format:</strong> School, Grade, Student Name, Gender
@@ -1057,10 +1232,20 @@ function StudentManagement({students}){
       </div>
 
       <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
-        <h3 className="font-bold mb-4">All Students ({students.length})</h3>
+        <h3 className="font-bold mb-4">
+          Showing {filteredStudents.length} of {students.length} Students
+        </h3>
         <table className="w-full">
           <thead className="avanti-gradient-light">
             <tr>
+              <th className="p-3">
+                <input 
+                  type="checkbox" 
+                  checked={selectAll&&filteredStudents.length>0} 
+                  onChange={handleSelectAll}
+                  className="cursor-pointer"
+                />
+              </th>
               <th className="p-3 text-left">School</th>
               <th className="p-3 text-left">Grade</th>
               <th className="p-3 text-left">Name</th>
@@ -1069,27 +1254,48 @@ function StudentManagement({students}){
             </tr>
           </thead>
           <tbody>
-            {students.map(s=>
-              <tr key={s.id} className="border-b hover:bg-gray-50">
-                <td className="p-3">{s.school}</td>
-                <td className="p-3">Class {s.grade}</td>
-                <td className="p-3 font-semibold">{s.name}</td>
-                <td className="p-3">{s.gender}</td>
-                <td className="p-3">
-                  <button onClick={()=>handleDelete(s)} className="px-3 py-1 bg-red-500 text-white rounded-lg">
-                    Delete
-                  </button>
+            {filteredStudents.length===0?(
+              <tr>
+                <td colSpan="6" className="p-8 text-center text-gray-500">
+                  No students found
                 </td>
               </tr>
+            ):(
+              filteredStudents.map(s=>
+                <tr key={s.id} className={`border-b hover:bg-gray-50 ${selectedStudents.includes(s.id)?'bg-blue-50':''}`}>
+                  <td className="p-3">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedStudents.includes(s.id)}
+                      onChange={()=>handleSelectStudent(s.id)}
+                      className="cursor-pointer"
+                    />
+                  </td>
+                  <td className="p-3">{s.school}</td>
+                  <td className="p-3">Class {s.grade}</td>
+                  <td className="p-3 font-semibold">{s.name}</td>
+                  <td className="p-3">{s.gender}</td>
+                  <td className="p-3">
+                    <div className="flex gap-2">
+                      <button onClick={()=>openEditModal(s)} className="px-3 py-1 bg-yellow-400 rounded-lg font-semibold">
+                        Edit
+                      </button>
+                      <button onClick={()=>handleDelete(s)} className="px-3 py-1 bg-red-500 text-white rounded-lg font-semibold">
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
             )}
           </tbody>
         </table>
       </div>
 
       {showModal&&(
-        <div className="modal-overlay" onClick={()=>setShowModal(false)}>
+        <div className="modal-overlay" onClick={()=>{setShowModal(false);setEditingStudent(null)}}>
           <div className="modal-content" onClick={e=>e.stopPropagation()}>
-            <h3 className="text-2xl font-bold mb-4">Add New Student</h3>
+            <h3 className="text-2xl font-bold mb-4">{editingStudent?'Edit Student':'Add New Student'}</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-bold mb-1">School *</label>
@@ -1121,7 +1327,7 @@ function StudentManagement({students}){
                 <button onClick={handleSave} className="flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold">
                   Save
                 </button>
-                <button onClick={()=>setShowModal(false)} className="flex-1 bg-gray-300 py-3 rounded-xl font-semibold">
+                <button onClick={()=>{setShowModal(false);setEditingStudent(null);setForm({school:'',grade:'',name:'',gender:''})}} className="flex-1 bg-gray-300 py-3 rounded-xl font-semibold">
                   Cancel
                 </button>
               </div>
