@@ -160,13 +160,26 @@ function Confetti(){const shapes=['●','■','▲','★','♦','♥','✦','✧
 if(loading){return(<div className="min-h-screen avanti-gradient flex items-center justify-center"><div className="text-center"><img src={AVANTI_LOGO} alt="Avanti Fellows" className="w-20 h-20 mx-auto mb-4 animate-bounce"/><div className="text-white text-2xl font-bold">Loading...</div></div></div>)}
 if(!currentUser){return(<div className="min-h-screen avanti-gradient flex items-center justify-center p-4"><div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md"><div className="text-center mb-8"><img src={AVANTI_LOGO} alt="Avanti Fellows" className="w-20 h-20 mx-auto mb-4"/><h1 className="text-4xl font-bold text-gray-800 mb-2">Curriculum Tracker</h1><p className="text-gray-600 mt-3">Avanti Fellows</p></div><div className="space-y-5"><input type="email" className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg" value={loginForm.email} onChange={e=>setLoginForm({...loginForm,email:e.target.value})} placeholder="Email"/><input type="password" className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg" value={loginForm.password} onChange={e=>setLoginForm({...loginForm,password:e.target.value})} placeholder="Password" onKeyPress={e=>e.key==='Enter'&&handleLogin()}/><button onClick={handleLogin} disabled={authLoading} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-50">{authLoading?'Logging in...':'Login'}</button></div></div></div>)}
 
-return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} curriculum={curriculum} chapterProgress={chapterProgress} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab}/>;
+return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab}/>;
 }
 
-function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebrationMessage,teachers,curriculum,chapterProgress,updateChapterProgress,activeTab,setActiveTab}){return(<div className="min-h-screen bg-gray-50 flex flex-col">{showConfetti&&<Confetti/>}<nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['overview','analytics','class11','class12','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='overview'&&'📊 Overview'}{tab==='analytics'&&'📈 Analytics'}{tab==='class11'&&'📚 Class 11'}{tab==='class12'&&'📖 Class 12'}{tab==='birthdays'&&'🎂 Celebrations'}</button>)}</div>{activeTab==='overview'&&<TeacherOverview currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers}/>}{activeTab==='analytics'&&<TeacherAnalytics currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='class11'&&<TeacherCurriculum grade="11" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='class12'&&<TeacherCurriculum grade="12" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='birthdays'&&<BirthdaysPage teachers={teachers} currentUser={currentUser}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
+function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebrationMessage,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,updateChapterProgress,activeTab,setActiveTab}){return(<div className="min-h-screen bg-gray-50 flex flex-col">{showConfetti&&<Confetti/>}<nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['overview','analytics','class11','class12','attendance','myattendance','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='overview'&&'📊 Overview'}
+{tab==='analytics'&&'📈 Analytics'}
+{tab==='class11'&&'📚 Class 11'}
+{tab==='class12'&&'📖 Class 12'}
+{tab==='attendance'&&'✅ Student Attendance'}
+{tab==='myattendance'&&'👤 My Attendance'}
+{tab==='birthdays'&&'🎂 Celebrations'}</button>)}</div>{activeTab==='overview'&&<TeacherOverview currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers}/>}{activeTab==='analytics'&&<TeacherAnalytics currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='class11'&&<TeacherCurriculum grade="11" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='class12'&&<TeacherCurriculum grade="12" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='birthdays'&&<BirthdaysPage teachers={teachers} currentUser={currentUser}/>}{activeTab==='attendance'&&<StudentAttendanceView currentUser={currentUser} students={students} studentAttendance={studentAttendance}/>}
+{activeTab==='myattendance'&&<TeacherAttendanceView currentUser={currentUser} teacherAttendance={teacherAttendance}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
 
-function AdminView({currentUser,handleLogout,teachers,curriculum,chapterProgress,addChapter,updateChapter,deleteChapter}){const[activeTab,setActiveTab]=useState('teachers');return(<div className="min-h-screen bg-gray-50 flex flex-col"><nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['teachers','curriculum','analytics','chapter-details','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='teachers'&&'👥 Teachers'}{tab==='curriculum'&&'📚 Curriculum'}{tab==='analytics'&&'📊 Analytics'}{tab==='chapter-details'&&'📋 Chapter Details'}{tab==='birthdays'&&'🎂 Celebrations'}</button>)}</div>{activeTab==='teachers'&&<TeacherManagement teachers={teachers}/>}{activeTab==='curriculum'&&<AdminCurriculum curriculum={curriculum} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>}{activeTab==='analytics'&&<AdminAnalytics teachers={teachers} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='chapter-details'&&<AdminChapterDetails curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers}/>}{activeTab==='birthdays'&&<AdminBirthdays teachers={teachers}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
-
+function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,addChapter,updateChapter,deleteChapter}){const[activeTab,setActiveTab]=useState('teachers');return(<div className="min-h-screen bg-gray-50 flex flex-col"><nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['teachers','students','curriculum','analytics','chapter-details','attendance','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='teachers'&&'👥 Teachers'}
+{tab==='students'&&'👨‍🎓 Students'}
+{tab==='curriculum'&&'📚 Curriculum'}
+{tab==='analytics'&&'📊 Analytics'}
+{tab==='chapter-details'&&'📋 Chapter Details'}
+{tab==='attendance'&&'📊 Attendance Analytics'}
+{tab==='birthdays'&&'🎂 Celebrations'}</button>)}</div>{activeTab==='teachers'&&<TeacherManagement teachers={teachers}/>}{activeTab==='curriculum'&&<AdminCurriculum curriculum={curriculum} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>}{activeTab==='analytics'&&<AdminAnalytics teachers={teachers} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='chapter-details'&&<AdminChapterDetails curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers}/>}{activeTab==='birthdays'&&<AdminBirthdays teachers={teachers}/>}{activeTab==='students'&&<StudentManagement students={students}/>}
+{activeTab==='attendance'&&<AdminAttendanceAnalytics students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
 function TeacherOverview({currentUser,curriculum,chapterProgress,teachers}){const mySchool=currentUser.school;const mySubject=currentUser.subject;const schoolRankings=useMemo(()=>{const rankings=SCHOOLS.map(school=>{let total=0,completed=0;SUBJECTS.forEach(subject=>{['11','12'].forEach(grade=>{const docId=`${school}_${subject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];chapters.forEach(ch=>{total++;const progressId=`${school}_${ch.id}`;const prog=chapterProgress[progressId]||{};if(prog.completed==='Yes'&&prog.testConducted==='Yes'){completed++}})})});return{school,total,completed,percentage:total?Math.round((completed/total)*100):0}});rankings.sort((a,b)=>b.percentage-a.percentage);return rankings},[curriculum,chapterProgress]);const subjectRankings=useMemo(()=>{
   const rankings=SUBJECTS.map(subject=>{
     let total=0,completed=0;
@@ -188,10 +201,45 @@ function TeacherOverview({currentUser,curriculum,chapterProgress,teachers}){cons
 
   rankings.sort((a,b)=>b.percentage-a.percentage);
   return rankings
-},[curriculum,chapterProgress,mySchool]);const mySchoolRank=schoolRankings.findIndex(r=>r.school===mySchool)+1;const laggingSubject=subjectRankings[subjectRankings.length-1];return(<div className="space-y-6"><h2 className="text-3xl font-bold">Dashboard Overview</h2><div className="grid md:grid-cols-3 gap-4"><div className="stat-card avanti-gradient text-white"><div className="text-sm opacity-90">Your School Rank</div><div className="text-5xl font-bold">#{mySchoolRank}</div><div className="text-sm mt-2">Out of {SCHOOLS.length} schools</div></div><div className="stat-card bg-gradient-to-br from-green-500 to-emerald-600 text-white"><div className="text-sm opacity-90">Best Performing School</div><div className="text-2xl font-bold mt-2">{schoolRankings[0]?.school}</div><div className="text-sm mt-2">{schoolRankings[0]?.percentage}% completed</div></div><div className="stat-card bg-gradient-to-br from-orange-500 to-red-600 text-white"><div className="text-sm opacity-90">Lagging Subject (Your School)</div><div className="text-2xl font-bold mt-2">{laggingSubject?.subject}</div><div className="text-sm mt-2">{laggingSubject?.percentage}% completed</div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">🏆 School Rankings</h3><div className="space-y-3">{schoolRankings.map((rank,index)=><div key={rank.school} className={`ranking-card ${index===0?'ranking-1':index===1?'ranking-2':index===2?'ranking-3':''} ${rank.school===mySchool?'bg-yellow-50':''}`}><div className="flex justify-between items-center"><div className="flex items-center gap-4"><div className="text-2xl font-bold text-gray-400">#{index+1}</div><div><div className="font-bold text-lg">{rank.school} {rank.school===mySchool&&'⭐'}</div><div className="text-sm text-gray-600">{rank.completed} / {rank.total} chapters completed</div></div></div><div className="text-3xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div></div>)}</div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">📚 Subject Performance in {mySchool}</h3><div className="grid md:grid-cols-2 gap-4">{subjectRankings.map(rank=><div key={rank.subject} className="border-2 rounded-xl p-4"><div className="flex justify-between items-center mb-2"><div className="font-bold text-lg">{rank.subject}</div><div className="text-2xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div><div className="h-2 bg-gray-200 rounded-full"><div className="h-2 avanti-gradient rounded-full" style={{width:`${rank.percentage}%`}}/></div><div className="text-sm text-gray-600 mt-2">{rank.completed} / {rank.total} chapters</div></div>)}</div></div></div>)}
-
+},[curriculum,chapterProgress,mySchool]);const mySchoolRank=schoolRankings.findIndex(r=>r.school===mySchool)+1;const laggingSubject=subjectRankings[subjectRankings.length-1];return(<div className="space-y-6"><h2 className="text-3xl font-bold">Dashboard Overview</h2><div className="grid md:grid-cols-4 gap-4"><div className="stat-card avanti-gradient text-white"><div className="text-sm opacity-90">Your School Rank</div><div className="text-5xl font-bold">#{mySchoolRank}</div><div className="text-sm mt-2">Out of {SCHOOLS.length} schools</div></div><div className="stat-card bg-gradient-to-br from-green-500 to-emerald-600 text-white"><div className="text-sm opacity-90">Best Performing School</div><div className="text-2xl font-bold mt-2">{schoolRankings[0]?.school}</div><div className="text-sm mt-2">{schoolRankings[0]?.percentage}% completed</div></div><div className="stat-card bg-gradient-to-br from-orange-500 to-red-600 text-white"><div className="text-sm opacity-90">Lagging Subject (Your School)</div><div className="text-2xl font-bold mt-2">{laggingSubject?.subject}</div><div className="text-sm mt-2">{laggingSubject?.percentage}% completed</div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">🏆 School Rankings</h3><div className="space-y-3">{schoolRankings.map((rank,index)=><div key={rank.school} className={`ranking-card ${index===0?'ranking-1':index===1?'ranking-2':index===2?'ranking-3':''} ${rank.school===mySchool?'bg-yellow-50':''}`}><div className="flex justify-between items-center"><div className="flex items-center gap-4"><div className="text-2xl font-bold text-gray-400">#{index+1}</div><div><div className="font-bold text-lg">{rank.school} {rank.school===mySchool&&'⭐'}</div><div className="text-sm text-gray-600">{rank.completed} / {rank.total} chapters completed</div></div></div><div className="text-3xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div></div>)}</div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">📚 Subject Performance in {mySchool}</h3><div className="grid md:grid-cols-2 gap-4">{subjectRankings.map(rank=><div key={rank.subject} className="border-2 rounded-xl p-4"><div className="flex justify-between items-center mb-2"><div className="font-bold text-lg">{rank.subject}</div><div className="text-2xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div><div className="h-2 bg-gray-200 rounded-full"><div className="h-2 avanti-gradient rounded-full" style={{width:`${rank.percentage}%`}}/></div><div className="text-sm text-gray-600 mt-2">{rank.completed} / {rank.total} chapters</div></div>)}</div></div><div className="stat-card bg-gradient-to-br from-purple-500 to-pink-600 text-white">
+  <div className="text-sm opacity-90">My Attendance (This Month)</div>
+  <div className="text-2xl font-bold mt-2">
+    {teacherAttendance.filter(a=>a.teacherId===currentUser.afid&&getMonthYear(a.date)===getMonthYear(getTodayDate())).length} days
+  </div>
+  <div className="text-sm mt-2">Marked this month</div>
+  <div className="bg-white p-6 rounded-2xl shadow-lg">
+  <h3 className="text-2xl font-bold mb-4">📊 Quick Attendance Overview</h3>
+  <div className="grid md:grid-cols-2 gap-4">
+    <div className="border-2 rounded-xl p-4">
+      <h4 className="font-bold mb-2">Today's Student Attendance</h4>
+      <p className="text-sm text-gray-600">
+        Present: <strong className="text-green-600">
+          {studentAttendance.filter(a=>a.date===getTodayDate()&&a.school===currentUser.school&&a.status==='Present').length}
+        </strong>
+      </p>
+      <p className="text-sm text-gray-600">
+        Absent: <strong className="text-red-600">
+          {studentAttendance.filter(a=>a.date===getTodayDate()&&a.school===currentUser.school&&a.status==='Absent').length}
+        </strong>
+      </p>
+    </div>
+    <div className="border-2 rounded-xl p-4">
+      <h4 className="font-bold mb-2">My Attendance Status</h4>
+      {teacherAttendance.find(a=>a.teacherId===currentUser.afid&&a.date===getTodayDate())?
+        <div className="text-sm">
+          <p className="text-green-600 font-bold">✓ Marked for today</p>
+          <p className="text-gray-600">
+            Status: {teacherAttendance.find(a=>a.teacherId===currentUser.afid&&a.date===getTodayDate()).status}
+          </p>
+        </div>
+      :
+        <p className="text-orange-600 font-bold">⚠️ Not marked yet</p>
+      }
+    </div>
+  </div>
+</div>
+</div></div>)}
 function TeacherAnalytics({currentUser,curriculum,chapterProgress}){const chartRef=useRef(null);const chartInstance=useRef(null);const mySchool=currentUser.school;const mySubject=currentUser.subject;const analyticsData=useMemo(()=>{const data={11:{total:0,completed:0},12:{total:0,completed:0}};let totalDays=0;let chaptersWithDates=0;['11','12'].forEach(grade=>{const docId=`${mySchool}_${mySubject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];chapters.forEach(ch=>{data[grade].total++;const progressId=`${mySchool}_${ch.id}`;const prog=chapterProgress[progressId]||{};if(prog.completed==='Yes'&&prog.testConducted==='Yes'){data[grade].completed++;if(prog.completionDate&&ch.targetDate){const target=new Date(ch.targetDate);const completion=new Date(prog.completionDate);const days=Math.abs(Math.ceil((completion-target)/(1000*60*60*24)));totalDays+=days;chaptersWithDates++}}})});const avgDays=chaptersWithDates?Math.round(totalDays/chaptersWithDates):0;return{...data,avgDays}},[curriculum,chapterProgress,mySchool,mySubject]);useEffect(()=>{if(chartRef.current){if(chartInstance.current){chartInstance.current.destroy()}const ctx=chartRef.current.getContext('2d');chartInstance.current=new Chart(ctx,{type:'bar',data:{labels:['Class 11','Class 12'],datasets:[{label:'Completed',data:[analyticsData[11].completed,analyticsData[12].completed],backgroundColor:'#10B981'},{label:'Pending',data:[analyticsData[11].total-analyticsData[11].completed,analyticsData[12].total-analyticsData[12].completed],backgroundColor:'#F59E0B'}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true}}}})}return()=>{if(chartInstance.current){chartInstance.current.destroy()}}},[analyticsData]);const handleExport=()=>{const exportData=[{Grade:'Class 11','Total Chapters':analyticsData[11].total,'Completed':analyticsData[11].completed,'Pending':analyticsData[11].total-analyticsData[11].completed,'Completion %':analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0},{Grade:'Class 12','Total Chapters':analyticsData[12].total,'Completed':analyticsData[12].completed,'Pending':analyticsData[12].total-analyticsData[12].completed,'Completion %':analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0}];exportToExcel(exportData,'my_analytics')};return(<div className="space-y-6"><div className="flex justify-between items-center"><h2 className="text-3xl font-bold">My Analytics</h2><button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">📊 Export to Excel</button></div><div className="grid grid-cols-3 gap-4"><div className="stat-card"><div className="text-sm text-gray-600">Avg Days per Chapter</div><div className="text-4xl font-bold">{analyticsData.avgDays}</div></div><div className="stat-card"><div className="text-sm text-gray-600">Class 11 Progress</div><div className="text-4xl font-bold">{analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0}%</div></div><div className="stat-card"><div className="text-sm text-gray-600">Class 12 Progress</div><div className="text-4xl font-bold">{analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0}%</div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}><canvas ref={chartRef}></canvas></div></div>)}
-
 function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateChapterProgress}){
   const[expandedChapters,setExpandedChapters]=useState({});
   const mySchool=currentUser.school;
@@ -888,6 +936,799 @@ function AdminChapterDetails({curriculum,chapterProgress}){const[filterSchool,se
 
 function AdminBirthdays({teachers}){const todayBirthdays=useMemo(()=>getBirthdays(teachers,'today'),[teachers]);const weekBirthdays=useMemo(()=>getBirthdays(teachers,'week'),[teachers]);const monthBirthdays=useMemo(()=>getBirthdays(teachers,'month'),[teachers]);const todayAnniversaries=useMemo(()=>getAnniversaries(teachers,'today'),[teachers]);const weekAnniversaries=useMemo(()=>getAnniversaries(teachers,'week'),[teachers]);const monthAnniversaries=useMemo(()=>getAnniversaries(teachers,'month'),[teachers]);return(<div className="space-y-6"><h2 className="text-3xl font-bold">🎉 Celebrations</h2><div className="grid md:grid-cols-2 gap-6">{todayBirthdays.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎂 Today's Birthdays</h3>{todayBirthdays.map(t=><div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{t.school} - {t.subject}</div></div>)}</div>}{todayAnniversaries.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎉 Today's Work Anniversaries</h3>{todayAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{years} Years - {t.school}</div></div>)})}</div>}</div><div className="grid md:grid-cols-3 gap-6"><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Week</h3>{weekBirthdays.length===0&&weekAnniversaries.length===0?<p className="text-gray-500">No celebrations</p>:<div className="space-y-2">{weekBirthdays.map(t=><div key={t.id} className="p-3 bg-blue-50 rounded-lg"><div className="font-semibold">🎂 {t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}{weekAnniversaries.map(t=><div key={t.id} className="p-3 bg-green-50 rounded-lg"><div className="font-semibold">🎉 {t.name}</div><div className="text-sm text-gray-600">Work Anniversary</div></div>)}</div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month - Birthdays</h3>{monthBirthdays.length===0?<p className="text-gray-500">No birthdays</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month - Anniversaries</h3>{monthAnniversaries.length===0?<p className="text-gray-500">No anniversaries</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{years} Years</div></div>)})}</div>}</div></div></div>)}
 
+// ========================================
+// STUDENT MANAGEMENT COMPONENT
+// ========================================
+function StudentManagement({students}){
+  const[showModal,setShowModal]=useState(false);
+  const[form,setForm]=useState({school:'',grade:'',name:'',gender:''});
+  const fileInputRef=useRef(null);
+
+  const handleSave=async()=>{
+    if(!form.school||!form.grade||!form.name||!form.gender){
+      alert('Please fill all fields');
+      return;
+    }
+    try{
+      await db.collection('students').add({
+        school:form.school,
+        grade:form.grade,
+        name:form.name,
+        gender:form.gender,
+        createdAt:new Date().toISOString()
+      });
+      alert('Student added!');
+      setShowModal(false);
+      setForm({school:'',grade:'',name:'',gender:''});
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const handleCSVImport=e=>{
+    const file=e.target.files[0];
+    if(!file)return;
+
+    Papa.parse(file,{
+      complete:async results=>{
+        try{
+          const rows=results.data;
+          if(rows.length<2){
+            alert('CSV file is empty');
+            return;
+          }
+
+          let imported=0;
+          for(let i=1;i<rows.length;i++){
+            const row=rows[i];
+            const school=row[0]?row[0].trim():'';
+            const grade=row[1]?row[1].trim():'';
+            const name=row[2]?row[2].trim():'';
+            const gender=row[3]?row[3].trim():'';
+
+            if(school&&grade&&name&&gender){
+              await db.collection('students').add({
+                school,
+                grade,
+                name,
+                gender,
+                createdAt:new Date().toISOString()
+              });
+              imported++;
+            }
+          }
+
+          alert(`Imported ${imported} students!`);
+          if(fileInputRef.current)fileInputRef.current.value='';
+        }catch(e){
+          alert('Import failed: '+e.message);
+        }
+      },
+      error:()=>alert('Failed to parse CSV')
+    });
+  };
+
+  const handleDelete=async student=>{
+    if(!confirm(`Delete ${student.name}?`))return;
+    try{
+      await db.collection('students').doc(student.id).delete();
+      alert('Student deleted!');
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const handleExport=()=>{
+    const exportData=students.map(s=>({
+      School:s.school,
+      Grade:s.grade,
+      Name:s.name,
+      Gender:s.gender
+    }));
+    exportToExcel(exportData,'students_list');
+  };
+
+  return(
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">Student Management</h2>
+        <div className="flex gap-3">
+          <button onClick={()=>setShowModal(true)} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">
+            + Add Student
+          </button>
+          <label className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer">
+            📤 Import CSV
+            <input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVImport} className="hidden"/>
+          </label>
+          <button onClick={handleExport} className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold">
+            📥 Export
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white p-4 rounded-xl border-2 border-gray-200">
+        <p className="text-sm text-gray-600">
+          <strong>CSV Format:</strong> School, Grade, Student Name, Gender
+          <br/>
+          <strong>Example:</strong> CoE Barwani, 11, Raj Kumar, Male
+        </p>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
+        <h3 className="font-bold mb-4">All Students ({students.length})</h3>
+        <table className="w-full">
+          <thead className="avanti-gradient-light">
+            <tr>
+              <th className="p-3 text-left">School</th>
+              <th className="p-3 text-left">Grade</th>
+              <th className="p-3 text-left">Name</th>
+              <th className="p-3 text-left">Gender</th>
+              <th className="p-3 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map(s=>
+              <tr key={s.id} className="border-b hover:bg-gray-50">
+                <td className="p-3">{s.school}</td>
+                <td className="p-3">Class {s.grade}</td>
+                <td className="p-3 font-semibold">{s.name}</td>
+                <td className="p-3">{s.gender}</td>
+                <td className="p-3">
+                  <button onClick={()=>handleDelete(s)} className="px-3 py-1 bg-red-500 text-white rounded-lg">
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {showModal&&(
+        <div className="modal-overlay" onClick={()=>setShowModal(false)}>
+          <div className="modal-content" onClick={e=>e.stopPropagation()}>
+            <h3 className="text-2xl font-bold mb-4">Add New Student</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold mb-1">School *</label>
+                <select value={form.school} onChange={e=>setForm({...form,school:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg">
+                  <option value="">Select</option>
+                  {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1">Grade *</label>
+                <select value={form.grade} onChange={e=>setForm({...form,grade:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg">
+                  <option value="">Select</option>
+                  <option value="11">Class 11</option>
+                  <option value="12">Class 12</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1">Name *</label>
+                <input type="text" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/>
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1">Gender *</label>
+                <select value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg">
+                  <option value="">Select</option>
+                  {GENDERS.map(g=><option key={g} value={g}>{g}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={handleSave} className="flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold">
+                  Save
+                </button>
+                <button onClick={()=>setShowModal(false)} className="flex-1 bg-gray-300 py-3 rounded-xl font-semibold">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========================================
+// STUDENT ATTENDANCE VIEW (FOR TEACHERS)
+// ========================================
+function StudentAttendanceView({currentUser,students,studentAttendance}){
+  const[selectedGrade,setSelectedGrade]=useState('11');
+  const[selectedDate,setSelectedDate]=useState(getTodayDate());
+  const[attendanceMap,setAttendanceMap]=useState({});
+
+  const mySchool=currentUser.school;
+  const filteredStudents=students.filter(s=>s.school===mySchool&&s.grade===selectedGrade);
+
+  useEffect(()=>{
+    const map={};
+    studentAttendance
+      .filter(a=>a.date===selectedDate&&a.school===mySchool&&a.grade===selectedGrade)
+      .forEach(a=>{
+        map[a.studentId]=a.status;
+      });
+    setAttendanceMap(map);
+  },[selectedDate,studentAttendance,mySchool,selectedGrade]);
+
+  const handleAttendanceChange=async(studentId,status)=>{
+    try{
+      const docId=`${mySchool}_${selectedGrade}_${studentId}_${selectedDate}`;
+      await db.collection('studentAttendance').doc(docId).set({
+        school:mySchool,
+        grade:selectedGrade,
+        studentId,
+        studentName:filteredStudents.find(s=>s.id===studentId)?.name||'',
+        date:selectedDate,
+        status,
+        markedBy:currentUser.afid,
+        markedAt:new Date().toISOString()
+      });
+      setAttendanceMap({...attendanceMap,[studentId]:status});
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const handleSelectAll=async()=>{
+    try{
+      for(const student of filteredStudents){
+        const docId=`${mySchool}_${selectedGrade}_${student.id}_${selectedDate}`;
+        await db.collection('studentAttendance').doc(docId).set({
+          school:mySchool,
+          grade:selectedGrade,
+          studentId:student.id,
+          studentName:student.name,
+          date:selectedDate,
+          status:'Present',
+          markedBy:currentUser.afid,
+          markedAt:new Date().toISOString()
+        });
+      }
+      const newMap={};
+      filteredStudents.forEach(s=>newMap[s.id]='Present');
+      setAttendanceMap(newMap);
+      alert('All students marked present!');
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  return(
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold">Student Attendance - {mySchool}</h2>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <div className="grid md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">Grade</label>
+            <select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Date</label>
+            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+          </div>
+          <div className="flex items-end">
+            <button onClick={handleSelectAll} className="w-full px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
+              ✅ Mark All Present
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="font-bold mb-4">Students ({filteredStudents.length})</h3>
+        {filteredStudents.length===0?
+          <p className="text-gray-500 text-center py-8">No students found</p>
+        :
+          <div className="space-y-2">
+            {filteredStudents.map(student=>
+              <div key={student.id} className="flex items-center justify-between p-4 border-2 rounded-xl hover:bg-gray-50">
+                <div className="flex-1">
+                  <div className="font-semibold text-lg">{student.name}</div>
+                  <div className="text-sm text-gray-600">{student.gender}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={()=>handleAttendanceChange(student.id,'Present')}
+                    className={`px-6 py-2 rounded-lg font-semibold ${attendanceMap[student.id]==='Present'?'bg-green-500 text-white':'bg-gray-200'}`}
+                  >
+                    ✓ Present
+                  </button>
+                  <button 
+                    onClick={()=>handleAttendanceChange(student.id,'Absent')}
+                    className={`px-6 py-2 rounded-lg font-semibold ${attendanceMap[student.id]==='Absent'?'bg-red-500 text-white':'bg-gray-200'}`}
+                  >
+                    ✗ Absent
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// TEACHER ATTENDANCE VIEW
+// ========================================
+function TeacherAttendanceView({currentUser,teacherAttendance}){
+  const[selectedDate,setSelectedDate]=useState(getTodayDate());
+  const[status,setStatus]=useState('Present');
+  const[reason,setReason]=useState('Present');
+  const[location,setLocation]=useState('');
+  const[fetchingLocation,setFetchingLocation]=useState(false);
+
+  const todayRecord=teacherAttendance.find(a=>a.teacherId===currentUser.afid&&a.date===selectedDate);
+
+  useEffect(()=>{
+    if(todayRecord){
+      setStatus(todayRecord.status);
+      setReason(todayRecord.reason||'Present');
+      setLocation(todayRecord.location||'');
+    }
+  },[todayRecord]);
+
+  const getLocation=()=>{
+    setFetchingLocation(true);
+    if(navigator.geolocation){
+      navigator.geolocation.getCurrentPosition(
+        position=>{
+          const loc=`${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
+          setLocation(loc);
+          setFetchingLocation(false);
+        },
+        ()=>{
+          alert('Unable to fetch location');
+          setFetchingLocation(false);
+        }
+      );
+    }else{
+      alert('Geolocation not supported');
+      setFetchingLocation(false);
+    }
+  };
+
+  const handleSubmit=async()=>{
+    if(status!=='Present'&&!reason){
+      alert('Please select a reason');
+      return;
+    }
+    try{
+      const docId=`${currentUser.afid}_${selectedDate}`;
+      await db.collection('teacherAttendance').doc(docId).set({
+        teacherId:currentUser.afid,
+        teacherName:currentUser.name,
+        school:currentUser.school,
+        date:selectedDate,
+        status,
+        reason:status==='Present'?'Present':reason,
+        location:location||'Not provided',
+        markedAt:new Date().toISOString()
+      });
+      alert('Attendance marked!');
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  return(
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold">My Attendance</h2>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg max-w-2xl mx-auto">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">Date</label>
+            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold mb-2">Status *</label>
+            <div className="flex gap-3">
+              <button 
+                onClick={()=>{setStatus('Present');setReason('Present')}}
+                className={`flex-1 py-3 rounded-xl font-semibold ${status==='Present'?'bg-green-500 text-white':'bg-gray-200'}`}
+              >
+                ✓ Present
+              </button>
+              <button 
+                onClick={()=>setStatus('On Leave')}
+                className={`flex-1 py-3 rounded-xl font-semibold ${status==='On Leave'?'bg-orange-500 text-white':'bg-gray-200'}`}
+              >
+                📅 On Leave
+              </button>
+            </div>
+          </div>
+
+          {status==='On Leave'&&(
+            <div>
+              <label className="block text-sm font-bold mb-2">Reason *</label>
+              <select value={reason} onChange={e=>setReason(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+                {LEAVE_REASONS.filter(r=>r!=='Present').map(r=><option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-bold mb-2">Location</label>
+            <div className="flex gap-2">
+              <input type="text" value={location} onChange={e=>setLocation(e.target.value)} className="flex-1 border-2 px-4 py-3 rounded-xl" placeholder="Enter location or fetch GPS"/>
+              <button onClick={getLocation} disabled={fetchingLocation} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold disabled:opacity-50">
+                {fetchingLocation?'📍 Fetching...':'📍 Get GPS'}
+              </button>
+            </div>
+            {location&&<p className="text-sm text-gray-600 mt-2">📍 {location}</p>}
+          </div>
+
+          <button onClick={handleSubmit} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg">
+            Submit Attendance
+          </button>
+
+          {todayRecord&&(
+            <div className="mt-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+              <h4 className="font-bold text-green-800 mb-2">✓ Already Marked for {selectedDate}</h4>
+              <p><strong>Status:</strong> {todayRecord.status}</p>
+              <p><strong>Reason:</strong> {todayRecord.reason}</p>
+              <p><strong>Location:</strong> {todayRecord.location}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// ADMIN ATTENDANCE ANALYTICS
+// ========================================
+function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAttendance}){
+  const[filterSchool,setFilterSchool]=useState('All');
+  const[filterGrade,setFilterGrade]=useState('All');
+  const[filterMonth,setFilterMonth]=useState(getMonthYear(getTodayDate()));
+  const[selectedDate,setSelectedDate]=useState(getTodayDate());
+
+  const chart1Ref=useRef(null);
+  const chart2Ref=useRef(null);
+  const chart3Ref=useRef(null);
+  const chart4Ref=useRef(null);
+
+  const chartInstances=useRef({});
+
+  const filteredStudentAttendance=useMemo(()=>{
+    return studentAttendance.filter(a=>{
+      if(filterSchool!=='All'&&a.school!==filterSchool)return false;
+      if(filterGrade!=='All'&&a.grade!==filterGrade)return false;
+      if(getMonthYear(a.date)!==filterMonth)return false;
+      return true;
+    });
+  },[studentAttendance,filterSchool,filterGrade,filterMonth]);
+
+  const filteredTeacherAttendance=useMemo(()=>{
+    return teacherAttendance.filter(a=>{
+      if(filterSchool!=='All'&&a.school!==filterSchool)return false;
+      if(getMonthYear(a.date)!==filterMonth)return false;
+      return true;
+    });
+  },[teacherAttendance,filterSchool,filterMonth]);
+
+  const todayStats=useMemo(()=>{
+    const studentRecords=studentAttendance.filter(a=>a.date===selectedDate);
+    const teacherRecords=teacherAttendance.filter(a=>a.date===selectedDate);
+    return{
+      studentPresent:studentRecords.filter(r=>r.status==='Present').length,
+      studentAbsent:studentRecords.filter(r=>r.status==='Absent').length,
+      teacherPresent:teacherRecords.filter(r=>r.status==='Present').length,
+      teacherAbsent:teacherRecords.filter(r=>r.status==='On Leave').length
+    };
+  },[studentAttendance,teacherAttendance,selectedDate]);
+
+  const genderStats=useMemo(()=>{
+    const stats={Male:{present:0,absent:0},Female:{present:0,absent:0},Other:{present:0,absent:0}};
+    filteredStudentAttendance.forEach(a=>{
+      const student=students.find(s=>s.id===a.studentId);
+      if(student&&stats[student.gender]){
+        if(a.status==='Present'){
+          stats[student.gender].present++;
+        }else{
+          stats[student.gender].absent++;
+        }
+        });
+    return stats;
+  },[filteredStudentAttendance,students]);
+
+  const monthlyDayStats=useMemo(()=>{
+    return getMonthlyAttendanceStats(filteredStudentAttendance,filterMonth);
+  },[filteredStudentAttendance,filterMonth]);
+
+  useEffect(()=>{
+    Object.values(chartInstances.current).forEach(chart=>{
+      if(chart)chart.destroy();
+    });
+    chartInstances.current={};
+
+    // Chart 1: Daily Student Attendance (Line)
+    if(chart1Ref.current){
+      const ctx=chart1Ref.current.getContext('2d');
+      const dates=Object.keys(monthlyDayStats).sort();
+      chartInstances.current.chart1=new Chart(ctx,{
+        type:'line',
+        data:{
+          labels:dates.map(d=>new Date(d).getDate()),
+          datasets:[
+            {
+              label:'Present',
+              data:dates.map(d=>monthlyDayStats[d].present),
+              borderColor:'#10B981',
+              backgroundColor:'rgba(16,185,129,0.1)',
+              tension:0.4,
+              fill:true
+            },
+            {
+              label:'Absent',
+              data:dates.map(d=>monthlyDayStats[d].absent),
+              borderColor:'#EF4444',
+              backgroundColor:'rgba(239,68,68,0.1)',
+              tension:0.4,
+              fill:true
+            }
+          ]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'Daily Student Attendance (Month)',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          },
+          scales:{
+            y:{beginAtZero:true}
+          }
+        }
+      });
+    }
+
+    // Chart 2: Gender-wise Attendance (Bar)
+    if(chart2Ref.current){
+      const ctx=chart2Ref.current.getContext('2d');
+      const genders=Object.keys(genderStats);
+      chartInstances.current.chart2=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:genders,
+          datasets:[
+            {
+              label:'Present',
+              data:genders.map(g=>genderStats[g].present),
+              backgroundColor:'#10B981'
+            },
+            {
+              label:'Absent',
+              data:genders.map(g=>genderStats[g].absent),
+              backgroundColor:'#EF4444'
+            }
+          ]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'Gender-wise Student Attendance',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          },
+          scales:{
+            y:{beginAtZero:true}
+          }
+        }
+      });
+    }
+
+    // Chart 3: Teacher Attendance Status (Pie)
+    if(chart3Ref.current){
+      const ctx=chart3Ref.current.getContext('2d');
+      const present=filteredTeacherAttendance.filter(a=>a.status==='Present').length;
+      const onLeave=filteredTeacherAttendance.filter(a=>a.status==='On Leave').length;
+      chartInstances.current.chart3=new Chart(ctx,{
+        type:'pie',
+        data:{
+          labels:['Present','On Leave'],
+          datasets:[{
+            data:[present,onLeave],
+            backgroundColor:['#10B981','#F59E0B'],
+            borderWidth:2
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'Teacher Attendance Status (Month)',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          }
+        }
+      });
+    }
+
+    // Chart 4: Overall Student Attendance (Doughnut)
+    if(chart4Ref.current){
+      const ctx=chart4Ref.current.getContext('2d');
+      const present=filteredStudentAttendance.filter(a=>a.status==='Present').length;
+      const absent=filteredStudentAttendance.filter(a=>a.status==='Absent').length;
+      chartInstances.current.chart4=new Chart(ctx,{
+        type:'doughnut',
+        data:{
+          labels:['Present','Absent'],
+          datasets:[{
+            data:[present,absent],
+            backgroundColor:['#3B82F6','#EF4444'],
+            borderWidth:0
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'Overall Student Attendance (Month)',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          }
+        }
+      });
+    }
+
+    return()=>{
+      Object.values(chartInstances.current).forEach(chart=>{
+        if(chart)chart.destroy();
+      });
+    };
+  },[monthlyDayStats,genderStats,filteredTeacherAttendance,filteredStudentAttendance]);
+
+  const handleExportStudents=()=>{
+    const exportData=filteredStudentAttendance.map(a=>({
+      Date:a.date,
+      School:a.school,
+      Grade:a.grade,
+      'Student Name':a.studentName,
+      Status:a.status,
+      'Marked By':a.markedBy
+    }));
+    exportToExcel(exportData,'student_attendance');
+  };
+
+  const handleExportTeachers=()=>{
+    const exportData=filteredTeacherAttendance.map(a=>({
+      Date:a.date,
+      'Teacher Name':a.teacherName,
+      School:a.school,
+      Status:a.status,
+      Reason:a.reason,
+      Location:a.location
+    }));
+    exportToExcel(exportData,'teacher_attendance');
+  };
+
+  return(
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">📊 Attendance Analytics</h2>
+        <div className="flex gap-2">
+          <button onClick={handleExportStudents} className="px-4 py-2 bg-green-600 text-white rounded-xl font-semibold">
+            📥 Export Students
+          </button>
+          <button onClick={handleExportTeachers} className="px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold">
+            📥 Export Teachers
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">🔍 Filters</h3>
+        <div className="grid md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">School</label>
+            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="All">All Schools</option>
+              {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Grade</label>
+            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="All">All Grades</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Month</label>
+            <input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Today's Date</label>
+            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="stat-card bg-green-500 text-white">
+          <div className="text-sm opacity-90">Students Present Today</div>
+          <div className="text-4xl font-bold">{todayStats.studentPresent}</div>
+        </div>
+        <div className="stat-card bg-red-500 text-white">
+          <div className="text-sm opacity-90">Students Absent Today</div>
+          <div className="text-4xl font-bold">{todayStats.studentAbsent}</div>
+        </div>
+        <div className="stat-card bg-blue-500 text-white">
+          <div className="text-sm opacity-90">Teachers Present Today</div>
+          <div className="text-4xl font-bold">{todayStats.teacherPresent}</div>
+        </div>
+        <div className="stat-card bg-orange-500 text-white">
+          <div className="text-sm opacity-90">Teachers on Leave Today</div>
+          <div className="text-4xl font-bold">{todayStats.teacherAbsent}</div>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart1Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart2Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart3Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart4Ref}></canvas>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">📋 Detailed Teacher Attendance</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="avanti-gradient-light">
+              <tr>
+                <th className="p-3 text-left">Date</th>
+                <th className="p-3 text-left">Teacher</th>
+                <th className="p-3 text-left">School</th>
+                <th className="p-3 text-left">Status</th>
+                <th className="p-3 text-left">Reason</th>
+                <th className="p-3 text-left">Location</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTeacherAttendance.length===0?
+                <tr><td colSpan="6" className="p-8 text-center text-gray-500">No records found</td></tr>
+              :
+                filteredTeacherAttendance.slice(0,50).map((a,idx)=>
+                  <tr key={idx} className="border-b hover:bg-gray-50">
+                    <td className="p-3">{a.date}</td>
+                    <td className="p-3 font-semibold">{a.teacherName}</td>
+                    <td className="p-3">{a.school}</td>
+                    <td className="p-3">
+                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${a.status==='Present'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>
+                        {a.status}
+                      </span>
+                    </td>
+                    <td className="p-3">{a.reason}</td>
+                    <td className="p-3 text-sm">📍 {a.location}</td>
+                  </tr>
+                )
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
 ReactDOM.render(<App/>,document.getElementById('root'));
   </script>
 </body>
