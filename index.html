@@ -1934,24 +1934,54 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
   },[todayRecord]);
 
   const getLocation=()=>{
-    setFetchingLocation(true);
-    if(navigator.geolocation){
-      navigator.geolocation.getCurrentPosition(
-        position=>{
-          const loc=`${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
-          setLocation(loc);
-          setFetchingLocation(false);
-        },
-        ()=>{
-          alert('Unable to fetch location');
-          setFetchingLocation(false);
-        }
-      );
-    }else{
-      alert('Geolocation not supported');
+  setFetchingLocation(true);
+  
+  // Check if geolocation is supported
+  if(!navigator.geolocation){
+    alert('❌ Geolocation is not supported by your browser');
+    setFetchingLocation(false);
+    return;
+  }
+  
+  // Check if we're on HTTPS (required for geolocation)
+  if(window.location.protocol!=='https:'&&!window.location.hostname.includes('localhost')){
+    alert('⚠️ Location access requires HTTPS. Please access the site using https:// instead of http://');
+    setFetchingLocation(false);
+    return;
+  }
+  
+  navigator.geolocation.getCurrentPosition(
+    position=>{
+      const loc=`${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
+      setLocation(loc);
       setFetchingLocation(false);
+      alert('✅ Location fetched successfully!');
+    },
+    error=>{
+      let errorMessage='Unable to fetch location. ';
+      switch(error.code){
+        case error.PERMISSION_DENIED:
+          errorMessage+='Please allow location permission in your browser settings.';
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMessage+='Location information is unavailable.';
+          break;
+        case error.TIMEOUT:
+          errorMessage+='Location request timed out.';
+          break;
+        default:
+          errorMessage+='An unknown error occurred.';
+      }
+      alert('❌ '+errorMessage);
+      setFetchingLocation(false);
+    },
+    {
+      enableHighAccuracy:true,
+      timeout:10000,
+      maximumAge:0
     }
-  };
+  );
+};
 
   const handleSubmit=async()=>{
     if(status!=='Present'&&!reason){
