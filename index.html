@@ -1982,27 +1982,31 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
     });
 };
   const handleSubmit=async()=>{
-    if(status!=='Present'&&!reason){
-      alert('Please select a reason');
-      return;
-    }
-    try{
-      const docId=`${currentUser.afid}_${selectedDate}`;
-      await db.collection('teacherAttendance').doc(docId).set({
-        teacherId:currentUser.afid,
-        teacherName:currentUser.name,
-        school:currentUser.school,
-        date:selectedDate,
-        status,
-        reason:status==='Present'?'Present':reason,
-        location:location||'Not provided',
-        markedAt:new Date().toISOString()
-      });
-      alert('Attendance marked!');
-    }catch(e){
-      alert('Failed: '+e.message);
-    }
-  };
+  if(status!=='Present'&&!reason){
+    alert('Please select a reason');
+    return;
+  }
+  
+  // Make location optional with a default value
+  const finalLocation=location.trim()||'Not provided';
+  
+  try{
+    const docId=`${currentUser.afid}_${selectedDate}`;
+    await db.collection('teacherAttendance').doc(docId).set({
+      teacherId:currentUser.afid,
+      teacherName:currentUser.name,
+      school:currentUser.school,
+      date:selectedDate,
+      status,
+      reason:status==='Present'?'Present':reason,
+      location:finalLocation,
+      markedAt:new Date().toISOString()
+    });
+    alert('✅ Attendance marked successfully!');
+  }catch(e){
+    alert('❌ Failed: '+e.message);
+  }
+};
 
   return(
     <div className="space-y-6">
@@ -2043,19 +2047,28 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
           )}
 
           <div>
-            <label className="block text-sm font-bold mb-2">Location</label>
-            <div className="flex gap-2">
-              <input type="text" value={location} onChange={e=>setLocation(e.target.value)} className="flex-1 border-2 px-4 py-3 rounded-xl" placeholder="Enter location or fetch GPS"/>
-              <button onClick={getLocation} disabled={fetchingLocation} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold disabled:opacity-50">
-                {fetchingLocation?'📍 Fetching...':'📍 Get GPS'}
-              </button>
-            </div>
-            {location&&<p className="text-sm text-gray-600 mt-2">📍 {location}</p>}
-          </div>
-
-          <button onClick={handleSubmit} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg">
-            Submit Attendance
-          </button>
+  <label className="block text-sm font-bold mb-2">Location (Optional)</label>
+  <div className="flex gap-2">
+    <input 
+      type="text" 
+      value={location} 
+      onChange={e=>setLocation(e.target.value)} 
+      className="flex-1 border-2 px-4 py-3 rounded-xl" 
+      placeholder="Enter your location (e.g., CoE Barwani Office)"
+    />
+    <button 
+      onClick={getLocation} 
+      disabled={fetchingLocation} 
+      className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold disabled:opacity-50 whitespace-nowrap"
+    >
+      {fetchingLocation?'📍 Fetching...':'📍 Get GPS'}
+    </button>
+  </div>
+  {location&&<p className="text-sm text-gray-600 mt-2">📍 {location}</p>}
+  <p className="text-xs text-gray-500 mt-1">
+    Tip: If GPS doesn't work, you can type your location manually (e.g., "CoE Barwani Office" or "Work from Home")
+  </p>
+</div>
 
           {todayRecord&&(
             <div className="mt-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
