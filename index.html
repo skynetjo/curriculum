@@ -1937,7 +1937,7 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
   setFetchingLocation(true);
   
   if(!navigator.geolocation){
-    alert('❌ Geolocation is not supported by your browser. Please enter location manually.');
+    alert('❌ Geolocation is not supported by your browser.\n\nPlease enter your location manually in the text field above.');
     setFetchingLocation(false);
     return;
   }
@@ -1965,20 +1965,20 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
     .catch(error=>{
       let errorMessage='';
       if(error.message==='Timeout'){
-        errorMessage='Location request timed out. Please try again or enter location manually.';
+        errorMessage='⏱️ GPS location tracking timed out.\n\nPlease enter your location manually (e.g., "CoE Barwani Office", "Main Building", etc.)';
       }else if(error.code===1){
-        errorMessage='Location permission denied. Please enable location access in your browser settings and try again.';
+        errorMessage='🚫 GPS location tracking failed - Permission denied.\n\nPlease enable location access in your browser settings, or enter your location manually.';
       }else if(error.code===2){
-        errorMessage='Location unavailable. Please try again or enter your location manually.';
+        errorMessage='📍 GPS location tracking failed - Location unavailable.\n\nPlease enter your location manually (e.g., "CoE Barwani Office", "Work from Home", etc.)';
       }else if(error.code===3){
-        errorMessage='Location request timed out. Please try again or enter location manually.';
+        errorMessage='⏱️ GPS location tracking timed out.\n\nPlease enter your location manually.';
       }else{
-        errorMessage='Unable to fetch location. Please enter your location manually.';
+        errorMessage='❌ GPS location tracking failed.\n\nPlease enter your location manually in the text field above.';
       }
-      alert('⚠️ '+errorMessage);
+      alert(errorMessage);
       setFetchingLocation(false);
-      // Set a default prompt message
-      setLocation('');
+      // Focus on the input field so user can type immediately
+      document.querySelector('input[placeholder*="location"]')?.focus();
     });
 };
   const handleSubmit=async()=>{
