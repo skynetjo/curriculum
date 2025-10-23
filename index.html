@@ -63,7 +63,18 @@ const auth=firebase.auth();
 const SUBJECTS=['Physics','Chemistry','Maths','Biology'];
 const SCHOOLS=['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal','JNV Bharuch'];
 const LEAVE_REASONS=['Present','Personal Leave','Sick Leave','Weekly Off','Public Holiday','Organization Holiday','School Holiday','Emergency Leave'];
-const GENDERS=['Male','Female','Other'];    
+const GENDERS=['Male','Female','Other'];
+const DEFAULT_JOBS=['Teaching','Meetings','Centre Visit','Curriculum Planning','Assessment','Documentation','Training','Student Support'];
+const DEFAULT_SUBJOBS={
+  'Teaching':['Class 11 Physics','Class 11 Chemistry','Class 11 Maths','Class 11 Biology','Class 12 Physics','Class 12 Chemistry','Class 12 Maths','Class 12 Biology'],
+  'Meetings':['Team Meeting','Parent Meeting','Admin Meeting','One-on-One','Planning Meeting'],
+  'Centre Visit':['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal','JNV Bharuch'],
+  'Curriculum Planning':['Lesson Planning','Content Development','Resource Creation','Assessment Design'],
+  'Assessment':['Test Creation','Paper Checking','Result Analysis','Feedback Session'],
+  'Documentation':['Reports','Data Entry','Progress Tracking','Attendance Records'],
+  'Training':['Professional Development','Skill Building','Workshop','Orientation'],
+  'Student Support':['Doubt Clearing','Counseling','Remedial Teaching','Mentoring']
+};  
 const AVANTI_LOGO='/mnt/user-data/uploads/Avanti_Fellows-logo.png';
 const exportToExcel=(data,filename)=>{const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Data");XLSX.writeFile(wb,`${filename}_${new Date().toISOString().slice(0,10)}.xlsx`)};
 const getBirthdays=(teachers,period='week')=>{const now=new Date();return teachers.filter(t=>{if(!t.dob)return false;const d=new Date(t.dob);const thisYear=new Date(now.getFullYear(),d.getMonth(),d.getDate());const diff=Math.ceil((thisYear-now)/(1000*60*60*24));if(period==='today'){return d.getDate()===now.getDate()&&d.getMonth()===now.getMonth()}else if(period==='week'){return diff>=0&&diff<=7}else if(period==='month'){return d.getMonth()===now.getMonth()}return false})};
@@ -108,6 +119,8 @@ const getChapterStatus=(chapter,progress)=>{if(!chapter.targetDate){return{label
 function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:''});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);
 const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
+const[timeEntries,setTimeEntries]=useState([]);
+const[jobSettings,setJobSettings]=useState({jobs:DEFAULT_JOBS,subjobs:DEFAULT_SUBJOBS});
 useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){if(user.email==='admin@avantifellows.org'){setIsAdmin(true);setCurrentUser({name:'Administrator',email:user.email,afid:'ADMIN',school:'Admin'});setActiveTab('teachers')}else{const teacherSnapshot=await db.collection('teachers').where('email','==',user.email).limit(1).get();if(!teacherSnapshot.empty){const teacherData=teacherSnapshot.docs[0].data();setCurrentUser(teacherData);setIsAdmin(false);setActiveTab('overview');if(teacherData.dob){const d=new Date(teacherData.dob);const now=new Date();if(d.getMonth()===now.getMonth()&&d.getDate()===now.getDate()){setShowConfetti(true);setCelebrationMessage(`🎂 Happy Birthday, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}if(teacherData.joiningDate){const j=new Date(teacherData.joiningDate);const now=new Date();if(j.getMonth()===now.getMonth()&&j.getDate()===now.getDate()&&j.getFullYear()<now.getFullYear()){const years=now.getFullYear()-j.getFullYear();setShowConfetti(true);setCelebrationMessage(`🎉 Happy ${years} Year Work Anniversary, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}}else{alert('Teacher profile not found. Please contact admin.');await auth.signOut()}}}else{setCurrentUser(null);setIsAdmin(false)}setLoading(false)});return()=>unsubscribe()},[]);
 useEffect(() => {
   const unsubProgress = db.collection('chapterProgress').onSnapshot(snap => {
@@ -139,6 +152,17 @@ useEffect(() => {
   const unsubTeacherAttendance = db.collection('teacherAttendance').onSnapshot(snap => {
     setTeacherAttendance(snap.docs.map(d => ({ ...d.data(), id: d.id })));
   });
+  const unsubTimeEntries = db.collection('timeEntries').onSnapshot(snap => {
+    setTimeEntries(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+  });
+
+  const unsubJobSettings = db.collection('settings').doc('jobSettings').onSnapshot(doc => {
+    if(doc.exists){
+      setJobSettings(doc.data());
+    }else{
+      setJobSettings({jobs:DEFAULT_JOBS,subjobs:DEFAULT_SUBJOBS});
+    }
+  });
 
   return () => {
     unsubProgress();
@@ -148,6 +172,8 @@ useEffect(() => {
     unsubStudents();
     unsubStudentAttendance();
     unsubTeacherAttendance();
+    unsubTimeEntries();
+    unsubJobSettings();
   };
 }, []);
 const handleLogin=async()=>{setAuthLoading(true);try{const email=(loginForm.email||'').trim().toLowerCase();const password=loginForm.password;if(!email||!password){alert('Please enter email and password');setAuthLoading(false);return}await auth.signInWithEmailAndPassword(email,password)}catch(e){console.error('login error',e);alert('Login failed: '+e.message)}setAuthLoading(false)};
@@ -163,25 +189,33 @@ if(!currentUser){return(<div className="min-h-screen avanti-gradient flex items-
 return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab}/>;
 }
 
-function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebrationMessage,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,updateChapterProgress,activeTab,setActiveTab}){return(<div className="min-h-screen bg-gray-50 flex flex-col">{showConfetti&&<Confetti/>}<nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['overview','analytics','class11','class12','attendance','attendancedash','myattendance','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='overview'&&'📊 Overview'}
+function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebrationMessage,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,updateChapterProgress,activeTab,setActiveTab}){return(<div className="min-h-screen bg-gray-50 flex flex-col">{showConfetti&&<Confetti/>}<nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['overview','analytics','class11','class12','attendance','attendancedash','myattendance','birthdays','timetracker','timeanalytics'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='overview'&&'📊 Overview'}
 {tab==='analytics'&&'📈 Analytics'}
 {tab==='class11'&&'📚 Class 11'}
 {tab==='class12'&&'📖 Class 12'}
 {tab==='attendance'&&'✅ Mark Attendance'}
 {tab==='attendancedash'&&'📊 Attendance Dashboard'}
 {tab==='myattendance'&&'👤 My Attendance'}
-{tab==='birthdays'&&'🎂 Celebrations'}</button>)}</div>{activeTab==='overview'&&<TeacherOverview currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers} teacherAttendance={teacherAttendance} studentAttendance={studentAttendance}/>}{activeTab==='analytics'&&<TeacherAnalytics currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='class11'&&<TeacherCurriculum grade="11" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='class12'&&<TeacherCurriculum grade="12" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='birthdays'&&<BirthdaysPage teachers={teachers} currentUser={currentUser}/>}{activeTab==='attendance'&&<StudentAttendanceView currentUser={currentUser} students={students} studentAttendance={studentAttendance}/>}
+{tab==='birthdays'&&'🎂 Celebrations'}
+{tab==='timetracker'&&'⏱️ Time Tracker'}
+{tab==='timeanalytics'&&'📊 Time Analytics'}</button>)}</div>{activeTab==='overview'&&<TeacherOverview currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers} teacherAttendance={teacherAttendance} studentAttendance={studentAttendance}/>}{activeTab==='analytics'&&<TeacherAnalytics currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='class11'&&<TeacherCurriculum grade="11" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='class12'&&<TeacherCurriculum grade="12" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='birthdays'&&<BirthdaysPage teachers={teachers} currentUser={currentUser}/>}{activeTab==='attendance'&&<StudentAttendanceView currentUser={currentUser} students={students} studentAttendance={studentAttendance}/>}
 {activeTab==='attendancedash'&&<TeacherAttendanceDashboard currentUser={currentUser} students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}
-{activeTab==='myattendance'&&<TeacherAttendanceView currentUser={currentUser} teacherAttendance={teacherAttendance}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
+{activeTab==='myattendance'&&<TeacherAttendanceView currentUser={currentUser} teacherAttendance={teacherAttendance}/>}
+{activeTab==='timetracker'&&<TimeTrackerView currentUser={currentUser} timeEntries={timeEntries} jobSettings={jobSettings}/>}
+{activeTab==='timeanalytics'&&<TimeAnalyticsView currentUser={currentUser} timeEntries={timeEntries} teachers={teachers}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
 
-function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,addChapter,updateChapter,deleteChapter}){const[activeTab,setActiveTab]=useState('teachers');return(<div className="min-h-screen bg-gray-50 flex flex-col"><nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['teachers','students','curriculum','analytics','chapter-details','attendance','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='teachers'&&'👥 Teachers'}
+function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,addChapter,updateChapter,deleteChapter}){const[activeTab,setActiveTab]=useState('teachers');return(<div className="min-h-screen bg-gray-50 flex flex-col"><nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['teachers','students','curriculum','analytics','chapter-details','attendance','birthdays','timetracker','jobsettings'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='teachers'&&'👥 Teachers'}
 {tab==='students'&&'👨‍🎓 Students'}
 {tab==='curriculum'&&'📚 Curriculum'}
 {tab==='analytics'&&'📊 Analytics'}
 {tab==='chapter-details'&&'📋 Chapter Details'}
 {tab==='attendance'&&'📊 Attendance Analytics'}
-{tab==='birthdays'&&'🎂 Celebrations'}</button>)}</div>{activeTab==='teachers'&&<TeacherManagement teachers={teachers}/>}{activeTab==='curriculum'&&<AdminCurriculum curriculum={curriculum} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>}{activeTab==='analytics'&&<AdminAnalytics teachers={teachers} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='chapter-details'&&<AdminChapterDetails curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers}/>}{activeTab==='birthdays'&&<AdminBirthdays teachers={teachers}/>}{activeTab==='students'&&<StudentManagement students={students}/>}
-{activeTab==='attendance'&&<AdminAttendanceAnalytics students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
+{tab==='birthdays'&&'🎂 Celebrations'}</button>)}
+{tab==='timetracker'&&'⏱️ Time Tracker Analytics'}
+{tab==='jobsettings'&&'⚙️ Job Settings'}</div>{activeTab==='teachers'&&<TeacherManagement teachers={teachers}/>}{activeTab==='curriculum'&&<AdminCurriculum curriculum={curriculum} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>}{activeTab==='analytics'&&<AdminAnalytics teachers={teachers} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='chapter-details'&&<AdminChapterDetails curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers}/>}{activeTab==='birthdays'&&<AdminBirthdays teachers={teachers}/>}{activeTab==='students'&&<StudentManagement students={students}/>}
+{activeTab==='attendance'&&<AdminAttendanceAnalytics students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}
+{activeTab==='timetracker'&&<AdminTimeTrackerAnalytics teachers={teachers} timeEntries={timeEntries}/>}
+{activeTab==='jobsettings'&&<JobSettingsManagement jobSettings={jobSettings}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
 function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teacherAttendance,studentAttendance}){const mySchool=currentUser.school;const mySubject=currentUser.subject;const schoolRankings=useMemo(()=>{const rankings=SCHOOLS.map(school=>{let total=0,completed=0;SUBJECTS.forEach(subject=>{['11','12'].forEach(grade=>{const docId=`${school}_${subject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];chapters.forEach(ch=>{total++;const progressId=`${school}_${ch.id}`;const prog=chapterProgress[progressId]||{};if(prog.completed==='Yes'&&prog.testConducted==='Yes'){completed++}})})});return{school,total,completed,percentage:total?Math.round((completed/total)*100):0}});rankings.sort((a,b)=>b.percentage-a.percentage);return rankings},[curriculum,chapterProgress]);const subjectRankings=useMemo(()=>{
   const rankings=SUBJECTS.map(subject=>{
     let total=0,completed=0;
@@ -2453,6 +2487,1212 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+// ========================================
+// TIME TRACKER ADDITIONS TO INDEX.HTML
+// ========================================
+
+// ADD THESE CONSTANTS AFTER LINE 20 (after GENDERS constant):
+const DEFAULT_JOBS=['Teaching','Meetings','Centre Visit','Curriculum Planning','Assessment','Documentation','Training','Student Support'];
+const DEFAULT_SUBJOBS={
+  'Teaching':['Class 11 Physics','Class 11 Chemistry','Class 11 Maths','Class 11 Biology','Class 12 Physics','Class 12 Chemistry','Class 12 Maths','Class 12 Biology'],
+  'Meetings':['Team Meeting','Parent Meeting','Admin Meeting','One-on-One','Planning Meeting'],
+  'Centre Visit':['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal','JNV Bharuch'],
+  'Curriculum Planning':['Lesson Planning','Content Development','Resource Creation','Assessment Design'],
+  'Assessment':['Test Creation','Paper Checking','Result Analysis','Feedback Session'],
+  'Documentation':['Reports','Data Entry','Progress Tracking','Attendance Records'],
+  'Training':['Professional Development','Skill Building','Workshop','Orientation'],
+  'Student Support':['Doubt Clearing','Counseling','Remedial Teaching','Mentoring']
+};
+
+// ========================================
+// ADD TO App() FUNCTION STATE (after line 119):
+// ========================================
+const[timeEntries,setTimeEntries]=useState([]);
+const[jobSettings,setJobSettings]=useState({jobs:DEFAULT_JOBS,subjobs:DEFAULT_SUBJOBS});
+
+// ========================================
+// ADD TO useEffect() subscriptions (around line 165):
+// ========================================
+const unsubTimeEntries = db.collection('timeEntries').onSnapshot(snap => {
+  setTimeEntries(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+});
+
+const unsubJobSettings = db.collection('settings').doc('jobSettings').onSnapshot(doc => {
+  if(doc.exists){
+    setJobSettings(doc.data());
+  }else{
+    setJobSettings({jobs:DEFAULT_JOBS,subjobs:DEFAULT_SUBJOBS});
+  }
+});
+
+// ADD TO CLEANUP:
+unsubTimeEntries();
+unsubJobSettings();
+
+// ========================================
+// ADD TO TEACHER TAB NAVIGATION (around line 315):
+// ========================================
+// Add 'timetracker' and 'timeanalytics' to the tabs array
+
+{tab==='timetracker'&&'⏱️ Time Tracker'}
+{tab==='timeanalytics'&&'📊 Time Analytics'}
+
+// ========================================
+// ADD TO TEACHER VIEW RENDER (around line 340):
+// ========================================
+{activeTab==='timetracker'&&<TimeTrackerView currentUser={currentUser} timeEntries={timeEntries} jobSettings={jobSettings}/>}
+{activeTab==='timeanalytics'&&<TimeAnalyticsView currentUser={currentUser} timeEntries={timeEntries} teachers={teachers}/>}
+
+// ========================================
+// ADD TO ADMIN TAB NAVIGATION (around line 369):
+// ========================================
+// Add 'timetracker' and 'jobsettings' to admin tabs
+
+{tab==='timetracker'&&'⏱️ Time Tracker Analytics'}
+{tab==='jobsettings'&&'⚙️ Job Settings'}
+
+// ========================================
+// ADD TO ADMIN VIEW RENDER (around line 385):
+// ========================================
+{activeTab==='timetracker'&&<AdminTimeTrackerAnalytics teachers={teachers} timeEntries={timeEntries}/>}
+{activeTab==='jobsettings'&&<JobSettingsManagement jobSettings={jobSettings}/>}
+
+// ========================================
+// NEW COMPONENTS TO ADD BEFORE ReactDOM.render
+// ========================================
+
+// TIME TRACKER VIEW FOR TEACHERS
+function TimeTrackerView({currentUser,timeEntries,jobSettings}){
+  const[showModal,setShowModal]=useState(false);
+  const[form,setForm]=useState({date:getTodayDate(),job:'',subjob:'',startTime:'',endTime:'',notes:''});
+  const[editingEntry,setEditingEntry]=useState(null);
+
+  const myEntries=timeEntries.filter(e=>e.teacherId===currentUser.afid).sort((a,b)=>b.date.localeCompare(a.date));
+
+  const calculateDuration=(start,end)=>{
+    if(!start||!end)return 0;
+    const[sh,sm]=start.split(':').map(Number);
+    const[eh,em]=end.split(':').map(Number);
+    const startMins=sh*60+sm;
+    const endMins=eh*60+em;
+    return((endMins-startMins)/60).toFixed(2);
+  };
+
+  const openAddModal=()=>{
+    setEditingEntry(null);
+    setForm({date:getTodayDate(),job:'',subjob:'',startTime:'',endTime:'',notes:''});
+    setShowModal(true);
+  };
+
+  const openEditModal=(entry)=>{
+    setEditingEntry(entry);
+    setForm({
+      date:entry.date,
+      job:entry.job,
+      subjob:entry.subjob,
+      startTime:entry.startTime,
+      endTime:entry.endTime,
+      notes:entry.notes||''
+    });
+    setShowModal(true);
+  };
+
+  const handleSave=async()=>{
+    if(!form.date||!form.job||!form.subjob||!form.startTime||!form.endTime){
+      alert('Please fill all required fields');
+      return;
+    }
+    
+    const duration=calculateDuration(form.startTime,form.endTime);
+    if(duration<=0){
+      alert('End time must be after start time');
+      return;
+    }
+
+    try{
+      const data={
+        teacherId:currentUser.afid,
+        teacherName:currentUser.name,
+        school:currentUser.school,
+        date:form.date,
+        job:form.job,
+        subjob:form.subjob,
+        startTime:form.startTime,
+        endTime:form.endTime,
+        duration:parseFloat(duration),
+        notes:form.notes,
+        updatedAt:new Date().toISOString()
+      };
+
+      if(editingEntry){
+        await db.collection('timeEntries').doc(editingEntry.id).update(data);
+        alert('Time entry updated!');
+      }else{
+        data.createdAt=new Date().toISOString();
+        await db.collection('timeEntries').add(data);
+        alert('Time entry added!');
+      }
+      setShowModal(false);
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const handleDelete=async(entry)=>{
+    if(!confirm('Delete this time entry?'))return;
+    try{
+      await db.collection('timeEntries').doc(entry.id).delete();
+      alert('Time entry deleted!');
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const todayTotal=myEntries.filter(e=>e.date===getTodayDate()).reduce((sum,e)=>sum+e.duration,0).toFixed(2);
+  const weekStart=new Date();
+  weekStart.setDate(weekStart.getDate()-weekStart.getDay());
+  const weekStartStr=weekStart.toISOString().split('T')[0];
+  const weekTotal=myEntries.filter(e=>e.date>=weekStartStr).reduce((sum,e)=>sum+e.duration,0).toFixed(2);
+
+  const monthStart=getTodayDate().slice(0,7)+'-01';
+  const monthTotal=myEntries.filter(e=>e.date>=monthStart).reduce((sum,e)=>sum+e.duration,0).toFixed(2);
+
+  return(
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">⏱️ Time Tracker</h2>
+        <button onClick={openAddModal} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">
+          + Add Time Entry
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="stat-card bg-green-500 text-white">
+          <div className="text-sm opacity-90">Today's Hours</div>
+          <div className="text-4xl font-bold">{todayTotal}h</div>
+        </div>
+        <div className="stat-card bg-blue-500 text-white">
+          <div className="text-sm opacity-90">This Week</div>
+          <div className="text-4xl font-bold">{weekTotal}h</div>
+        </div>
+        <div className="stat-card bg-purple-500 text-white">
+          <div className="text-sm opacity-90">This Month</div>
+          <div className="text-4xl font-bold">{monthTotal}h</div>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">📋 My Time Entries</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="avanti-gradient-light">
+              <tr>
+                <th className="p-3 text-left">Date</th>
+                <th className="p-3 text-left">Job</th>
+                <th className="p-3 text-left">Sub Job</th>
+                <th className="p-3 text-left">Time</th>
+                <th className="p-3 text-left">Duration</th>
+                <th className="p-3 text-left">Notes</th>
+                <th className="p-3 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {myEntries.length===0?
+                <tr><td colSpan="7" className="p-8 text-center text-gray-500">No time entries yet</td></tr>
+              :
+                myEntries.map(entry=>
+                  <tr key={entry.id} className="border-b hover:bg-gray-50">
+                    <td className="p-3">{entry.date}</td>
+                    <td className="p-3 font-semibold">{entry.job}</td>
+                    <td className="p-3">{entry.subjob}</td>
+                    <td className="p-3 text-sm">{entry.startTime} - {entry.endTime}</td>
+                    <td className="p-3 font-bold text-blue-600">{entry.duration}h</td>
+                    <td className="p-3 text-sm">{entry.notes||'-'}</td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <button onClick={()=>openEditModal(entry)} className="px-3 py-1 bg-yellow-400 rounded-lg font-semibold">Edit</button>
+                        <button onClick={()=>handleDelete(entry)} className="px-3 py-1 bg-red-500 text-white rounded-lg font-semibold">Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showModal&&(
+        <div className="modal-overlay" onClick={()=>setShowModal(false)}>
+          <div className="modal-content" onClick={e=>e.stopPropagation()}>
+            <h3 className="text-2xl font-bold mb-4">{editingEntry?'Edit Time Entry':'Add Time Entry'}</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold mb-1">Date *</label>
+                <input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/>
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1">Job *</label>
+                <select value={form.job} onChange={e=>setForm({...form,job:e.target.value,subjob:''})} className="w-full border-2 px-3 py-2 rounded-lg">
+                  <option value="">Select Job</option>
+                  {jobSettings.jobs.map(j=><option key={j} value={j}>{j}</option>)}
+                </select>
+              </div>
+              {form.job&&(
+                <div>
+                  <label className="block text-sm font-bold mb-1">Sub Job *</label>
+                  <select value={form.subjob} onChange={e=>setForm({...form,subjob:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg">
+                    <option value="">Select Sub Job</option>
+                    {(jobSettings.subjobs[form.job]||[]).map(sj=><option key={sj} value={sj}>{sj}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1">Start Time *</label>
+                  <input type="time" value={form.startTime} onChange={e=>setForm({...form,startTime:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-1">End Time *</label>
+                  <input type="time" value={form.endTime} onChange={e=>setForm({...form,endTime:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/>
+                </div>
+              </div>
+              {form.startTime&&form.endTime&&(
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <strong>Duration:</strong> {calculateDuration(form.startTime,form.endTime)} hours
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-bold mb-1">Notes</label>
+                <textarea value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg" rows="3" placeholder="Add any notes..."/>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={handleSave} className="flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold">Save</button>
+                <button onClick={()=>setShowModal(false)} className="flex-1 bg-gray-300 py-3 rounded-xl font-semibold">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Continue in next part...
+// ========================================
+// TIME ANALYTICS VIEW FOR TEACHERS
+// ========================================
+function TimeAnalyticsView({currentUser,timeEntries,teachers}){
+  const[filterPeriod,setFilterPeriod]=useState('month');
+  const chart1Ref=useRef(null);
+  const chart2Ref=useRef(null);
+  const chart3Ref=useRef(null);
+  const chartInstances=useRef({});
+
+  const myEntries=timeEntries.filter(e=>e.teacherId===currentUser.afid);
+
+  const getFilteredEntries=()=>{
+    const today=getTodayDate();
+    if(filterPeriod==='day'){
+      return myEntries.filter(e=>e.date===today);
+    }else if(filterPeriod==='week'){
+      const weekStart=new Date();
+      weekStart.setDate(weekStart.getDate()-weekStart.getDay());
+      const weekStartStr=weekStart.toISOString().split('T')[0];
+      return myEntries.filter(e=>e.date>=weekStartStr);
+    }else{
+      const monthStart=today.slice(0,7)+'-01';
+      return myEntries.filter(e=>e.date>=monthStart);
+    }
+  };
+
+  const filteredEntries=getFilteredEntries();
+
+  const jobStats=useMemo(()=>{
+    const stats={};
+    filteredEntries.forEach(e=>{
+      if(!stats[e.job]){
+        stats[e.job]=0;
+      }
+      stats[e.job]+=e.duration;
+    });
+    return stats;
+  },[filteredEntries]);
+
+  const dailyStats=useMemo(()=>{
+    const stats={};
+    filteredEntries.forEach(e=>{
+      if(!stats[e.date]){
+        stats[e.date]=0;
+      }
+      stats[e.date]+=e.duration;
+    });
+    return stats;
+  },[filteredEntries]);
+
+  const schoolComparison=useMemo(()=>{
+    const stats={};
+    SCHOOLS.forEach(school=>{
+      const schoolTeachers=teachers.filter(t=>t.school===school);
+      const schoolEntries=timeEntries.filter(e=>{
+        const teacher=teachers.find(t=>t.afid===e.teacherId);
+        return teacher&&teacher.school===school;
+      });
+      const monthStart=getTodayDate().slice(0,7)+'-01';
+      const monthEntries=schoolEntries.filter(e=>e.date>=monthStart);
+      const total=monthEntries.reduce((sum,e)=>sum+e.duration,0);
+      stats[school]={
+        total:total,
+        avg:schoolTeachers.length>0?(total/schoolTeachers.length).toFixed(2):0
+      };
+    });
+    return stats;
+  },[timeEntries,teachers]);
+
+  const mySchoolRanking=useMemo(()=>{
+    const rankings=Object.entries(schoolComparison)
+      .map(([school,data])=>({school,total:data.total}))
+      .sort((a,b)=>b.total-a.total);
+    return rankings.findIndex(r=>r.school===currentUser.school)+1;
+  },[schoolComparison,currentUser.school]);
+
+  const totalHours=filteredEntries.reduce((sum,e)=>sum+e.duration,0).toFixed(2);
+
+  useEffect(()=>{
+    Object.values(chartInstances.current).forEach(chart=>{
+      if(chart)chart.destroy();
+    });
+    chartInstances.current={};
+
+    if(chart1Ref.current){
+      const ctx=chart1Ref.current.getContext('2d');
+      const jobs=Object.keys(jobStats);
+      chartInstances.current.chart1=new Chart(ctx,{
+        type:'pie',
+        data:{
+          labels:jobs,
+          datasets:[{
+            data:jobs.map(j=>jobStats[j]),
+            backgroundColor:['#F4B41A','#3B82F6','#10B981','#EF4444','#8B5CF6','#F59E0B','#EC4899','#14B8A6']
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:`Hours by Job (${filterPeriod})`,font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          }
+        }
+      });
+    }
+
+    if(chart2Ref.current&&filterPeriod!=='day'){
+      const ctx=chart2Ref.current.getContext('2d');
+      const dates=Object.keys(dailyStats).sort();
+      chartInstances.current.chart2=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:dates.map(d=>new Date(d).getDate()),
+          datasets:[{
+            label:'Hours Worked',
+            data:dates.map(d=>dailyStats[d]),
+            backgroundColor:'#3B82F6',
+            borderRadius:8
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'Daily Hours',font:{size:16,weight:'bold'}},
+            legend:{display:false}
+          },
+          scales:{y:{beginAtZero:true}}
+        }
+      });
+    }
+
+    if(chart3Ref.current){
+      const ctx=chart3Ref.current.getContext('2d');
+      const schools=Object.keys(schoolComparison);
+      chartInstances.current.chart3=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:schools,
+          datasets:[{
+            label:'Average Hours per Teacher',
+            data:schools.map(s=>schoolComparison[s].avg),
+            backgroundColor:schools.map(s=>s===currentUser.school?'#C8342E':'#94A3B8'),
+            borderRadius:8
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'School Comparison (This Month)',font:{size:16,weight:'bold'}},
+            legend:{display:false}
+          },
+          scales:{y:{beginAtZero:true}}
+        }
+      });
+    }
+
+    return()=>{
+      Object.values(chartInstances.current).forEach(chart=>{
+        if(chart)chart.destroy();
+      });
+    };
+  },[jobStats,dailyStats,schoolComparison,filterPeriod,currentUser.school]);
+
+  const handleExport=()=>{
+    const exportData=filteredEntries.map(e=>({
+      Date:e.date,
+      Job:e.job,
+      'Sub Job':e.subjob,
+      'Start Time':e.startTime,
+      'End Time':e.endTime,
+      'Duration (hrs)':e.duration,
+      Notes:e.notes||''
+    }));
+    exportToExcel(exportData,`time_entries_${currentUser.name}_${filterPeriod}`);
+  };
+
+  return(
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">📊 Time Analytics</h2>
+        <button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
+          📥 Export
+        </button>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">🔍 Period</h3>
+        <div className="flex gap-3">
+          <button onClick={()=>setFilterPeriod('day')} className={`px-6 py-3 rounded-xl font-semibold ${filterPeriod==='day'?'avanti-gradient text-white':'bg-gray-200'}`}>
+            Today
+          </button>
+          <button onClick={()=>setFilterPeriod('week')} className={`px-6 py-3 rounded-xl font-semibold ${filterPeriod==='week'?'avanti-gradient text-white':'bg-gray-200'}`}>
+            This Week
+          </button>
+          <button onClick={()=>setFilterPeriod('month')} className={`px-6 py-3 rounded-xl font-semibold ${filterPeriod==='month'?'avanti-gradient text-white':'bg-gray-200'}`}>
+            This Month
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="stat-card avanti-gradient text-white">
+          <div className="text-sm opacity-90">Total Hours</div>
+          <div className="text-4xl font-bold">{totalHours}h</div>
+        </div>
+        <div className="stat-card bg-blue-500 text-white">
+          <div className="text-sm opacity-90">Entries</div>
+          <div className="text-4xl font-bold">{filteredEntries.length}</div>
+        </div>
+        <div className="stat-card bg-green-500 text-white">
+          <div className="text-sm opacity-90">School Ranking</div>
+          <div className="text-4xl font-bold">#{mySchoolRanking}</div>
+        </div>
+        <div className="stat-card bg-purple-500 text-white">
+          <div className="text-sm opacity-90">Avg per Day</div>
+          <div className="text-4xl font-bold">{Object.keys(dailyStats).length>0?(totalHours/Object.keys(dailyStats).length).toFixed(2):0}h</div>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart1Ref}></canvas>
+        </div>
+        {filterPeriod!=='day'&&(
+          <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+            <canvas ref={chart2Ref}></canvas>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+        <canvas ref={chart3Ref}></canvas>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">🏆 School Rankings (Monthly Avg Hours per Teacher)</h3>
+        <div className="space-y-3">
+          {Object.entries(schoolComparison)
+            .sort((a,b)=>b[1].total-a[1].total)
+            .map(([school,data],index)=>
+              <div key={school} className={`p-4 rounded-xl border-2 ${school===currentUser.school?'bg-yellow-50 border-yellow-400':'bg-gray-50 border-gray-200'}`}>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-4">
+                    <div className="text-2xl font-bold text-gray-400">#{index+1}</div>
+                    <div>
+                      <div className="font-bold text-lg">{school} {school===currentUser.school&&'⭐'}</div>
+                      <div className="text-sm text-gray-600">Total: {data.total.toFixed(2)}h</div>
+                    </div>
+                  </div>
+                  <div className="text-3xl font-bold" style={{color:'var(--avanti-red)'}}>{data.avg}h</div>
+                </div>
+              </div>
+            )
+          }
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// ADMIN TIME TRACKER ANALYTICS
+// ========================================
+function AdminTimeTrackerAnalytics({teachers,timeEntries}){
+  const[filterSchool,setFilterSchool]=useState('All');
+  const[filterTeacher,setFilterTeacher]=useState('All');
+  const[filterPeriod,setFilterPeriod]=useState('month');
+
+  const chart1Ref=useRef(null);
+  const chart2Ref=useRef(null);
+  const chart3Ref=useRef(null);
+  const chart4Ref=useRef(null);
+  const chartInstances=useRef({});
+
+  const getDateRange=()=>{
+    const today=getTodayDate();
+    if(filterPeriod==='day'){
+      return{start:today,end:today};
+    }else if(filterPeriod==='week'){
+      const weekStart=new Date();
+      weekStart.setDate(weekStart.getDate()-weekStart.getDay());
+      return{start:weekStart.toISOString().split('T')[0],end:today};
+    }else{
+      return{start:today.slice(0,7)+'-01',end:today};
+    }
+  };
+
+  const dateRange=getDateRange();
+
+  const filteredEntries=useMemo(()=>{
+    return timeEntries.filter(e=>{
+      if(e.date<dateRange.start||e.date>dateRange.end)return false;
+      if(filterTeacher!=='All'&&e.teacherId!==filterTeacher)return false;
+      if(filterSchool!=='All'){
+        const teacher=teachers.find(t=>t.afid===e.teacherId);
+        if(!teacher||teacher.school!==filterSchool)return false;
+      }
+      return true;
+    });
+  },[timeEntries,teachers,filterSchool,filterTeacher,dateRange]);
+
+  const schoolStats=useMemo(()=>{
+    const stats={};
+    SCHOOLS.forEach(school=>{
+      const schoolTeachers=teachers.filter(t=>t.school===school);
+      const schoolEntries=timeEntries.filter(e=>{
+        const teacher=teachers.find(t=>t.afid===e.teacherId);
+        return teacher&&teacher.school===school&&e.date>=dateRange.start&&e.date<=dateRange.end;
+      });
+      const total=schoolEntries.reduce((sum,e)=>sum+e.duration,0);
+      stats[school]={
+        total:total,
+        avg:schoolTeachers.length>0?(total/schoolTeachers.length).toFixed(2):0,
+        teachers:schoolTeachers.length
+      };
+    });
+    return stats;
+  },[timeEntries,teachers,dateRange]);
+
+  const jobStats=useMemo(()=>{
+    const stats={};
+    filteredEntries.forEach(e=>{
+      if(!stats[e.job]){
+        stats[e.job]=0;
+      }
+      stats[e.job]+=e.duration;
+    });
+    return stats;
+  },[filteredEntries]);
+
+  const teacherStats=useMemo(()=>{
+    const stats={};
+    filteredEntries.forEach(e=>{
+      if(!stats[e.teacherId]){
+        stats[e.teacherId]={
+          name:e.teacherName,
+          school:e.school,
+          total:0,
+          entries:0
+        };
+      }
+      stats[e.teacherId].total+=e.duration;
+      stats[e.teacherId].entries++;
+    });
+    return Object.entries(stats).map(([id,data])=>({id,...data})).sort((a,b)=>b.total-a.total);
+  },[filteredEntries]);
+
+  const dailyStats=useMemo(()=>{
+    const stats={};
+    filteredEntries.forEach(e=>{
+      if(!stats[e.date]){
+        stats[e.date]=0;
+      }
+      stats[e.date]+=e.duration;
+    });
+    return stats;
+  },[filteredEntries]);
+
+  const totalHours=filteredEntries.reduce((sum,e)=>sum+e.duration,0).toFixed(2);
+
+  useEffect(()=>{
+    Object.values(chartInstances.current).forEach(chart=>{
+      if(chart)chart.destroy();
+    });
+    chartInstances.current={};
+
+    if(chart1Ref.current){
+      const ctx=chart1Ref.current.getContext('2d');
+      const schools=Object.keys(schoolStats);
+      chartInstances.current.chart1=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:schools,
+          datasets:[{
+            label:'Average Hours per Teacher',
+            data:schools.map(s=>schoolStats[s].avg),
+            backgroundColor:'#C8342E',
+            borderRadius:8
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'School Comparison (Avg Hours)',font:{size:16,weight:'bold'}},
+            legend:{display:false}
+          },
+          scales:{y:{beginAtZero:true}}
+        }
+      });
+    }
+
+    if(chart2Ref.current){
+      const ctx=chart2Ref.current.getContext('2d');
+      const jobs=Object.keys(jobStats);
+      chartInstances.current.chart2=new Chart(ctx,{
+        type:'doughnut',
+        data:{
+          labels:jobs,
+          datasets:[{
+            data:jobs.map(j=>jobStats[j]),
+            backgroundColor:['#F4B41A','#3B82F6','#10B981','#EF4444','#8B5CF6','#F59E0B','#EC4899','#14B8A6']
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'Hours by Job Type',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          }
+        }
+      });
+    }
+
+    if(chart3Ref.current&&filterPeriod!=='day'){
+      const ctx=chart3Ref.current.getContext('2d');
+      const dates=Object.keys(dailyStats).sort();
+      chartInstances.current.chart3=new Chart(ctx,{
+        type:'line',
+        data:{
+          labels:dates.map(d=>new Date(d).getDate()),
+          datasets:[{
+            label:'Total Hours',
+            data:dates.map(d=>dailyStats[d]),
+            borderColor:'#3B82F6',
+            backgroundColor:'rgba(59,130,246,0.1)',
+            tension:0.4,
+            fill:true
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'Daily Trend',font:{size:16,weight:'bold'}},
+            legend:{display:false}
+          },
+          scales:{y:{beginAtZero:true}}
+        }
+      });
+    }
+
+    if(chart4Ref.current){
+      const ctx=chart4Ref.current.getContext('2d');
+      const topTeachers=teacherStats.slice(0,10);
+      chartInstances.current.chart4=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:topTeachers.map(t=>t.name),
+          datasets:[{
+            label:'Hours Worked',
+            data:topTeachers.map(t=>t.total),
+            backgroundColor:'#10B981',
+            borderRadius:8
+          }]
+        },
+        options:{
+          indexAxis:'y',
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'Top 10 Teachers (Hours)',font:{size:16,weight:'bold'}},
+            legend:{display:false}
+          },
+          scales:{x:{beginAtZero:true}}
+        }
+      });
+    }
+
+    return()=>{
+      Object.values(chartInstances.current).forEach(chart=>{
+        if(chart)chart.destroy();
+      });
+    };
+  },[schoolStats,jobStats,dailyStats,teacherStats,filterPeriod]);
+
+  const handleExport=()=>{
+    const exportData=filteredEntries.map(e=>({
+      Date:e.date,
+      Teacher:e.teacherName,
+      School:e.school,
+      Job:e.job,
+      'Sub Job':e.subjob,
+      'Start Time':e.startTime,
+      'End Time':e.endTime,
+      'Duration (hrs)':e.duration,
+      Notes:e.notes||''
+    }));
+    exportToExcel(exportData,`admin_time_entries_${filterPeriod}`);
+  };
+
+  return(
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">⏱️ Time Tracker Analytics</h2>
+        <button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
+          📥 Export
+        </button>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">🔍 Filters</h3>
+        <div className="grid md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">School</label>
+            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="All">All Schools</option>
+              {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Teacher</label>
+            <select value={filterTeacher} onChange={e=>setFilterTeacher(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="All">All Teachers</option>
+              {teachers.map(t=><option key={t.afid} value={t.afid}>{t.name} ({t.school})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Period</label>
+            <select value={filterPeriod} onChange={e=>setFilterPeriod(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="day">Today</option>
+              <option value="week">This Week</option>
+              <option value="month">This Month</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="stat-card avanti-gradient text-white">
+          <div className="text-sm opacity-90">Total Hours</div>
+          <div className="text-4xl font-bold">{totalHours}h</div>
+        </div>
+        <div className="stat-card bg-blue-500 text-white">
+          <div className="text-sm opacity-90">Total Entries</div>
+          <div className="text-4xl font-bold">{filteredEntries.length}</div>
+        </div>
+        <div className="stat-card bg-green-500 text-white">
+          <div className="text-sm opacity-90">Active Teachers</div>
+          <div className="text-4xl font-bold">{teacherStats.length}</div>
+        </div>
+        <div className="stat-card bg-purple-500 text-white">
+          <div className="text-sm opacity-90">Avg per Teacher</div>
+          <div className="text-4xl font-bold">{teacherStats.length>0?(totalHours/teacherStats.length).toFixed(2):0}h</div>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart1Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart2Ref}></canvas>
+        </div>
+        {filterPeriod!=='day'&&(
+          <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+            <canvas ref={chart3Ref}></canvas>
+          </div>
+        )}
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+          <canvas ref={chart4Ref}></canvas>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">📊 School Rankings</h3>
+        <div className="space-y-3">
+          {Object.entries(schoolStats)
+            .sort((a,b)=>b[1].total-a[1].total)
+            .map(([school,data],index)=>
+              <div key={school} className={`p-4 rounded-xl border-2 ${index===0?'border-yellow-400 bg-yellow-50':index===1?'border-gray-300 bg-gray-50':index===2?'border-orange-300 bg-orange-50':'border-gray-200 bg-gray-50'}`}>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-4">
+                    <div className="text-2xl font-bold text-gray-400">#{index+1}</div>
+                    <div>
+                      <div className="font-bold text-lg">{school}</div>
+                      <div className="text-sm text-gray-600">Total: {data.total.toFixed(2)}h | Teachers: {data.teachers}</div>
+                    </div>
+                  </div>
+                  <div className="text-3xl font-bold" style={{color:'var(--avanti-red)'}}>{data.avg}h</div>
+                </div>
+              </div>
+            )
+          }
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
+        <h3 className="text-xl font-bold mb-4">👥 Teacher Performance</h3>
+        <table className="w-full">
+          <thead className="avanti-gradient-light">
+            <tr>
+              <th className="p-3 text-left">Rank</th>
+              <th className="p-3 text-left">Teacher</th>
+              <th className="p-3 text-left">School</th>
+              <th className="p-3 text-left">Total Hours</th>
+              <th className="p-3 text-left">Entries</th>
+              <th className="p-3 text-left">Avg per Entry</th>
+            </tr>
+          </thead>
+          <tbody>
+            {teacherStats.map((t,idx)=>
+              <tr key={t.id} className="border-b hover:bg-gray-50">
+                <td className="p-3 font-bold text-gray-400">#{idx+1}</td>
+                <td className="p-3 font-semibold">{t.name}</td>
+                <td className="p-3">{t.school}</td>
+                <td className="p-3 font-bold text-blue-600">{t.total.toFixed(2)}h</td>
+                <td className="p-3">{t.entries}</td>
+                <td className="p-3">{(t.total/t.entries).toFixed(2)}h</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// Continue in next part with Job Settings Management...
+// ========================================
+// JOB SETTINGS MANAGEMENT (ADMIN)
+// ========================================
+function JobSettingsManagement({jobSettings}){
+  const[jobs,setJobs]=useState(jobSettings.jobs||[]);
+  const[subjobs,setSubjobs]=useState(jobSettings.subjobs||{});
+  const[newJob,setNewJob]=useState('');
+  const[selectedJob,setSelectedJob]=useState('');
+  const[newSubjob,setNewSubjob]=useState('');
+  const[editingJob,setEditingJob]=useState(null);
+  const[editJobName,setEditJobName]=useState('');
+
+  useEffect(()=>{
+    setJobs(jobSettings.jobs||[]);
+    setSubjobs(jobSettings.subjobs||{});
+  },[jobSettings]);
+
+  const handleAddJob=async()=>{
+    if(!newJob.trim()){
+      alert('Please enter a job name');
+      return;
+    }
+    if(jobs.includes(newJob.trim())){
+      alert('Job already exists');
+      return;
+    }
+    try{
+      const updatedJobs=[...jobs,newJob.trim()];
+      const updatedSubjobs={...subjobs,[newJob.trim()]:[]};
+      await db.collection('settings').doc('jobSettings').set({
+        jobs:updatedJobs,
+        subjobs:updatedSubjobs
+      });
+      setNewJob('');
+      alert('Job added successfully!');
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const handleUpdateJob=async()=>{
+    if(!editJobName.trim()){
+      alert('Please enter a job name');
+      return;
+    }
+    if(editJobName.trim()===editingJob){
+      setEditingJob(null);
+      return;
+    }
+    if(jobs.includes(editJobName.trim())&&editJobName.trim()!==editingJob){
+      alert('Job name already exists');
+      return;
+    }
+    try{
+      const updatedJobs=jobs.map(j=>j===editingJob?editJobName.trim():j);
+      const updatedSubjobs={...subjobs};
+      if(editingJob!==editJobName.trim()){
+        updatedSubjobs[editJobName.trim()]=updatedSubjobs[editingJob];
+        delete updatedSubjobs[editingJob];
+      }
+      await db.collection('settings').doc('jobSettings').set({
+        jobs:updatedJobs,
+        subjobs:updatedSubjobs
+      });
+      setEditingJob(null);
+      setEditJobName('');
+      alert('Job updated successfully!');
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const handleDeleteJob=async(job)=>{
+    if(!confirm(`Delete job "${job}" and all its sub-jobs?`))return;
+    try{
+      const updatedJobs=jobs.filter(j=>j!==job);
+      const updatedSubjobs={...subjobs};
+      delete updatedSubjobs[job];
+      await db.collection('settings').doc('jobSettings').set({
+        jobs:updatedJobs,
+        subjobs:updatedSubjobs
+      });
+      alert('Job deleted successfully!');
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const handleAddSubjob=async()=>{
+    if(!selectedJob){
+      alert('Please select a job first');
+      return;
+    }
+    if(!newSubjob.trim()){
+      alert('Please enter a sub-job name');
+      return;
+    }
+    if((subjobs[selectedJob]||[]).includes(newSubjob.trim())){
+      alert('Sub-job already exists');
+      return;
+    }
+    try{
+      const updatedSubjobs={
+        ...subjobs,
+        [selectedJob]:[...(subjobs[selectedJob]||[]),newSubjob.trim()]
+      };
+      await db.collection('settings').doc('jobSettings').set({
+        jobs,
+        subjobs:updatedSubjobs
+      });
+      setNewSubjob('');
+      alert('Sub-job added successfully!');
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const handleDeleteSubjob=async(job,subjob)=>{
+    if(!confirm(`Delete sub-job "${subjob}"?`))return;
+    try{
+      const updatedSubjobs={
+        ...subjobs,
+        [job]:(subjobs[job]||[]).filter(sj=>sj!==subjob)
+      };
+      await db.collection('settings').doc('jobSettings').set({
+        jobs,
+        subjobs:updatedSubjobs
+      });
+      alert('Sub-job deleted successfully!');
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  const handleResetDefaults=async()=>{
+    if(!confirm('Reset to default job settings? This will replace all current jobs and sub-jobs.'))return;
+    try{
+      await db.collection('settings').doc('jobSettings').set({
+        jobs:DEFAULT_JOBS,
+        subjobs:DEFAULT_SUBJOBS
+      });
+      alert('Reset to defaults successfully!');
+    }catch(e){
+      alert('Failed: '+e.message);
+    }
+  };
+
+  return(
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">⚙️ Job Settings Management</h2>
+        <button onClick={handleResetDefaults} className="px-6 py-3 bg-red-600 text-white rounded-xl font-semibold">
+          🔄 Reset to Defaults
+        </button>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <h3 className="text-xl font-bold mb-4">➕ Add New Job</h3>
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              value={newJob} 
+              onChange={e=>setNewJob(e.target.value)} 
+              onKeyPress={e=>e.key==='Enter'&&handleAddJob()}
+              className="flex-1 border-2 px-4 py-3 rounded-xl" 
+              placeholder="Enter job name"
+            />
+            <button onClick={handleAddJob} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">
+              Add
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <h3 className="text-xl font-bold mb-4">➕ Add Sub-Job</h3>
+          <div className="space-y-3">
+            <select 
+              value={selectedJob} 
+              onChange={e=>setSelectedJob(e.target.value)} 
+              className="w-full border-2 px-4 py-3 rounded-xl"
+            >
+              <option value="">Select Job</option>
+              {jobs.map(j=><option key={j} value={j}>{j}</option>)}
+            </select>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={newSubjob} 
+                onChange={e=>setNewSubjob(e.target.value)} 
+                onKeyPress={e=>e.key==='Enter'&&handleAddSubjob()}
+                className="flex-1 border-2 px-4 py-3 rounded-xl" 
+                placeholder="Enter sub-job name"
+                disabled={!selectedJob}
+              />
+              <button 
+                onClick={handleAddSubjob} 
+                disabled={!selectedJob}
+                className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">📋 Current Jobs & Sub-Jobs</h3>
+        <div className="space-y-4">
+          {jobs.length===0?
+            <p className="text-gray-500 text-center py-8">No jobs configured</p>
+          :
+            jobs.map(job=>
+              <div key={job} className="border-2 rounded-xl p-4 hover:bg-gray-50">
+                <div className="flex justify-between items-start mb-3">
+                  {editingJob===job?
+                    <div className="flex-1 flex gap-2">
+                      <input 
+                        type="text" 
+                        value={editJobName} 
+                        onChange={e=>setEditJobName(e.target.value)} 
+                        className="flex-1 border-2 px-3 py-2 rounded-lg"
+                      />
+                      <button onClick={handleUpdateJob} className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold">
+                        Save
+                      </button>
+                      <button onClick={()=>{setEditingJob(null);setEditJobName('')}} className="px-4 py-2 bg-gray-300 rounded-lg font-semibold">
+                        Cancel
+                      </button>
+                    </div>
+                  :
+                    <>
+                      <h4 className="text-lg font-bold">{job}</h4>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={()=>{setEditingJob(job);setEditJobName(job)}} 
+                          className="px-3 py-1 bg-yellow-400 rounded-lg font-semibold"
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={()=>handleDeleteJob(job)} 
+                          className="px-3 py-1 bg-red-500 text-white rounded-lg font-semibold"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  }
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-semibold text-gray-600 mb-2">Sub-Jobs ({(subjobs[job]||[]).length}):</p>
+                  {(subjobs[job]||[]).length===0?
+                    <p className="text-sm text-gray-400 italic">No sub-jobs</p>
+                  :
+                    <div className="space-y-2">
+                      {(subjobs[job]||[]).map(sj=>
+                        <div key={sj} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                          <span className="text-sm">{sj}</span>
+                          <button 
+                            onClick={()=>handleDeleteSubjob(job,sj)} 
+                            className="px-2 py-1 bg-red-400 text-white rounded text-xs font-semibold"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  }
+                </div>
+              </div>
+            )
+          }
+        </div>
+      </div>
+
+      <div className="bg-blue-50 border-2 border-blue-300 p-6 rounded-xl">
+        <h4 className="font-bold text-blue-800 mb-2">💡 Tips:</h4>
+        <ul className="text-sm text-blue-700 space-y-1">
+          <li>• Jobs are the main categories (e.g., Teaching, Meetings)</li>
+          <li>• Sub-jobs are specific activities under each job</li>
+          <li>• Teachers will see these options when adding time entries</li>
+          <li>• Deleting a job will also delete all its sub-jobs</li>
+          <li>• Use "Reset to Defaults" to restore the original configuration</li>
+        </ul>
       </div>
     </div>
   );
