@@ -56,6 +56,7 @@
   <div id="root"></div>
   <script type="text/babel" data-presets="react">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
+const { createRoot } = ReactDOM;
 const firebaseConfig={apiKey:"AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",authDomain:"curriculum-dbb10.firebaseapp.com",projectId:"curriculum-dbb10",storageBucket:"curriculum-dbb10.firebasestorage.app",messagingSenderId:"706387632109",appId:"1:706387632109:web:06c78a304fdbdc12f391e4"};
 if(!firebase.apps.length){firebase.initializeApp(firebaseConfig)}
 const db=firebase.firestore();
@@ -3702,7 +3703,9 @@ function JobSettingsManagement({jobSettings}){
     </div>
   );
 }
-ReactDOM.render(<App/>,document.getElementById('root'));
+const container = document.getElementById('root');
+const root = createRoot(container);
+root.render(<App />);
   </script>
 </body>
 </html>
