@@ -1994,6 +1994,15 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
     return;
   }
 
+  // Check if we're on HTTPS (required for geolocation)
+  if(window.location.protocol==='https:'||window.location.hostname.includes('localhost')){
+    // All good, proceed with geolocation
+  } else {
+    alert('⚠️ Location access requires HTTPS. Please access the site using https:// instead of http://');
+    setFetchingLocation(false);
+    return;
+  }
+
   // Use getCurrentPosition with better error handling
   navigator.geolocation.getCurrentPosition(
     // Success callback
@@ -2033,8 +2042,8 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
     // Options
     {
       enableHighAccuracy:false,
-      timeout:10000, // 10 seconds
-      maximumAge:300000 // 5 minutes
+      timeout:10000,
+      maximumAge:300000
     }
   );
 };
