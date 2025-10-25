@@ -7,12 +7,12 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Updated: 2025-10-24 - Time Tracker Fix -->
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <style>
@@ -56,7 +56,6 @@
   <div id="root"></div>
   <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
-const { createRoot } = ReactDOM;
 const firebaseConfig={apiKey:"AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",authDomain:"curriculum-dbb10.firebaseapp.com",projectId:"curriculum-dbb10",storageBucket:"curriculum-dbb10.firebasestorage.app",messagingSenderId:"706387632109",appId:"1:706387632109:web:06c78a304fdbdc12f391e4"};
 if(!firebase.apps.length){firebase.initializeApp(firebaseConfig)}
 const db=firebase.firestore();
@@ -76,7 +75,7 @@ const DEFAULT_SUBJOBS={
   'Training':['Professional Development','Skill Building','Workshop','Orientation'],
   'Student Support':['Doubt Clearing','Counseling','Remedial Teaching','Mentoring']
 };  
-const AVANTI_LOGO = '/uploads/Avanti_Fellows-logo.png';
+const AVANTI_LOGO='/mnt/user-data/uploads/Avanti_Fellows-logo.png';
 const exportToExcel=(data,filename)=>{const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Data");XLSX.writeFile(wb,`${filename}_${new Date().toISOString().slice(0,10)}.xlsx`)};
 const getBirthdays=(teachers,period='week')=>{const now=new Date();return teachers.filter(t=>{if(!t.dob)return false;const d=new Date(t.dob);const thisYear=new Date(now.getFullYear(),d.getMonth(),d.getDate());const diff=Math.ceil((thisYear-now)/(1000*60*60*24));if(period==='today'){return d.getDate()===now.getDate()&&d.getMonth()===now.getMonth()}else if(period==='week'){return diff>=0&&diff<=7}else if(period==='month'){return d.getMonth()===now.getMonth()}return false})};
 const getAnniversaries=(teachers,period='week')=>{const now=new Date();return teachers.filter(t=>{if(!t.joiningDate)return false;const j=new Date(t.joiningDate);if(j.getFullYear()>=now.getFullYear())return false;const thisYear=new Date(now.getFullYear(),j.getMonth(),j.getDate());const diff=Math.ceil((thisYear-now)/(1000*60*60*24));if(period==='today'){return j.getDate()===now.getDate()&&j.getMonth()===now.getMonth()}else if(period==='week'){return diff>=0&&diff<=7}else if(period==='month'){return j.getMonth()===now.getMonth()}return false})};
@@ -187,45 +186,33 @@ function Confetti(){const shapes=['●','■','▲','★','♦','♥','✦','✧
 if(loading){return(<div className="min-h-screen avanti-gradient flex items-center justify-center"><div className="text-center"><img src={AVANTI_LOGO} alt="Avanti Fellows" className="w-20 h-20 mx-auto mb-4 animate-bounce"/><div className="text-white text-2xl font-bold">Loading...</div></div></div>)}
 if(!currentUser){return(<div className="min-h-screen avanti-gradient flex items-center justify-center p-4"><div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md"><div className="text-center mb-8"><img src={AVANTI_LOGO} alt="Avanti Fellows" className="w-20 h-20 mx-auto mb-4"/><h1 className="text-4xl font-bold text-gray-800 mb-2">Curriculum Tracker</h1><p className="text-gray-600 mt-3">Avanti Fellows</p></div><div className="space-y-5"><input type="email" className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg" value={loginForm.email} onChange={e=>setLoginForm({...loginForm,email:e.target.value})} placeholder="Email"/><input type="password" className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg" value={loginForm.password} onChange={e=>setLoginForm({...loginForm,password:e.target.value})} placeholder="Password" onKeyPress={e=>e.key==='Enter'&&handleLogin()}/><button onClick={handleLogin} disabled={authLoading} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-50">{authLoading?'Logging in...':'Login'}</button></div></div></div>)}
 
-return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} timeEntries={timeEntries} jobSettings={jobSettings} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} timeEntries={timeEntries} jobSettings={jobSettings} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab}/>;
+return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab}/>;
 }
 
-function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebrationMessage,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,updateChapterProgress,activeTab,setActiveTab,timeEntries,jobSettings}){return(<div className="min-h-screen bg-gray-50 flex flex-col">{showConfetti&&<Confetti/>}<nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">
-  {['overview','analytics','class11','class12','attendance','attendancedash','myattendance','birthdays','timetracker','timeanalytics'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>
-      {tab==='overview'&&'📊 Overview'}
-      {tab==='analytics'&&'📈 Analytics'}
-      {tab==='class11'&&'📚 Class 11'}
-      {tab==='class12'&&'📖 Class 12'}
-      {tab==='attendance'&&'✅ Mark Attendance'}
-      {tab==='attendancedash'&&'📊 Attendance Dashboard'}
-      {tab==='myattendance'&&'👤 My Attendance'}
-      {tab==='birthdays'&&'🎂 Celebrations'}
-      {tab==='timetracker'&&'⏱️ Time Tracker'}
-      {tab==='timeanalytics'&&'📊 Time Analytics'}
-    </button>
-  )}
-</div>
-  {activeTab==='overview'&&<TeacherOverview currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers} teacherAttendance={teacherAttendance} studentAttendance={studentAttendance}/>}{activeTab==='analytics'&&<TeacherAnalytics currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='class11'&&<TeacherCurriculum grade="11" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='class12'&&<TeacherCurriculum grade="12" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='birthdays'&&<BirthdaysPage teachers={teachers} currentUser={currentUser}/>}{activeTab==='attendance'&&<StudentAttendanceView currentUser={currentUser} students={students} studentAttendance={studentAttendance}/>}
+function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebrationMessage,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,updateChapterProgress,activeTab,setActiveTab}){return(<div className="min-h-screen bg-gray-50 flex flex-col">{showConfetti&&<Confetti/>}<nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['overview','analytics','class11','class12','attendance','attendancedash','myattendance','birthdays','timetracker','timeanalytics'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='overview'&&'📊 Overview'}
+{tab==='analytics'&&'📈 Analytics'}
+{tab==='class11'&&'📚 Class 11'}
+{tab==='class12'&&'📖 Class 12'}
+{tab==='attendance'&&'✅ Mark Attendance'}
+{tab==='attendancedash'&&'📊 Attendance Dashboard'}
+{tab==='myattendance'&&'👤 My Attendance'}
+{tab==='birthdays'&&'🎂 Celebrations'}
+{tab==='timetracker'&&'⏱️ Time Tracker'}
+{tab==='timeanalytics'&&'📊 Time Analytics'}</button>)}</div>{activeTab==='overview'&&<TeacherOverview currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers} teacherAttendance={teacherAttendance} studentAttendance={studentAttendance}/>}{activeTab==='analytics'&&<TeacherAnalytics currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='class11'&&<TeacherCurriculum grade="11" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='class12'&&<TeacherCurriculum grade="12" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='birthdays'&&<BirthdaysPage teachers={teachers} currentUser={currentUser}/>}{activeTab==='attendance'&&<StudentAttendanceView currentUser={currentUser} students={students} studentAttendance={studentAttendance}/>}
 {activeTab==='attendancedash'&&<TeacherAttendanceDashboard currentUser={currentUser} students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}
 {activeTab==='myattendance'&&<TeacherAttendanceView currentUser={currentUser} teacherAttendance={teacherAttendance}/>}
 {activeTab==='timetracker'&&<TimeTrackerView currentUser={currentUser} timeEntries={timeEntries} jobSettings={jobSettings}/>}
 {activeTab==='timeanalytics'&&<TimeAnalyticsView currentUser={currentUser} timeEntries={timeEntries} teachers={teachers}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
 
-function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,timeEntries,jobSettings,addChapter,updateChapter,deleteChapter}){const[activeTab,setActiveTab]=useState('teachers');return(<div className="min-h-screen bg-gray-50 flex flex-col"><nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">
-  {['teachers','students','curriculum','analytics','chapter-details','attendance','birthdays','timetracker','jobsettings'].map(tab=>
-    <button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>
-      {tab==='teachers'&&'👥 Teachers'}
-      {tab==='students'&&'👨‍🎓 Students'}
-      {tab==='curriculum'&&'📚 Curriculum'}
-      {tab==='analytics'&&'📊 Analytics'}
-      {tab==='chapter-details'&&'📋 Chapter Details'}
-      {tab==='attendance'&&'📊 Attendance Analytics'}
-      {tab==='birthdays'&&'🎂 Celebrations'}
-      {tab==='timetracker'&&'⏱️ Time Tracker Analytics'}
-      {tab==='jobsettings'&&'⚙️ Job Settings'}
-    </button>
-  )}
-</div>{activeTab==='teachers'&&<TeacherManagement teachers={teachers}/>}{activeTab==='curriculum'&&<AdminCurriculum curriculum={curriculum} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>}{activeTab==='analytics'&&<AdminAnalytics teachers={teachers} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='chapter-details'&&<AdminChapterDetails curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers}/>}{activeTab==='birthdays'&&<AdminBirthdays teachers={teachers}/>}{activeTab==='students'&&<StudentManagement students={students}/>}
+function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,addChapter,updateChapter,deleteChapter}){const[activeTab,setActiveTab]=useState('teachers');return(<div className="min-h-screen bg-gray-50 flex flex-col"><nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['teachers','students','curriculum','analytics','chapter-details','attendance','birthdays','timetracker','jobsettings'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='teachers'&&'👥 Teachers'}
+{tab==='students'&&'👨‍🎓 Students'}
+{tab==='curriculum'&&'📚 Curriculum'}
+{tab==='analytics'&&'📊 Analytics'}
+{tab==='chapter-details'&&'📋 Chapter Details'}
+{tab==='attendance'&&'📊 Attendance Analytics'}
+{tab==='birthdays'&&'🎂 Celebrations'}</button>)}
+{tab==='timetracker'&&'⏱️ Time Tracker Analytics'}
+{tab==='jobsettings'&&'⚙️ Job Settings'}</div>{activeTab==='teachers'&&<TeacherManagement teachers={teachers}/>}{activeTab==='curriculum'&&<AdminCurriculum curriculum={curriculum} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>}{activeTab==='analytics'&&<AdminAnalytics teachers={teachers} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='chapter-details'&&<AdminChapterDetails curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers}/>}{activeTab==='birthdays'&&<AdminBirthdays teachers={teachers}/>}{activeTab==='students'&&<StudentManagement students={students}/>}
 {activeTab==='attendance'&&<AdminAttendanceAnalytics students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}
 {activeTab==='timetracker'&&<AdminTimeTrackerAnalytics teachers={teachers} timeEntries={timeEntries}/>}
 {activeTab==='jobsettings'&&<JobSettingsManagement jobSettings={jobSettings}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
@@ -356,28 +343,31 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
                   {isExpanded&&(
                     <>
                       <div className="space-y-2 max-h-40 overflow-y-auto bg-white p-2 rounded-lg">
-  {allTopics.map((topic,idx)=>{
-    const checked=completedTopics.includes(topic);
-    return(
-      <label 
-        key={idx} 
-        className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded"
-      >
-        <input 
-          type="checkbox" 
-          checked={checked}
-          onChange={(e)=>{
-            const updated=e.target.checked?[...completedTopics,topic]:completedTopics.filter(t=>t!==topic);
-            updateChapterProgress(mySchool,chapter.id,'completedTopics',updated);
-          }}
-        />
-        <span className={`text-sm ${checked?'line-through text-gray-500':'font-medium'}`}>
-          {topic}
-        </span>
-      </label>
-    );
-  })}
-</div>
+                        {allTopics.map((topic,idx)=>{
+                          const checked=completedTopics.includes(topic);
+                          return(
+                            <label 
+  key={idx} 
+  className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded"
+  onClick={(e)=>e.stopPropagation()}
+>
+  <input 
+    type="checkbox" 
+    checked={checked}
+    onClick={(e)=>e.stopPropagation()}
+    onChange={(e)=>{
+      e.stopPropagation();
+      const updated=e.target.checked?[...completedTopics,topic]:completedTopics.filter(t=>t!==topic);
+      updateChapterProgress(mySchool,chapter.id,'completedTopics',updated);
+    }}
+  />
+                              <span className={`text-sm ${checked?'line-through text-gray-500':'font-medium'}`}>
+                                {topic}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
 
                       <div className="bg-white p-3 rounded-lg">
                         <label className="block text-sm font-bold mb-1">Target Date</label>
@@ -1992,15 +1982,6 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
     return;
   }
 
-  // Check if we're on HTTPS (required for geolocation)
-  if(window.location.protocol==='https:'||window.location.hostname.includes('localhost')){
-    // All good, proceed with geolocation
-  } else {
-    alert('⚠️ Location access requires HTTPS. Please access the site using https:// instead of http://');
-    setFetchingLocation(false);
-    return;
-  }
-
   // Use getCurrentPosition with better error handling
   navigator.geolocation.getCurrentPosition(
     // Success callback
@@ -2040,8 +2021,8 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
     // Options
     {
       enableHighAccuracy:false,
-      timeout:10000,
-      maximumAge:300000
+      timeout:10000, // 10 seconds
+      maximumAge:300000 // 5 minutes
     }
   );
 };
@@ -2513,6 +2494,19 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
 // ========================================
 // TIME TRACKER ADDITIONS TO INDEX.HTML
 // ========================================
+
+// ADD THESE CONSTANTS AFTER LINE 20 (after GENDERS constant):
+const DEFAULT_JOBS=['Teaching','Meetings','Centre Visit','Curriculum Planning','Assessment','Documentation','Training','Student Support'];
+const DEFAULT_SUBJOBS={
+  'Teaching':['Class 11 Physics','Class 11 Chemistry','Class 11 Maths','Class 11 Biology','Class 12 Physics','Class 12 Chemistry','Class 12 Maths','Class 12 Biology'],
+  'Meetings':['Team Meeting','Parent Meeting','Admin Meeting','One-on-One','Planning Meeting'],
+  'Centre Visit':['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal','JNV Bharuch'],
+  'Curriculum Planning':['Lesson Planning','Content Development','Resource Creation','Assessment Design'],
+  'Assessment':['Test Creation','Paper Checking','Result Analysis','Feedback Session'],
+  'Documentation':['Reports','Data Entry','Progress Tracking','Attendance Records'],
+  'Training':['Professional Development','Skill Building','Workshop','Orientation'],
+  'Student Support':['Doubt Clearing','Counseling','Remedial Teaching','Mentoring']
+};
 
 // ========================================
 // ADD TO App() FUNCTION STATE (after line 119):
@@ -3703,9 +3697,7 @@ function JobSettingsManagement({jobSettings}){
     </div>
   );
 }
-const container = document.getElementById('root');
-const root = createRoot(container);
-root.render(<App />);
+ReactDOM.render(<App/>,document.getElementById('root'));
   </script>
 </body>
 </html>
