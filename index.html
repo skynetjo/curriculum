@@ -2078,15 +2078,24 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
   },[teacherAttendance,filterSchool,startDate,endDate]);
 
   const todayStats=useMemo(()=>{
-    const studentRecords=studentAttendance.filter(a=>a.date===selectedDate);
-    const teacherRecords=teacherAttendance.filter(a=>a.date===selectedDate);
-    return{
-      studentPresent:studentRecords.filter(r=>r.status==='Present').length,
-      studentAbsent:studentRecords.filter(r=>r.status==='Absent').length,
-      teacherPresent:teacherRecords.filter(r=>r.status==='Present').length,
-      teacherAbsent:teacherRecords.filter(r=>r.status==='On Leave').length
-    };
-  },[studentAttendance,teacherAttendance,selectedDate]);
+  const studentRecords=studentAttendance.filter(a=>{
+    if(a.date!==selectedDate)return false;
+    if(filterSchool!=='All'&&a.school!==filterSchool)return false;
+    if(filterGrade!=='All'&&a.grade!==filterGrade)return false;
+    return true;
+  });
+  const teacherRecords=teacherAttendance.filter(a=>{
+    if(a.date!==selectedDate)return false;
+    if(filterSchool!=='All'&&a.school!==filterSchool)return false;
+    return true;
+  });
+  return{
+    studentPresent:studentRecords.filter(r=>r.status==='Present').length,
+    studentAbsent:studentRecords.filter(r=>r.status==='Absent').length,
+    teacherPresent:teacherRecords.filter(r=>r.status==='Present').length,
+    teacherAbsent:teacherRecords.filter(r=>r.status==='On Leave').length
+  };
+},[studentAttendance,teacherAttendance,selectedDate,filterSchool,filterGrade]);
 
   const genderStats=useMemo(()=>{
     const stats={Male:{present:0,absent:0},Female:{present:0,absent:0},Other:{present:0,absent:0}};
