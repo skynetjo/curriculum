@@ -64,7 +64,10 @@ const SUBJECTS=['Physics','Chemistry','Maths','Biology'];
 const SCHOOLS=['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal','JNV Bharuch'];
 const LEAVE_REASONS=['Present','Personal Leave','Sick Leave','Weekly Off','Public Holiday','Organization Holiday','School Holiday','Emergency Leave'];
 const GENDERS=['Male','Female','Other'];    
-const AVANTI_LOGO = '/Avanti_Fellows-logo.png';
+const AVANTI_LOGO = 'data:image/png;base64,EOF
+cat /home/claude/logo_base64.txt >> /home/claude/LOGO_FIX_CODE.js
+cat >> /home/claude/LOGO_FIX_CODE.js << 'EOF'
+';
 const exportToExcel=(data,filename)=>{const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Data");XLSX.writeFile(wb,`${filename}_${new Date().toISOString().slice(0,10)}.xlsx`)};
 const getBirthdays=(teachers,period='week')=>{const now=new Date();return teachers.filter(t=>{if(!t.dob)return false;const d=new Date(t.dob);const thisYear=new Date(now.getFullYear(),d.getMonth(),d.getDate());const diff=Math.ceil((thisYear-now)/(1000*60*60*24));if(period==='today'){return d.getDate()===now.getDate()&&d.getMonth()===now.getMonth()}else if(period==='week'){return diff>=0&&diff<=7}else if(period==='month'){return d.getMonth()===now.getMonth()}return false})};
 const getAnniversaries=(teachers,period='week')=>{const now=new Date();return teachers.filter(t=>{if(!t.joiningDate)return false;const j=new Date(t.joiningDate);if(j.getFullYear()>=now.getFullYear())return false;const thisYear=new Date(now.getFullYear(),j.getMonth(),j.getDate());const diff=Math.ceil((thisYear-now)/(1000*60*60*24));if(period==='today'){return j.getDate()===now.getDate()&&j.getMonth()===now.getMonth()}else if(period==='week'){return diff>=0&&diff<=7}else if(period==='month'){return j.getMonth()===now.getMonth()}return false})};
