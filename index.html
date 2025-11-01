@@ -16,30 +16,30 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <style>
-    /* Enhanced Priority Badge Gradients */
+    /* Priority Badge Gradients */
 .priority-badge {
   display: inline-block;
-  padding: 0.6rem 1.2rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
+  padding: 0.4rem 0.8rem;  /* Smaller padding */
+  border-radius: 0.4rem;
+  font-size: 0.75rem;  /* Smaller text */
   font-weight: 600;
   color: white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   text-align: center;
-  min-width: 130px;
-  letter-spacing: 0.025em;
+  min-width: 100px;  /* Smaller width */
+  letter-spacing: 0.02em;
 }
 
 .priority-high {
-  background: linear-gradient(135deg, #10B981 0%, #6EE7B7 50%, rgba(110, 231, 183, 0.7) 100%);
+  background: linear-gradient(90deg, #10B981 0%, #34D399 100%);
 }
 
 .priority-medium {
-  background: linear-gradient(135deg, #F59E0B 0%, #FCD34D 50%, rgba(252, 211, 77, 0.7) 100%);
+  background: linear-gradient(90deg, #F59E0B 0%, #FBBF24 100%);
 }
 
 .priority-low {
-  background: linear-gradient(135deg, #EF4444 0%, #FCA5A5 50%, rgba(252, 165, 165, 0.7) 100%);
+  background: linear-gradient(90deg, #EF4444 0%, #F87171 100%);
 }
     :root{--avanti-yellow:#F4B41A;--avanti-orange:#E8B039;--avanti-red:#C8342E}
     *{box-sizing:border-box}
@@ -303,37 +303,39 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
             const status=getChapterStatus(chapter,prog);
 
             return(
-              <div key={chapter.id} className={`chapter-card ${status.color} rounded-2xl shadow-lg p-5`}>
-                <div className="flex justify-between items-start mb-3">
-                  <h3 className="text-xl font-bold pr-2">{chapter.name}</h3>
-                  <div className="mt-2 mb-2">
-  {(chapter.priority==='high'||!chapter.priority)&&(
-    <div className="priority-badge priority-high">
-      🟢 High Priority
+              <div className={`chapter-card ${status.color} rounded-2xl shadow-lg p-5`}>
+  <div className="flex justify-between items-start mb-3">
+    <div className="flex-1">
+      <h3 className="text-xl font-bold mb-2">{chapter.name}</h3>
+      <div>
+        {(chapter.priority==='high'||!chapter.priority)&&(
+          <span className="priority-badge priority-high text-xs">
+            🟢 High Priority
+          </span>
+        )}
+        {chapter.priority==='medium'&&(
+          <span className="priority-badge priority-medium text-xs">
+            🟡 Medium Priority
+          </span>
+        )}
+        {chapter.priority==='low'&&(
+          <span className="priority-badge priority-low text-xs">
+            🔴 Low Priority
+          </span>
+        )}
+      </div>
     </div>
-  )}
-  {chapter.priority==='medium'&&(
-    <div className="priority-badge priority-medium">
-      🟡 Medium Priority
-    </div>
-  )}
-  {chapter.priority==='low'&&(
-    <div className="priority-badge priority-low">
-      🔴 Low Priority
-    </div>
-  )}
-</div>
-                  <button 
-                    onClick={(e)=>{
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setExpandedChapters(prev=>({...prev,[chapter.id]:!prev[chapter.id]}));
-                    }} 
-                    className="text-sm px-3 py-1 bg-white rounded-lg font-semibold"
-                  >
-                    {isExpanded?'▲':'▼'}
-                  </button>
-                </div>
+    <button 
+      onClick={(e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        setExpandedChapters(prev=>({...prev,[chapter.id]:!prev[chapter.id]}));
+      }} 
+      className="text-sm px-3 py-1 bg-white rounded-lg font-semibold flex-shrink-0"
+    >
+      {isExpanded?'▲':'▼'}
+    </button>
+  </div>
 
                 <div className={`status-badge ${status.class} mb-3`}>{status.label}</div>
 
