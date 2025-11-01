@@ -16,37 +16,30 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <style>
-    .priority-badge-high {
-  background: linear-gradient(135deg, #EF4444, #DC2626);
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: bold;
+    /* Enhanced Priority Badge Gradients */
+.priority-badge {
   display: inline-block;
-  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+  padding: 0.6rem 1.2rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  text-align: center;
+  min-width: 130px;
+  letter-spacing: 0.025em;
 }
 
-.priority-badge-medium {
-  background: linear-gradient(135deg, #F59E0B, #D97706);
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: bold;
-  display: inline-block;
-  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+.priority-high {
+  background: linear-gradient(135deg, #10B981 0%, #6EE7B7 50%, rgba(110, 231, 183, 0.7) 100%);
 }
 
-.priority-badge-low {
-  background: linear-gradient(135deg, #10B981, #059669);
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: bold;
-  display: inline-block;
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+.priority-medium {
+  background: linear-gradient(135deg, #F59E0B 0%, #FCD34D 50%, rgba(252, 211, 77, 0.7) 100%);
+}
+
+.priority-low {
+  background: linear-gradient(135deg, #EF4444 0%, #FCA5A5 50%, rgba(252, 165, 165, 0.7) 100%);
 }
     :root{--avanti-yellow:#F4B41A;--avanti-orange:#E8B039;--avanti-red:#C8342E}
     *{box-sizing:border-box}
@@ -313,21 +306,21 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
               <div key={chapter.id} className={`chapter-card ${status.color} rounded-2xl shadow-lg p-5`}>
                 <div className="flex justify-between items-start mb-3">
                   <h3 className="text-xl font-bold pr-2">{chapter.name}</h3>
-                  <div className="mt-2">
+                  <div className="mt-2 mb-2">
   {(chapter.priority==='high'||!chapter.priority)&&(
-    <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500 text-white">
-      🔴 High Priority
-    </span>
+    <div className="priority-badge priority-high">
+      🟢 High Priority
+    </div>
   )}
   {chapter.priority==='medium'&&(
-    <span className="px-3 py-1 rounded-full text-xs font-bold bg-yellow-500 text-white">
+    <div className="priority-badge priority-medium">
       🟡 Medium Priority
-    </span>
+    </div>
   )}
   {chapter.priority==='low'&&(
-    <span className="px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-white">
-      🟢 Low Priority
-    </span>
+    <div className="priority-badge priority-low">
+      🔴 Low Priority
+    </div>
   )}
 </div>
                   <button 
@@ -383,6 +376,20 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
                           );
                         })}
                       </div>
+                      <div className="bg-white p-3 rounded-lg">
+      <label className="block text-sm font-bold mb-1">Chapter Priority</label>
+      <div>
+        {(chapter.priority==='high'||!chapter.priority)&&(
+          <span className="priority-badge priority-high text-sm">🟢 High Priority</span>
+        )}
+        {chapter.priority==='medium'&&(
+          <span className="priority-badge priority-medium text-sm">🟡 Medium Priority</span>
+        )}
+        {chapter.priority==='low'&&(
+          <span className="priority-badge priority-low text-sm">🔴 Low Priority</span>
+        )}
+      </div>
+    </div>
 
                       <div className="bg-white p-3 rounded-lg">
                         <label className="block text-sm font-bold mb-1">Target Date</label>
@@ -536,11 +543,21 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
     onChange={e=>setChapterForm({...chapterForm,priority:e.target.value})} 
     className="w-full border-2 px-4 py-3 rounded-xl"
   >
-    <option value="high">🔴 High Priority</option>
+    <option value="high">🟢 High Priority</option>
     <option value="medium">🟡 Medium Priority</option>
-    <option value="low">🟢 Low Priority</option>
+    <option value="low">🔴 Low Priority</option>
   </select>
-</div><div><label className="block text-sm font-bold mb-2">Topics</label><div className="flex gap-2 mb-3"><input type="text" value={newTopic} onChange={e=>setNewTopic(e.target.value)} onKeyPress={e=>e.key==='Enter'&&handleAddTopic()} className="flex-1 border-2 px-4 py-3 rounded-xl" placeholder="Enter topic"/><button onClick={handleAddTopic} className="px-6 py-3 bg-blue-600 text-white rounded-xl">Add</button></div><div className="space-y-2">{chapterForm.topics.map((topic,idx)=><div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"><span>{topic}</span><button onClick={()=>{const updated=chapterForm.topics.filter((_,i)=>i!==idx);setChapterForm({...chapterForm,topics:updated})}} className="px-3 py-1 bg-red-500 text-white rounded-lg">Remove</button></div>)}</div></div><button onClick={handleSaveChapter} className="px-6 py-3 avanti-gradient text-white rounded-xl font-semibold">{editingChapter?'Update Chapter':'Save Chapter'}</button></div></div>}<div className="bg-white p-6 rounded-2xl shadow-lg"><h4 className="text-xl font-bold mb-4">{selectedSchool} - {selectedSubject} - Class {selectedGrade} ({chapters.length} chapters)</h4>{chapters.length===0?<p className="text-gray-500 text-center py-8">No chapters yet</p>:<div className="space-y-3">{chapters.map(ch=><div key={ch.id} className="border-2 rounded-xl p-4 hover:bg-gray-50"><div className="flex justify-between items-start"><div className="flex-1"><h5 className="font-bold text-lg">{ch.name}</h5><p className="text-sm text-gray-600">Target: {ch.targetDate||'Not set'} | Topics: {ch.topics?.length||0}</p>{ch.topics&&ch.topics.length>0&&<ul className="text-xs text-gray-600 ml-4 mt-2">{ch.topics.map((t,i)=><li key={i}>• {t}</li>)}</ul>}</div><div className="flex gap-2"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
+</div><div><label className="block text-sm font-bold mb-2">Topics</label><div className="flex gap-2 mb-3"><input type="text" value={newTopic} onChange={e=>setNewTopic(e.target.value)} onKeyPress={e=>e.key==='Enter'&&handleAddTopic()} className="flex-1 border-2 px-4 py-3 rounded-xl" placeholder="Enter topic"/><button onClick={handleAddTopic} className="px-6 py-3 bg-blue-600 text-white rounded-xl">Add</button></div><div className="space-y-2">{chapterForm.topics.map((topic,idx)=><div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"><span>{topic}</span><button onClick={()=>{const updated=chapterForm.topics.filter((_,i)=>i!==idx);setChapterForm({...chapterForm,topics:updated})}} className="px-3 py-1 bg-red-500 text-white rounded-lg">Remove</button></div>)}</div></div><button onClick={handleSaveChapter} className="px-6 py-3 avanti-gradient text-white rounded-xl font-semibold">{editingChapter?'Update Chapter':'Save Chapter'}</button></div></div>}<div className="bg-white p-6 rounded-2xl shadow-lg"><h4 className="text-xl font-bold mb-4">{selectedSchool} - {selectedSubject} - Class {selectedGrade} ({chapters.length} chapters)</h4>{chapters.length===0?<p className="text-gray-500 text-center py-8">No chapters yet</p>:<div className="space-y-3">{chapters.map(ch=><div key={ch.id} className="border-2 rounded-xl p-4 hover:bg-gray-50"><div className="flex justify-between items-start"><div className="flex-1"><h5 className="font-bold text-lg">{ch.name}</h5><p className="text-sm text-gray-600">Target: {ch.targetDate||'Not set'} | Topics: {ch.topics?.length||0}</p><div className="mt-2">
+    {(ch.priority==='high'||!ch.priority)&&(
+      <span className="priority-badge priority-high text-xs">🟢 High Priority</span>
+    )}
+    {ch.priority==='medium'&&(
+      <span className="priority-badge priority-medium text-xs">🟡 Medium Priority</span>
+    )}
+    {ch.priority==='low'&&(
+      <span className="priority-badge priority-low text-xs">🔴 Low Priority</span>
+    )}
+  </div>{ch.topics&&ch.topics.length>0&&<ul className="text-xs text-gray-600 ml-4 mt-2">{ch.topics.map((t,i)=><li key={i}>• {t}</li>)}</ul>}</div><div className="flex gap-2"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
 function AdminAnalytics({teachers,curriculum,chapterProgress}){
   const[filterSchool,setFilterSchool]=useState('All');
   const[filterGrade,setFilterGrade]=useState('All');
