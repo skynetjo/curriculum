@@ -1059,11 +1059,13 @@ function StudentManagement({students}){
   const[selectAll,setSelectAll]=useState(false);
   const fileInputRef=useRef(null);
 
-  const filteredStudents=students.filter(s=>{
+  const filteredStudents=students
+  .filter(s=>{
     if(filterSchool!=='All'&&s.school!==filterSchool)return false;
     if(filterGrade!=='All'&&s.grade!==filterGrade)return false;
     return true;
-  });
+  })
+  .sort((a,b)=>a.name.localeCompare(b.name));
 
   const handleSave=async()=>{
     if(!form.school||!form.grade||!form.name||!form.gender){
@@ -1874,7 +1876,9 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   const[selectedStudent,setSelectedStudent]=useState(null);
 
   const mySchool=currentUser.school;
-  const filteredStudents=students.filter(s=>s.school===mySchool&&s.grade===selectedGrade);
+  const filteredStudents=students
+  .filter(s=>s.school===mySchool&&s.grade===selectedGrade)
+  .sort((a,b)=>a.name.localeCompare(b.name));
 
   console.log('StudentAttendanceView Debug:',{
     mySchool,
