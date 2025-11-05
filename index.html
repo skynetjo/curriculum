@@ -159,7 +159,75 @@ const getMonthlyAttendanceStats=(attendanceRecords,month)=>{
   return dayStats;
 };
 const getChapterStatus=(chapter,progress)=>{if(!chapter.targetDate){return{label:'No Target',color:'pending',class:'status-delayed'}}const targetDate=new Date(chapter.targetDate);const today=new Date();const completionDate=progress.completionDate?new Date(progress.completionDate):null;if(progress.completed==='Yes'&&progress.testConducted==='Yes'){if(completionDate){if(completionDate<targetDate){return{label:'Ahead - Good Job! 🎉',color:'completed',class:'status-ahead'}}else if(completionDate.toDateString()===targetDate.toDateString()){return{label:'On Track ✓',color:'completed',class:'status-ontrack'}}else{return{label:'Completed (Late)',color:'delayed',class:'status-delayed'}}}return{label:'Completed ✓',color:'completed',class:'status-ahead'}}if(today>targetDate){return{label:'Delayed ⚠️',color:'delayed',class:'status-delayed'}}return{label:'Pending',color:'pending',class:'status-delayed'}};
+// ====================================
+// INSTALL PROMPT COMPONENT (PWA)
+// ====================================
+function InstallPrompt(){
+  const[deferredPrompt,setDeferredPrompt]=useState(null);
+  const[showInstall,setShowInstall]=useState(false);
 
+  useEffect(()=>{
+    const handler=(e)=>{
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstall(true);
+    };
+    window.addEventListener('beforeinstallprompt',handler);
+    
+    // Check if already installed
+    if(window.matchMedia('(display-mode: standalone)').matches){
+      setShowInstall(false);
+    }
+    
+    return()=>window.removeEventListener('beforeinstallprompt',handler);
+  },[]);
+
+  const handleInstall=async()=>{
+    if(!deferredPrompt)return;
+    deferredPrompt.prompt();
+    const{outcome}=await deferredPrompt.userChoice;
+    setDeferredPrompt(null);
+    setShowInstall(false);
+  };
+
+  const handleDismiss=()=>{
+    setShowInstall(false);
+    localStorage.setItem('installDismissed','true');
+  };
+
+  // Don't show if dismissed
+  if(localStorage.getItem('installDismissed')==='true')return null;
+  if(!showInstall)return null;
+
+  return(
+    <div className="fixed bottom-4 left-4 right-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-2xl shadow-2xl z-[9999] animate-bounce">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex-1">
+          <p className="font-bold text-lg flex items-center gap-2">
+            📱 Install Mobile App
+          </p>
+          <p className="text-sm opacity-90 mt-1">
+            Use like a mobile app - faster & works offline!
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button 
+            onClick={handleInstall}
+            className="px-6 py-3 bg-white text-blue-600 rounded-xl font-bold hover:bg-gray-100 transition-all"
+          >
+            Install
+          </button>
+          <button 
+            onClick={handleDismiss}
+            className="px-3 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30 transition-all"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:''});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);
 const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
@@ -218,7 +286,12 @@ if(!currentUser){return(<div className="min-h-screen avanti-gradient flex items-
 return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab}/>;
 }
 
-function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebrationMessage,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,updateChapterProgress,activeTab,setActiveTab}){return(<div className="min-h-screen bg-gray-50 flex flex-col">{showConfetti&&<Confetti/>}<nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['overview','analytics','class11','class12','attendance','attendancedash','myattendance','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='overview'&&'📊 Overview'}
+function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebrationMessage,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,updateChapterProgress,activeTab,setActiveTab})
+  return(
+  <div className="min-h-screen bg-gray-50 flex flex-col">
+    {showConfetti&&<Confetti/>}
+    <InstallPrompt/>  {/* ⬅️ ADD THIS LINE */}
+    <nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['overview','analytics','class11','class12','attendance','attendancedash','myattendance','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='overview'&&'📊 Overview'}
 {tab==='analytics'&&'📈 Analytics'}
 {tab==='class11'&&'📚 Class 11'}
 {tab==='class12'&&'📖 Class 12'}
@@ -229,7 +302,10 @@ function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebration
 {activeTab==='attendancedash'&&<TeacherAttendanceDashboard currentUser={currentUser} students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}
 {activeTab==='myattendance'&&<TeacherAttendanceView currentUser={currentUser} teacherAttendance={teacherAttendance}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
 
-function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,addChapter,updateChapter,deleteChapter}){const[activeTab,setActiveTab]=useState('teachers');return(<div className="min-h-screen bg-gray-50 flex flex-col"><nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['teachers','students','curriculum','analytics','chapter-details','attendance','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='teachers'&&'👥 Teachers'}
+function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,addChapter,updateChapter,deleteChapter}){const[activeTab,setActiveTab]=useState('teachers');return(
+  <div className="min-h-screen bg-gray-50 flex flex-col">
+    <InstallPrompt/>  {/* ⬅️ ADD THIS LINE */}
+    <nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['teachers','students','curriculum','analytics','chapter-details','attendance','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='teachers'&&'👥 Teachers'}
 {tab==='students'&&'👨‍🎓 Students'}
 {tab==='curriculum'&&'📚 Curriculum'}
 {tab==='analytics'&&'📊 Analytics'}
