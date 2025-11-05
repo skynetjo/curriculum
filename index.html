@@ -4,47 +4,59 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
+  
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  
+  <!-- React -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- ✅ FIX: Chart.js v3.9.1 (specific stable version) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  
   <!-- PWA Manifest -->
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#F4B41A">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Curriculum Tracker">
-<link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#F4B41A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Curriculum Tracker">
+  <link rel="apple-touch-icon" href="/icon-192.png">
 
+  <!-- CSV & Excel -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+  
+  <!-- Tally Form -->
   <script>
-window.TallyConfig = {
-  "formId": "wQggKA",
-  "popup": {
-    "width": 250,
-    "emoji": {
-      "text": "👋",
-      "animation": "flash"
-    },
-    "hideTitle": true,
-    "alignLeft": true,
-    "overlay": true,
-    "autoClose": 4000,
-    "open": {
-      "trigger": "scroll",
-      "scrollPercent": 10
-    },
-    "doNotShowAfterSubmit": true
-  }
-};
-</script>
-
-<script async src="https://tally.so/widgets/embed.js"></script>
+    window.TallyConfig = {
+      "formId": "wQggKA",
+      "popup": {
+        "width": 250,
+        "emoji": {
+          "text": "👋",
+          "animation": "flash"
+        },
+        "hideTitle": true,
+        "alignLeft": true,
+        "overlay": true,
+        "autoClose": 4000,
+        "open": {
+          "trigger": "scroll",
+          "scrollPercent": 10
+        },
+        "doNotShowAfterSubmit": true
+      }
+    };
+  </script>
+  <script async src="https://tally.so/widgets/embed.js"></script>
   <style>
     /* Priority Badge Gradients */
 .priority-badge {
