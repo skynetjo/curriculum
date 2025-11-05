@@ -302,6 +302,23 @@ function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebration
   return(
   <div className="min-h-screen bg-gray-50 flex flex-col">
     {showConfetti&&<Confetti/>}
+<InstallPrompt/>
+
+{/* Manual Install Button - Always Visible */}
+<div className="fixed bottom-20 right-4 z-[9998]">
+  <button 
+    onClick={() => {
+      if (window.matchMedia('(display-mode: standalone)').matches) {
+        alert('App is already installed! ✓');
+      } else {
+        alert('To install:\n\n📱 Mobile: Tap browser menu → "Add to Home Screen"\n\n💻 Desktop: Look for install icon in address bar (⊕ or 🔽)');
+      }
+    }}
+    className="bg-blue-600 text-white px-4 py-3 rounded-full shadow-2xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
+  >
+    📱 Install App
+  </button>
+</div>
     <InstallPrompt/>  {/* ⬅️ ADD THIS LINE */}
     <nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['overview','analytics','class11','class12','attendance','attendancedash','myattendance','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='overview'&&'📊 Overview'}
 {tab==='analytics'&&'📈 Analytics'}
