@@ -2535,5 +2535,15 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
 }
 ReactDOM.render(<App/>,document.getElementById('root'));
   </script>
+  <script>
+  // Register service worker for PWA
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('Service Worker registered'))
+        .catch(err => console.log('Service Worker registration failed:', err));
+    });
+  }
+</script>
 </body>
 </html>
