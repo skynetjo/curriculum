@@ -410,14 +410,8 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
   const chapters=curriculum[docId]?.chapters||[];
 
   const handleCompletedChange=(chapterId,value)=>{
-    const progressId=`${mySchool}_${chapterId}`;
-    const prog=chapterProgress[progressId]||{};
-    if(value==='Yes'&&prog.testConducted!=='Yes'){
-      alert('⚠️ Please conduct the chapter test before marking as completed!');
-      return;
-    }
-    updateChapterProgress(mySchool,chapterId,'completed',value);
-  };
+  updateChapterProgress(mySchool,chapterId,'completed',value);
+};
 
   return(
     <div className="space-y-6">
