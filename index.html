@@ -373,7 +373,36 @@ function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapte
 {tab==='attendance'&&'📊 Attendance Analytics'}
 {tab==='birthdays'&&'🎂 Celebrations'}</button>)}</div>{activeTab==='teachers'&&<TeacherManagement teachers={teachers}/>}{activeTab==='curriculum'&&<AdminCurriculum curriculum={curriculum} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>}{activeTab==='analytics'&&<AdminAnalytics teachers={teachers} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='chapter-details'&&<AdminChapterDetails curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers}/>}{activeTab==='birthdays'&&<AdminBirthdays teachers={teachers}/>}{activeTab==='students'&&<StudentManagement students={students}/>}
 {activeTab==='attendance'&&<AdminAttendanceAnalytics students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
-function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teacherAttendance,studentAttendance}){const mySchool=currentUser.school;const mySubject=currentUser.subject;const schoolRankings=useMemo(()=>{const rankings=SCHOOLS.map(school=>{let total=0,completed=0;SUBJECTS.forEach(subject=>{['11','12'].forEach(grade=>{const docId=`${school}_${subject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];chapters.forEach(ch=>{total++;const progressId=`${school}_${ch.id}`;const prog=chapterProgress[progressId]||{};if(prog.completed==='Yes'&&prog.testConducted==='Yes'){completed++}})})});return{school,total,completed,percentage:total?Math.round((completed/total)*100):0}});rankings.sort((a,b)=>b.percentage-a.percentage);return rankings},[curriculum,chapterProgress]);const subjectRankings=useMemo(()=>{
+function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teacherAttendance,studentAttendance}){const mySchool=currentUser.school;const mySubject=currentUser.subject;const schoolRankings=useMemo(()=>{
+  const rankings=SCHOOLS.map(school=>{
+    let total=0,completed=0,testsCompleted=0,testsPending=0;
+    SUBJECTS.forEach(subject=>{
+      ['11','12'].forEach(grade=>{
+        const docId=`${school}_${subject}_${grade}`;
+        const chapters=curriculum[docId]?.chapters||[];
+        chapters.forEach(ch=>{
+          total++;
+          const progressId=`${school}_${ch.id}`;
+          const prog=chapterProgress[progressId]||{};
+          // ✅ Count when chapter is completed (not test)
+          if(prog.completed==='Yes'){
+            completed++;
+            // Track tests separately
+            if(prog.testConducted==='Yes'){
+              testsCompleted++;
+            }else{
+              testsPending++;
+            }
+          }
+        })
+      })
+    });
+    return{school,total,completed,testsCompleted,testsPending,percentage:total?Math.round((completed/total)*100):0}
+  });
+  rankings.sort((a,b)=>b.percentage-a.percentage);
+  return rankings
+},[curriculum,chapterProgress]);                                                                                                  
+  const subjectRankings=useMemo(()=>{
   const rankings=SUBJECTS.map(subject=>{
     let total=0,completed=0;
     ['11','12'].forEach(grade=>{
@@ -383,15 +412,15 @@ function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teache
         total++;
         const progressId=`${mySchool}_${ch.id}`;
         const prog=chapterProgress[progressId]||{};
-        if(prog.completed==='Yes'&&prog.testConducted==='Yes'){
+        // ✅ Count when chapter completed
+        if(prog.completed==='Yes'){
           completed++
         }
       })
     });
     return{subject,total,completed,percentage:total?Math.round((completed/total)*100):0}
   })
-  .filter(rank=>rank.total>0); // ⭐ ADD THIS LINE - Filter out subjects with no chapters
-
+  .filter(rank=>rank.total>0);
   rankings.sort((a,b)=>b.percentage-a.percentage);
   return rankings
 },[curriculum,chapterProgress,mySchool]);const mySchoolRank=schoolRankings.findIndex(r=>r.school===mySchool)+1;const laggingSubject=subjectRankings[subjectRankings.length-1];return(<div className="space-y-6"><h2 className="text-3xl font-bold">Dashboard Overview</h2><div className="grid md:grid-cols-4 gap-4"><div className="stat-card avanti-gradient text-white"><div className="text-sm opacity-90">Your School Rank</div><div className="text-5xl font-bold">#{mySchoolRank}</div><div className="text-sm mt-2">Out of {SCHOOLS.length} schools</div></div><div className="stat-card bg-gradient-to-br from-green-500 to-emerald-600 text-white"><div className="text-sm opacity-90">Best Performing School</div><div className="text-2xl font-bold mt-2">{schoolRankings[0]?.school}</div><div className="text-sm mt-2">{schoolRankings[0]?.percentage}% completed</div></div><div className="stat-card bg-gradient-to-br from-orange-500 to-red-600 text-white"><div className="text-sm opacity-90">Lagging Subject (Your School)</div><div className="text-2xl font-bold mt-2">{laggingSubject?.subject}</div><div className="text-sm mt-2">{laggingSubject?.percentage}% completed</div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">🏆 School Rankings</h3><div className="space-y-3">{schoolRankings.map((rank,index)=><div key={rank.school} className={`ranking-card ${index===0?'ranking-1':index===1?'ranking-2':index===2?'ranking-3':''} ${rank.school===mySchool?'bg-yellow-50':''}`}><div className="flex justify-between items-center"><div className="flex items-center gap-4"><div className="text-2xl font-bold text-gray-400">#{index+1}</div><div><div className="font-bold text-lg">{rank.school} {rank.school===mySchool&&'⭐'}</div><div className="text-sm text-gray-600">{rank.completed} / {rank.total} chapters completed</div></div></div><div className="text-3xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div></div>)}</div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">📚 Subject Performance in {mySchool}</h3><div className="grid md:grid-cols-2 gap-4">{subjectRankings.map(rank=><div key={rank.subject} className="border-2 rounded-xl p-4"><div className="flex justify-between items-center mb-2"><div className="font-bold text-lg">{rank.subject}</div><div className="text-2xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div><div className="h-2 bg-gray-200 rounded-full"><div className="h-2 avanti-gradient rounded-full" style={{width:`${rank.percentage}%`}}/></div><div className="text-sm text-gray-600 mt-2">{rank.completed} / {rank.total} chapters</div></div>)}</div></div><div className="stat-card bg-gradient-to-br from-purple-500 to-pink-600 text-white">
@@ -477,7 +506,265 @@ function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teache
   </div>
 </div>
 </div></div>)}
-function TeacherAnalytics({currentUser,curriculum,chapterProgress}){const chartRef=useRef(null);const chartInstance=useRef(null);const mySchool=currentUser.school;const mySubject=currentUser.subject;const analyticsData=useMemo(()=>{const data={11:{total:0,completed:0},12:{total:0,completed:0}};let totalDays=0;let chaptersWithDates=0;['11','12'].forEach(grade=>{const docId=`${mySchool}_${mySubject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];chapters.forEach(ch=>{data[grade].total++;const progressId=`${mySchool}_${ch.id}`;const prog=chapterProgress[progressId]||{};if(prog.completed==='Yes'&&prog.testConducted==='Yes'){data[grade].completed++;if(prog.completionDate&&ch.targetDate){const target=new Date(ch.targetDate);const completion=new Date(prog.completionDate);const days=Math.abs(Math.ceil((completion-target)/(1000*60*60*24)));totalDays+=days;chaptersWithDates++}}})});const avgDays=chaptersWithDates?Math.round(totalDays/chaptersWithDates):0;return{...data,avgDays}},[curriculum,chapterProgress,mySchool,mySubject]);useEffect(()=>{if(chartRef.current){if(chartInstance.current){chartInstance.current.destroy()}const ctx=chartRef.current.getContext('2d');chartInstance.current=new Chart(ctx,{type:'bar',data:{labels:['Class 11','Class 12'],datasets:[{label:'Completed',data:[analyticsData[11].completed,analyticsData[12].completed],backgroundColor:'#10B981'},{label:'Pending',data:[analyticsData[11].total-analyticsData[11].completed,analyticsData[12].total-analyticsData[12].completed],backgroundColor:'#F59E0B'}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true}}}})}return()=>{if(chartInstance.current){chartInstance.current.destroy()}}},[analyticsData]);const handleExport=()=>{const exportData=[{Grade:'Class 11','Total Chapters':analyticsData[11].total,'Completed':analyticsData[11].completed,'Pending':analyticsData[11].total-analyticsData[11].completed,'Completion %':analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0},{Grade:'Class 12','Total Chapters':analyticsData[12].total,'Completed':analyticsData[12].completed,'Pending':analyticsData[12].total-analyticsData[12].completed,'Completion %':analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0}];exportToExcel(exportData,'my_analytics')};return(<div className="space-y-6"><div className="flex justify-between items-center"><h2 className="text-3xl font-bold">My Analytics</h2><button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">📊 Export to Excel</button></div><div className="grid grid-cols-3 gap-4"><div className="stat-card"><div className="text-sm text-gray-600">Avg Days per Chapter</div><div className="text-4xl font-bold">{analyticsData.avgDays}</div></div><div className="stat-card"><div className="text-sm text-gray-600">Class 11 Progress</div><div className="text-4xl font-bold">{analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0}%</div></div><div className="stat-card"><div className="text-sm text-gray-600">Class 12 Progress</div><div className="text-4xl font-bold">{analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0}%</div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}><canvas ref={chartRef}></canvas></div></div>)}
+function function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
+  const chartRef=useRef(null);
+  const testChartRef=useRef(null);
+  const schoolCompareRef=useRef(null);
+  const chartInstance=useRef(null);
+  const testChartInstance=useRef(null);
+  const schoolCompareInstance=useRef(null);
+  const chart9Ref=useRef(null);  // ✅ NEW: For test status chart
+  
+  const mySchool=currentUser.school;
+  const mySubject=currentUser.subject;
+  
+  const analyticsData=useMemo(()=>{
+    const data={
+      11:{total:0,completed:0,testsCompleted:0,testsPending:0},
+      12:{total:0,completed:0,testsCompleted:0,testsPending:0}
+    };
+    let totalDays=0;
+    let chaptersWithDates=0;
+    
+    ['11','12'].forEach(grade=>{
+      const docId=`${mySchool}_${mySubject}_${grade}`;
+      const chapters=curriculum[docId]?.chapters||[];
+      chapters.forEach(ch=>{
+        data[grade].total++;
+        const progressId=`${mySchool}_${ch.id}`;
+        const prog=chapterProgress[progressId]||{};
+        
+        // ✅ Count chapter completion
+        if(prog.completed==='Yes'){
+          data[grade].completed++;
+          
+          // Track tests separately
+          if(prog.testConducted==='Yes'){
+            data[grade].testsCompleted++;
+          }else{
+            data[grade].testsPending++;
+          }
+          
+          if(prog.completionDate&&ch.targetDate){
+            const target=new Date(ch.targetDate);
+            const completion=new Date(prog.completionDate);
+            const days=Math.abs(Math.ceil((completion-target)/(1000*60*60*24)));
+            totalDays+=days;
+            chaptersWithDates++;
+          }
+        }
+      })
+    });
+    
+    const avgDays=chaptersWithDates?Math.round(totalDays/chaptersWithDates):0;
+    return{...data,avgDays};
+  },[curriculum,chapterProgress,mySchool,mySubject]);
+
+  // School comparison data
+  const schoolCompareData=useMemo(()=>{
+    const data={};
+    SCHOOLS.forEach(school=>{
+      let total=0,completed=0;
+      ['11','12'].forEach(grade=>{
+        const docId=`${school}_${mySubject}_${grade}`;
+        const chapters=curriculum[docId]?.chapters||[];
+        chapters.forEach(ch=>{
+          total++;
+          const progressId=`${school}_${ch.id}`;
+          const prog=chapterProgress[progressId]||{};
+          if(prog.completed==='Yes'){
+            completed++;
+          }
+        })
+      });
+      data[school]={total,completed,percentage:total?Math.round((completed/total)*100):0};
+    });
+    return data;
+  },[curriculum,chapterProgress,mySubject]);
+
+  useEffect(()=>{
+    // Main chart
+    if(chartRef.current){
+      if(chartInstance.current){
+        chartInstance.current.destroy();
+      }
+      const ctx=chartRef.current.getContext('2d');
+      chartInstance.current=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:['Class 11','Class 12'],
+          datasets:[{
+            label:'Completed',
+            data:[analyticsData[11].completed,analyticsData[12].completed],
+            backgroundColor:'#10B981'
+          },{
+            label:'Pending',
+            data:[
+              analyticsData[11].total-analyticsData[11].completed,
+              analyticsData[12].total-analyticsData[12].completed
+            ],
+            backgroundColor:'#F59E0B'
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'Chapter Completion Progress',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          },
+          scales:{x:{stacked:true},y:{stacked:true}}
+        }
+      });
+    }
+
+    // Test chart
+    if(testChartRef.current){
+      if(testChartInstance.current){
+        testChartInstance.current.destroy();
+      }
+      const ctx=testChartRef.current.getContext('2d');
+      testChartInstance.current=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:['Class 11','Class 12'],
+          datasets:[{
+            label:'Tests Completed',
+            data:[analyticsData[11].testsCompleted,analyticsData[12].testsCompleted],
+            backgroundColor:'#3B82F6'
+          },{
+            label:'Tests Pending',
+            data:[analyticsData[11].testsPending,analyticsData[12].testsPending],
+            backgroundColor:'#EF4444'
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:'Chapter Tests Status',font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          },
+          scales:{y:{beginAtZero:true}}
+        }
+      });
+    }
+
+    // School comparison chart
+    if(schoolCompareRef.current){
+      if(schoolCompareInstance.current){
+        schoolCompareInstance.current.destroy();
+      }
+      const ctx=schoolCompareRef.current.getContext('2d');
+      const schools=Object.keys(schoolCompareData);
+      schoolCompareInstance.current=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:schools,
+          datasets:[{
+            label:'Completion %',
+            data:schools.map(s=>schoolCompareData[s].percentage),
+            backgroundColor:schools.map(s=>s===mySchool?'#C8342E':'#F4B41A'),
+            borderWidth:schools.map(s=>s===mySchool?3:0),
+            borderColor:'#000'
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:`${mySubject} - School Comparison (Your school highlighted)`,font:{size:16,weight:'bold'}},
+            legend:{display:false}
+          },
+          scales:{y:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}
+        }
+      });
+    }
+
+    return()=>{
+      if(chartInstance.current)chartInstance.current.destroy();
+      if(testChartInstance.current)testChartInstance.current.destroy();
+      if(schoolCompareInstance.current)schoolCompareInstance.current.destroy();
+    };
+  },[analyticsData,schoolCompareData,mySchool,mySubject]);
+
+  const handleExport=()=>{
+    const exportData=[
+      {
+        Grade:'Class 11',
+        'Total Chapters':analyticsData[11].total,
+        'Chapters Completed':analyticsData[11].completed,
+        'Tests Completed':analyticsData[11].testsCompleted,
+        'Tests Pending':analyticsData[11].testsPending,
+        'Completion %':analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0
+      },
+      {
+        Grade:'Class 12',
+        'Total Chapters':analyticsData[12].total,
+        'Chapters Completed':analyticsData[12].completed,
+        'Tests Completed':analyticsData[12].testsCompleted,
+        'Tests Pending':analyticsData[12].testsPending,
+        'Completion %':analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0
+      }
+    ];
+    exportToExcel(exportData,'my_analytics');
+  };
+
+  return(
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">My Analytics</h2>
+        <button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
+          📊 Export to Excel
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="stat-card">
+          <div className="text-sm text-gray-600">Avg Days per Chapter</div>
+          <div className="text-4xl font-bold">{analyticsData.avgDays}</div>
+        </div>
+        <div className="stat-card">
+          <div className="text-sm text-gray-600">Class 11 Progress</div>
+          <div className="text-4xl font-bold">
+            {analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0}%
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="text-sm text-gray-600">Class 12 Progress</div>
+          <div className="text-4xl font-bold">
+            {analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0}%
+          </div>
+        </div>
+        <div className="stat-card bg-blue-500 text-white">
+          <div className="text-sm opacity-90">Tests Completed</div>
+          <div className="text-4xl font-bold">
+            {analyticsData[11].testsCompleted+analyticsData[12].testsCompleted}
+          </div>
+        </div>
+        <div className="stat-card bg-red-500 text-white">
+          <div className="text-sm opacity-90">Tests Pending</div>
+          <div className="text-4xl font-bold">
+            {analyticsData[11].testsPending+analyticsData[12].testsPending}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+          <canvas ref={chartRef}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+          <canvas ref={testChartRef}></canvas>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+        <canvas ref={schoolCompareRef}></canvas>
+      </div>
+    </div>
+  );
+}
 function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateChapterProgress}){
   const[expandedChapters,setExpandedChapters]=useState({});
   const mySchool=currentUser.school;
@@ -782,99 +1069,109 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
   const chartInstances=useRef({});
 
   const filteredData=useMemo(()=>{
-    const data={
-      totalChapters:0,
-      completedChapters:0,
-      delayedChapters:0,
-      aheadChapters:0,
-      testsCompleted:0,
-      testsPending:0,
-      schoolData:{},
-      subjectData:{},
-      gradeData:{},
-      teacherData:{},
-      statusData:{ahead:0,ontrack:0,delayed:0,pending:0}
-    };
+  const data={
+    totalChapters:0,
+    completedChapters:0,
+    delayedChapters:0,
+    aheadChapters:0,
+    testsCompleted:0,
+    testsPending:0,
+    schoolData:{},
+    subjectData:{},
+    gradeData:{},
+    teacherData:{},
+    statusData:{ahead:0,ontrack:0,delayed:0,pending:0},
+    testData:{completed:0,pending:0}  // ✅ NEW
+  };
 
-    const schoolsToProcess=filterSchool==='All'?SCHOOLS:[filterSchool];
-    const gradesToProcess=filterGrade==='All'?['11','12']:[filterGrade];
-    const teachersFiltered=filterTeacher==='All'?teachers:teachers.filter(t=>t.afid===filterTeacher);
+  const schoolsToProcess=filterSchool==='All'?SCHOOLS:[filterSchool];
+  const gradesToProcess=filterGrade==='All'?['11','12']:[filterGrade];
+  const teachersFiltered=filterTeacher==='All'?teachers:teachers.filter(t=>t.afid===filterTeacher);
 
-    schoolsToProcess.forEach(school=>{
-      if(!data.schoolData[school]){
-        data.schoolData[school]={total:0,completed:0,delayed:0,ahead:0,tests:0};
+  schoolsToProcess.forEach(school=>{
+    if(!data.schoolData[school]){
+      data.schoolData[school]={total:0,completed:0,delayed:0,ahead:0,tests:0,testsPending:0};
+    }
+
+    SUBJECTS.forEach(subject=>{
+      if(!data.subjectData[subject]){
+        data.subjectData[subject]={total:0,completed:0,testsCompleted:0,testsPending:0};
       }
 
-      SUBJECTS.forEach(subject=>{
-        if(!data.subjectData[subject]){
-          data.subjectData[subject]={total:0,completed:0};
+      gradesToProcess.forEach(grade=>{
+        if(!data.gradeData[grade]){
+          data.gradeData[grade]={total:0,completed:0,testsCompleted:0,testsPending:0};
         }
 
-        gradesToProcess.forEach(grade=>{
-          if(!data.gradeData[grade]){
-            data.gradeData[grade]={total:0,completed:0};
-          }
+        const docId=`${school}_${subject}_${grade}`;
+        const chapters=curriculum[docId]?.chapters||[];
 
-          const docId=`${school}_${subject}_${grade}`;
-          const chapters=curriculum[docId]?.chapters||[];
+        const relevantTeachers=teachersFiltered.filter(t=>t.school===school&&t.subject===subject);
+        if(filterTeacher!=='All'&&relevantTeachers.length===0)return;
 
-          const relevantTeachers=teachersFiltered.filter(t=>t.school===school&&t.subject===subject);
-          if(filterTeacher!=='All'&&relevantTeachers.length===0)return;
+        chapters.forEach(ch=>{
+          data.totalChapters++;
+          data.schoolData[school].total++;
+          data.subjectData[subject].total++;
+          data.gradeData[grade].total++;
 
-          chapters.forEach(ch=>{
-            data.totalChapters++;
-            data.schoolData[school].total++;
-            data.subjectData[subject].total++;
-            data.gradeData[grade].total++;
+          const progressId=`${school}_${ch.id}`;
+          const prog=chapterProgress[progressId]||{};
+          const status=getChapterStatus(ch,prog);
 
-            const progressId=`${school}_${ch.id}`;
-            const prog=chapterProgress[progressId]||{};
-            const status=getChapterStatus(ch,prog);
+          // ✅ Count chapter completion (not test)
+          if(prog.completed==='Yes'){
+            data.completedChapters++;
+            data.schoolData[school].completed++;
+            data.subjectData[subject].completed++;
+            data.gradeData[grade].completed++;
 
-            if(prog.completed==='Yes'&&prog.testConducted==='Yes'){
-              data.completedChapters++;
-              data.schoolData[school].completed++;
-              data.subjectData[subject].completed++;
-              data.gradeData[grade].completed++;
-
-              if(status.class==='status-ahead'){
-                data.aheadChapters++;
-                data.schoolData[school].ahead++;
-                data.statusData.ahead++;
-              }else if(status.class==='status-ontrack'){
-                data.statusData.ontrack++;
-              }
-            }
-
+            // Track tests separately
             if(prog.testConducted==='Yes'){
               data.testsCompleted++;
               data.schoolData[school].tests++;
-            }else if(prog.completed==='Yes'){
+              data.subjectData[subject].testsCompleted++;
+              data.gradeData[grade].testsCompleted++;
+              data.testData.completed++;
+            }else{
               data.testsPending++;
+              data.schoolData[school].testsPending++;
+              data.subjectData[subject].testsPending++;
+              data.gradeData[grade].testsPending++;
+              data.testData.pending++;
             }
 
-            if(status.label.includes('Delayed')){
-              data.delayedChapters++;
-              data.schoolData[school].delayed++;
-              data.statusData.delayed++;
+            if(status.class==='status-ahead'){
+              data.aheadChapters++;
+              data.schoolData[school].ahead++;
+              data.statusData.ahead++;
+            }else if(status.class==='status-ontrack'){
+              data.statusData.ontrack++;
             }
+          }
 
-            if(status.label==='Pending'){
-              data.statusData.pending++;
-            }
-          });
+          if(status.label.includes('Delayed')){
+            data.delayedChapters++;
+            data.schoolData[school].delayed++;
+            data.statusData.delayed++;
+          }
+
+          if(status.label==='Pending'){
+            data.statusData.pending++;
+          }
         });
       });
     });
+  });
 
-    teachersFiltered.forEach(teacher=>{
-      if(!data.teacherData[teacher.afid]){
-        data.teacherData[teacher.afid]={name:teacher.name,total:0,completed:0};
-      }
-    });
+  teachersFiltered.forEach(teacher=>{
+    if(!data.teacherData[teacher.afid]){
+      data.teacherData[teacher.afid]={name:teacher.name,total:0,completed:0};
+    }
+  });
 
-    return data;
-  },[curriculum,chapterProgress,teachers,filterSchool,filterGrade,filterTeacher]);
+  return data;
+},[curriculum,chapterProgress,teachers,filterSchool,filterGrade,filterTeacher]);
 
   useEffect(()=>{
     Object.values(chartInstances.current).forEach(chart=>{
@@ -1219,6 +1516,9 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
         <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
           <canvas ref={chart8Ref}></canvas>
         </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
+  <canvas ref={chart9Ref}></canvas>
+</div>
       </div>
     </div>
   );
@@ -2566,7 +2866,29 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
         }
       });
     }
-
+    // Chart 9: Tests Status (NEW)
+if(chart9Ref.current){
+  const ctx=chart9Ref.current.getContext('2d');
+  chartInstances.current.chart9=new Chart(ctx,{
+    type:'doughnut',
+    data:{
+      labels:['Tests Completed','Tests Pending'],
+      datasets:[{
+        data:[filteredData.testData.completed,filteredData.testData.pending],
+        backgroundColor:['#3B82F6','#EF4444'],
+        borderWidth:2
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{
+        title:{display:true,text:'Chapter Tests: Completed vs Pending',font:{size:16,weight:'bold'}},
+        legend:{position:'bottom'}
+      }
+    }
+  });
+}
     return()=>{
       Object.values(chartInstances.current).forEach(chart=>{
         if(chart)chart.destroy();
