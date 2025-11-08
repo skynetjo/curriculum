@@ -170,7 +170,38 @@ const getMonthlyAttendanceStats=(attendanceRecords,month)=>{
   });
   return dayStats;
 };
-const getChapterStatus=(chapter,progress)=>{if(!chapter.targetDate){return{label:'No Target',color:'pending',class:'status-delayed'}}const targetDate=new Date(chapter.targetDate);const today=new Date();const completionDate=progress.completionDate?new Date(progress.completionDate):null;if(progress.completed==='Yes'&&progress.testConducted==='Yes'){if(completionDate){if(completionDate<targetDate){return{label:'Ahead - Good Job! 🎉',color:'completed',class:'status-ahead'}}else if(completionDate.toDateString()===targetDate.toDateString()){return{label:'On Track ✓',color:'completed',class:'status-ontrack'}}else{return{label:'Completed (Late)',color:'delayed',class:'status-delayed'}}}return{label:'Completed ✓',color:'completed',class:'status-ahead'}}if(today>targetDate){return{label:'Delayed ⚠️',color:'delayed',class:'status-delayed'}}return{label:'Pending',color:'pending',class:'status-delayed'}};
+const getChapterStatus=(chapter,progress)=>{
+  if(!chapter.targetDate){
+    return{label:'No Target',color:'pending',class:'status-delayed'}
+  }
+  const targetDate=new Date(chapter.targetDate);
+  const today=new Date();
+  const completionDate=progress.completionDate?new Date(progress.completionDate):null;
+  
+  // ✅ FIXED: Check if test is NOT 'Yes' (handles both 'No' and undefined)
+  if(progress.completed==='Yes'&&progress.testConducted!=='Yes'){
+    return{label:'⚠️ Test Pending',color:'delayed',class:'status-delayed'}
+  }
+  
+  // Only show green when BOTH are Yes
+  if(progress.completed==='Yes'&&progress.testConducted==='Yes'){
+    if(completionDate){
+      if(completionDate<targetDate){
+        return{label:'Ahead - Good Job! 🎉',color:'completed',class:'status-ahead'}
+      }else if(completionDate.toDateString()===targetDate.toDateString()){
+        return{label:'On Track ✓',color:'completed',class:'status-ontrack'}
+      }else{
+        return{label:'Completed (Late)',color:'delayed',class:'status-delayed'}
+      }
+    }
+    return{label:'Completed ✓',color:'completed',class:'status-ahead'}
+  }
+  
+  if(today>targetDate){
+    return{label:'Delayed ⚠️',color:'delayed',class:'status-delayed'}
+  }
+  return{label:'Pending',color:'pending',class:'status-delayed'}
+};
 // ====================================
 // INSTALL PROMPT COMPONENT (PWA)
 // ====================================
