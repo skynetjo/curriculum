@@ -1147,7 +1147,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
     gradeData:{},
     teacherData:{},
     statusData:{ahead:0,ontrack:0,delayed:0,pending:0},
-    testData:{completed:0,pending:0}  // ✅ NEW
+    testData:{completed:0,pending:0}
   };
 
   const schoolsToProcess=filterSchool==='All'?SCHOOLS:[filterSchool];
@@ -1165,6 +1165,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
       }
 
       gradesToProcess.forEach(grade=>{
+        // Initialize gradeData
         if(!data.gradeData[grade]){
           data.gradeData[grade]={total:0,completed:0,testsCompleted:0,testsPending:0};
         }
@@ -1185,14 +1186,12 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
           const prog=chapterProgress[progressId]||{};
           const status=getChapterStatus(ch,prog);
 
-          // ✅ Count chapter completion (not test)
           if(prog.completed==='Yes'){
             data.completedChapters++;
             data.schoolData[school].completed++;
             data.subjectData[subject].completed++;
             data.gradeData[grade].completed++;
 
-            // Track tests separately
             if(prog.testConducted==='Yes'){
               data.testsCompleted++;
               data.schoolData[school].tests++;
@@ -1538,35 +1537,104 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-  <div className="stat-card avanti-gradient text-white">
-    <div className="text-sm opacity-90">Total Chapters</div>
-    <div className="text-4xl font-bold">{filteredData.totalChapters}</div>
-  </div>
-  <div className="stat-card bg-green-500 text-white">
-    <div className="text-sm opacity-90">Completed</div>
-    <div className="text-3xl font-bold">{filteredData.completedChapters}/{filteredData.totalChapters}</div>
-    <div className="text-lg font-semibold mt-1">
-      {filteredData.totalChapters?Math.round((filteredData.completedChapters/filteredData.totalChapters)*100):0}%
-    </div>
-  </div>
-  <div className="stat-card bg-blue-500 text-white">
-    <div className="text-sm opacity-90">Tests Completed</div>
-    <div className="text-3xl font-bold">{filteredData.testsCompleted}/{filteredData.completedChapters}</div>
-    <div className="text-lg font-semibold mt-1">
-      {filteredData.completedChapters?Math.round((filteredData.testsCompleted/filteredData.completedChapters)*100):0}%
-    </div>
-  </div>
-  <div className="stat-card bg-purple-500 text-white">
-    <div className="text-sm opacity-90">Tests Pending</div>
-    <div className="text-4xl font-bold">{filteredData.testsPending}</div>
-  </div>
-  <div className="stat-card bg-orange-500 text-white">
-    <div className="text-sm opacity-90">Delayed</div>
-    <div className="text-3xl font-bold">{filteredData.delayedChapters}</div>
-  </div>
-</div>
+      {/* NEW: Overall Summary Cards */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">📊 Overall Progress Summary</h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="stat-card avanti-gradient text-white">
+            <div className="text-sm opacity-90">Total Chapters</div>
+            <div className="text-4xl font-bold">{filteredData.totalChapters}</div>
+          </div>
+          <div className="stat-card bg-green-500 text-white">
+            <div className="text-sm opacity-90">Completed</div>
+            <div className="text-3xl font-bold">{filteredData.completedChapters}/{filteredData.totalChapters}</div>
+            <div className="text-lg font-semibold mt-1">
+              {filteredData.totalChapters?Math.round((filteredData.completedChapters/filteredData.totalChapters)*100):0}%
+            </div>
+          </div>
+          <div className="stat-card bg-blue-500 text-white">
+            <div className="text-sm opacity-90">Tests Completed</div>
+            <div className="text-3xl font-bold">{filteredData.testsCompleted}/{filteredData.completedChapters}</div>
+            <div className="text-lg font-semibold mt-1">
+              {filteredData.completedChapters?Math.round((filteredData.testsCompleted/filteredData.completedChapters)*100):0}%
+            </div>
+          </div>
+          <div className="stat-card bg-purple-500 text-white">
+            <div className="text-sm opacity-90">Tests Pending</div>
+            <div className="text-4xl font-bold">{filteredData.testsPending}</div>
+          </div>
+          <div className="stat-card bg-orange-500 text-white">
+            <div className="text-sm opacity-90">Delayed</div>
+            <div className="text-3xl font-bold">{filteredData.delayedChapters}</div>
+          </div>
+        </div>
+      </div>
 
+      {/* NEW: Grade-wise Breakdown Cards */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">📚 Grade-wise Breakdown</h3>
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Class 11 Card */}
+          <div className="border-4 border-green-500 rounded-2xl p-6 bg-gradient-to-br from-green-50 to-emerald-50">
+            <h4 className="text-2xl font-bold text-green-800 mb-4">📗 Class 11</h4>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow">
+                <span className="font-semibold">Total Chapters:</span>
+                <span className="text-2xl font-bold text-gray-800">{filteredData.gradeData['11']?.total||0}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow">
+                <span className="font-semibold">Completed:</span>
+                <span className="text-2xl font-bold text-green-600">{filteredData.gradeData['11']?.completed||0}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow">
+                <span className="font-semibold">Tests Completed:</span>
+                <span className="text-2xl font-bold text-blue-600">{filteredData.gradeData['11']?.testsCompleted||0}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow">
+                <span className="font-semibold">Tests Pending:</span>
+                <span className="text-2xl font-bold text-red-600">{filteredData.gradeData['11']?.testsPending||0}</span>
+              </div>
+              <div className="mt-4 p-4 bg-green-600 text-white rounded-xl text-center">
+                <div className="text-sm opacity-90">Completion Rate</div>
+                <div className="text-4xl font-bold">
+                  {filteredData.gradeData['11']?.total?Math.round((filteredData.gradeData['11'].completed/filteredData.gradeData['11'].total)*100):0}%
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Class 12 Card */}
+          <div className="border-4 border-blue-500 rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-cyan-50">
+            <h4 className="text-2xl font-bold text-blue-800 mb-4">📘 Class 12</h4>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow">
+                <span className="font-semibold">Total Chapters:</span>
+                <span className="text-2xl font-bold text-gray-800">{filteredData.gradeData['12']?.total||0}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow">
+                <span className="font-semibold">Completed:</span>
+                <span className="text-2xl font-bold text-green-600">{filteredData.gradeData['12']?.completed||0}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow">
+                <span className="font-semibold">Tests Completed:</span>
+                <span className="text-2xl font-bold text-blue-600">{filteredData.gradeData['12']?.testsCompleted||0}</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow">
+                <span className="font-semibold">Tests Pending:</span>
+                <span className="text-2xl font-bold text-red-600">{filteredData.gradeData['12']?.testsPending||0}</span>
+              </div>
+              <div className="mt-4 p-4 bg-blue-600 text-white rounded-xl text-center">
+                <div className="text-sm opacity-90">Completion Rate</div>
+                <div className="text-4xl font-bold">
+                  {filteredData.gradeData['12']?.total?Math.round((filteredData.gradeData['12'].completed/filteredData.gradeData['12'].total)*100):0}%
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Keep the existing charts below */}
       <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
           <canvas ref={chart1Ref}></canvas>
