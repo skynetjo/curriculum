@@ -1544,22 +1544,25 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
     <div className="text-4xl font-bold">{filteredData.totalChapters}</div>
   </div>
   <div className="stat-card bg-green-500 text-white">
-    <div className="text-sm opacity-90">Chapters Completed</div>
-    <div className="text-4xl font-bold">{filteredData.completedChapters}/{filteredData.totalChapters}</div>
-    <div className="text-sm opacity-90 mt-1">
+    <div className="text-sm opacity-90">Completed</div>
+    <div className="text-3xl font-bold">{filteredData.completedChapters}/{filteredData.totalChapters}</div>
+    <div className="text-lg font-semibold mt-1">
       {filteredData.totalChapters?Math.round((filteredData.completedChapters/filteredData.totalChapters)*100):0}%
     </div>
   </div>
   <div className="stat-card bg-blue-500 text-white">
-    <div className="text-sm opacity-90">Tests Completed</div>
-    <div className="text-4xl font-bold">{filteredData.testsCompleted}/{filteredData.completedChapters}</div>
-    <div className="text-sm opacity-90 mt-1">
-      {filteredData.completedChapters?Math.round((filteredData.testsCompleted/filteredData.completedChapters)*100):0}%
+    <div className="text-sm opacity-90">Ahead Schedule</div>
+    <div className="text-3xl font-bold">{filteredData.aheadChapters}/{filteredData.completedChapters}</div>
+    <div className="text-lg font-semibold mt-1">
+      {filteredData.completedChapters?Math.round((filteredData.aheadChapters/filteredData.completedChapters)*100):0}%
     </div>
   </div>
   <div className="stat-card bg-orange-500 text-white">
-    <div className="text-sm opacity-90">Tests Pending</div>
-    <div className="text-4xl font-bold">{filteredData.testsPending}</div>
+    <div className="text-sm opacity-90">Delayed</div>
+    <div className="text-3xl font-bold">{filteredData.delayedChapters}/{filteredData.completedChapters}</div>
+    <div className="text-lg font-semibold mt-1">
+      {filteredData.completedChapters?Math.round((filteredData.delayedChapters/filteredData.completedChapters)*100):0}%
+    </div>
   </div>
 </div>
 
