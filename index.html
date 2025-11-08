@@ -1165,7 +1165,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
       }
 
       gradesToProcess.forEach(grade=>{
-        // Initialize gradeData
         if(!data.gradeData[grade]){
           data.gradeData[grade]={total:0,completed:0,testsCompleted:0,testsPending:0};
         }
@@ -1244,7 +1243,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
     });
     chartInstances.current={};
 
-    // Chart 1: School Completion Rate (Bar)
     if(chart1Ref.current){
       const ctx=chart1Ref.current.getContext('2d');
       const schools=Object.keys(filteredData.schoolData);
@@ -1274,7 +1272,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
       });
     }
 
-    // Chart 2: Subject Distribution (Pie)
     if(chart2Ref.current){
       const ctx=chart2Ref.current.getContext('2d');
       const subjects=Object.keys(filteredData.subjectData);
@@ -1299,7 +1296,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
       });
     }
 
-    // Chart 3: Grade Comparison (Bar)
     if(chart3Ref.current){
       const ctx=chart3Ref.current.getContext('2d');
       const grades=Object.keys(filteredData.gradeData);
@@ -1332,7 +1328,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
       });
     }
 
-    // Chart 4: Overall Status (Doughnut)
     if(chart4Ref.current){
       const ctx=chart4Ref.current.getContext('2d');
       chartInstances.current.chart4=new Chart(ctx,{
@@ -1360,7 +1355,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
       });
     }
 
-    // Chart 5: Tests Status (Pie)
     if(chart5Ref.current){
       const ctx=chart5Ref.current.getContext('2d');
       chartInstances.current.chart5=new Chart(ctx,{
@@ -1384,7 +1378,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
       });
     }
 
-    // Chart 6: Performance Status (Bar)
     if(chart6Ref.current){
       const ctx=chart6Ref.current.getContext('2d');
       chartInstances.current.chart6=new Chart(ctx,{
@@ -1415,7 +1408,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
       });
     }
 
-    // Chart 7: School Delayed Chapters (Horizontal Bar)
     if(chart7Ref.current){
       const ctx=chart7Ref.current.getContext('2d');
       const schools=Object.keys(filteredData.schoolData);
@@ -1443,7 +1435,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
       });
     }
 
-    // Chart 8: Subject Completion Rate (Doughnut)
     if(chart8Ref.current){
       const ctx=chart8Ref.current.getContext('2d');
       const subjects=Object.keys(filteredData.subjectData);
@@ -1537,7 +1528,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
         </div>
       </div>
 
-      {/* NEW: Overall Summary Cards */}
       <div className="bg-white p-6 rounded-2xl shadow-lg">
         <h3 className="text-xl font-bold mb-4">📊 Overall Progress Summary</h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -1570,11 +1560,9 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
         </div>
       </div>
 
-      {/* NEW: Grade-wise Breakdown Cards */}
       <div className="bg-white p-6 rounded-2xl shadow-lg">
         <h3 className="text-xl font-bold mb-4">📚 Grade-wise Breakdown</h3>
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Class 11 Card */}
           <div className="border-4 border-green-500 rounded-2xl p-6 bg-gradient-to-br from-green-50 to-emerald-50">
             <h4 className="text-2xl font-bold text-green-800 mb-4">📗 Class 11</h4>
             <div className="space-y-3">
@@ -1603,7 +1591,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
             </div>
           </div>
 
-          {/* Class 12 Card */}
           <div className="border-4 border-blue-500 rounded-2xl p-6 bg-gradient-to-br from-blue-50 to-cyan-50">
             <h4 className="text-2xl font-bold text-blue-800 mb-4">📘 Class 12</h4>
             <div className="space-y-3">
@@ -1634,7 +1621,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
         </div>
       </div>
 
-      {/* Keep the existing charts below */}
       <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
           <canvas ref={chart1Ref}></canvas>
@@ -1660,9 +1646,6 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
         <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
           <canvas ref={chart8Ref}></canvas>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
-  <canvas ref={chart9Ref}></canvas>
-</div>
       </div>
     </div>
   );
