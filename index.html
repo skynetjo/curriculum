@@ -507,18 +507,19 @@ function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teache
 </div>
 </div></div>)}
 function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
-  const chartRef=useRef(null);
-  const testChartRef=useRef(null);
-  const schoolCompareRef=useRef(null);
-  const chartInstance=useRef(null);
-  const testChartInstance=useRef(null);
-  const schoolCompareInstance=useRef(null);
-  const chart9Ref=useRef(null);  // ✅ NEW: For test status chart
+  const chart1Ref=useRef(null);
+  const chart2Ref=useRef(null);
+  const chart3Ref=useRef(null);
+  const chart4Ref=useRef(null);
+  const chart5Ref=useRef(null);
+  
+  const chartInstances=useRef({});
   
   const mySchool=currentUser.school;
   const mySubject=currentUser.subject;
   
-  const analyticsData=useMemo(()=>{
+  // My school data
+  const myData=useMemo(()=>{
     const data={
       11:{total:0,completed:0,testsCompleted:0,testsPending:0},
       12:{total:0,completed:0,testsCompleted:0,testsPending:0}
@@ -534,11 +535,9 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
         const progressId=`${mySchool}_${ch.id}`;
         const prog=chapterProgress[progressId]||{};
         
-        // ✅ Count chapter completion
         if(prog.completed==='Yes'){
           data[grade].completed++;
           
-          // Track tests separately
           if(prog.testConducted==='Yes'){
             data[grade].testsCompleted++;
           }else{
@@ -560,48 +559,54 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
     return{...data,avgDays};
   },[curriculum,chapterProgress,mySchool,mySubject]);
 
-  // School comparison data
-  const schoolCompareData=useMemo(()=>{
+  // All schools comparison data
+  const allSchoolsData=useMemo(()=>{
     const data={};
     SCHOOLS.forEach(school=>{
-      let total=0,completed=0;
+      data[school]={
+        11:{total:0,completed:0,testsCompleted:0},
+        12:{total:0,completed:0,testsCompleted:0}
+      };
+      
       ['11','12'].forEach(grade=>{
         const docId=`${school}_${mySubject}_${grade}`;
         const chapters=curriculum[docId]?.chapters||[];
         chapters.forEach(ch=>{
-          total++;
+          data[school][grade].total++;
           const progressId=`${school}_${ch.id}`;
           const prog=chapterProgress[progressId]||{};
           if(prog.completed==='Yes'){
-            completed++;
+            data[school][grade].completed++;
+            if(prog.testConducted==='Yes'){
+              data[school][grade].testsCompleted++;
+            }
           }
         })
       });
-      data[school]={total,completed,percentage:total?Math.round((completed/total)*100):0};
     });
     return data;
   },[curriculum,chapterProgress,mySubject]);
 
   useEffect(()=>{
-    // Main chart
-    if(chartRef.current){
-      if(chartInstance.current){
-        chartInstance.current.destroy();
-      }
-      const ctx=chartRef.current.getContext('2d');
-      chartInstance.current=new Chart(ctx,{
+    Object.values(chartInstances.current).forEach(c=>c&&c.destroy());
+    chartInstances.current={};
+
+    // Chart 1: My Chapter Progress (11th & 12th)
+    if(chart1Ref.current){
+      const ctx=chart1Ref.current.getContext('2d');
+      chartInstances.current.chart1=new Chart(ctx,{
         type:'bar',
         data:{
           labels:['Class 11','Class 12'],
           datasets:[{
             label:'Completed',
-            data:[analyticsData[11].completed,analyticsData[12].completed],
+            data:[myData[11].completed,myData[12].completed],
             backgroundColor:'#10B981'
           },{
             label:'Pending',
             data:[
-              analyticsData[11].total-analyticsData[11].completed,
-              analyticsData[12].total-analyticsData[12].completed
+              myData[11].total-myData[11].completed,
+              myData[12].total-myData[12].completed
             ],
             backgroundColor:'#F59E0B'
           }]
@@ -610,31 +615,28 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
           responsive:true,
           maintainAspectRatio:false,
           plugins:{
-            title:{display:true,text:'Chapter Completion Progress',font:{size:16,weight:'bold'}},
+            title:{display:true,text:'My Chapter Progress',font:{size:16,weight:'bold'}},
             legend:{position:'bottom'}
           },
-          scales:{x:{stacked:true},y:{stacked:true}}
+          scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}}
         }
       });
     }
 
-    // Test chart
-    if(testChartRef.current){
-      if(testChartInstance.current){
-        testChartInstance.current.destroy();
-      }
-      const ctx=testChartRef.current.getContext('2d');
-      testChartInstance.current=new Chart(ctx,{
+    // Chart 2: My Tests Status (11th & 12th)
+    if(chart2Ref.current){
+      const ctx=chart2Ref.current.getContext('2d');
+      chartInstances.current.chart2=new Chart(ctx,{
         type:'bar',
         data:{
           labels:['Class 11','Class 12'],
           datasets:[{
             label:'Tests Completed',
-            data:[analyticsData[11].testsCompleted,analyticsData[12].testsCompleted],
+            data:[myData[11].testsCompleted,myData[12].testsCompleted],
             backgroundColor:'#3B82F6'
           },{
             label:'Tests Pending',
-            data:[analyticsData[11].testsPending,analyticsData[12].testsPending],
+            data:[myData[11].testsPending,myData[12].testsPending],
             backgroundColor:'#EF4444'
           }]
         },
@@ -642,7 +644,7 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
           responsive:true,
           maintainAspectRatio:false,
           plugins:{
-            title:{display:true,text:'Chapter Tests Status',font:{size:16,weight:'bold'}},
+            title:{display:true,text:'My Tests Status',font:{size:16,weight:'bold'}},
             legend:{position:'bottom'}
           },
           scales:{y:{beginAtZero:true}}
@@ -650,22 +652,18 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
       });
     }
 
-    // School comparison chart
-    if(schoolCompareRef.current){
-      if(schoolCompareInstance.current){
-        schoolCompareInstance.current.destroy();
-      }
-      const ctx=schoolCompareRef.current.getContext('2d');
-      const schools=Object.keys(schoolCompareData);
-      schoolCompareInstance.current=new Chart(ctx,{
+    // Chart 3: Class 11 - School Comparison
+    if(chart3Ref.current){
+      const ctx=chart3Ref.current.getContext('2d');
+      chartInstances.current.chart3=new Chart(ctx,{
         type:'bar',
         data:{
-          labels:schools,
+          labels:SCHOOLS,
           datasets:[{
-            label:'Completion %',
-            data:schools.map(s=>schoolCompareData[s].percentage),
-            backgroundColor:schools.map(s=>s===mySchool?'#C8342E':'#F4B41A'),
-            borderWidth:schools.map(s=>s===mySchool?3:0),
+            label:'Chapters Completed',
+            data:SCHOOLS.map(s=>allSchoolsData[s][11].completed),
+            backgroundColor:SCHOOLS.map(s=>s===mySchool?'#C8342E':'#10B981'),
+            borderWidth:SCHOOLS.map(s=>s===mySchool?3:0),
             borderColor:'#000'
           }]
         },
@@ -673,47 +671,104 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
           responsive:true,
           maintainAspectRatio:false,
           plugins:{
-            title:{display:true,text:`${mySubject} - School Comparison (Your school highlighted)`,font:{size:16,weight:'bold'}},
+            title:{display:true,text:`Class 11 ${mySubject} - School Comparison`,font:{size:16,weight:'bold'}},
             legend:{display:false}
           },
-          scales:{y:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%'}}}
+          scales:{y:{beginAtZero:true}}
+        }
+      });
+    }
+
+    // Chart 4: Class 12 - School Comparison
+    if(chart4Ref.current){
+      const ctx=chart4Ref.current.getContext('2d');
+      chartInstances.current.chart4=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:SCHOOLS,
+          datasets:[{
+            label:'Chapters Completed',
+            data:SCHOOLS.map(s=>allSchoolsData[s][12].completed),
+            backgroundColor:SCHOOLS.map(s=>s===mySchool?'#C8342E':'#10B981'),
+            borderWidth:SCHOOLS.map(s=>s===mySchool?3:0),
+            borderColor:'#000'
+          }]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:`Class 12 ${mySubject} - School Comparison`,font:{size:16,weight:'bold'}},
+            legend:{display:false}
+          },
+          scales:{y:{beginAtZero:true}}
+        }
+      });
+    }
+
+    // Chart 5: Tests Comparison - All Schools
+    if(chart5Ref.current){
+      const ctx=chart5Ref.current.getContext('2d');
+      chartInstances.current.chart5=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:SCHOOLS,
+          datasets:[
+            {
+              label:'Class 11 Tests',
+              data:SCHOOLS.map(s=>allSchoolsData[s][11].testsCompleted),
+              backgroundColor:'#3B82F6'
+            },
+            {
+              label:'Class 12 Tests',
+              data:SCHOOLS.map(s=>allSchoolsData[s][12].testsCompleted),
+              backgroundColor:'#8B5CF6'
+            }
+          ]
+        },
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{
+            title:{display:true,text:`${mySubject} Tests Completed - School Comparison`,font:{size:16,weight:'bold'}},
+            legend:{position:'bottom'}
+          },
+          scales:{y:{beginAtZero:true}}
         }
       });
     }
 
     return()=>{
-      if(chartInstance.current)chartInstance.current.destroy();
-      if(testChartInstance.current)testChartInstance.current.destroy();
-      if(schoolCompareInstance.current)schoolCompareInstance.current.destroy();
+      Object.values(chartInstances.current).forEach(c=>c&&c.destroy());
     };
-  },[analyticsData,schoolCompareData,mySchool,mySubject]);
+  },[myData,allSchoolsData,mySchool,mySubject]);
 
   const handleExport=()=>{
     const exportData=[
       {
         Grade:'Class 11',
-        'Total Chapters':analyticsData[11].total,
-        'Chapters Completed':analyticsData[11].completed,
-        'Tests Completed':analyticsData[11].testsCompleted,
-        'Tests Pending':analyticsData[11].testsPending,
-        'Completion %':analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0
+        'Total Chapters':myData[11].total,
+        'Completed':myData[11].completed,
+        'Tests Completed':myData[11].testsCompleted,
+        'Tests Pending':myData[11].testsPending,
+        'Completion %':myData[11].total?Math.round((myData[11].completed/myData[11].total)*100):0
       },
       {
         Grade:'Class 12',
-        'Total Chapters':analyticsData[12].total,
-        'Chapters Completed':analyticsData[12].completed,
-        'Tests Completed':analyticsData[12].testsCompleted,
-        'Tests Pending':analyticsData[12].testsPending,
-        'Completion %':analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0
+        'Total Chapters':myData[12].total,
+        'Completed':myData[12].completed,
+        'Tests Completed':myData[12].testsCompleted,
+        'Tests Pending':myData[12].testsPending,
+        'Completion %':myData[12].total?Math.round((myData[12].completed/myData[12].total)*100):0
       }
     ];
-    exportToExcel(exportData,'my_analytics');
+    exportToExcel(exportData,`${mySubject}_analytics_${mySchool}`);
   };
 
   return(
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold">My Analytics</h2>
+        <h2 className="text-3xl font-bold">My Analytics - {mySubject}</h2>
         <button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
           📊 Export to Excel
         </button>
@@ -722,45 +777,56 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="stat-card">
           <div className="text-sm text-gray-600">Avg Days per Chapter</div>
-          <div className="text-4xl font-bold">{analyticsData.avgDays}</div>
+          <div className="text-4xl font-bold">{myData.avgDays}</div>
         </div>
-        <div className="stat-card">
-          <div className="text-sm text-gray-600">Class 11 Progress</div>
-          <div className="text-4xl font-bold">
-            {analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0}%
+        <div className="stat-card bg-green-500 text-white">
+          <div className="text-sm opacity-90">Class 11 Completed</div>
+          <div className="text-4xl font-bold">{myData[11].completed}/{myData[11].total}</div>
+          <div className="text-sm opacity-90">
+            {myData[11].total?Math.round((myData[11].completed/myData[11].total)*100):0}%
           </div>
         </div>
-        <div className="stat-card">
-          <div className="text-sm text-gray-600">Class 12 Progress</div>
-          <div className="text-4xl font-bold">
-            {analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0}%
+        <div className="stat-card bg-green-500 text-white">
+          <div className="text-sm opacity-90">Class 12 Completed</div>
+          <div className="text-4xl font-bold">{myData[12].completed}/{myData[12].total}</div>
+          <div className="text-sm opacity-90">
+            {myData[12].total?Math.round((myData[12].completed/myData[12].total)*100):0}%
           </div>
         </div>
         <div className="stat-card bg-blue-500 text-white">
           <div className="text-sm opacity-90">Tests Completed</div>
           <div className="text-4xl font-bold">
-            {analyticsData[11].testsCompleted+analyticsData[12].testsCompleted}
+            {myData[11].testsCompleted+myData[12].testsCompleted}
           </div>
         </div>
         <div className="stat-card bg-red-500 text-white">
           <div className="text-sm opacity-90">Tests Pending</div>
           <div className="text-4xl font-bold">
-            {analyticsData[11].testsPending+analyticsData[12].testsPending}
+            {myData[11].testsPending+myData[12].testsPending}
           </div>
         </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
-          <canvas ref={chartRef}></canvas>
+          <canvas ref={chart1Ref}></canvas>
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
-          <canvas ref={testChartRef}></canvas>
+          <canvas ref={chart2Ref}></canvas>
         </div>
       </div>
 
       <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
-        <canvas ref={schoolCompareRef}></canvas>
+        <canvas ref={chart5Ref}></canvas>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+          <canvas ref={chart3Ref}></canvas>
+        </div>
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+          <canvas ref={chart4Ref}></canvas>
+        </div>
       </div>
     </div>
   );
@@ -1473,23 +1539,29 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="stat-card avanti-gradient text-white">
-          <div className="text-sm opacity-90">Total Chapters</div>
-          <div className="text-4xl font-bold">{filteredData.totalChapters}</div>
-        </div>
-        <div className="stat-card bg-green-500 text-white">
-          <div className="text-sm opacity-90">Completed</div>
-          <div className="text-4xl font-bold">{filteredData.completedChapters}</div>
-        </div>
-        <div className="stat-card bg-blue-500 text-white">
-          <div className="text-sm opacity-90">Ahead Schedule</div>
-          <div className="text-4xl font-bold">{filteredData.aheadChapters}</div>
-        </div>
-        <div className="stat-card bg-orange-500 text-white">
-          <div className="text-sm opacity-90">Delayed</div>
-          <div className="text-4xl font-bold">{filteredData.delayedChapters}</div>
-        </div>
-      </div>
+  <div className="stat-card avanti-gradient text-white">
+    <div className="text-sm opacity-90">Total Chapters</div>
+    <div className="text-4xl font-bold">{filteredData.totalChapters}</div>
+  </div>
+  <div className="stat-card bg-green-500 text-white">
+    <div className="text-sm opacity-90">Chapters Completed</div>
+    <div className="text-4xl font-bold">{filteredData.completedChapters}/{filteredData.totalChapters}</div>
+    <div className="text-sm opacity-90 mt-1">
+      {filteredData.totalChapters?Math.round((filteredData.completedChapters/filteredData.totalChapters)*100):0}%
+    </div>
+  </div>
+  <div className="stat-card bg-blue-500 text-white">
+    <div className="text-sm opacity-90">Tests Completed</div>
+    <div className="text-4xl font-bold">{filteredData.testsCompleted}/{filteredData.completedChapters}</div>
+    <div className="text-sm opacity-90 mt-1">
+      {filteredData.completedChapters?Math.round((filteredData.testsCompleted/filteredData.completedChapters)*100):0}%
+    </div>
+  </div>
+  <div className="stat-card bg-orange-500 text-white">
+    <div className="text-sm opacity-90">Tests Pending</div>
+    <div className="text-4xl font-bold">{filteredData.testsPending}</div>
+  </div>
+</div>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'350px'}}>
