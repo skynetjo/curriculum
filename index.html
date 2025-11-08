@@ -400,6 +400,51 @@ function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teache
     </div>
   </div>
 </div>
+  <div className="bg-white p-6 rounded-2xl shadow-lg">
+  <h3 className="text-2xl font-bold mb-4">⏰ Today's Punch-In Times - {mySchool}</h3>
+  <div className="space-y-2 max-h-96 overflow-y-auto">
+    {teachers
+      .filter(t=>t.school===mySchool)
+      .map(teacher=>{
+        const todayAttendance=teacherAttendance.find(
+          a=>a.teacherId===teacher.afid&&a.date===getTodayDate()
+        );
+        return(
+          <div key={teacher.afid} className={`p-4 rounded-xl border-2 ${
+            teacher.afid===currentUser.afid?'bg-yellow-50 border-yellow-400':'bg-gray-50 border-gray-200'
+          }`}>
+            <div className="flex justify-between items-center">
+              <div className="flex-1">
+                <div className="font-bold text-lg">
+                  {teacher.name} {teacher.afid===currentUser.afid&&'(You)'}
+                </div>
+                <div className="text-sm text-gray-600">{teacher.subject}</div>
+              </div>
+              <div className="text-right">
+                {todayAttendance?(
+                  <>
+                    <div className={`text-2xl font-bold ${
+                      todayAttendance.status==='Present'?'text-green-600':'text-orange-600'
+                    }`}>
+                      ⏰ {todayAttendance.punchInTime||'--:--'}
+                    </div>
+                    <div className={`text-xs font-semibold ${
+                      todayAttendance.status==='Present'?'text-green-600':'text-orange-600'
+                    }`}>
+                      {todayAttendance.status}
+                    </div>
+                  </>
+                ):(
+                  <div className="text-gray-400 font-semibold">Not Marked</div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })
+    }
+  </div>
+</div>
 </div></div>)}
 function TeacherAnalytics({currentUser,curriculum,chapterProgress}){const chartRef=useRef(null);const chartInstance=useRef(null);const mySchool=currentUser.school;const mySubject=currentUser.subject;const analyticsData=useMemo(()=>{const data={11:{total:0,completed:0},12:{total:0,completed:0}};let totalDays=0;let chaptersWithDates=0;['11','12'].forEach(grade=>{const docId=`${mySchool}_${mySubject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];chapters.forEach(ch=>{data[grade].total++;const progressId=`${mySchool}_${ch.id}`;const prog=chapterProgress[progressId]||{};if(prog.completed==='Yes'&&prog.testConducted==='Yes'){data[grade].completed++;if(prog.completionDate&&ch.targetDate){const target=new Date(ch.targetDate);const completion=new Date(prog.completionDate);const days=Math.abs(Math.ceil((completion-target)/(1000*60*60*24)));totalDays+=days;chaptersWithDates++}}})});const avgDays=chaptersWithDates?Math.round(totalDays/chaptersWithDates):0;return{...data,avgDays}},[curriculum,chapterProgress,mySchool,mySubject]);useEffect(()=>{if(chartRef.current){if(chartInstance.current){chartInstance.current.destroy()}const ctx=chartRef.current.getContext('2d');chartInstance.current=new Chart(ctx,{type:'bar',data:{labels:['Class 11','Class 12'],datasets:[{label:'Completed',data:[analyticsData[11].completed,analyticsData[12].completed],backgroundColor:'#10B981'},{label:'Pending',data:[analyticsData[11].total-analyticsData[11].completed,analyticsData[12].total-analyticsData[12].completed],backgroundColor:'#F59E0B'}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true}}}})}return()=>{if(chartInstance.current){chartInstance.current.destroy()}}},[analyticsData]);const handleExport=()=>{const exportData=[{Grade:'Class 11','Total Chapters':analyticsData[11].total,'Completed':analyticsData[11].completed,'Pending':analyticsData[11].total-analyticsData[11].completed,'Completion %':analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0},{Grade:'Class 12','Total Chapters':analyticsData[12].total,'Completed':analyticsData[12].completed,'Pending':analyticsData[12].total-analyticsData[12].completed,'Completion %':analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0}];exportToExcel(exportData,'my_analytics')};return(<div className="space-y-6"><div className="flex justify-between items-center"><h2 className="text-3xl font-bold">My Analytics</h2><button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">📊 Export to Excel</button></div><div className="grid grid-cols-3 gap-4"><div className="stat-card"><div className="text-sm text-gray-600">Avg Days per Chapter</div><div className="text-4xl font-bold">{analyticsData.avgDays}</div></div><div className="stat-card"><div className="text-sm text-gray-600">Class 11 Progress</div><div className="text-4xl font-bold">{analyticsData[11].total?Math.round((analyticsData[11].completed/analyticsData[11].total)*100):0}%</div></div><div className="stat-card"><div className="text-sm text-gray-600">Class 12 Progress</div><div className="text-4xl font-bold">{analyticsData[12].total?Math.round((analyticsData[12].completed/analyticsData[12].total)*100):0}%</div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}><canvas ref={chartRef}></canvas></div></div>)}
 function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateChapterProgress}){
@@ -1748,6 +1793,7 @@ function TeacherAttendanceDashboard({currentUser,students,teachers,studentAttend
     const exportData=filteredTeacherAttendance.map(a=>({
       Date:a.date,
       'Teacher Name':a.teacherName,
+      'Punch-In Time':a.punchInTime||'Not recorded',
       Status:a.status,
       Reason:a.reason,
       Location:a.location
@@ -1869,6 +1915,7 @@ function TeacherAttendanceDashboard({currentUser,students,teachers,studentAttend
                 <tr>
                   <th className="p-3 text-left">Date</th>
                   <th className="p-3 text-left">Teacher</th>
+                  <th className="p-3 text-left">Punch-In</th>
                   <th className="p-3 text-left">Status</th>
                   <th className="p-3 text-left">Reason</th>
                 </tr>
@@ -1878,6 +1925,11 @@ function TeacherAttendanceDashboard({currentUser,students,teachers,studentAttend
                   <tr key={idx} className="border-b hover:bg-gray-50">
                     <td className="p-3 text-sm">{a.date}</td>
                     <td className="p-3 font-semibold">{a.teacherName}</td>
+                    <td className="p-3">
+                      <span className="font-mono font-bold text-blue-600">
+                        ⏰ {a.punchInTime||'--:--'}
+                      </span>
+                    </td>
                     <td className="p-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${a.status==='Present'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>
                         {a.status}
@@ -2177,6 +2229,9 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
       return;
     }
     try{
+      const now=new Date();
+      const punchInTime=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+      
       const docId=`${currentUser.afid}_${selectedDate}`;
       await db.collection('teacherAttendance').doc(docId).set({
         teacherId:currentUser.afid,
@@ -2186,9 +2241,10 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
         status,
         reason:status==='Present'?'Present':reason,
         location:location||'Not provided',
+        punchInTime:punchInTime,
         markedAt:new Date().toISOString()
       });
-      alert('Attendance marked!');
+      alert(`Attendance marked! ✓\nPunch-in time: ${punchInTime}`);
     }catch(e){
       alert('Failed: '+e.message);
     }
@@ -2252,6 +2308,7 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
               <h4 className="font-bold text-green-800 mb-2">✓ Already Marked for {selectedDate}</h4>
               <p><strong>Status:</strong> {todayRecord.status}</p>
               <p><strong>Reason:</strong> {todayRecord.reason}</p>
+              <p><strong>Punch-in Time:</strong> ⏰ {todayRecord.punchInTime||'Not recorded'}</p>
               <p><strong>Location:</strong> {todayRecord.location}</p>
             </div>
           )}
@@ -2504,6 +2561,7 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
       Date:a.date,
       'Teacher Name':a.teacherName,
       School:a.school,
+      'Punch-In Time':a.punchInTime||'Not recorded',
       Status:a.status,
       Reason:a.reason,
       Location:a.location
@@ -2599,28 +2657,35 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
             <thead className="avanti-gradient-light">
                 <tr>
                   <th className="p-3 text-left">Date</th>
+                  <th className="p-3 text-left">Teacher</th>
                   <th className="p-3 text-left">School</th>
-                  <th className="p-3 text-left">Grade</th>
-                  <th className="p-3 text-left">Student</th>
+                  <th className="p-3 text-left">Punch-In Time</th>
                   <th className="p-3 text-left">Status</th>
-                  <th className="p-3 text-left">Remarks</th>
+                  <th className="p-3 text-left">Reason</th>
+                  <th className="p-3 text-left">Location</th>
                 </tr>
               </thead>
             <tbody>
+              <tbody>
               {filteredTeacherAttendance.length===0?
-                <tr><td colSpan="6" className="p-8 text-center text-gray-500">No records found</td></tr>
+                <tr><td colSpan="7" className="p-8 text-center text-gray-500">No records found</td></tr>
               :
                 filteredTeacherAttendance.slice(0,50).map((a,idx)=>
                   <tr key={idx} className="border-b hover:bg-gray-50">
-                    <td className="p-3">{a.date}</td>
+                    <td className="p-3 text-sm">{a.date}</td>
                     <td className="p-3 font-semibold">{a.teacherName}</td>
                     <td className="p-3">{a.school}</td>
+                    <td className="p-3">
+                      <span className="font-mono font-bold text-blue-600 text-lg">
+                        ⏰ {a.punchInTime||'--:--'}
+                      </span>
+                    </td>
                     <td className="p-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${a.status==='Present'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>
                         {a.status}
                       </span>
                     </td>
-                    <td className="p-3">{a.reason}</td>
+                    <td className="p-3 text-sm">{a.reason}</td>
                     <td className="p-3 text-sm">📍 {a.location}</td>
                   </tr>
                 )
