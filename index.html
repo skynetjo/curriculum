@@ -276,45 +276,54 @@ const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
 useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){if(user.email==='admin@avantifellows.org'){setIsAdmin(true);setCurrentUser({name:'Administrator',email:user.email,afid:'ADMIN',school:'Admin'});setActiveTab('teachers')}else{const teacherSnapshot=await db.collection('teachers').where('email','==',user.email).limit(1).get();if(!teacherSnapshot.empty){const teacherData=teacherSnapshot.docs[0].data();setCurrentUser(teacherData);setIsAdmin(false);setActiveTab('overview');if(teacherData.dob){const d=new Date(teacherData.dob);const now=new Date();if(d.getMonth()===now.getMonth()&&d.getDate()===now.getDate()){setShowConfetti(true);setCelebrationMessage(`🎂 Happy Birthday, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}if(teacherData.joiningDate){const j=new Date(teacherData.joiningDate);const now=new Date();if(j.getMonth()===now.getMonth()&&j.getDate()===now.getDate()&&j.getFullYear()<now.getFullYear()){const years=now.getFullYear()-j.getFullYear();setShowConfetti(true);setCelebrationMessage(`🎉 Happy ${years} Year Work Anniversary, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}}else{alert('Teacher profile not found. Please contact admin.');await auth.signOut()}}}else{setCurrentUser(null);setIsAdmin(false)}setLoading(false)});return()=>unsubscribe()},[]);
 useEffect(() => {
-  const unsubProgress = db.collection('chapterProgress').onSnapshot(snap => {
-    const map = {};
-    snap.docs.forEach(d => map[d.id] = d.data());
-    setChapterProgress(map);
-  });
+  // ✅ OPTIMIZED: Fetch data once on load, refresh only when needed
+useEffect(() => {
+  const fetchData = async () => {
+    try {
+      // Fetch chapter progress
+      const progressSnap = await db.collection('chapterProgress').get();
+      const map = {};
+      progressSnap.docs.forEach(d => map[d.id] = d.data());
+      setChapterProgress(map);
 
-  const unsubTeachers = db.collection('teachers').onSnapshot(snap => {
-    setTeachers(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-  });
+      // Fetch teachers
+      const teachersSnap = await db.collection('teachers').get();
+      setTeachers(teachersSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
-  const unsubCurriculum = db.collection('curriculum').onSnapshot(snap => {
-    const currMap = {};
-    snap.docs.forEach(doc => { currMap[doc.id] = doc.data() });
-    setCurriculum(currMap);
-  });
+      // Fetch curriculum
+      const curriculumSnap = await db.collection('curriculum').get();
+      const currMap = {};
+      curriculumSnap.docs.forEach(doc => { currMap[doc.id] = doc.data() });
+      setCurriculum(currMap);
 
-  // ✅ Add these 3 new subscriptions here:
+      // Fetch students
+      const studentsSnap = await db.collection('students').get();
+      setStudents(studentsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
-  const unsubStudents = db.collection('students').onSnapshot(snap => {
-    setStudents(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-  });
+      // Fetch student attendance (last 30 days only)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const studentAttSnap = await db.collection('studentAttendance')
+        .where('date', '>=', thirtyDaysAgo.toISOString().split('T')[0])
+        .get();
+      setStudentAttendance(studentAttSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
-  const unsubStudentAttendance = db.collection('studentAttendance').onSnapshot(snap => {
-    setStudentAttendance(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-  });
+      // Fetch teacher attendance (last 30 days only)
+      const teacherAttSnap = await db.collection('teacherAttendance')
+        .where('date', '>=', thirtyDaysAgo.toISOString().split('T')[0])
+        .get();
+      setTeacherAttendance(teacherAttSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
-  const unsubTeacherAttendance = db.collection('teacherAttendance').onSnapshot(snap => {
-    setTeacherAttendance(snap.docs.map(d => ({ ...d.data(), id: d.id })));
-  });
-
-  return () => {
-    unsubProgress();
-    unsubTeachers();
-    unsubCurriculum();
-    // ✅ Cleanup the new ones too
-    unsubStudents();
-    unsubStudentAttendance();
-    unsubTeacherAttendance();
+    } catch (e) {
+      console.error('Data fetch error:', e);
+    }
   };
+
+  fetchData();
+
+  // ✅ Refresh data every 5 minutes instead of real-time
+  const interval = setInterval(fetchData, 5 * 60 * 1000);
+  return () => clearInterval(interval);
 }, []);
 const handleLogin=async()=>{setAuthLoading(true);try{const email=(loginForm.email||'').trim().toLowerCase();const password=loginForm.password;if(!email||!password){alert('Please enter email and password');setAuthLoading(false);return}await auth.signInWithEmailAndPassword(email,password)}catch(e){console.error('login error',e);alert('Login failed: '+e.message)}setAuthLoading(false)};
 const handleLogout=async()=>{try{await auth.signOut();setActiveTab('overview')}catch(e){console.error('logout error',e)}};
