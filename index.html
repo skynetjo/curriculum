@@ -3010,29 +3010,7 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
         }
       });
     }
-    // Chart 9: Tests Status (NEW)
-if(chart9Ref.current){
-  const ctx=chart9Ref.current.getContext('2d');
-  chartInstances.current.chart9=new Chart(ctx,{
-    type:'doughnut',
-    data:{
-      labels:['Tests Completed','Tests Pending'],
-      datasets:[{
-        data:[filteredData.testData.completed,filteredData.testData.pending],
-        backgroundColor:['#3B82F6','#EF4444'],
-        borderWidth:2
-      }]
-    },
-    options:{
-      responsive:true,
-      maintainAspectRatio:false,
-      plugins:{
-        title:{display:true,text:'Chapter Tests: Completed vs Pending',font:{size:16,weight:'bold'}},
-        legend:{position:'bottom'}
-      }
-    }
-  });
-}
+    
     return()=>{
       Object.values(chartInstances.current).forEach(chart=>{
         if(chart)chart.destroy();
