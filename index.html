@@ -128,15 +128,34 @@
     anchor: 'end',
     align: 'end',
     offset: 4,
-    font: { weight: '600', size: 11 },
     formatter: (value, ctx) => {
       const type = ctx.chart.config.type;
+
+      // Pie/Doughnut → show %
       if (type === 'pie' || type === 'doughnut') {
         const sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0) || 1;
         return Math.round((value / sum) * 100) + '%';
       }
+
+      // Bar/Line → show number
       return value;
-    }
+    },
+    // Default style (if not overridden below)
+    color: '#333',
+    font: { weight: '600', size: 11 }
+  };
+
+  // Optional overrides per chart type
+  Chart.overrides.bar.plugins.datalabels = {
+    color: '#007bff',       // blue labels for bar charts
+    font: { weight: '700', size: 12 },
+    align: 'end',
+    anchor: 'end'
+  };
+
+  Chart.overrides.pie.plugins.datalabels = {
+    color: '#fff',          // white labels for pie charts
+    font: { weight: '600', size: 14 }
   };
 </script>
   <script type="text/babel">
