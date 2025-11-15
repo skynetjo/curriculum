@@ -363,7 +363,44 @@ useEffect(() => {
 }, []);
 const handleLogin=async()=>{setAuthLoading(true);try{const email=(loginForm.email||'').trim().toLowerCase();const password=loginForm.password;if(!email||!password){alert('Please enter email and password');setAuthLoading(false);return}await auth.signInWithEmailAndPassword(email,password)}catch(e){console.error('login error',e);alert('Login failed: '+e.message)}setAuthLoading(false)};
 const handleLogout=async()=>{try{await auth.signOut();setActiveTab('overview')}catch(e){console.error('logout error',e)}};
-const updateChapterProgress=useCallback(async(school,chapterId,field,value)=>{try{const docId=`${school}_${chapterId}`;await db.collection('chapterProgress').doc(docId).set({[field]:value},{merge:true});if(field==='completed'&&value==='Yes'){const testStatus=chapterProgress[docId]?.testConducted;if(testStatus==='Yes'){setShowConfetti(true);setCelebrationMessage('🎉 Chapter Completed Successfully!');setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},5000)}}}catch(e){console.error('Update error',e);alert('Failed to update: '+e.message)}},[chapterProgress]);
+const updateChapterProgress = useCallback(
+  async (school, chapterId, field, value) => {
+    try {
+      const docId = `${school}_${chapterId}`;
+
+      // 1) Write to Firestore
+      await db.collection('chapterProgress')
+        .doc(docId)
+        .set({ [field]: value }, { merge: true });
+
+      // 2) Immediately update local state
+      setChapterProgress(prev => ({
+        ...prev,
+        [docId]: {
+          ...(prev[docId] || {}),
+          [field]: value
+        }
+      }));
+
+      // 3) Celebration logic
+      if (field === "completed" && value === "Yes") {
+        const testStatus = chapterProgress[docId]?.testConducted;
+        if (testStatus === "Yes") {
+          setShowConfetti(true);
+          setCelebrationMessage("🎉 Chapter Completed Successfully!");
+          setTimeout(() => {
+            setShowConfetti(false);
+            setCelebrationMessage("");
+          }, 5000);
+        }
+      }
+    } catch (e) {
+      console.error("Update error", e);
+      alert("Failed to update: " + e.message);
+    }
+  },
+  [chapterProgress]
+);
 const addChapter=async(school,subject,grade,chapter)=>{try{const docId=`${school}_${subject}_${grade}`;const doc=await db.collection('curriculum').doc(docId).get();const existing=doc.exists?(doc.data().chapters||[]):[];chapter.id=`${subject.charAt(0)}${grade}-${existing.length+1}-${Date.now().toString().slice(-4)}`;const updated=[...existing,chapter];await db.collection('curriculum').doc(docId).set({chapters:updated});alert('Chapter added successfully!')}catch(e){console.error('Add error',e);alert('Failed to add: '+e.message)}};
 const updateChapter=async(school,subject,grade,chapterId,updates)=>{try{const docId=`${school}_${subject}_${grade}`;const doc=await db.collection('curriculum').doc(docId).get();const existing=doc.exists?(doc.data().chapters||[]):[];const index=existing.findIndex(ch=>ch.id===chapterId);if(index===-1){alert('Chapter not found');return}existing[index]={...existing[index],...updates};await db.collection('curriculum').doc(docId).set({chapters:existing});alert('Chapter updated successfully!')}catch(e){console.error('Update error',e);alert('Failed to update: '+e.message)}};
 const deleteChapter=async(school,subject,grade,chapterId)=>{if(!confirm('Delete this chapter?'))return;try{const docId=`${school}_${subject}_${grade}`;const doc=await db.collection('curriculum').doc(docId).get();const existing=doc.exists?(doc.data().chapters||[]):[];const updated=existing.filter(ch=>ch.id!==chapterId);await db.collection('curriculum').doc(docId).set({chapters:updated});alert('Chapter deleted successfully')}catch(e){console.error('Delete error',e);alert('Failed to delete: '+e.message)}};
