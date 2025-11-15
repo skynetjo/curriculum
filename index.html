@@ -316,38 +316,38 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
 useEffect(() => {
   const fetchData = async () => {
     try {
-      // Fetch chapter progress
-      const progressSnap = await db.collection('chapterProgress').get();
+      // ✅ FETCH ALL DATA IN PARALLEL (MUCH FASTER!)
+      const [progressSnap, teachersSnap, curriculumSnap, studentsSnap, studentAttSnap, teacherAttSnap] = await Promise.all([
+        db.collection('chapterProgress').get(),
+        db.collection('teachers').get(),
+        db.collection('curriculum').get(),
+        db.collection('students').get(),
+        db.collection('studentAttendance')
+          .where('date', '>=', new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0])
+          .get(),
+        db.collection('teacherAttendance')
+          .where('date', '>=', new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0])
+          .get()
+      ]);
+
+      // Process chapter progress
       const map = {};
       progressSnap.docs.forEach(d => map[d.id] = d.data());
       setChapterProgress(map);
 
-      // Fetch teachers
-      const teachersSnap = await db.collection('teachers').get();
+      // Process teachers
       setTeachers(teachersSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
-      // Fetch curriculum
-      const curriculumSnap = await db.collection('curriculum').get();
+      // Process curriculum
       const currMap = {};
       curriculumSnap.docs.forEach(doc => { currMap[doc.id] = doc.data() });
       setCurriculum(currMap);
 
-      // Fetch students
-      const studentsSnap = await db.collection('students').get();
+      // Process students
       setStudents(studentsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
-      // Fetch student attendance (last 30 days only)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const studentAttSnap = await db.collection('studentAttendance')
-        .where('date', '>=', thirtyDaysAgo.toISOString().split('T')[0])
-        .get();
+      // Process attendance
       setStudentAttendance(studentAttSnap.docs.map(d => ({ ...d.data(), id: d.id })));
-
-      // Fetch teacher attendance (last 30 days only)
-      const teacherAttSnap = await db.collection('teacherAttendance')
-        .where('date', '>=', thirtyDaysAgo.toISOString().split('T')[0])
-        .get();
       setTeacherAttendance(teacherAttSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
     } catch (e) {
@@ -357,54 +357,86 @@ useEffect(() => {
 
   fetchData();
 
-  // ✅ Refresh data every 5 minutes instead of real-time
-  const interval = setInterval(fetchData, 5 * 60 * 1000);
+  // ✅ Refresh data every 2 minutes (faster updates)
+  const interval = setInterval(fetchData, 2 * 60 * 1000);
   return () => clearInterval(interval);
 }, []);
 const handleLogin=async()=>{setAuthLoading(true);try{const email=(loginForm.email||'').trim().toLowerCase();const password=loginForm.password;if(!email||!password){alert('Please enter email and password');setAuthLoading(false);return}await auth.signInWithEmailAndPassword(email,password)}catch(e){console.error('login error',e);alert('Login failed: '+e.message)}setAuthLoading(false)};
 const handleLogout=async()=>{try{await auth.signOut();setActiveTab('overview')}catch(e){console.error('logout error',e)}};
-const updateChapterProgress = useCallback(
-  async (school, chapterId, field, value) => {
-    try {
-      const docId = `${school}_${chapterId}`;
+const updateChapterProgress = useCallback(async (school, chapterId, field, value) => {
+  try {
+    const docId = `${school}_${chapterId}`;
 
-      // 1) Write to Firestore
-      await db.collection('chapterProgress')
-        .doc(docId)
-        .set({ [field]: value }, { merge: true });
+    // Save to Firebase
+    await db.collection('chapterProgress').doc(docId).set(
+      { [field]: value },
+      { merge: true }
+    );
 
-      // 2) Immediately update local state
-      setChapterProgress(prev => ({
-        ...prev,
-        [docId]: {
-          ...(prev[docId] || {}),
-          [field]: value
-        }
-      }));
-
-      // 3) Celebration logic
-      if (field === "completed" && value === "Yes") {
-        const testStatus = chapterProgress[docId]?.testConducted;
-        if (testStatus === "Yes") {
-          setShowConfetti(true);
-          setCelebrationMessage("🎉 Chapter Completed Successfully!");
-          setTimeout(() => {
-            setShowConfetti(false);
-            setCelebrationMessage("");
-          }, 5000);
-        }
-      }
-    } catch (e) {
-      console.error("Update error", e);
-      alert("Failed to update: " + e.message);
+    // 🎉 Show confetti when CHAPTER is marked completed
+    if (field === 'completed' && value === 'Yes') {
+      setShowConfetti(true);
+      setCelebrationMessage('🎉 Chapter marked as completed!');
+      setTimeout(() => {
+        setShowConfetti(false);
+        setCelebrationMessage('');
+      }, 5000);
     }
-  },
-  [chapterProgress]
-);
+
+    // 🎉 Show confetti when TEST is marked completed
+    if (field === 'testConducted' && value === 'Yes') {
+      setShowConfetti(true);
+      setCelebrationMessage('📝 Chapter test completed!');
+      setTimeout(() => {
+        setShowConfetti(false);
+        setCelebrationMessage('');
+      }, 5000);
+    }
+  } catch (e) {
+    console.error('Update error', e);
+    alert('Failed to update: ' + e.message);
+  }
+}, [chapterProgress]);
 const addChapter=async(school,subject,grade,chapter)=>{try{const docId=`${school}_${subject}_${grade}`;const doc=await db.collection('curriculum').doc(docId).get();const existing=doc.exists?(doc.data().chapters||[]):[];chapter.id=`${subject.charAt(0)}${grade}-${existing.length+1}-${Date.now().toString().slice(-4)}`;const updated=[...existing,chapter];await db.collection('curriculum').doc(docId).set({chapters:updated});alert('Chapter added successfully!')}catch(e){console.error('Add error',e);alert('Failed to add: '+e.message)}};
 const updateChapter=async(school,subject,grade,chapterId,updates)=>{try{const docId=`${school}_${subject}_${grade}`;const doc=await db.collection('curriculum').doc(docId).get();const existing=doc.exists?(doc.data().chapters||[]):[];const index=existing.findIndex(ch=>ch.id===chapterId);if(index===-1){alert('Chapter not found');return}existing[index]={...existing[index],...updates};await db.collection('curriculum').doc(docId).set({chapters:existing});alert('Chapter updated successfully!')}catch(e){console.error('Update error',e);alert('Failed to update: '+e.message)}};
 const deleteChapter=async(school,subject,grade,chapterId)=>{if(!confirm('Delete this chapter?'))return;try{const docId=`${school}_${subject}_${grade}`;const doc=await db.collection('curriculum').doc(docId).get();const existing=doc.exists?(doc.data().chapters||[]):[];const updated=existing.filter(ch=>ch.id!==chapterId);await db.collection('curriculum').doc(docId).set({chapters:updated});alert('Chapter deleted successfully')}catch(e){console.error('Delete error',e);alert('Failed to delete: '+e.message)}};
-function Confetti(){const shapes=['●','■','▲','★','♦','♥','✦','✧'];const colors=['#F4B41A','#E8B039','#C8342E','#FFA07A','#98D8C8','#F7DC6F'];return(<div className="fixed inset-0 pointer-events-none z-[9999]">{Array.from({length:60}).map((_,i)=>{const shape=shapes[Math.floor(Math.random()*shapes.length)];const color=colors[Math.floor(Math.random()*colors.length)];const size=12+Math.random()*20;const left=Math.random()*100;const delay=Math.random()*2;return(<div key={i} className="confetti-piece" style={{left:`${left}%`,top:'-50px',color:color,fontSize:`${size}px`,animationDelay:`${delay}s`}}>{shape}</div>)})}</div>)}
+function Confetti() {
+  const primary = ['#F97316', '#FACC15', '#22C55E', '#0EA5E9', '#6366F1', '#EC4899'];
+  const secondary = ['#FDBA74', '#FDE68A', '#86EFAC', '#7DD3FC', '#A5B4FC', '#F9A8D4'];
+  const pieces = 120;
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-[9999]">
+      {Array.from({ length: pieces }).map((_, i) => {
+        const colorIndex = Math.floor(Math.random() * primary.length);
+        const left = Math.random() * 100;
+        const size = 6 + Math.random() * 10;
+        const delay = Math.random() * 1.2;
+        const duration = 2.4 + Math.random() * 1.2;
+        const isCircle = Math.random() > 0.6;
+
+        return (
+          <div
+            key={i}
+            className="confetti-piece"
+            style={{
+              left: `${left}%`,
+              top: '-40px',
+              width: `${size * 1.8}px`,
+              height: `${size}px`,
+              background: `linear-gradient(135deg, ${primary[colorIndex]}, ${secondary[colorIndex]})`,
+              borderRadius: isCircle ? '999px' : '6px',
+              boxShadow: '0 0 0 1px rgba(255,255,255,0.5)',
+              animationDelay: `${delay}s`,
+              animationDuration: `${duration}s`,
+              opacity: 0.95,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
 if(loading){return(<div className="min-h-screen avanti-gradient flex items-center justify-center"><div className="text-center"><img src={AVANTI_LOGO} alt="Avanti Fellows" className="w-20 h-20 mx-auto mb-4 animate-bounce"/><div className="text-white text-2xl font-bold">Loading...</div></div></div>)}
 if(!currentUser){return(<div className="min-h-screen avanti-gradient flex items-center justify-center p-4"><div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md"><div className="text-center mb-8"><img src={AVANTI_LOGO} alt="Avanti Fellows" className="w-20 h-20 mx-auto mb-4"/><h1 className="text-4xl font-bold text-gray-800 mb-2">Curriculum Tracker</h1><p className="text-gray-600 mt-3">Avanti Fellows</p></div><div className="space-y-5"><input type="email" className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg" value={loginForm.email} onChange={e=>setLoginForm({...loginForm,email:e.target.value})} placeholder="Email"/><input type="password" className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg" value={loginForm.password} onChange={e=>setLoginForm({...loginForm,password:e.target.value})} placeholder="Password" onKeyPress={e=>e.key==='Enter'&&handleLogin()}/><button onClick={handleLogin} disabled={authLoading} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-50">{authLoading?'Logging in...':'Login'}</button></div></div></div>)}
 
@@ -2598,6 +2630,10 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   },[selectedDate,mySchool,selectedGrade]);
   const handleAttendanceChange=async(studentId,status,remarks='')=>{
     try{
+      // ✅ UPDATE UI FIRST (Optimistic update)
+      setAttendanceMap(prev=>({...prev,[studentId]:status}));
+      
+      // ✅ THEN save to database
       const docId=`${mySchool}_${selectedGrade}_${studentId}_${selectedDate}`;
       await db.collection('studentAttendance').doc(docId).set({
         school:mySchool,
@@ -2610,8 +2646,9 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
         markedBy:currentUser.afid,
         markedAt:new Date().toISOString()
       });
-      setAttendanceMap(prev=>({...prev,[studentId]:status}));
     }catch(e){
+      // ✅ Rollback UI if save fails
+      setAttendanceMap(prev=>({...prev,[studentId]:prev[studentId]||''}));
       alert('Failed: '+e.message);
     }
   };
