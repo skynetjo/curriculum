@@ -729,7 +729,29 @@ function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebration
 function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,schoolInfo,addChapter,updateChapter,deleteChapter}){const[activeTab,setActiveTab]=useState('teachers');return(
   <div className="min-h-screen bg-gray-50 flex flex-col">
     <InstallPrompt/>  {/* ⬅️ ADD THIS LINE */}
-    <nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['teachers','students','curriculum','analytics','chapter-details','attendance','schoolinfo','birthdays','studentprofiles','examstats'].map(tab=>{tab==='studentprofiles'&&'👨‍🎓 Student Profiles'}{tab==='examstats'&&'📊 Exam Statistics'}<button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='teachers'&&'👥 Teachers'}
+    <nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">
+  {['teachers','students','curriculum','analytics','chapter-details','attendance','schoolinfo','birthdays','studentprofiles','examstats'].map(tab => (
+    <button
+      key={tab}
+      onClick={() => setActiveTab(tab)}
+      className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${
+        activeTab === tab ? 'avanti-gradient text-white' : 'bg-white'
+      }`}
+    >
+      {tab === 'teachers' && '👥 Teachers'}
+      {tab === 'students' && '👨‍🎓 Students'}
+      {tab === 'curriculum' && '📚 Curriculum'}
+      {tab === 'analytics' && '📊 Analytics'}
+      {tab === 'chapter-details' && '📋 Chapter Details'}
+      {tab === 'attendance' && '📊 Attendance Analytics'}
+      {tab === 'schoolinfo' && '🏫 School Info'}
+      {tab === 'birthdays' && '🎂 Celebrations'}
+      {tab === 'studentprofiles' && '👨‍🎓 Student Profiles'}
+      {tab === 'examstats' && '📊 Exam Statistics'}
+    </button>
+  ))}
+</div>
+key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='teachers'&&'👥 Teachers'}
 {tab==='students'&&'👨‍🎓 Students'}
 {tab==='curriculum'&&'📚 Curriculum'}
 {tab==='analytics'&&'📊 Analytics'}
@@ -737,7 +759,18 @@ function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapte
 {tab==='attendance'&&'📊 Attendance Analytics'}
 {tab==='schoolinfo'&&'🏫 School Info'}
 {tab==='birthdays'&&'🎂 Celebrations'}</button>)}</div>{activeTab==='teachers'&&<TeacherManagement teachers={teachers}/>}{activeTab==='curriculum'&&<AdminCurriculum curriculum={curriculum} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>}{activeTab==='analytics'&&<AdminAnalytics teachers={teachers} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='chapter-details'&&<AdminChapterDetails curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers}/>}{activeTab==='birthdays'&&<AdminBirthdays teachers={teachers}/>}{activeTab==='students'&&<StudentManagement students={students}/>}
-{activeTab==='attendance'&&<AdminAttendanceAnalytics students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}{activeTab==='schoolinfo'&&<AdminSchoolInfo schoolInfo={schoolInfo}/>}{activeTab==='studentprofiles'&&}{activeTab==='examstats'&&}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
+{activeTab==='attendance' && (
+  <AdminAttendanceAnalytics
+    students={students}
+    teachers={teachers}
+    studentAttendance={studentAttendance}
+    teacherAttendance={teacherAttendance}
+  />
+)}
+{activeTab==='schoolinfo' && <AdminSchoolInfo schoolInfo={schoolInfo} />}
+{activeTab==='studentprofiles' && <AdminStudentProfiles />}
+{activeTab==='examstats' && <AdminExamStats />}
+</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
 function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teacherAttendance,studentAttendance}){const mySchool=currentUser.school;const mySubject=currentUser.subject;const schoolRankings=useMemo(()=>{
   const rankings=SCHOOLS.map(school=>{
     let total=0,completed=0,testsCompleted=0,testsPending=0;
