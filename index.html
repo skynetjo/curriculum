@@ -4560,58 +4560,6 @@ function TeacherExamStats({currentUser}){
   );
 }
 
-// Mock data for demonstration
-const EDUCATION_LEVELS = [
-  'Primary School (1-5)',
-  'High School (6-10)',
-  'College (11-12)',
-  'Graduation (BA/BSc/BCom)',
-  'Post Graduation',
-  'PhD'
-];
-const INCOME_RANGES = [
-  '₹5,000 - ₹10,000',
-  '₹10,000 - ₹40,000',
-  '₹50,000 - ₹1 Lakh',
-  '₹2 - ₹5 Lakh',
-  '₹5 - ₹8 Lakh',
-  '₹9 - ₹15 Lakh',
-  '₹15 Lakh and above'
-];
-const EXAMS_12TH = [
-  'JEE Mains Session 1',
-  'JEE Mains Session 2',
-  'JEE Advanced',
-  'NEET UG',
-  'NDA',
-  'BITSAT',
-  'VITEEE',
-  'COMEDK',
-  'MHT CET',
-  'TS EAMCET',
-  'AP EAMCET',
-  'KCET',
-  'WBJEE'
-];
-const EXAMS_11TH = [
-  'JEE Mains',
-  'JEE Advanced',
-  'NEET UG',
-  'KVPY',
-  'NTSE',
-  'Olympiads',
-  'BITSAT',
-  'VITEEE'
-];
-
-const INDIAN_STATES = [
-  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
-  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
-  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
-  'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal'
-];
-
 // Login Component
 function LoginPage({ onLogin }) {
   const [loginType, setLoginType] = useState('teacher');
