@@ -2133,7 +2133,123 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
 }
 
 function AdminChapterDetails({curriculum,chapterProgress}){const[filterSchool,setFilterSchool]=useState('All');const[filterSubject,setFilterSubject]=useState('All');const[filterGrade,setFilterGrade]=useState('All');const chapterDetails=useMemo(()=>{const details=[];const schoolsToProcess=filterSchool==='All'?SCHOOLS:[filterSchool];const subjectsToProcess=filterSubject==='All'?SUBJECTS:[filterSubject];const gradesToProcess=filterGrade==='All'?['11','12']:[filterGrade];schoolsToProcess.forEach(school=>{subjectsToProcess.forEach(subject=>{gradesToProcess.forEach(grade=>{const docId=`${school}_${subject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];chapters.forEach(ch=>{const progressId=`${school}_${ch.id}`;const prog=chapterProgress[progressId]||{};details.push({school,subject,grade:`Class ${grade}`,chapterName:ch.name,targetDate:ch.targetDate||'—',completed:prog.completed||'No',completionDate:prog.completionDate||'—',testConducted:prog.testConducted||'No',notes:prog.notes||'—'})})})})});return details},[curriculum,chapterProgress,filterSchool,filterSubject,filterGrade]);const handleExport=()=>{exportToExcel(chapterDetails,'chapter_details')};return(<div className="space-y-6"><div className="flex justify-between items-center"><h2 className="text-3xl font-bold">Chapter Details</h2><button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">📊 Export to Excel</button></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="font-bold mb-4">Filters</h3><div className="grid md:grid-cols-3 gap-4"><div><label className="block text-sm font-bold mb-2">School</label><select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"><option value="All">All Schools</option>{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Subject</label><select value={filterSubject} onChange={e=>setFilterSubject(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"><option value="All">All Subjects</option>{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Grade</label><select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"><option value="All">All Grades</option><option value="11">Class 11</option><option value="12">Class 12</option></select></div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto"><h3 className="font-bold mb-4">All Chapters ({chapterDetails.length})</h3><table className="w-full"><thead className="avanti-gradient-light"><tr><th className="p-3 text-left">School</th><th className="p-3 text-left">Subject</th><th className="p-3 text-left">Grade</th><th className="p-3 text-left">Chapter Name</th><th className="p-3 text-left">Target Date</th><th className="p-3 text-left">Completed</th><th className="p-3 text-left">Completion Date</th><th className="p-3 text-left">Test Conducted</th><th className="p-3 text-left">Notes</th></tr></thead><tbody>{chapterDetails.length===0?<tr><td colSpan="9" className="p-8 text-center text-gray-500">No chapters found</td></tr>:chapterDetails.map((ch,idx)=><tr key={idx} className="border-b hover:bg-gray-50"><td className="p-3">{ch.school}</td><td className="p-3">{ch.subject}</td><td className="p-3">{ch.grade}</td><td className="p-3 font-semibold">{ch.chapterName}</td><td className="p-3 text-sm">{ch.targetDate}</td><td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${ch.completed==='Yes'?'bg-green-100 text-green-700':'bg-gray-100'}`}>{ch.completed}</span></td><td className="p-3 text-sm">{ch.completionDate}</td><td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${ch.testConducted==='Yes'?'bg-blue-100 text-blue-700':'bg-orange-100 text-orange-700'}`}>{ch.testConducted}</span></td><td className="p-3 text-sm">{ch.notes}</td></tr>)}</tbody></table></div></div>)}
+// ========================================
+// ADMIN STUDENT PROFILES VIEW
+// ========================================
+function AdminStudentProfiles(){
+  const[studentProfiles,setStudentProfiles]=useState([]);
+  const[filterSchool,setFilterSchool]=useState('All');
+  const[filterGrade,setFilterGrade]=useState('All');
 
+  useEffect(()=>{
+    const fetchData=async()=>{
+      const profilesSnap=await db.collection('studentProfiles').get();
+      setStudentProfiles(profilesSnap.docs.map(d=>({...d.data(),id:d.id})));
+    };
+    fetchData();
+  },[]);
+
+  const filteredProfiles=studentProfiles.filter(p=>{
+    if(filterSchool!=='All'&&p.school!==filterSchool)return false;
+    if(filterGrade!=='All'&&p.grade!==filterGrade)return false;
+    return true;
+  });
+
+  const handleExport=()=>{
+    const exportData=filteredProfiles.map(p=>({
+      'Student ID':p.studentId,
+      'First Name':p.firstName,
+      'Last Name':p.lastName,
+      'Email':p.email,
+      'Phone':p.phone,
+      'DOB':p.dob,
+      'Grade':p.grade,
+      'Category':p.category,
+      'Stream':p.stream,
+      'School':p.school,
+      'Father Name':p.fatherName,
+      'Father Occupation':p.fatherOccupation,
+      'Father Education':p.fatherEducation,
+      'Mother Name':p.motherName,
+      'Mother Occupation':p.motherOccupation,
+      'Mother Education':p.motherEducation,
+      'Family Income':p.familyIncome,
+      'Address':p.address,
+      'State':p.state,
+      'District':p.district,
+      'Pincode':p.pincode,
+      'WhatsApp':p.whatsappNumber,
+      '10th %':p.percentage10th,
+      '11th %':p.percentage11th||'N/A'
+    }));
+    exportToExcel(exportData,'student_profiles');
+  };
+
+  return(
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">👨‍🎓 Student Profiles ({filteredProfiles.length})</h2>
+        <button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
+          📥 Export to Excel
+        </button>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">🔍 Filters</h3>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">School</label>
+            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="All">All Schools</option>
+              {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Grade</label>
+            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="All">All Grades</option>
+              <option value="11">Class 11</option>
+              <option value="12">Class 12</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
+        <table className="w-full">
+          <thead className="avanti-gradient-light">
+            <tr>
+              <th className="p-3 text-left">Student ID</th>
+              <th className="p-3 text-left">Name</th>
+              <th className="p-3 text-left">Grade</th>
+              <th className="p-3 text-left">School</th>
+              <th className="p-3 text-left">Stream</th>
+              <th className="p-3 text-left">Category</th>
+              <th className="p-3 text-left">10th %</th>
+              <th className="p-3 text-left">Contact</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredProfiles.length===0?(
+              <tr><td colSpan="8" className="p-8 text-center text-gray-500">No student profiles found</td></tr>
+            ):filteredProfiles.map(profile=>
+              <tr key={profile.id} className="border-b hover:bg-gray-50">
+                <td className="p-3 font-mono">{profile.studentId}</td>
+                <td className="p-3 font-semibold">{profile.firstName} {profile.lastName}</td>
+                <td className="p-3">{profile.grade}th</td>
+                <td className="p-3">{profile.school}</td>
+                <td className="p-3">{profile.stream}</td>
+                <td className="p-3">{profile.category}</td>
+                <td className="p-3">{profile.percentage10th}%</td>
+                <td className="p-3 text-sm">{profile.phone}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 function AdminBirthdays({teachers}){const todayBirthdays=useMemo(()=>getBirthdays(teachers,'today'),[teachers]);const weekBirthdays=useMemo(()=>getBirthdays(teachers,'week'),[teachers]);const monthBirthdays=useMemo(()=>getBirthdays(teachers,'month'),[teachers]);const todayAnniversaries=useMemo(()=>getAnniversaries(teachers,'today'),[teachers]);const weekAnniversaries=useMemo(()=>getAnniversaries(teachers,'week'),[teachers]);const monthAnniversaries=useMemo(()=>getAnniversaries(teachers,'month'),[teachers]);return(<div className="space-y-6"><h2 className="text-3xl font-bold">🎉 Celebrations</h2><div className="grid md:grid-cols-2 gap-6">{todayBirthdays.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎂 Today's Birthdays</h3>{todayBirthdays.map(t=><div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{t.school} - {t.subject}</div></div>)}</div>}{todayAnniversaries.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎉 Today's Work Anniversaries</h3>{todayAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{years} Years - {t.school}</div></div>)})}</div>}</div><div className="grid md:grid-cols-3 gap-6"><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Week</h3>{weekBirthdays.length===0&&weekAnniversaries.length===0?<p className="text-gray-500">No celebrations</p>:<div className="space-y-2">{weekBirthdays.map(t=><div key={t.id} className="p-3 bg-blue-50 rounded-lg"><div className="font-semibold">🎂 {t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}{weekAnniversaries.map(t=><div key={t.id} className="p-3 bg-green-50 rounded-lg"><div className="font-semibold">🎉 {t.name}</div><div className="text-sm text-gray-600">Work Anniversary</div></div>)}</div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month - Birthdays</h3>{monthBirthdays.length===0?<p className="text-gray-500">No birthdays</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month - Anniversaries</h3>{monthAnniversaries.length===0?<p className="text-gray-500">No anniversaries</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{years} Years</div></div>)})}</div>}</div></div></div>)}
 
 // ========================================
