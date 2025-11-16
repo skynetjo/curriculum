@@ -2425,47 +2425,64 @@ function StudentManagement({students}){
   .sort((a,b)=>a.name.localeCompare(b.name));
 
   const handleSave=async()=>{
-    if(!form.school||!form.grade||!form.name||!form.gender||!form.id){
-      alert('Please fill all fields including Student ID');
-      return;
-    }
-    try{
-      if(editingStudent){
-        // UPDATE: Keep the same Firestore doc ID, just update the fields
-        await db.collection('students').doc(editingStudent.docId).update({
-          school:form.school,
-          grade:form.grade,
-          name:form.name,
-          gender:form.gender,
-          id:form.id,
-          updatedAt:new Date().toISOString()
-        });
-        alert('Student updated! Login ID: '+form.id);
-      }else{
-        // ADD NEW: Check if Student ID already exists
-        const existingSnap=await db.collection('students').where('id','==',form.id).limit(1).get();
-        if(!existingSnap.empty){
-          alert('Student ID already exists! Please use a unique ID.');
+  if(!form.school||!form.grade||!form.name||!form.gender||!form.id){
+    alert('Please fill all fields including Student ID');
+    return;
+  }
+  try{
+    // ✅ USE COMPOUND KEY: school + student ID as document ID
+    const docId=`${form.school.replace(/\s+/g,'_')}_${form.id}`;
+    
+    if(editingStudent){
+      // UPDATE: Check if changing ID conflicts
+      const originalDocId=`${editingStudent.school.replace(/\s+/g,'_')}_${editingStudent.id}`;
+      
+      if(docId!==originalDocId){
+        // ID/school changed - check conflicts
+        const existingSnap=await db.collection('students').doc(docId).get();
+        if(existingSnap.exists){
+          alert('Student ID already exists in this school!');
           return;
         }
-        
-        await db.collection('students').add({
-          school:form.school,
-          grade:form.grade,
-          name:form.name,
-          gender:form.gender,
-          id:form.id,
-          createdAt:new Date().toISOString()
-        });
-        alert('Student added! Login credentials:\nStudent ID: '+form.id+'\nPassword: pass123');
+        // Delete old doc
+        await db.collection('students').doc(originalDocId).delete();
       }
-      setShowModal(false);
-      setEditingStudent(null);
-      setForm({school:'',grade:'',name:'',gender:'',id:''});
-    }catch(e){
-      alert('Failed: '+e.message);
+      
+      // Save with new/same doc ID
+      await db.collection('students').doc(docId).set({
+        school:form.school,
+        grade:form.grade,
+        name:form.name,
+        gender:form.gender,
+        id:form.id,
+        updatedAt:new Date().toISOString()
+      });
+      alert('Student updated! Login ID: '+form.id);
+    }else{
+      // ADD NEW
+      const existingSnap=await db.collection('students').doc(docId).get();
+      if(existingSnap.exists){
+        alert('Student ID already exists! Use unique ID.');
+        return;
+      }
+      
+      await db.collection('students').doc(docId).set({
+        school:form.school,
+        grade:form.grade,
+        name:form.name,
+        gender:form.gender,
+        id:form.id,
+        createdAt:new Date().toISOString()
+      });
+      alert('Student added! Login:\nID: '+form.id+'\nPassword: pass123');
     }
-  };
+    setShowModal(false);
+    setEditingStudent(null);
+    setForm({school:'',grade:'',name:'',gender:'',id:''});
+  }catch(e){
+    alert('Failed: '+e.message);
+  }
+};
 
   const openAddModal=()=>{
     setEditingStudent(null);
@@ -2474,16 +2491,16 @@ function StudentManagement({students}){
   };
 
   const openEditModal=(student)=>{
-    setEditingStudent({...student, docId: student.docId || student.id}); // Store Firestore doc ID
-    setForm({
-      school:student.school,
-      grade:student.grade,
-      name:student.name,
-      gender:student.gender,
-      id:student.id  // This is the Student ID for login
-    });
-    setShowModal(true);
-  };
+  setEditingStudent(student); // Store whole student
+  setForm({
+    school:student.school,
+    grade:student.grade,
+    name:student.name,
+    gender:student.gender,
+    id:student.id
+  });
+  setShowModal(true);
+};
 
   const handleSelectAll=()=>{
     if(selectAll){
