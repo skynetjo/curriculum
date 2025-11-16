@@ -360,7 +360,7 @@ useEffect(() => {
       setChapterProgress(map);
 
       // Process teachers
-      setTeachers(teachersSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+      setTeachers(teachersSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
 
       // Process curriculum
       const currMap = {};
@@ -368,13 +368,13 @@ useEffect(() => {
       setCurriculum(currMap);
 
       // Process students
-      setStudents(studentsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+      setStudents(studentsSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
 
       // Process attendance
-      setStudentAttendance(studentAttSnap.docs.map(d => ({ ...d.data(), id: d.id })));
-      setTeacherAttendance(teacherAttSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+      setStudentAttendance(studentAttSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+      setTeacherAttendance(teacherAttSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
       // Process school info
-      setSchoolInfo(schoolInfoSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+      setSchoolInfo(schoolInfoSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
 
     } catch (e) {
       console.error('Data fetch error:', e);
@@ -2431,7 +2431,8 @@ function StudentManagement({students}){
     }
     try{
       if(editingStudent){
-        await db.collection('students').doc(editingStudent.id).update({
+        // UPDATE: Keep the same Firestore doc ID, just update the fields
+        await db.collection('students').doc(editingStudent.docId).update({
           school:form.school,
           grade:form.grade,
           name:form.name,
@@ -2439,9 +2440,9 @@ function StudentManagement({students}){
           id:form.id,
           updatedAt:new Date().toISOString()
         });
-        alert('Student updated!');
+        alert('Student updated! Login ID: '+form.id);
       }else{
-        // Check if student ID already exists
+        // ADD NEW: Check if Student ID already exists
         const existingSnap=await db.collection('students').where('id','==',form.id).limit(1).get();
         if(!existingSnap.empty){
           alert('Student ID already exists! Please use a unique ID.');
@@ -2473,13 +2474,13 @@ function StudentManagement({students}){
   };
 
   const openEditModal=(student)=>{
-    setEditingStudent(student);
+    setEditingStudent({...student, docId: student.docId || student.id}); // Store Firestore doc ID
     setForm({
       school:student.school,
       grade:student.grade,
       name:student.name,
       gender:student.gender,
-      id:student.id
+      id:student.id  // This is the Student ID for login
     });
     setShowModal(true);
   };
