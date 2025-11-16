@@ -2665,15 +2665,17 @@ await db.collection('students').doc(docId).set({
     });
   };
 
-  const handleDelete=async student=>{
-    if(!confirm(`Delete ${student.name}?`))return;
-    try{
-      await db.collection('students').doc(student.id).delete();
-      alert('Student deleted!');
-    }catch(e){
-      alert('Failed: '+e.message);
-    }
-  };
+  const handleDelete = async (student) => {
+  if (!confirm(`Delete ${student.name}?`)) return;
+  try {
+    // ✅ Use compound key
+    const docId = `${student.school.replace(/\s+/g, '_')}_${student.id}`;
+    await db.collection('students').doc(docId).delete();
+    alert('Student deleted!');
+  } catch (e) {
+    alert('Failed: ' + e.message);
+  }
+};
 
   const handleExport=()=>{
     const exportData=students.map(s=>({
