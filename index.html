@@ -2632,14 +2632,16 @@ function StudentManagement({students}){
               continue;
             }
 
-            await db.collection('students').add({
-              school,
-              grade,
-              name,
-              gender,
-              id:studentId,
-              createdAt:new Date().toISOString()
-            });
+            // ✅ Use compound key instead of .add()
+const docId = `${school.replace(/\s+/g, '_')}_${studentId}`;
+await db.collection('students').doc(docId).set({
+  school,
+  grade,
+  name,
+  gender,
+  id: studentId,
+  createdAt: new Date().toISOString()
+});
             imported++;
           }
 
