@@ -310,14 +310,16 @@ function InstallPrompt(){
 }
 function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:''});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);
 const[studentAttendance,setStudentAttendance]=useState([]);
-const[teacherAttendance,setTeacherAttendance]=useState([]);const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
+const[teacherAttendance,setTeacherAttendance]=useState([]);
+const[schoolInfo,setSchoolInfo]=useState([]);               
+const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
 useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){if(user.email==='admin@avantifellows.org'){setIsAdmin(true);setCurrentUser({name:'Administrator',email:user.email,afid:'ADMIN',school:'Admin'});setActiveTab('teachers')}else{const teacherSnapshot=await db.collection('teachers').where('email','==',user.email).limit(1).get();if(!teacherSnapshot.empty){const teacherData=teacherSnapshot.docs[0].data();setCurrentUser(teacherData);setIsAdmin(false);setActiveTab('overview');if(teacherData.dob){const d=new Date(teacherData.dob);const now=new Date();if(d.getMonth()===now.getMonth()&&d.getDate()===now.getDate()){setShowConfetti(true);setCelebrationMessage(`🎂 Happy Birthday, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}if(teacherData.joiningDate){const j=new Date(teacherData.joiningDate);const now=new Date();if(j.getMonth()===now.getMonth()&&j.getDate()===now.getDate()&&j.getFullYear()<now.getFullYear()){const years=now.getFullYear()-j.getFullYear();setShowConfetti(true);setCelebrationMessage(`🎉 Happy ${years} Year Work Anniversary, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}}else{alert('Teacher profile not found. Please contact admin.');await auth.signOut()}}}else{setCurrentUser(null);setIsAdmin(false)}setLoading(false)});return()=>unsubscribe()},[]);
   // ✅ OPTIMIZED: Fetch data once on load, refresh only when needed
 useEffect(() => {
   const fetchData = async () => {
     try {
       // ✅ FETCH ALL DATA IN PARALLEL (MUCH FASTER!)
-      const [progressSnap, teachersSnap, curriculumSnap, studentsSnap, studentAttSnap, teacherAttSnap] = await Promise.all([
+      const [progressSnap, teachersSnap, curriculumSnap, studentsSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap] = await Promise.all([
         db.collection('chapterProgress').get(),
         db.collection('teachers').get(),
         db.collection('curriculum').get(),
@@ -327,7 +329,8 @@ useEffect(() => {
           .get(),
         db.collection('teacherAttendance')
           .where('date', '>=', new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0])
-          .get()
+          .get(),
+        db.collection('schoolInfo').get()
       ]);
 
       // Process chapter progress
@@ -349,6 +352,8 @@ useEffect(() => {
       // Process attendance
       setStudentAttendance(studentAttSnap.docs.map(d => ({ ...d.data(), id: d.id })));
       setTeacherAttendance(teacherAttSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+      // Process school info
+      setSchoolInfo(schoolInfoSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
     } catch (e) {
       console.error('Data fetch error:', e);
@@ -440,10 +445,10 @@ function Confetti() {
 if(loading){return(<div className="min-h-screen avanti-gradient flex items-center justify-center"><div className="text-center"><img src={AVANTI_LOGO} alt="Avanti Fellows" className="w-20 h-20 mx-auto mb-4 animate-bounce"/><div className="text-white text-2xl font-bold">Loading...</div></div></div>)}
 if(!currentUser){return(<div className="min-h-screen avanti-gradient flex items-center justify-center p-4"><div className="bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md"><div className="text-center mb-8"><img src={AVANTI_LOGO} alt="Avanti Fellows" className="w-20 h-20 mx-auto mb-4"/><h1 className="text-4xl font-bold text-gray-800 mb-2">Curriculum Tracker</h1><p className="text-gray-600 mt-3">Avanti Fellows</p></div><div className="space-y-5"><input type="email" className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg" value={loginForm.email} onChange={e=>setLoginForm({...loginForm,email:e.target.value})} placeholder="Email"/><input type="password" className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg" value={loginForm.password} onChange={e=>setLoginForm({...loginForm,password:e.target.value})} placeholder="Password" onKeyPress={e=>e.key==='Enter'&&handleLogin()}/><button onClick={handleLogin} disabled={authLoading} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-50">{authLoading?'Logging in...':'Login'}</button></div></div></div>)}
 
-return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab}/>;
+return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab}/>;
 }
 
-function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebrationMessage,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,updateChapterProgress,activeTab,setActiveTab}) {
+function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebrationMessage,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,schoolInfo,updateChapterProgress,activeTab,setActiveTab}) {
   return(
   <div className="min-h-screen bg-gray-50 flex flex-col">
     {showConfetti&&<Confetti/>}
@@ -465,28 +470,30 @@ function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebration
   </button>
 </div>
     <InstallPrompt/>  {/* ⬅️ ADD THIS LINE */}
-    <nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['overview','analytics','class11','class12','attendance','attendancedash','myattendance','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='overview'&&'📊 Overview'}
+    <nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['overview','analytics','class11','class12','attendance','attendancedash','myattendance','schoolinfo','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='overview'&&'📊 Overview'}
 {tab==='analytics'&&'📈 Analytics'}
 {tab==='class11'&&'📚 Class 11'}
 {tab==='class12'&&'📖 Class 12'}
 {tab==='attendance'&&'✅ Mark Attendance'}
 {tab==='attendancedash'&&'📊 Attendance Dashboard'}
 {tab==='myattendance'&&'👤 My Attendance'}
+{tab==='schoolinfo'&&'🏫 School Info'}
 {tab==='birthdays'&&'🎂 Celebrations'}</button>)}</div>{activeTab==='overview'&&<TeacherOverview currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers} teacherAttendance={teacherAttendance} studentAttendance={studentAttendance}/>}{activeTab==='analytics'&&<TeacherAnalytics currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='class11'&&<TeacherCurriculum grade="11" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='class12'&&<TeacherCurriculum grade="12" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}{activeTab==='birthdays'&&<BirthdaysPage teachers={teachers} currentUser={currentUser}/>}{activeTab==='attendance'&&<StudentAttendanceView currentUser={currentUser} students={students} studentAttendance={studentAttendance}/>}
 {activeTab==='attendancedash'&&<TeacherAttendanceDashboard currentUser={currentUser} students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}
-{activeTab==='myattendance'&&<TeacherAttendanceView currentUser={currentUser} teacherAttendance={teacherAttendance}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
+{activeTab==='myattendance'&&<TeacherAttendanceView currentUser={currentUser} teacherAttendance={teacherAttendance}/>}{activeTab==='schoolinfo'&&<SchoolInfoView currentUser={currentUser} schoolInfo={schoolInfo}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
 
-function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,addChapter,updateChapter,deleteChapter}){const[activeTab,setActiveTab]=useState('teachers');return(
+function AdminView({currentUser,handleLogout,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,schoolInfo,addChapter,updateChapter,deleteChapter}){const[activeTab,setActiveTab]=useState('teachers');return(
   <div className="min-h-screen bg-gray-50 flex flex-col">
     <InstallPrompt/>  {/* ⬅️ ADD THIS LINE */}
-    <nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['teachers','students','curriculum','analytics','chapter-details','attendance','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='teachers'&&'👥 Teachers'}
+    <nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><h1 className="text-2xl font-bold text-white">Admin Dashboard</h1></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></nav><div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['teachers','students','curriculum','analytics','chapter-details','attendance','schoolinfo','birthdays'].map(tab=><button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>{tab==='teachers'&&'👥 Teachers'}
 {tab==='students'&&'👨‍🎓 Students'}
 {tab==='curriculum'&&'📚 Curriculum'}
 {tab==='analytics'&&'📊 Analytics'}
 {tab==='chapter-details'&&'📋 Chapter Details'}
 {tab==='attendance'&&'📊 Attendance Analytics'}
+{tab==='schoolinfo'&&'🏫 School Info'}
 {tab==='birthdays'&&'🎂 Celebrations'}</button>)}</div>{activeTab==='teachers'&&<TeacherManagement teachers={teachers}/>}{activeTab==='curriculum'&&<AdminCurriculum curriculum={curriculum} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>}{activeTab==='analytics'&&<AdminAnalytics teachers={teachers} curriculum={curriculum} chapterProgress={chapterProgress}/>}{activeTab==='chapter-details'&&<AdminChapterDetails curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers}/>}{activeTab==='birthdays'&&<AdminBirthdays teachers={teachers}/>}{activeTab==='students'&&<StudentManagement students={students}/>}
-{activeTab==='attendance'&&<AdminAttendanceAnalytics students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
+{activeTab==='attendance'&&<AdminAttendanceAnalytics students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}{activeTab==='schoolinfo'&&<AdminSchoolInfo schoolInfo={schoolInfo}/>}</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
 function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teacherAttendance,studentAttendance}){const mySchool=currentUser.school;const mySubject=currentUser.subject;const schoolRankings=useMemo(()=>{
   const rankings=SCHOOLS.map(school=>{
     let total=0,completed=0,testsCompleted=0,testsPending=0;
@@ -3270,6 +3277,834 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+// ========================================
+// SCHOOL INFO VIEW (FOR TEACHERS)
+// ========================================
+function SchoolInfoView({currentUser,schoolInfo}){
+  const mySchool=currentUser.school;
+  const existingInfo=schoolInfo.find(info=>info.school===mySchool);
+  
+  const[formData,setFormData]=useState({
+    // Principal Info
+    principalName:'',
+    principalPhone:'',
+    principalEmail:'',
+    // Vice Principal Info
+    vicePrincipalName:'',
+    vicePrincipalPhone:'',
+    vicePrincipalEmail:'',
+    // Avanti Coordinator
+    coordinatorName:'',
+    coordinatorPhone:'',
+    coordinatorEmail:'',
+    // WiFi Info
+    wifiInClassroom:'No',
+    wifiInstalledBy:'',
+    wifiWorking:'No',
+    wifiMonthlyBill:'',
+    wifiConnectionType:'',
+    wifiNetworkName:'',
+    bothClassesWifi:'No',
+    // Modules - Class 11
+    modules11Received:'',
+    modules11Distributed:'',
+    modules11Stock:'',
+    // Modules - Class 12
+    modules12Received:'',
+    modules12Distributed:'',
+    modules12Stock:'',
+    // Reference Books
+    referenceBooks:[],
+    // Chromebooks - Class 11
+    chromebooks11Distributed:'No',
+    chromebooks11Count:'',
+    chromebooks11Working:'',
+    chromebooks11Brand:'',
+    chromebooks11DistributedDate:'',
+    chromebooks11TestMethod:'',
+    chromebooks11JNVLabAccess:'',
+    chromebooks11JNVCount:'',
+    // Chromebooks - Class 12
+    chromebooks12Distributed:'No',
+    chromebooks12Count:'',
+    chromebooks12Working:'',
+    chromebooks12Brand:'',
+    chromebooks12DistributedDate:'',
+    chromebooks12TestMethod:'',
+    chromebooks12JNVLabAccess:'',
+    chromebooks12JNVCount:'',
+    // Printer
+    printerAvailable:'No',
+    printerWorking:'No',
+    printerBrand:'',
+    printerIssuedDate:'',
+    // Other Assets
+    otherAssets:[]
+  });
+
+  useEffect(()=>{
+    if(existingInfo){
+      setFormData({...existingInfo});
+    }
+  },[existingInfo]);
+
+  const handleAddBook=()=>{
+    setFormData({
+      ...formData,
+      referenceBooks:[...formData.referenceBooks,{
+        bookName:'',
+        publisher:'',
+        author:'',
+        price:'',
+        inStock:'',
+        distributed:''
+      }]
+    });
+  };
+
+  const handleRemoveBook=(index)=>{
+    const updated=[...formData.referenceBooks];
+    updated.splice(index,1);
+    setFormData({...formData,referenceBooks:updated});
+  };
+
+  const handleBookChange=(index,field,value)=>{
+    const updated=[...formData.referenceBooks];
+    updated[index][field]=value;
+    setFormData({...formData,referenceBooks:updated});
+  };
+
+  const handleAddAsset=()=>{
+    setFormData({
+      ...formData,
+      otherAssets:[...formData.otherAssets,{
+        assetName:'',
+        assetQuantity:'',
+        assetCondition:'',
+        assetNotes:''
+      }]
+    });
+  };
+
+  const handleRemoveAsset=(index)=>{
+    const updated=[...formData.otherAssets];
+    updated.splice(index,1);
+    setFormData({...formData,otherAssets:updated});
+  };
+
+  const handleAssetChange=(index,field,value)=>{
+    const updated=[...formData.otherAssets];
+    updated[index][field]=value;
+    setFormData({...formData,otherAssets:updated});
+  };
+
+  const handleSubmit=async()=>{
+    try{
+      const docId=mySchool.replace(/\s+/g,'_');
+      await db.collection('schoolInfo').doc(docId).set({
+        ...formData,
+        school:mySchool,
+        updatedBy:currentUser.afid,
+        updatedAt:new Date().toISOString()
+      });
+      alert('School information saved successfully!');
+    }catch(e){
+      alert('Failed to save: '+e.message);
+    }
+  };
+
+  // Generate month/year options
+  const generateMonthYearOptions=()=>{
+    const options=[];
+    for(let year=2022;year<=2025;year++){
+      for(let month=1;month<=12;month++){
+        const monthName=new Date(year,month-1).toLocaleString('default',{month:'long'});
+        options.push(`${monthName} ${year}`);
+      }
+    }
+    return options;
+  };
+
+  return(
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold">🏫 School Information - {mySchool}</h2>
+
+      <div className="bg-white p-6 rounded-2xl shadow-lg space-y-6">
+        
+        {/* Principal Information */}
+        <div className="border-4 border-blue-500 rounded-2xl p-6 bg-blue-50">
+          <h3 className="text-2xl font-bold mb-4 text-blue-800">👨‍💼 Principal Information</h3>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">Principal Name *</label>
+              <input type="text" value={formData.principalName} onChange={e=>setFormData({...formData,principalName:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Phone Number *</label>
+              <input type="tel" value={formData.principalPhone} onChange={e=>setFormData({...formData,principalPhone:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Email ID *</label>
+              <input type="email" value={formData.principalEmail} onChange={e=>setFormData({...formData,principalEmail:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+          </div>
+        </div>
+
+        {/* Vice Principal Information */}
+        <div className="border-4 border-green-500 rounded-2xl p-6 bg-green-50">
+          <h3 className="text-2xl font-bold mb-4 text-green-800">👨‍💼 Vice Principal Information</h3>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">Vice Principal Name *</label>
+              <input type="text" value={formData.vicePrincipalName} onChange={e=>setFormData({...formData,vicePrincipalName:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Phone Number *</label>
+              <input type="tel" value={formData.vicePrincipalPhone} onChange={e=>setFormData({...formData,vicePrincipalPhone:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Email ID *</label>
+              <input type="email" value={formData.vicePrincipalEmail} onChange={e=>setFormData({...formData,vicePrincipalEmail:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+          </div>
+        </div>
+
+        {/* Avanti Coordinator Information */}
+        <div className="border-4 border-orange-500 rounded-2xl p-6 bg-orange-50">
+          <h3 className="text-2xl font-bold mb-4 text-orange-800">👨‍💼 Avanti Coordinator Information</h3>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">Coordinator Name *</label>
+              <input type="text" value={formData.coordinatorName} onChange={e=>setFormData({...formData,coordinatorName:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Phone Number *</label>
+              <input type="tel" value={formData.coordinatorPhone} onChange={e=>setFormData({...formData,coordinatorPhone:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Email ID *</label>
+              <input type="email" value={formData.coordinatorEmail} onChange={e=>setFormData({...formData,coordinatorEmail:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+          </div>
+        </div>
+
+        {/* WiFi Information */}
+        <div className="border-4 border-purple-500 rounded-2xl p-6 bg-purple-50">
+          <h3 className="text-2xl font-bold mb-4 text-purple-800">📶 WiFi Connection Details</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">WiFi in Classroom? *</label>
+              <select value={formData.wifiInClassroom} onChange={e=>setFormData({...formData,wifiInClassroom:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            {formData.wifiInClassroom==='Yes'&&(
+              <>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Installed By *</label>
+                  <select value={formData.wifiInstalledBy} onChange={e=>setFormData({...formData,wifiInstalledBy:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <option value="">Select</option>
+                    <option value="Avanti">Avanti</option>
+                    <option value="JNV">JNV</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Working Condition? *</label>
+                  <select value={formData.wifiWorking} onChange={e=>setFormData({...formData,wifiWorking:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Monthly Bill Amount *</label>
+                  <input type="text" value={formData.wifiMonthlyBill} onChange={e=>setFormData({...formData,wifiMonthlyBill:e.target.value})} placeholder="₹ Amount" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Connection Type *</label>
+                  <select value={formData.wifiConnectionType} onChange={e=>setFormData({...formData,wifiConnectionType:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <option value="">Select</option>
+                    <option value="Postpaid">Postpaid</option>
+                    <option value="Prepaid">Prepaid</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Network Name *</label>
+                  <select value={formData.wifiNetworkName} onChange={e=>setFormData({...formData,wifiNetworkName:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <option value="">Select</option>
+                    <option value="Airtel">Airtel</option>
+                    <option value="Jio">Jio</option>
+                    <option value="Local">Local</option>
+                    <option value="BSNL">BSNL</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Both 11th & 12th have WiFi? *</label>
+                  <select value={formData.bothClassesWifi} onChange={e=>setFormData({...formData,bothClassesWifi:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Modules - Class 11 */}
+        <div className="border-4 border-green-500 rounded-2xl p-6 bg-green-50">
+          <h3 className="text-2xl font-bold mb-4 text-green-800">📚 Modules - Class 11th</h3>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">Modules Received (AY 2025-26) *</label>
+              <input type="number" value={formData.modules11Received} onChange={e=>setFormData({...formData,modules11Received:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Modules Distributed to 11th *</label>
+              <input type="number" value={formData.modules11Distributed} onChange={e=>setFormData({...formData,modules11Distributed:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Modules in Stock (11th) *</label>
+              <input type="number" value={formData.modules11Stock} onChange={e=>setFormData({...formData,modules11Stock:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+          </div>
+        </div>
+
+        {/* Modules - Class 12 */}
+        <div className="border-4 border-blue-500 rounded-2xl p-6 bg-blue-50">
+          <h3 className="text-2xl font-bold mb-4 text-blue-800">📚 Modules - Class 12th</h3>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">Modules Received (AY 2025-26) *</label>
+              <input type="number" value={formData.modules12Received} onChange={e=>setFormData({...formData,modules12Received:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Modules Distributed to 12th *</label>
+              <input type="number" value={formData.modules12Distributed} onChange={e=>setFormData({...formData,modules12Distributed:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Modules in Stock (12th) *</label>
+              <input type="number" value={formData.modules12Stock} onChange={e=>setFormData({...formData,modules12Stock:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+          </div>
+        </div>
+
+        {/* Reference Books */}
+        <div className="border-4 border-yellow-500 rounded-2xl p-6 bg-yellow-50">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-2xl font-bold text-yellow-800">📖 Other Reference Books (AY 2025-26)</h3>
+            <button onClick={handleAddBook} className="px-6 py-3 bg-yellow-600 text-white rounded-xl font-semibold">
+              + Add Book
+            </button>
+          </div>
+          {formData.referenceBooks.map((book,idx)=>
+            <div key={idx} className="bg-white p-4 rounded-xl mb-4 border-2 border-yellow-300">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="font-bold text-lg">Book {idx+1}</h4>
+                <button onClick={()=>handleRemoveBook(idx)} className="px-4 py-2 bg-red-500 text-white rounded-lg">
+                  Remove
+                </button>
+              </div>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-2">Book Name *</label>
+                  <input type="text" value={book.bookName} onChange={e=>handleBookChange(idx,'bookName',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Publisher Name *</label>
+                  <input type="text" value={book.publisher} onChange={e=>handleBookChange(idx,'publisher',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Author Name *</label>
+                  <input type="text" value={book.author} onChange={e=>handleBookChange(idx,'author',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Price *</label>
+                  <input type="text" value={book.price} onChange={e=>handleBookChange(idx,'price',e.target.value)} placeholder="₹ Amount" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">In Stock *</label>
+                  <input type="number" value={book.inStock} onChange={e=>handleBookChange(idx,'inStock',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Distributed *</label>
+                  <input type="number" value={book.distributed} onChange={e=>handleBookChange(idx,'distributed',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Chromebooks - Class 11 */}
+        <div className="border-4 border-indigo-500 rounded-2xl p-6 bg-indigo-50">
+          <h3 className="text-2xl font-bold mb-4 text-indigo-800">💻 Chromebooks/Laptops - Class 11th</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">Distributed from Avanti? *</label>
+              <select value={formData.chromebooks11Distributed} onChange={e=>setFormData({...formData,chromebooks11Distributed:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            {formData.chromebooks11Distributed==='Yes'?(
+              <>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Number Distributed *</label>
+                  <input type="number" value={formData.chromebooks11Count} onChange={e=>setFormData({...formData,chromebooks11Count:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Working Condition *</label>
+                  <input type="number" value={formData.chromebooks11Working} onChange={e=>setFormData({...formData,chromebooks11Working:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Brand Name *</label>
+                  <input type="text" value={formData.chromebooks11Brand} onChange={e=>setFormData({...formData,chromebooks11Brand:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-bold mb-2">When Distributed? *</label>
+                  <select value={formData.chromebooks11DistributedDate} onChange={e=>setFormData({...formData,chromebooks11DistributedDate:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <option value="">Select Month & Year</option>
+                    {generateMonthYearOptions().map(opt=><option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
+              </>
+            ):(
+              <>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-bold mb-2">How do you conduct tests? *</label>
+                  <textarea value={formData.chromebooks11TestMethod} onChange={e=>setFormData({...formData,chromebooks11TestMethod:e.target.value})} rows="3" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">JNV Computer Lab/Tablets Accessible? *</label>
+                  <input type="text" value={formData.chromebooks11JNVLabAccess} onChange={e=>setFormData({...formData,chromebooks11JNVLabAccess:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">How many tabs/computers in JNV? *</label>
+                  <input type="number" value={formData.chromebooks11JNVCount} onChange={e=>setFormData({...formData,chromebooks11JNVCount:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Chromebooks - Class 12 */}
+        <div className="border-4 border-pink-500 rounded-2xl p-6 bg-pink-50">
+          <h3 className="text-2xl font-bold mb-4 text-pink-800">💻 Chromebooks/Laptops - Class 12th</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">Distributed from Avanti? *</label>
+              <select value={formData.chromebooks12Distributed} onChange={e=>setFormData({...formData,chromebooks12Distributed:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            {formData.chromebooks12Distributed==='Yes'?(
+              <>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Number Distributed *</label>
+                  <input type="number" value={formData.chromebooks12Count} onChange={e=>setFormData({...formData,chromebooks12Count:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Working Condition *</label>
+                  <input type="number" value={formData.chromebooks12Working} onChange={e=>setFormData({...formData,chromebooks12Working:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Brand Name *</label>
+                  <input type="text" value={formData.chromebooks12Brand} onChange={e=>setFormData({...formData,chromebooks12Brand:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-bold mb-2">When Distributed? *</label>
+                  <select value={formData.chromebooks12DistributedDate} onChange={e=>setFormData({...formData,chromebooks12DistributedDate:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <option value="">Select Month & Year</option>
+                    {generateMonthYearOptions().map(opt=><option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
+              </>
+            ):(
+              <>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-bold mb-2">How do you conduct tests? *</label>
+                  <textarea value={formData.chromebooks12TestMethod} onChange={e=>setFormData({...formData,chromebooks12TestMethod:e.target.value})} rows="3" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">JNV Computer Lab/Tablets Accessible? *</label>
+                  <input type="text" value={formData.chromebooks12JNVLabAccess} onChange={e=>setFormData({...formData,chromebooks12JNVLabAccess:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">How many tabs/computers in JNV? *</label>
+                  <input type="number" value={formData.chromebooks12JNVCount} onChange={e=>setFormData({...formData,chromebooks12JNVCount:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Printer Information */}
+        <div className="border-4 border-cyan-500 rounded-2xl p-6 bg-cyan-50">
+          <h3 className="text-2xl font-bold mb-4 text-cyan-800">🖨️ Printer Information</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">Printer Available? *</label>
+              <select value={formData.printerAvailable} onChange={e=>setFormData({...formData,printerAvailable:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+            {formData.printerAvailable==='Yes'&&(
+              <>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Working Condition? *</label>
+                  <select value={formData.printerWorking} onChange={e=>setFormData({...formData,printerWorking:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">Printer Brand *</label>
+                  <input type="text" value={formData.printerBrand} onChange={e=>setFormData({...formData,printerBrand:e.target.value})} placeholder="e.g., HP, Canon, Epson" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-2">When Issued? *</label>
+                  <select value={formData.printerIssuedDate} onChange={e=>setFormData({...formData,printerIssuedDate:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <option value="">Select Month & Year</option>
+                    {generateMonthYearOptions().map(opt=><option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Other Assets */}
+        <div className="border-4 border-teal-500 rounded-2xl p-6 bg-teal-50">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-2xl font-bold text-teal-800">📦 Other Assets</h3>
+            <button onClick={handleAddAsset} className="px-6 py-3 bg-teal-600 text-white rounded-xl font-semibold">
+              + Add Asset
+            </button>
+          </div>
+          {formData.otherAssets.length===0?(
+            <p className="text-gray-600 text-center py-4">No other assets added yet. Click "+ Add Asset" to add.</p>
+          ):(
+            formData.otherAssets.map((asset,idx)=>
+              <div key={idx} className="bg-white p-4 rounded-xl mb-4 border-2 border-teal-300">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="font-bold text-lg">Asset {idx+1}</h4>
+                  <button onClick={()=>handleRemoveAsset(idx)} className="px-4 py-2 bg-red-500 text-white rounded-lg">
+                    Remove
+                  </button>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold mb-2">Asset Name *</label>
+                    <input type="text" value={asset.assetName} onChange={e=>handleAssetChange(idx,'assetName',e.target.value)} placeholder="e.g., Projector, Whiteboard" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold mb-2">Quantity *</label>
+                    <input type="number" value={asset.assetQuantity} onChange={e=>handleAssetChange(idx,'assetQuantity',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold mb-2">Condition *</label>
+                    <select value={asset.assetCondition} onChange={e=>handleAssetChange(idx,'assetCondition',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+                      <option value="">Select</option>
+                      <option value="Working">Working</option>
+                      <option value="Not Working">Not Working</option>
+                      <option value="Needs Repair">Needs Repair</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold mb-2">Notes</label>
+                    <input type="text" value={asset.assetNotes} onChange={e=>handleAssetChange(idx,'assetNotes',e.target.value)} placeholder="Additional details" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  </div>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+
+        <button onClick={handleSubmit} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-xl">
+          💾 Save School Information
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// ADMIN SCHOOL INFO VIEW
+// ========================================
+function AdminSchoolInfo({schoolInfo}){
+  const handleExport=()=>{
+    const exportData=schoolInfo.map(info=>({
+      School:info.school,
+      'Principal Name':info.principalName,
+      'Principal Phone':info.principalPhone,
+      'Principal Email':info.principalEmail,
+      'Vice Principal Name':info.vicePrincipalName,
+      'Vice Principal Phone':info.vicePrincipalPhone,
+      'Vice Principal Email':info.vicePrincipalEmail,
+      'Coordinator Name':info.coordinatorName,
+      'Coordinator Phone':info.coordinatorPhone,
+      'Coordinator Email':info.coordinatorEmail,
+      'WiFi in Classroom':info.wifiInClassroom,
+      'WiFi Installed By':info.wifiInstalledBy,
+      'WiFi Working':info.wifiWorking,
+      'WiFi Monthly Bill':info.wifiMonthlyBill,
+      'WiFi Connection Type':info.wifiConnectionType,
+      'WiFi Network Name':info.wifiNetworkName,
+      'Both Classes WiFi':info.bothClassesWifi,
+      'Modules 11 Received':info.modules11Received,
+      'Modules 11 Distributed':info.modules11Distributed,
+      'Modules 11 Stock':info.modules11Stock,
+      'Modules 12 Received':info.modules12Received,
+      'Modules 12 Distributed':info.modules12Distributed,
+      'Modules 12 Stock':info.modules12Stock,
+      'Chromebooks 11 Distributed':info.chromebooks11Distributed,
+      'Chromebooks 11 Count':info.chromebooks11Count,
+      'Chromebooks 11 Working':info.chromebooks11Working,
+      'Chromebooks 11 Brand':info.chromebooks11Brand,
+      'Chromebooks 11 Date':info.chromebooks11DistributedDate,
+      'Chromebooks 12 Distributed':info.chromebooks12Distributed,
+      'Chromebooks 12 Count':info.chromebooks12Count,
+      'Chromebooks 12 Working':info.chromebooks12Working,
+      'Chromebooks 12 Brand':info.chromebooks12Brand,
+      'Chromebooks 12 Date':info.chromebooks12DistributedDate,
+      'Printer Available':info.printerAvailable,
+      'Printer Working':info.printerWorking,
+      'Printer Brand':info.printerBrand,
+      'Printer Issued Date':info.printerIssuedDate,
+      'Other Assets Count':info.otherAssets?info.otherAssets.length:0,
+      'Last Updated':info.updatedAt?new Date(info.updatedAt).toLocaleString():''
+    }));
+    exportToExcel(exportData,'school_information');
+  };
+
+  return(
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">🏫 School Information</h2>
+        <button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
+          📥 Export to Excel
+        </button>
+      </div>
+
+      {schoolInfo.length===0?(
+        <div className="bg-white p-8 rounded-2xl text-center">
+          <p className="text-gray-600">No school information available yet. Teachers need to fill the forms.</p>
+        </div>
+      ):(
+        <div className="space-y-6">
+          {schoolInfo.map(info=>
+            <div key={info.id} className="bg-white p-6 rounded-2xl shadow-lg">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold">{info.school}</h3>
+                <span className="text-sm text-gray-600">
+                  Last Updated: {info.updatedAt?new Date(info.updatedAt).toLocaleString():'N/A'}
+                </span>
+              </div>
+
+              {/* Principal Info */}
+              <div className="border-2 border-blue-300 rounded-xl p-4 mb-4 bg-blue-50">
+                <h4 className="font-bold text-lg mb-3 text-blue-800">👨‍💼 Principal</h4>
+                <div className="grid md:grid-cols-3 gap-3 text-sm">
+                  <div><strong>Name:</strong> {info.principalName||'—'}</div>
+                  <div><strong>Phone:</strong> {info.principalPhone||'—'}</div>
+                  <div><strong>Email:</strong> {info.principalEmail||'—'}</div>
+                </div>
+              </div>
+
+              {/* Vice Principal Info */}
+              <div className="border-2 border-green-300 rounded-xl p-4 mb-4 bg-green-50">
+                <h4 className="font-bold text-lg mb-3 text-green-800">👨‍💼 Vice Principal</h4>
+                <div className="grid md:grid-cols-3 gap-3 text-sm">
+                  <div><strong>Name:</strong> {info.vicePrincipalName||'—'}</div>
+                  <div><strong>Phone:</strong> {info.vicePrincipalPhone||'—'}</div>
+                  <div><strong>Email:</strong> {info.vicePrincipalEmail||'—'}</div>
+                </div>
+              </div>
+
+              {/* Avanti Coordinator Info */}
+              <div className="border-2 border-orange-300 rounded-xl p-4 mb-4 bg-orange-50">
+                <h4 className="font-bold text-lg mb-3 text-orange-800">👨‍💼 Avanti Coordinator</h4>
+                <div className="grid md:grid-cols-3 gap-3 text-sm">
+                  <div><strong>Name:</strong> {info.coordinatorName||'—'}</div>
+                  <div><strong>Phone:</strong> {info.coordinatorPhone||'—'}</div>
+                  <div><strong>Email:</strong> {info.coordinatorEmail||'—'}</div>
+                </div>
+              </div>
+
+              {/* WiFi Info */}
+              <div className="border-2 border-purple-300 rounded-xl p-4 mb-4 bg-purple-50">
+                <h4 className="font-bold text-lg mb-3 text-purple-800">📶 WiFi Connection</h4>
+                <div className="grid md:grid-cols-3 gap-3 text-sm">
+                  <div><strong>WiFi Available:</strong> {info.wifiInClassroom||'—'}</div>
+                  {info.wifiInClassroom==='Yes'&&(
+                    <>
+                      <div><strong>Installed By:</strong> {info.wifiInstalledBy||'—'}</div>
+                      <div><strong>Working:</strong> {info.wifiWorking||'—'}</div>
+                      <div><strong>Monthly Bill:</strong> ₹{info.wifiMonthlyBill||'—'}</div>
+                      <div><strong>Connection Type:</strong> {info.wifiConnectionType||'—'}</div>
+                      <div><strong>Network:</strong> {info.wifiNetworkName||'—'}</div>
+                      <div><strong>Both Classes WiFi:</strong> {info.bothClassesWifi||'—'}</div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Modules Info */}
+              <div className="grid md:grid-cols-2 gap-4 mb-4">
+                <div className="border-2 border-green-300 rounded-xl p-4 bg-green-50">
+                  <h4 className="font-bold text-lg mb-3 text-green-800">📚 Modules - Class 11</h4>
+                  <div className="space-y-2 text-sm">
+                    <div><strong>Received:</strong> {info.modules11Received||'—'}</div>
+                    <div><strong>Distributed:</strong> {info.modules11Distributed||'—'}</div>
+                    <div><strong>In Stock:</strong> {info.modules11Stock||'—'}</div>
+                  </div>
+                </div>
+                <div className="border-2 border-blue-300 rounded-xl p-4 bg-blue-50">
+                  <h4 className="font-bold text-lg mb-3 text-blue-800">📚 Modules - Class 12</h4>
+                  <div className="space-y-2 text-sm">
+                    <div><strong>Received:</strong> {info.modules12Received||'—'}</div>
+                    <div><strong>Distributed:</strong> {info.modules12Distributed||'—'}</div>
+                    <div><strong>In Stock:</strong> {info.modules12Stock||'—'}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Reference Books */}
+              {info.referenceBooks&&info.referenceBooks.length>0&&(
+                <div className="border-2 border-yellow-300 rounded-xl p-4 mb-4 bg-yellow-50">
+                  <h4 className="font-bold text-lg mb-3 text-yellow-800">📖 Reference Books</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-yellow-200">
+                        <tr>
+                          <th className="p-2 text-left">Book Name</th>
+                          <th className="p-2 text-left">Publisher</th>
+                          <th className="p-2 text-left">Author</th>
+                          <th className="p-2 text-left">Price</th>
+                          <th className="p-2 text-left">In Stock</th>
+                          <th className="p-2 text-left">Distributed</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {info.referenceBooks.map((book,idx)=>
+                          <tr key={idx} className="border-b border-yellow-200">
+                            <td className="p-2">{book.bookName||'—'}</td>
+                            <td className="p-2">{book.publisher||'—'}</td>
+                            <td className="p-2">{book.author||'—'}</td>
+                            <td className="p-2">₹{book.price||'—'}</td>
+                            <td className="p-2">{book.inStock||'—'}</td>
+                            <td className="p-2">{book.distributed||'—'}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Chromebooks Info */}
+              <div className="grid md:grid-cols-2 gap-4 mb-4">
+                <div className="border-2 border-indigo-300 rounded-xl p-4 bg-indigo-50">
+                  <h4 className="font-bold text-lg mb-3 text-indigo-800">💻 Chromebooks - Class 11</h4>
+                  <div className="space-y-2 text-sm">
+                    <div><strong>Distributed from Avanti:</strong> {info.chromebooks11Distributed||'—'}</div>
+                    {info.chromebooks11Distributed==='Yes'?(
+                      <>
+                        <div><strong>Count:</strong> {info.chromebooks11Count||'—'}</div>
+                        <div><strong>Working:</strong> {info.chromebooks11Working||'—'}</div>
+                        <div><strong>Brand:</strong> {info.chromebooks11Brand||'—'}</div>
+                        <div><strong>Distributed:</strong> {info.chromebooks11DistributedDate||'—'}</div>
+                      </>
+                    ):(
+                      <>
+                        <div><strong>Test Method:</strong> {info.chromebooks11TestMethod||'—'}</div>
+                        <div><strong>JNV Lab Access:</strong> {info.chromebooks11JNVLabAccess||'—'}</div>
+                        <div><strong>JNV Devices:</strong> {info.chromebooks11JNVCount||'—'}</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="border-2 border-pink-300 rounded-xl p-4 bg-pink-50">
+                  <h4 className="font-bold text-lg mb-3 text-pink-800">💻 Chromebooks - Class 12</h4>
+                  <div className="space-y-2 text-sm">
+                    <div><strong>Distributed from Avanti:</strong> {info.chromebooks12Distributed||'—'}</div>
+                    {info.chromebooks12Distributed==='Yes'?(
+                      <>
+                        <div><strong>Count:</strong> {info.chromebooks12Count||'—'}</div>
+                        <div><strong>Working:</strong> {info.chromebooks12Working||'—'}</div>
+                        <div><strong>Brand:</strong> {info.chromebooks12Brand||'—'}</div>
+                        <div><strong>Distributed:</strong> {info.chromebooks12DistributedDate||'—'}</div>
+                      </>
+                    ):(
+                      <>
+                        <div><strong>Test Method:</strong> {info.chromebooks12TestMethod||'—'}</div>
+                        <div><strong>JNV Lab Access:</strong> {info.chromebooks12JNVLabAccess||'—'}</div>
+                        <div><strong>JNV Devices:</strong> {info.chromebooks12JNVCount||'—'}</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Printer Info */}
+              <div className="border-2 border-cyan-300 rounded-xl p-4 mb-4 bg-cyan-50">
+                <h4 className="font-bold text-lg mb-3 text-cyan-800">🖨️ Printer</h4>
+                <div className="grid md:grid-cols-2 gap-3 text-sm">
+                  <div><strong>Printer Available:</strong> {info.printerAvailable||'—'}</div>
+                  {info.printerAvailable==='Yes'&&(
+                    <>
+                      <div><strong>Working:</strong> {info.printerWorking||'—'}</div>
+                      <div><strong>Brand:</strong> {info.printerBrand||'—'}</div>
+                      <div><strong>Issued:</strong> {info.printerIssuedDate||'—'}</div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Other Assets */}
+              {info.otherAssets&&info.otherAssets.length>0&&(
+                <div className="border-2 border-teal-300 rounded-xl p-4 mb-4 bg-teal-50">
+                  <h4 className="font-bold text-lg mb-3 text-teal-800">📦 Other Assets ({info.otherAssets.length})</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-teal-200">
+                        <tr>
+                          <th className="p-2 text-left">Asset Name</th>
+                          <th className="p-2 text-left">Quantity</th>
+                          <th className="p-2 text-left">Condition</th>
+                          <th className="p-2 text-left">Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {info.otherAssets.map((asset,idx)=>
+                          <tr key={idx} className="border-b border-teal-200">
+                            <td className="p-2 font-semibold">{asset.assetName||'—'}</td>
+                            <td className="p-2">{asset.assetQuantity||'—'}</td>
+                            <td className="p-2">
+                              <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                                asset.assetCondition==='Working'?'bg-green-100 text-green-700':
+                                asset.assetCondition==='Not Working'?'bg-red-100 text-red-700':
+                                'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {asset.assetCondition||'—'}
+                              </span>
+                            </td>
+                            <td className="p-2">{asset.assetNotes||'—'}</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
