@@ -2409,7 +2409,7 @@ function AdminBirthdays({teachers}){const todayBirthdays=useMemo(()=>getBirthday
 function StudentManagement({students}){
   const[showModal,setShowModal]=useState(false);
   const[editingStudent,setEditingStudent]=useState(null);
-  const[form,setForm]=useState({school:'',grade:'',name:'',gender:''});
+  const[form,setForm]=useState({school:'',grade:'',name:'',gender:'',id:''});
   const[selectedStudents,setSelectedStudents]=useState([]);
   const[filterSchool,setFilterSchool]=useState('All');
   const[filterGrade,setFilterGrade]=useState('All');
@@ -2425,8 +2425,8 @@ function StudentManagement({students}){
   .sort((a,b)=>a.name.localeCompare(b.name));
 
   const handleSave=async()=>{
-    if(!form.school||!form.grade||!form.name||!form.gender){
-      alert('Please fill all fields');
+    if(!form.school||!form.grade||!form.name||!form.gender||!form.id){
+      alert('Please fill all fields including Student ID');
       return;
     }
     try{
@@ -2436,29 +2436,39 @@ function StudentManagement({students}){
           grade:form.grade,
           name:form.name,
           gender:form.gender,
+          id:form.id,
           updatedAt:new Date().toISOString()
         });
         alert('Student updated!');
       }else{
+        // Check if student ID already exists
+        const existingSnap=await db.collection('students').where('id','==',form.id).limit(1).get();
+        if(!existingSnap.empty){
+          alert('Student ID already exists! Please use a unique ID.');
+          return;
+        }
+        
         await db.collection('students').add({
           school:form.school,
           grade:form.grade,
           name:form.name,
           gender:form.gender,
+          id:form.id,
           createdAt:new Date().toISOString()
         });
-        alert('Student added!');
+        alert('Student added! Login credentials:\nStudent ID: '+form.id+'\nPassword: pass123');
       }
       setShowModal(false);
       setEditingStudent(null);
-      setForm({school:'',grade:'',name:'',gender:''});
+      setForm({school:'',grade:'',name:'',gender:'',id:''});
     }catch(e){
       alert('Failed: '+e.message);
     }
   };
+
   const openAddModal=()=>{
     setEditingStudent(null);
-    setForm({school:'',grade:'',name:'',gender:''});
+    setForm({school:'',grade:'',name:'',gender:'',id:''});
     setShowModal(true);
   };
 
@@ -2468,7 +2478,8 @@ function StudentManagement({students}){
       school:student.school,
       grade:student.grade,
       name:student.name,
-      gender:student.gender
+      gender:student.gender,
+      id:student.id
     });
     setShowModal(true);
   };
@@ -2578,26 +2589,53 @@ function StudentManagement({students}){
           }
 
           let imported=0;
+          let skipped=0;
+          const errors=[];
+          
           for(let i=1;i<rows.length;i++){
             const row=rows[i];
             const school=row[0]?row[0].trim():'';
-            const grade=row[1]?row[1].trim():'';
-            const name=row[2]?row[2].trim():'';
-            const gender=row[3]?row[3].trim():'';
+            const studentId=row[1]?row[1].trim():'';
+            const grade=row[2]?row[2].trim():'';
+            const name=row[3]?row[3].trim():'';
+            const gender=row[4]?row[4].trim():'';
 
-            if(school&&grade&&name&&gender){
-              await db.collection('students').add({
-                school,
-                grade,
-                name,
-                gender,
-                createdAt:new Date().toISOString()
-              });
-              imported++;
+            if(!school||!studentId||!grade||!name||!gender){
+              errors.push(`Row ${i+1}: Missing required fields`);
+              skipped++;
+              continue;
             }
+
+            // Check if student ID already exists
+            const existingSnap=await db.collection('students').where('id','==',studentId).limit(1).get();
+            if(!existingSnap.empty){
+              errors.push(`Row ${i+1}: Student ID "${studentId}" already exists`);
+              skipped++;
+              continue;
+            }
+
+            await db.collection('students').add({
+              school,
+              grade,
+              name,
+              gender,
+              id:studentId,
+              createdAt:new Date().toISOString()
+            });
+            imported++;
           }
 
-          alert(`Imported ${imported} students!`);
+          let message=`✅ Imported ${imported} students!`;
+          if(skipped>0){
+            message+=`\n⚠️ Skipped ${skipped} students`;
+            if(errors.length>0){
+              message+='\n\nErrors:\n'+errors.slice(0,5).join('\n');
+              if(errors.length>5)message+=`\n... and ${errors.length-5} more`;
+            }
+          }
+          message+='\n\n📝 Students can login with:\nStudent ID + Password: pass123';
+          alert(message);
+          
           if(fileInputRef.current)fileInputRef.current.value='';
         }catch(e){
           alert('Import failed: '+e.message);
@@ -2620,6 +2658,7 @@ function StudentManagement({students}){
   const handleExport=()=>{
     const exportData=students.map(s=>({
       School:s.school,
+      'Student ID':s.id,
       Grade:s.grade,
       Name:s.name,
       Gender:s.gender
@@ -2692,9 +2731,13 @@ function StudentManagement({students}){
 
       <div className="bg-white p-4 rounded-xl border-2 border-gray-200">
         <p className="text-sm text-gray-600">
-          <strong>CSV Format:</strong> School, Grade, Student Name, Gender
-          <br/>
-          <strong>Example:</strong> CoE Barwani, 11, Raj Kumar, Male
+          <strong>📋 CSV Format (5 columns):</strong>
+          <br/>School Name, Student ID, Grade, Student Name, Gender
+          <br/><br/>
+          <strong>✅ Example Row:</strong>
+          <br/>CoE Barwani, STU001, 11, Raj Kumar, Male
+          <br/><br/>
+          <strong>🔐 Login Info:</strong> Students use their Student ID + Password: <span className="font-mono bg-yellow-100 px-2 py-1 rounded">pass123</span>
         </p>
       </div>
 
@@ -2714,6 +2757,7 @@ function StudentManagement({students}){
                 />
               </th>
               <th className="p-3 text-left">School</th>
+              <th className="p-3 text-left">Student ID</th>
               <th className="p-3 text-left">Grade</th>
               <th className="p-3 text-left">Name</th>
               <th className="p-3 text-left">Gender</th>
@@ -2723,7 +2767,7 @@ function StudentManagement({students}){
           <tbody>
             {filteredStudents.length===0?(
               <tr>
-                <td colSpan="6" className="p-8 text-center text-gray-500">
+                <td colSpan="7" className="p-8 text-center text-gray-500">
                   No students found
                 </td>
               </tr>
@@ -2739,6 +2783,11 @@ function StudentManagement({students}){
                     />
                   </td>
                   <td className="p-3">{s.school}</td>
+                  <td className="p-3">
+                    <span className="font-mono bg-blue-100 px-2 py-1 rounded font-bold">
+                      {s.id}
+                    </span>
+                  </td>
                   <td className="p-3">Class {s.grade}</td>
                   <td className="p-3 font-semibold">{s.name}</td>
                   <td className="p-3">{s.gender}</td>
@@ -2772,6 +2821,17 @@ function StudentManagement({students}){
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-bold mb-1">Student ID * (For Login)</label>
+                <input 
+                  type="text" 
+                  value={form.id} 
+                  onChange={e=>setForm({...form,id:e.target.value})} 
+                  placeholder="e.g., STU001"
+                  className="w-full border-2 px-3 py-2 rounded-lg"
+                />
+                <p className="text-xs text-gray-600 mt-1">This will be used for student login</p>
+              </div>
+              <div>
                 <label className="block text-sm font-bold mb-1">Grade *</label>
                 <select value={form.grade} onChange={e=>setForm({...form,grade:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg">
                   <option value="">Select</option>
@@ -2790,11 +2850,20 @@ function StudentManagement({students}){
                   {GENDERS.map(g=><option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
+              {!editingStudent&&(
+                <div className="bg-blue-50 border-2 border-blue-300 p-3 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>🔐 Login Credentials:</strong>
+                    <br/>Student ID: <span className="font-mono">{form.id||'(will be generated)'}</span>
+                    <br/>Password: <span className="font-mono bg-yellow-100 px-2 py-1 rounded">pass123</span>
+                  </p>
+                </div>
+              )}
               <div className="flex gap-3">
                 <button onClick={handleSave} className="flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold">
                   Save
                 </button>
-                <button onClick={()=>{setShowModal(false);setEditingStudent(null);setForm({school:'',grade:'',name:'',gender:''})}} className="flex-1 bg-gray-300 py-3 rounded-xl font-semibold">
+                <button onClick={()=>{setShowModal(false);setEditingStudent(null);setForm({school:'',grade:'',name:'',gender:'',id:''})}} className="flex-1 bg-gray-300 py-3 rounded-xl font-semibold">
                   Cancel
                 </button>
               </div>
