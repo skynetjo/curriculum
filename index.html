@@ -332,8 +332,9 @@ function InstallPrompt(){
 // ========================================
 // STUDENT PROFILE FORM COMPONENT
 // ========================================
-function StudentProfileForm({currentUser}) {
+function StudentProfileForm({ currentUser, onProfileUpdated }) {
   const myId = currentUser.studentId || currentUser.id;
+
   const [profile, setProfile] = useState({
     firstName: '',
     lastName: '',
@@ -361,25 +362,31 @@ function StudentProfileForm({currentUser}) {
     percentage10th: '',
     percentage11th: ''
   });
-  
+
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState({
+    personal: false,
+    parent: false,
+    contact: false,
+    academic: false
+  });
 
   useEffect(() => {
-  const fetchProfile = async () => {
-    try {
-      setLoading(true);  // ✅ ADD THIS
-      const docSnap = await db.collection('studentProfiles').doc(myId).get();
-      if (docSnap.exists) {
-        setProfile({ ...profile, ...docSnap.data() }); // ⬅️ CHANGE THIS LINE
+    const fetchProfile = async () => {
+      try {
+        setLoading(true);
+        const docSnap = await db.collection('studentProfiles').doc(myId).get();
+        if (docSnap.exists) {
+          setProfile(prev => ({ ...prev, ...docSnap.data() }));
+        }
+      } catch (e) {
+        console.error('Error fetching profile:', e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false); // ✅ ADD THIS
-    } catch (e) {
-      console.error('Error fetching profile:', e);
-      setLoading(false); // ✅ ADD THIS
-    }
-  };
-  fetchProfile();
-}, [myId]);
+    };
+    fetchProfile();
+  }, [myId]);
 
   const calculateCompletion = () => {
     const requiredFields = [
@@ -388,24 +395,45 @@ function StudentProfileForm({currentUser}) {
       'motherOccupation', 'fatherEducation', 'motherEducation', 'familyIncome',
       'address', 'state', 'district', 'pincode', 'whatsappNumber', 'percentage10th'
     ];
-    const filled = requiredFields.filter(field => profile[field] && String(profile[field]).trim() !== '').length;
+    const filled = requiredFields.filter(
+      field => profile[field] && String(profile[field]).trim() !== ''
+    ).length;
     return Math.round((filled / requiredFields.length) * 100);
   };
 
-  const handleSave = async () => {
+  const saveProfile = async () => {
     try {
       await db.collection('studentProfiles').doc(myId).set({
         ...profile,
         studentId: myId,
         updatedAt: new Date().toISOString()
       });
+
+      if (onProfileUpdated) {
+        onProfileUpdated({
+          ...profile,
+          studentId: myId
+        });
+      }
+
       alert('✅ Profile saved successfully!');
     } catch (e) {
+      console.error('Profile save error:', e);
       alert('Failed to save: ' + e.message);
     }
   };
 
+  const toggleSection = async (sectionKey) => {
+    if (editing[sectionKey]) {
+      // We are going from Edit → Save
+      await saveProfile();
+    }
+    setEditing(prev => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+  };
+
   const completion = calculateCompletion();
+  const inputBase =
+    "w-full border-2 px-4 py-3 rounded-xl bg-white disabled:bg-gray-100 disabled:cursor-not-allowed";
 
   if (loading) {
     return <div className="text-center py-8">Loading profile...</div>;
@@ -417,180 +445,371 @@ function StudentProfileForm({currentUser}) {
         <h2 className="text-3xl font-bold">👤 My Profile</h2>
         <div className="text-right">
           <div className="text-sm text-gray-600">Profile Completion</div>
-          <div className="text-3xl font-bold" style={{color: completion >= 80 ? '#10B981' : completion >= 50 ? '#F59E0B' : '#EF4444'}}>
+          <div
+            className="text-3xl font-bold"
+            style={{
+              color:
+                completion >= 80 ? '#10B981'
+                  : completion >= 50 ? '#F59E0B'
+                  : '#EF4444'
+            }}
+          >
             {completion}%
+          </div>
+          <div className="text-xs text-gray-500">
+            {100 - completion}% remaining
           </div>
         </div>
       </div>
 
-      {completion < 100 && (
-        <div className="bg-orange-50 border-2 border-orange-300 p-4 rounded-xl">
-          <p className="text-orange-800 font-semibold">
-            ⚠️ Please complete your profile! ({100 - completion}% remaining)
-          </p>
-        </div>
-      )}
+      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-xl">
+        <p className="text-sm text-yellow-800">
+          ✏️ Click <strong>Edit</strong> on each section to change details, then click <strong>Save</strong>.
+        </p>
+      </div>
 
-      <div className="bg-white p-6 rounded-2xl shadow-lg space-y-6">
-        {/* Personal Information */}
-        <div className="border-4 border-blue-500 rounded-2xl p-6 bg-blue-50">
-          <h3 className="text-2xl font-bold mb-4 text-blue-800">📋 Personal Information</h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">First Name *</label>
-              <input type="text" value={profile.firstName} onChange={e => setProfile({...profile, firstName: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Last Name *</label>
-              <input type="text" value={profile.lastName} onChange={e => setProfile({...profile, lastName: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Email ID *</label>
-              <input type="email" value={profile.email} onChange={e => setProfile({...profile, email: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Phone Number *</label>
-              <input type="tel" value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Date of Birth *</label>
-              <input type="date" value={profile.dob} onChange={e => setProfile({...profile, dob: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">WhatsApp Number *</label>
-              <input type="tel" value={profile.whatsappNumber} onChange={e => setProfile({...profile, whatsappNumber: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" />
-            </div>
+      {/* Personal Information */}
+      <div className="border-4 border-blue-500 rounded-2xl p-6 bg-blue-50">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-2xl font-bold text-blue-800">📘 Personal Information</h3>
+          <button
+            onClick={() => toggleSection('personal')}
+            className="px-4 py-2 rounded-xl font-semibold text-sm bg-blue-600 text-white"
+          >
+            {editing.personal ? 'Save' : 'Edit'}
+          </button>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">First Name *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.personal}
+              value={profile.firstName}
+              onChange={e => setProfile(prev => ({ ...prev, firstName: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Last Name *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.personal}
+              value={profile.lastName}
+              onChange={e => setProfile(prev => ({ ...prev, lastName: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Email *</label>
+            <input
+              type="email"
+              className={inputBase}
+              disabled={!editing.personal}
+              value={profile.email}
+              onChange={e => setProfile(prev => ({ ...prev, email: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Phone Number *</label>
+            <input
+              type="tel"
+              className={inputBase}
+              disabled={!editing.personal}
+              value={profile.phone}
+              onChange={e => setProfile(prev => ({ ...prev, phone: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Date of Birth *</label>
+            <input
+              type="date"
+              className={inputBase}
+              disabled={!editing.personal}
+              value={profile.dob}
+              onChange={e => setProfile(prev => ({ ...prev, dob: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Class *</label>
+            <select
+              className={inputBase}
+              disabled={!editing.personal}
+              value={profile.grade}
+              onChange={e => setProfile(prev => ({ ...prev, grade: e.target.value }))}
+            >
+              <option value="">Select</option>
+              <option value="11">11th</option>
+              <option value="12">12th</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Category *</label>
+            <select
+              className={inputBase}
+              disabled={!editing.personal}
+              value={profile.category}
+              onChange={e => setProfile(prev => ({ ...prev, category: e.target.value }))}
+            >
+              <option value="">Select</option>
+              {CATEGORIES.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Stream *</label>
+            <select
+              className={inputBase}
+              disabled={!editing.personal}
+              value={profile.stream}
+              onChange={e => setProfile(prev => ({ ...prev, stream: e.target.value }))}
+            >
+              <option value="">Select</option>
+              {STREAMS.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">School *</label>
+            <select
+              className={inputBase}
+              disabled={!editing.personal}
+              value={profile.school}
+              onChange={e => setProfile(prev => ({ ...prev, school: e.target.value }))}
+            >
+              <option value="">Select</option>
+              {SCHOOLS.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">10th Overall Percentage *</label>
+            <input
+              type="number"
+              step="0.01"
+              className={inputBase}
+              disabled={!editing.personal}
+              value={profile.percentage10th}
+              onChange={e => setProfile(prev => ({ ...prev, percentage10th: e.target.value }))}
+              placeholder="e.g. 85.5"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">11th Overall Percentage (Optional)</label>
+            <input
+              type="number"
+              step="0.01"
+              className={inputBase}
+              disabled={!editing.personal}
+              value={profile.percentage11th}
+              onChange={e => setProfile(prev => ({ ...prev, percentage11th: e.target.value }))}
+              placeholder="e.g. 80.0"
+            />
           </div>
         </div>
+      </div>
 
-        {/* Academic Information */}
-        <div className="border-4 border-green-500 rounded-2xl p-6 bg-green-50">
-          <h3 className="text-2xl font-bold mb-4 text-green-800">🎓 Academic Information</h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">Grade *</label>
-              <select value={profile.grade} onChange={e => setProfile({...profile, grade: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
-                <option value="">Select</option>
-                <option value="11">11th</option>
-                <option value="12">12th</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Category *</label>
-              <select value={profile.category} onChange={e => setProfile({...profile, category: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
-                <option value="">Select</option>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Stream *</label>
-              <select value={profile.stream} onChange={e => setProfile({...profile, stream: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
-                <option value="">Select</option>
-                {STREAMS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">School *</label>
-              <select value={profile.school} onChange={e => setProfile({...profile, school: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
-                <option value="">Select</option>
-                {SCHOOLS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">10th Overall Percentage *</label>
-              <input type="number" step="0.01" value={profile.percentage10th} onChange={e => setProfile({...profile, percentage10th: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" placeholder="e.g., 85.5" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">11th Overall Percentage (Optional)</label>
-              <input type="number" step="0.01" value={profile.percentage11th} onChange={e => setProfile({...profile, percentage11th: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" placeholder="e.g., 80.0" />
-            </div>
+      {/* Parent Information */}
+      <div className="border-4 border-purple-500 rounded-2xl p-6 bg-purple-50">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-2xl font-bold text-purple-800">👨‍👩‍👧‍👦 Parent Information</h3>
+          <button
+            onClick={() => toggleSection('parent')}
+            className="px-4 py-2 rounded-xl font-semibold text-sm bg-purple-600 text-white"
+          >
+            {editing.parent ? 'Save' : 'Edit'}
+          </button>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">Father's Name *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.parent}
+              value={profile.fatherName}
+              onChange={e => setProfile(prev => ({ ...prev, fatherName: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Mother's Name *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.parent}
+              value={profile.motherName}
+              onChange={e => setProfile(prev => ({ ...prev, motherName: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Father's Occupation *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.parent}
+              value={profile.fatherOccupation}
+              onChange={e => setProfile(prev => ({ ...prev, fatherOccupation: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Mother's Occupation *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.parent}
+              value={profile.motherOccupation}
+              onChange={e => setProfile(prev => ({ ...prev, motherOccupation: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Father's Education *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.parent}
+              value={profile.fatherEducation}
+              onChange={e => setProfile(prev => ({ ...prev, fatherEducation: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Mother's Education *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.parent}
+              value={profile.motherEducation}
+              onChange={e => setProfile(prev => ({ ...prev, motherEducation: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Family Income (per year) *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.parent}
+              value={profile.familyIncome}
+              onChange={e => setProfile(prev => ({ ...prev, familyIncome: e.target.value }))}
+              placeholder="e.g. 1–2 Lakhs"
+            />
           </div>
         </div>
+      </div>
 
-        {/* Parent Information */}
-        <div className="border-4 border-purple-500 rounded-2xl p-6 bg-purple-50">
-          <h3 className="text-2xl font-bold mb-4 text-purple-800">👨‍👩‍👧‍👦 Parent Information</h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">Father's Name *</label>
-              <input type="text" value={profile.fatherName} onChange={e => setProfile({...profile, fatherName: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Mother's Name *</label>
-              <input type="text" value={profile.motherName} onChange={e => setProfile({...profile, motherName: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Father's Occupation *</label>
-              <select value={profile.fatherOccupation} onChange={e => setProfile({...profile, fatherOccupation: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
-                <option value="">Select</option>
-                {OCCUPATIONS.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-              {profile.fatherOccupation === 'Others' && (
-                <input type="text" value={profile.fatherOccupationOther} onChange={e => setProfile({...profile, fatherOccupationOther: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl mt-2" placeholder="Please specify" />
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Mother's Occupation *</label>
-              <select value={profile.motherOccupation} onChange={e => setProfile({...profile, motherOccupation: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
-                <option value="">Select</option>
-                {OCCUPATIONS.map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-              {profile.motherOccupation === 'Others' && (
-                <input type="text" value={profile.motherOccupationOther} onChange={e => setProfile({...profile, motherOccupationOther: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl mt-2" placeholder="Please specify" />
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Father's Education *</label>
-              <select value={profile.fatherEducation} onChange={e => setProfile({...profile, fatherEducation: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
-                <option value="">Select</option>
-                {EDUCATION_LEVELS.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Mother's Education *</label>
-              <select value={profile.motherEducation} onChange={e => setProfile({...profile, motherEducation: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
-                <option value="">Select</option>
-                {EDUCATION_LEVELS.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-bold mb-2">Family Annual Income *</label>
-              <select value={profile.familyIncome} onChange={e => setProfile({...profile, familyIncome: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
-                <option value="">Select</option>
-                {INCOME_RANGES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
+      {/* Contact Information */}
+      <div className="border-4 border-green-500 rounded-2xl p-6 bg-green-50">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-2xl font-bold text-green-800">📞 Contact Information</h3>
+          <button
+            onClick={() => toggleSection('contact')}
+            className="px-4 py-2 rounded-xl font-semibold text-sm bg-green-600 text-white"
+          >
+            {editing.contact ? 'Save' : 'Edit'}
+          </button>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-bold mb-2">Address *</label>
+            <textarea
+              className={inputBase}
+              rows="3"
+              disabled={!editing.contact}
+              value={profile.address}
+              onChange={e => setProfile(prev => ({ ...prev, address: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">State *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.contact}
+              value={profile.state}
+              onChange={e => setProfile(prev => ({ ...prev, state: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">District *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.contact}
+              value={profile.district}
+              onChange={e => setProfile(prev => ({ ...prev, district: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Pincode *</label>
+            <input
+              type="text"
+              className={inputBase}
+              disabled={!editing.contact}
+              value={profile.pincode}
+              onChange={e => setProfile(prev => ({ ...prev, pincode: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">WhatsApp Number *</label>
+            <input
+              type="tel"
+              className={inputBase}
+              disabled={!editing.contact}
+              value={profile.whatsappNumber}
+              onChange={e => setProfile(prev => ({ ...prev, whatsappNumber: e.target.value }))}
+            />
           </div>
         </div>
+      </div>
 
-        {/* Address Information */}
-        <div className="border-4 border-orange-500 rounded-2xl p-6 bg-orange-50">
-          <h3 className="text-2xl font-bold mb-4 text-orange-800">🏠 Address Information</h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-bold mb-2">Address *</label>
-              <textarea value={profile.address} onChange={e => setProfile({...profile, address: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" rows="3" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">State *</label>
-              <select value={profile.state} onChange={e => setProfile({...profile, state: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
-                <option value="">Select</option>
-                {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">District *</label>
-              <input type="text" value={profile.district} onChange={e => setProfile({...profile, district: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Pincode *</label>
-              <input type="text" value={profile.pincode} onChange={e => setProfile({...profile, pincode: e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl" maxLength="6" />
-            </div>
+      {/* Academic Info (optional extras – currently just shows percentages again if needed) */}
+      <div className="border-4 border-indigo-500 rounded-2xl p-6 bg-indigo-50">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-2xl font-bold text-indigo-800">🎓 Academic Information</h3>
+          <button
+            onClick={() => toggleSection('academic')}
+            className="px-4 py-2 rounded-xl font-semibold text-sm bg-indigo-600 text-white"
+          >
+            {editing.academic ? 'Save' : 'Edit'}
+          </button>
+        </div>
+        <p className="text-sm text-gray-600">
+          You can update your marks / percentages here whenever results are updated.
+        </p>
+        <div className="grid md:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">10th Percentage *</label>
+            <input
+              type="number"
+              step="0.01"
+              className={inputBase}
+              disabled={!editing.academic}
+              value={profile.percentage10th}
+              onChange={e => setProfile(prev => ({ ...prev, percentage10th: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">11th Percentage (Optional)</label>
+            <input
+              type="number"
+              step="0.01"
+              className={inputBase}
+              disabled={!editing.academic}
+              value={profile.percentage11th}
+              onChange={e => setProfile(prev => ({ ...prev, percentage11th: e.target.value }))}
+            />
           </div>
         </div>
+      </div>
 
-        <button onClick={handleSave} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-xl">
-          💾 Save Profile
+      {/* Save all */}
+      <div className="text-right">
+        <button
+          onClick={saveProfile}
+          className="px-8 py-3 bg-green-600 text-white rounded-xl font-semibold"
+        >
+          💾 Save All Changes
         </button>
       </div>
     </div>
@@ -819,12 +1038,6 @@ function StudentDashboard({currentUser, handleLogout}) {
           .get();
         setTeachers(teacherSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
 
-        // Fetch student profile
-        const profileSnap = await db.collection('studentProfiles').doc(myId).get();
-        if (profileSnap.exists) {
-          setStudentProfile(profileSnap.data());
-        }
-
         // Fetch exam registrations
       const examSnap = await db.collection('studentExamRegistrations').doc(myId).get();
       if (examSnap.exists) {
@@ -849,6 +1062,27 @@ function StudentDashboard({currentUser, handleLogout}) {
     const filled = requiredFields.filter(field => studentProfile[field] && String(studentProfile[field]).trim() !== '').length;
     return Math.round((filled / requiredFields.length) * 100);
   };
+    // 🔄 Keep student profile in sync so banner and card match
+  useEffect(() => {
+    if (!myId) return;
+
+    const unsubscribe = db.collection('studentProfiles')
+      .doc(myId)
+      .onSnapshot(
+        (doc) => {
+          if (doc.exists) {
+            setStudentProfile(doc.data());
+          } else {
+            setStudentProfile(null);
+          }
+        },
+        (err) => {
+          console.error('Profile listener error:', err);
+        }
+      );
+
+    return () => unsubscribe();
+  }, [myId]);
 
   const profileCompletion = calculateCompletion();
   
@@ -918,25 +1152,35 @@ function StudentDashboard({currentUser, handleLogout}) {
             <h2 className="text-3xl font-bold">Welcome, {currentUser.name}! 👋</h2>
             
             <div className="grid md:grid-cols-4 gap-4">
-              <div className="stat-card bg-blue-500 text-white">
-                <div className="text-sm opacity-90">My School</div>
-                <div className="text-xl font-bold">{mySchool}</div>
-              </div>
-              <div className="stat-card bg-green-500 text-white">
-                <div className="text-sm opacity-90">My Class</div>
-                <div className="text-2xl font-bold">Class {myGrade}</div>
-              </div>
-              <div className="stat-card bg-purple-500 text-white">
-                <div className="text-sm opacity-90">Profile Complete</div>
-                <div className="text-2xl font-bold">{profileCompletion}%</div>
-              </div>
-              <div className="stat-card bg-orange-500 text-white">
-                <div className="text-sm opacity-90">My Attendance</div>
-                <div className="text-xl font-bold">
-                  {studentAttendance.filter(a => a.status === 'Present').length} / {studentAttendance.length}
-                </div>
-              </div>
-            </div>
+  <div className="stat-card bg-blue-500 text-white">
+    <div className="text-sm opacity-90">My School</div>
+    <div className="text-xl font-bold">{mySchool}</div>
+  </div>
+
+  <div className="stat-card bg-green-500 text-white">
+    <div className="text-sm opacity-90">My Class</div>
+    <div className="text-2xl font-bold">Class {myGrade}</div>
+  </div>
+
+  <div className="stat-card bg-purple-500 text-white">
+    <div className="text-sm opacity-90">Profile Complete</div>
+    <div className="text-2xl font-bold">{profileCompletion}%</div>
+  </div>
+
+  <div className="stat-card bg-green-600 text-white">
+    <div className="text-sm opacity-90">Days Present</div>
+    <div className="text-2xl font-bold">
+      {studentAttendance.filter(a => a.status === 'Present').length}
+    </div>
+  </div>
+
+  <div className="stat-card bg-red-500 text-white md:col-span-1 col-span-2">
+    <div className="text-sm opacity-90">Days Absent</div>
+    <div className="text-2xl font-bold">
+      {studentAttendance.filter(a => a.status === 'Absent').length}
+    </div>
+  </div>
+</div>
 
             {/* My Teachers */}
             <div className="bg-white p-6 rounded-2xl shadow-lg">
@@ -993,7 +1237,13 @@ function StudentDashboard({currentUser, handleLogout}) {
         )}
 
         {/* Profile Tab */}
-        {activeTab === 'profile' && <StudentProfileForm currentUser={currentUser} />}
+{activeTab === 'profile' && (
+  <StudentProfileForm
+    currentUser={currentUser}
+    onProfileUpdated={(updatedProfile) => setStudentProfile(updatedProfile)}
+  />
+)}
+
 
         {/* Curriculum Tab */}
         {activeTab === 'curriculum' && (
