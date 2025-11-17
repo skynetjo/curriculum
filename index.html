@@ -396,51 +396,50 @@ const handleLogin=async()=>{
     const loginType=loginForm.loginType||'teacher'; // NEW: track login type
     
     if(loginType==='student'){
-      // STUDENT LOGIN
-if(!studentId||!password){
-  alert('Please enter Student ID and password');
-  setAuthLoading(false);
-  return;
-}
-if(password!=='pass123'){
-  alert('Invalid password. Default password is: pass123');
-  setAuthLoading(false);
-  return;
-}
-
-// ✅ FIX: Search across all schools for student ID
-const allStudentsSnap = await db.collection('students').get();
-const studentDoc = allStudentsSnap.docs.find(doc => doc.data().id === studentId);
-
-if(studentDoc){
-  const studentData = studentDoc.data();
-  setCurrentUser({
-    ...studentData,
-    userType:'student',
-    studentId:studentId
-  });
-  setIsAdmin(false);
-  setActiveTab('dashboard');
-}else{
-  alert('Student ID not found. Please contact your teacher.');
-  setAuthLoading(false);
-  return;
-}
-      
-      if(!studentSnap.empty){
-        const studentData=studentSnap.docs[0].data();
-        setCurrentUser({
-          ...studentData,
-          userType:'student',
-          studentId:studentId
-        });
-        setIsAdmin(false);
-        setActiveTab('dashboard');
-      }else{
-        alert('Student ID not found. Please contact your teacher.');
-        setAuthLoading(false);
-        return;
+  // STUDENT LOGIN
+  if(!studentId||!password){
+    alert('Please enter Student ID and password');
+    setAuthLoading(false);
+    return;
+  }
+  if(password!=='pass123'){
+    alert('Invalid password. Default password is: pass123');
+    setAuthLoading(false);
+    return;
+  }
+  
+  try {
+    // ✅ FIX: Get all students and search for matching ID
+    const allStudentsSnap = await db.collection('students').get();
+    let foundStudent = null;
+    
+    allStudentsSnap.docs.forEach(doc => {
+      const data = doc.data();
+      if(data.id === studentId) {
+        foundStudent = data;
       }
+    });
+    
+    if(foundStudent){
+      setCurrentUser({
+        ...foundStudent,
+        userType:'student',
+        studentId:studentId
+      });
+      setIsAdmin(false);
+      setActiveTab('dashboard');
+    }else{
+      alert('Student ID not found. Please contact your teacher.');
+      setAuthLoading(false);
+      return;
+    }
+  } catch(e) {
+    console.error('Student login error:', e);
+    alert('Login failed: ' + e.message);
+    setAuthLoading(false);
+    return;
+  }
+}
     }else{
       // TEACHER/ADMIN LOGIN (existing code)
       if(!email||!password){
@@ -2440,71 +2439,86 @@ function StudentManagement({students}){
 
   const handleSave=async()=>{
   if(!form.school||!form.grade||!form.name||!form.gender||!form.id){
-    alert('Please fill all fields including Student ID');
+    alert('⚠️ Please fill all required fields:\n\n• School\n• Student ID\n• Grade\n• Name\n• Gender');
     return;
   }
+  
   try{
-    const docId=`${form.school.replace(/\s+/g,'_')}_${form.id}`;
+    const newDocId = `${form.school.replace(/\s+/g,'_')}_${form.id}`;
     
     if(editingStudent){
-      // ✅ FIX: Properly handle student edits
-      const originalDocId=`${editingStudent.school.replace(/\s+/g,'_')}_${editingStudent.id}`;
+      // ============ EDITING EXISTING STUDENT ============
+      const oldDocId = `${editingStudent.school.replace(/\s+/g,'_')}_${editingStudent.id}`;
+      
+      console.log('📝 Editing student:');
+      console.log('  Old Doc ID:', oldDocId);
+      console.log('  New Doc ID:', newDocId);
       
       // Check if student ID or school changed
-      if(docId !== originalDocId){
+      if(newDocId !== oldDocId){
+        console.log('🔄 ID or School changed - need to delete old doc');
+        
         // Check if new ID already exists
-        const existingSnap = await db.collection('students').doc(docId).get();
-        if(existingSnap.exists){
-          alert('This Student ID already exists in this school!');
+        const existingDoc = await db.collection('students').doc(newDocId).get();
+        if(existingDoc.exists){
+          alert('❌ This Student ID already exists in this school!\n\nPlease use a different Student ID.');
           return;
         }
         
         // Delete old document
-        await db.collection('students').doc(originalDocId).delete();
-        console.log('Deleted old document:', originalDocId);
+        console.log('🗑️ Deleting old document:', oldDocId);
+        await db.collection('students').doc(oldDocId).delete();
       }
       
-      // Save with new document ID
-      await db.collection('students').doc(docId).set({
-        school:form.school,
-        grade:form.grade,
-        name:form.name,
-        gender:form.gender,
-        id:form.id,
-        updatedAt:new Date().toISOString()
+      // Save with new/same document ID
+      console.log('💾 Saving to:', newDocId);
+      await db.collection('students').doc(newDocId).set({
+        school: form.school,
+        grade: form.grade,
+        name: form.name,
+        gender: form.gender,
+        id: form.id,
+        updatedAt: new Date().toISOString()
       });
       
       alert('✅ Student updated successfully!');
-    }else{
-      // ✅ ADD NEW STUDENT
-      const existingSnap=await db.collection('students').doc(docId).get();
-      if(existingSnap.exists){
-        alert('This Student ID already exists! Please use a unique ID.');
+      
+    } else {
+      // ============ ADDING NEW STUDENT ============
+      console.log('➕ Adding new student:', newDocId);
+      
+      // Check if student already exists
+      const existingDoc = await db.collection('students').doc(newDocId).get();
+      if(existingDoc.exists){
+        alert('❌ This Student ID already exists!\n\nStudent ID: ' + form.id + '\nSchool: ' + form.school);
         return;
       }
       
-      await db.collection('students').doc(docId).set({
-        school:form.school,
-        grade:form.grade,
-        name:form.name,
-        gender:form.gender,
-        id:form.id,
-        createdAt:new Date().toISOString()
+      // Create new student
+      await db.collection('students').doc(newDocId).set({
+        school: form.school,
+        grade: form.grade,
+        name: form.name,
+        gender: form.gender,
+        id: form.id,
+        createdAt: new Date().toISOString()
       });
       
-      alert('✅ Student added! Login:\nID: '+form.id+'\nPassword: pass123');
+      alert('✅ Student added successfully!\n\n📝 Login Details:\nStudent ID: ' + form.id + '\nPassword: pass123');
     }
     
+    // Close modal and reset form
     setShowModal(false);
     setEditingStudent(null);
     setForm({school:'',grade:'',name:'',gender:'',id:''});
     
-    // ✅ Reload page to show changes
-    window.location.reload();
+    // Reload to show changes
+    console.log('🔄 Reloading page...');
+    setTimeout(() => window.location.reload(), 500);
     
-  }catch(e){
-    console.error('Save error:', e);
-    alert('Failed to save: '+e.message);
+  } catch(e) {
+    console.error('❌ Save error:', e);
+    alert('Failed to save student:\n\n' + e.message);
   }
 };
 
@@ -2692,24 +2706,36 @@ await db.collection('students').doc(docId).set({
   };
 
   const handleDelete = async (student) => {
-  if (!confirm(`Delete ${student.name}? This will remove all their data.`)) return;
+  if (!confirm(`⚠️ Delete ${student.name}?\n\nStudent ID: ${student.id}\nSchool: ${student.school}\n\nThis cannot be undone!`)) return;
   
   try {
-    // ✅ FIX: Use correct document ID format
+    // ✅ FIX: Build correct document ID
     const docId = `${student.school.replace(/\s+/g, '_')}_${student.id}`;
     
-    console.log('Deleting student:', docId);
+    console.log('🗑️ Attempting to delete:', docId);
+    console.log('Student data:', student);
     
-    await db.collection('students').doc(docId).delete();
+    // Check if document exists
+    const docRef = db.collection('students').doc(docId);
+    const docSnap = await docRef.get();
     
+    if(!docSnap.exists) {
+      alert('❌ Error: Student document not found in database.\n\nDocument ID: ' + docId);
+      return;
+    }
+    
+    // Delete the document
+    await docRef.delete();
+    
+    console.log('✅ Deleted successfully:', docId);
     alert('✅ Student deleted successfully!');
     
-    // Reload to show changes
+    // Reload page to reflect changes
     window.location.reload();
     
   } catch (e) {
-    console.error('Delete error:', e);
-    alert('Failed to delete: ' + e.message);
+    console.error('❌ Delete error:', e);
+    alert('Failed to delete student:\n\n' + e.message);
   }
 };
 
