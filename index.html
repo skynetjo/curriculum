@@ -2423,6 +2423,245 @@ function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teache
   </div>
 </div>
 </div></div>)}
+// ========================================
+// CLASS VIEW COMPONENT (for Class 11 & 12 tabs)
+// ========================================
+function ClassView({grade, currentUser, curriculum, chapterProgress, updateChapterProgress}) {
+  const [expandedChapters, setExpandedChapters] = useState({});
+  const [currentDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Filter curriculum for the specific grade and teacher's subject
+  const gradeCurriculum = useMemo(() => {
+    const filtered = {};
+    Object.keys(curriculum).forEach(subject => {
+      if (currentUser.subject === 'All' || subject === currentUser.subject) {
+        filtered[subject] = (curriculum[subject] || []).filter(
+          ch => ch.grade === grade
+        );
+      }
+    });
+    return filtered;
+  }, [curriculum, grade, currentUser.subject]);
+
+  // Get progress for specific chapter
+  const getChapterProgress = (chapterId) => {
+    return chapterProgress[currentUser.school]?.[chapterId] || {};
+  };
+
+  // Toggle chapter expansion
+  const toggleChapter = (chapterId) => {
+    setExpandedChapters(prev => ({
+      ...prev,
+      [chapterId]: !prev[chapterId]
+    }));
+  };
+
+  // Calculate status based on dates
+  const getChapterStatus = (chapter) => {
+    const progress = getChapterProgress(chapter.id);
+    if (progress.completed) return 'completed';
+    
+    const today = new Date(currentDate);
+    const plannedEnd = new Date(chapter.plannedEndDate);
+    
+    if (today > plannedEnd) return 'delayed';
+    return 'pending';
+  };
+
+  // Count chapters by status
+  const getStatusCounts = () => {
+    let completed = 0, delayed = 0, pending = 0;
+    Object.values(gradeCurriculum).forEach(chapters => {
+      chapters.forEach(chapter => {
+        const status = getChapterStatus(chapter);
+        if (status === 'completed') completed++;
+        else if (status === 'delayed') delayed++;
+        else pending++;
+      });
+    });
+    return { completed, delayed, pending };
+  };
+
+  const statusCounts = getStatusCounts();
+  const totalChapters = statusCounts.completed + statusCounts.delayed + statusCounts.pending;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">📚 Class {grade} Curriculum</h2>
+        <div className="text-sm text-gray-600">
+          Subject: <span className="font-bold">{currentUser.subject}</span>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid md:grid-cols-4 gap-4">
+        <div className="stat-card bg-blue-500 text-white">
+          <div className="text-sm opacity-90">Total Chapters</div>
+          <div className="text-4xl font-bold">{totalChapters}</div>
+        </div>
+        <div className="stat-card bg-green-500 text-white">
+          <div className="text-sm opacity-90">✓ Completed</div>
+          <div className="text-4xl font-bold">{statusCounts.completed}</div>
+        </div>
+        <div className="stat-card bg-orange-500 text-white">
+          <div className="text-sm opacity-90">⚠ Delayed</div>
+          <div className="text-4xl font-bold">{statusCounts.delayed}</div>
+        </div>
+        <div className="stat-card bg-red-500 text-white">
+          <div className="text-sm opacity-90">⏳ Pending</div>
+          <div className="text-4xl font-bold">{statusCounts.pending}</div>
+        </div>
+      </div>
+
+      {/* Chapters by Subject */}
+      {Object.keys(gradeCurriculum).length === 0 ? (
+        <div className="bg-white p-12 rounded-2xl shadow-lg text-center">
+          <div className="text-6xl mb-4">📭</div>
+          <p className="text-xl text-gray-600">No chapters found for Class {grade}</p>
+        </div>
+      ) : (
+        Object.keys(gradeCurriculum).map(subject => {
+          const chapters = gradeCurriculum[subject];
+          if (chapters.length === 0) return null;
+
+          return (
+            <div key={subject} className="bg-white p-6 rounded-2xl shadow-lg">
+              <h3 className="text-2xl font-bold mb-4 text-blue-600">
+                {subject} ({chapters.length} chapters)
+              </h3>
+              
+              <div className="space-y-4">
+                {chapters.map(chapter => {
+                  const progress = getChapterProgress(chapter.id);
+                  const status = getChapterStatus(chapter);
+                  const isExpanded = expandedChapters[chapter.id];
+
+                  return (
+                    <div
+                      key={chapter.id}
+                      className={`chapter-card ${status} border-2 rounded-xl p-4`}
+                    >
+                      {/* Chapter Header */}
+                      <div 
+                        className="flex justify-between items-start cursor-pointer"
+                        onClick={() => toggleChapter(chapter.id)}
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h4 className="text-lg font-bold">{chapter.name}</h4>
+                            <span className={`status-badge status-${status}`}>
+                              {status === 'completed' ? '✓ Done' : 
+                               status === 'delayed' ? '⚠ Delayed' : '⏳ Pending'}
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-600 space-y-1">
+                            <div><strong>Duration:</strong> {chapter.duration} days</div>
+                            <div><strong>Planned:</strong> {chapter.plannedStartDate} → {chapter.plannedEndDate}</div>
+                            {progress.actualStartDate && (
+                              <div><strong>Actual Start:</strong> {progress.actualStartDate}</div>
+                            )}
+                            {progress.completed && progress.actualEndDate && (
+                              <div><strong>Actual End:</strong> {progress.actualEndDate}</div>
+                            )}
+                          </div>
+                        </div>
+                        <button className="text-2xl">
+                          {isExpanded ? '▲' : '▼'}
+                        </button>
+                      </div>
+
+                      {/* Expanded Details */}
+                      {isExpanded && (
+                        <div className="mt-4 pt-4 border-t-2 chapter-details">
+                          <div className="grid md:grid-cols-2 gap-4 mb-4">
+                            {/* Actual Start Date */}
+                            <div>
+                              <label className="block text-sm font-semibold mb-2">
+                                Actual Start Date
+                              </label>
+                              <input
+                                type="date"
+                                value={progress.actualStartDate || ''}
+                                onChange={(e) => {
+                                  updateChapterProgress(chapter.id, {
+                                    ...progress,
+                                    actualStartDate: e.target.value
+                                  });
+                                }}
+                                className="w-full px-3 py-2 border-2 rounded-lg"
+                              />
+                            </div>
+
+                            {/* Actual End Date */}
+                            <div>
+                              <label className="block text-sm font-semibold mb-2">
+                                Actual End Date
+                              </label>
+                              <input
+                                type="date"
+                                value={progress.actualEndDate || ''}
+                                onChange={(e) => {
+                                  updateChapterProgress(chapter.id, {
+                                    ...progress,
+                                    actualEndDate: e.target.value
+                                  });
+                                }}
+                                className="w-full px-3 py-2 border-2 rounded-lg"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Completion Checkbox */}
+                          <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={progress.completed || false}
+                              onChange={(e) => {
+                                updateChapterProgress(chapter.id, {
+                                  ...progress,
+                                  completed: e.target.checked,
+                                  actualEndDate: e.target.checked && !progress.actualEndDate 
+                                    ? currentDate 
+                                    : progress.actualEndDate
+                                });
+                              }}
+                            />
+                            <span className="font-semibold">Mark as Completed</span>
+                          </label>
+
+                          {/* Notes */}
+                          <div className="mt-4">
+                            <label className="block text-sm font-semibold mb-2">
+                              Notes / Remarks
+                            </label>
+                            <textarea
+                              value={progress.notes || ''}
+                              onChange={(e) => {
+                                updateChapterProgress(chapter.id, {
+                                  ...progress,
+                                  notes: e.target.value
+                                });
+                              }}
+                              className="w-full px-3 py-2 border-2 rounded-lg"
+                              rows="3"
+                              placeholder="Add any notes about this chapter..."
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}    
 function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
   const chart1Ref=useRef(null);
   const chart2Ref=useRef(null);
