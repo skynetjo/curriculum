@@ -3700,6 +3700,7 @@ function StudentManagement({students}){
   const[filterGrade,setFilterGrade]=useState('All');
   const[selectAll,setSelectAll]=useState(false);
   const fileInputRef=useRef(null);
+  const updateIdFileRef=useRef(null);
 
   const filteredStudents=students
   .filter(s=>{
@@ -3977,6 +3978,92 @@ await db.collection('students').doc(docId).set({
     });
   };
 
+  // ✅ NEW: Bulk Update Student IDs
+  const handleBulkUpdateIDs=e=>{
+    const file=e.target.files[0];
+    if(!file)return;
+
+    Papa.parse(file,{
+      complete:async results=>{
+        try{
+          const rows=results.data;
+          if(rows.length<2){
+            alert('CSV file is empty');
+            return;
+          }
+
+          let updated=0;
+          let notFound=0;
+          const errors=[];
+          const updateLog=[];
+          
+          for(let i=1;i<rows.length;i++){
+            const row=rows[i];
+            const schoolName=row[0]?row[0].trim():'';
+            const studentName=row[1]?row[1].trim():'';
+            const grade=row[2]?row[2].trim():'';
+            const newStudentId=row[3]?row[3].trim():'';
+
+            if(!schoolName||!studentName||!grade||!newStudentId){
+              errors.push(`Row ${i+1}: Missing required fields (School, Name, Grade, Student ID)`);
+              notFound++;
+              continue;
+            }
+
+            // Find student by School + Name + Grade (exact match)
+            const querySnap=await db.collection('students')
+              .where('school','==',schoolName)
+              .where('name','==',studentName)
+              .where('grade','==',grade)
+              .limit(1)
+              .get();
+
+            if(querySnap.empty){
+              errors.push(`Row ${i+1}: Student "${studentName}" not found in ${schoolName}, Grade ${grade}`);
+              notFound++;
+              continue;
+            }
+
+            // Update the student ID
+            const studentDoc=querySnap.docs[0];
+            const oldId=studentDoc.data().id||'(blank)';
+            
+            await studentDoc.ref.update({
+              id: newStudentId,
+              updatedAt: new Date().toISOString()
+            });
+            
+            updated++;
+            updateLog.push(`✅ ${studentName} (${schoolName}): ${oldId} → ${newStudentId}`);
+          }
+
+          let message=`✅ Updated ${updated} Student IDs!`;
+          if(notFound>0){
+            message+=`\n⚠️ ${notFound} students not found`;
+          }
+          
+          if(updateLog.length>0){
+            message+='\n\n📝 Updates:\n'+updateLog.slice(0,10).join('\n');
+            if(updateLog.length>10)message+=`\n... and ${updateLog.length-10} more`;
+          }
+          
+          if(errors.length>0){
+            message+='\n\n❌ Errors:\n'+errors.slice(0,5).join('\n');
+            if(errors.length>5)message+=`\n... and ${errors.length-5} more`;
+          }
+          
+          alert(message);
+          
+          if(updateIdFileRef.current)updateIdFileRef.current.value='';
+          window.location.reload(); // Refresh to show updated IDs
+        }catch(e){
+          alert('Update failed: '+e.message);
+        }
+      },
+      error:()=>alert('Failed to parse CSV')
+    });
+  };
+
   const handleDelete = async (student) => {
   if (!confirm(`⚠️ Delete ${student.name}?\n\nStudent ID: ${student.id}\nSchool: ${student.school}\n\nThis action cannot be undone!`)) return;
   
@@ -4048,6 +4135,10 @@ await db.collection('students').doc(docId).set({
             📤 Import CSV
             <input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVImport} className="hidden"/>
           </label>
+          <label className="px-6 py-3 bg-orange-600 text-white rounded-xl font-semibold cursor-pointer">
+            🔄 Update Student IDs
+            <input ref={updateIdFileRef} type="file" accept=".csv" onChange={handleBulkUpdateIDs} className="hidden"/>
+          </label>
           <button onClick={handleExport} className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold">
             📥 Export
           </button>
@@ -4101,13 +4192,25 @@ await db.collection('students').doc(docId).set({
 
       <div className="bg-white p-4 rounded-xl border-2 border-gray-200">
         <p className="text-sm text-gray-600">
-          <strong>📋 CSV Format (5 columns):</strong>
+          <strong>📋 Import New Students CSV Format (5 columns):</strong>
           <br/>School Name, Student ID, Grade, Student Name, Gender
           <br/><br/>
           <strong>✅ Example Row:</strong>
           <br/>CoE Barwani, STU001, 11, Raj Kumar, Male
           <br/><br/>
           <strong>🔐 Login Info:</strong> Students use their Student ID + Password: <span className="font-mono bg-yellow-100 px-2 py-1 rounded">pass123</span>
+        </p>
+      </div>
+
+      <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-300">
+        <p className="text-sm text-gray-600">
+          <strong>🔄 Update Student IDs CSV Format (4 columns):</strong>
+          <br/>School Name, Student Name, Grade, Student ID
+          <br/><br/>
+          <strong>✅ Example Row:</strong>
+          <br/>CoE Bundi, Aaditya Raj Dhawan, Class 12, 2754059028
+          <br/><br/>
+          <strong>⚡ How it works:</strong> System finds existing student by matching School + Name + Grade, then updates only the Student ID field.
         </p>
       </div>
 
