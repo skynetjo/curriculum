@@ -367,15 +367,15 @@ function StudentProfileForm({currentUser}) {
   useEffect(() => {
   const fetchProfile = async () => {
     try {
-      setLoading(true);  // ⬅️ ADD THIS
+      setLoading(true);  // ✅ ADD THIS
       const docSnap = await db.collection('studentProfiles').doc(myId).get();
       if (docSnap.exists) {
-        setStudentProfile({ ...studentProfile, ...docSnap.data() });
+        setProfile({ ...profile, ...docSnap.data() }); // ⬅️ CHANGE THIS LINE
       }
+      setLoading(false); // ✅ ADD THIS
     } catch (e) {
       console.error('Error fetching profile:', e);
-    } finally {
-      setLoading(false);  // ⬅️ ADD THIS
+      setLoading(false); // ✅ ADD THIS
     }
   };
   fetchProfile();
@@ -1145,72 +1145,72 @@ useEffect(() => {
 const handleLogin=async()=>{
   setAuthLoading(true);
   try{
-    const email=
-(loginForm.email||'').trim().toLowerCase();
+    const email=(loginForm.email||'').trim().toLowerCase();
     const password=loginForm.password;
-    const studentId=
-(loginForm.studentId||'').trim();
-    const loginType=loginForm.loginType||'teacher'; // NEW: track login type
+    const studentId=(loginForm.studentId||'').trim();
+    const loginType=loginForm.loginType||'teacher';
     
     if(loginType==='student'){
-  // STUDENT LOGIN
-  if(!studentId||!password){
-    alert('Please enter Student ID and password');
-    setAuthLoading(false);
-    return;
-  }
-  if(password!=='pass123'){
-    alert('Invalid password. Default password is: pass123');
-    setAuthLoading(false);
-    return;
-  }
-  
-  try {
-    // ✅ FIX: Get all students and search for matching ID
-    const allStudentsSnap = await db.collection('students').get();
-    let foundStudent = null;
-    
-    allStudentsSnap.docs.forEach(doc => {
-      const data = doc.data();
-      if(data.id === studentId) {
-        foundStudent = { ...data, docId: doc.id };
-console.log('✅ Found student:', foundStudent);
+      // STUDENT LOGIN
+      if(!studentId||!password){
+        alert('Please enter Student ID and password');
+        setAuthLoading(false);
+        return;
       }
-    });
-    
-    if(foundStudent){
-      setCurrentUser({
-        ...foundStudent,
-        userType:'student',
-        studentId:studentId
-      });
-      setIsAdmin(false);
-      setActiveTab('dashboard');
+      if(password!=='pass123'){
+        alert('Invalid password. Default password is: pass123');
+        setAuthLoading(false);
+        return;
+      }
+      
+      try {
+        // ✅ Get all students and search for matching ID
+        const allStudentsSnap = await db.collection('students').get();
+        let foundStudent = null;
+        
+        allStudentsSnap.docs.forEach(doc => {
+          const data = doc.data();
+          if(data.id === studentId) {
+            foundStudent = { ...data, docId: doc.id };
+            console.log('✅ Found student:', foundStudent);
+          }
+        });
+        
+        if(foundStudent){
+          setCurrentUser({
+            ...foundStudent,
+            userType:'student',
+            studentId:studentId
+          });
+          setIsAdmin(false);
+          setActiveTab('dashboard');
+          setAuthLoading(false); // ⬅️ ADD THIS
+        }else{
+          alert('Student ID not found. Please contact your teacher.');
+          setAuthLoading(false);
+          return;
+        }
+      } catch(e) {
+        console.error('Student login error:', e);
+        alert('Login failed: ' + e.message);
+        setAuthLoading(false);
+        return;
+      }
     }else{
-      alert('Student ID not found. Please contact your teacher.');
-      setAuthLoading(false);
-      return;
+      // TEACHER/ADMIN LOGIN (existing code)
+      if(!email||!password){
+        alert('Please enter email and password');
+        setAuthLoading(false);
+        return;
+      }
+      await auth.signInWithEmailAndPassword(email,password);
+      setAuthLoading(false); // ⬅️ ADD THIS
     }
-  } catch(e) {
-    console.error('Student login error:', e);
-    alert('Login failed: ' + e.message);
-    setAuthLoading(false);
-    return;
-  }
-}else{
-  // TEACHER/ADMIN LOGIN (existing code)
-  if(!email||!password){
-    alert('Please enter email and password');
-    setAuthLoading(false);
-    return;
-  }
-  await auth.signInWithEmailAndPassword(email,password);
-}
   }catch(e){
     console.error('login error',e);
     alert('Login failed: '+e.message);
+    setAuthLoading(false); // ⬅️ MAKE SURE THIS EXISTS
   }
-  setAuthLoading(false);
 };
 const handleLogout=async()=>{try{await auth.signOut();setActiveTab('overview')}catch(e){console.error('logout error',e)}};
 const updateChapterProgress = useCallback(async (school, chapterId, field, value) => {
