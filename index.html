@@ -329,6 +329,218 @@ function InstallPrompt(){
     </div>
   );
 }
+// ========================================
+// STUDENT DASHBOARD
+// ========================================
+function StudentDashboard({currentUser, handleLogout}) {
+  const [activeTab, setActiveTab] = useState('overview');
+  const [curriculum, setCurriculum] = useState({});
+  const [chapterProgress, setChapterProgress] = useState({});
+  const [studentAttendance, setStudentAttendance] = useState([]);
+  
+  const mySchool = currentUser.school;
+  const myGrade = currentUser.grade;
+  const myId = currentUser.studentId || currentUser.id;
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch curriculum for student's school and grade
+        const currMap = {};
+        const currSnap = await db.collection('curriculum').get();
+        currSnap.docs.forEach(doc => { currMap[doc.id] = doc.data() });
+        setCurriculum(currMap);
+
+        // Fetch chapter progress
+        const progressMap = {};
+        const progressSnap = await db.collection('chapterProgress').get();
+        progressSnap.docs.forEach(d => progressMap[d.id] = d.data());
+        setChapterProgress(progressMap);
+
+        // Fetch student's own attendance
+        const attSnap = await db.collection('studentAttendance')
+          .where('studentId', '==', myId)
+          .where('school', '==', mySchool)
+          .get();
+        setStudentAttendance(attSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+        
+      } catch (e) {
+        console.error('Data fetch error:', e);
+      }
+    };
+    fetchData();
+  }, [mySchool, myGrade, myId]);
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <nav className="avanti-gradient shadow-lg sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/>
+              <div>
+                <h1 className="text-2xl font-bold text-white">Student Dashboard</h1>
+                <p className="text-sm text-white opacity-90">{mySchool}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right hidden sm:block">
+                <p className="text-white font-semibold">{currentUser.name}</p>
+                <p className="text-sm text-white opacity-90">Class {myGrade} • ID: {myId}</p>
+              </div>
+              <button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
+        <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
+          {['overview', 'curriculum', 'attendance'].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} 
+              className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab === tab ? 'avanti-gradient text-white' : 'bg-white'}`}>
+              {tab === 'overview' && '📊 My Overview'}
+              {tab === 'curriculum' && '📚 My Curriculum'}
+              {tab === 'attendance' && '✅ My Attendance'}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-bold">Welcome, {currentUser.name}! 👋</h2>
+            
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="stat-card bg-blue-500 text-white">
+                <div className="text-sm opacity-90">My School</div>
+                <div className="text-2xl font-bold">{mySchool}</div>
+              </div>
+              <div className="stat-card bg-green-500 text-white">
+                <div className="text-sm opacity-90">My Class</div>
+                <div className="text-2xl font-bold">Class {myGrade}</div>
+              </div>
+              <div className="stat-card bg-purple-500 text-white">
+                <div className="text-sm opacity-90">My Attendance</div>
+                <div className="text-2xl font-bold">
+                  {studentAttendance.filter(a => a.status === 'Present').length} / {studentAttendance.length} days
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-lg">
+              <h3 className="text-xl font-bold mb-4">📚 My Recent Attendance</h3>
+              {studentAttendance.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">No attendance records yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {studentAttendance.slice(0, 10).map((record, idx) => (
+                    <div key={idx} className="flex justify-between items-center p-3 border-2 rounded-xl">
+                      <div className="font-semibold">{record.date}</div>
+                      <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                        record.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {record.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'curriculum' && (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-bold">📚 My Curriculum - Class {myGrade}</h2>
+            
+            {SUBJECTS.map(subject => {
+              const docId = `${mySchool}_${subject}_${myGrade}`;
+              const chapters = curriculum[docId]?.chapters || [];
+              
+              return (
+                <div key={subject} className="bg-white p-6 rounded-2xl shadow-lg">
+                  <h3 className="text-2xl font-bold mb-4">{subject}</h3>
+                  {chapters.length === 0 ? (
+                    <p className="text-gray-500">No chapters available</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {chapters.map(chapter => {
+                        const progressId = `${mySchool}_${chapter.id}`;
+                        const prog = chapterProgress[progressId] || {};
+                        const status = getChapterStatus(chapter, prog);
+                        
+                        return (
+                          <div key={chapter.id} className="border-2 rounded-xl p-4">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h4 className="font-bold text-lg">{chapter.name}</h4>
+                                <div className="text-sm text-gray-600 mt-1">
+                                  Target: {chapter.targetDate || 'Not set'}
+                                </div>
+                              </div>
+                              <div className={`status-badge ${status.class}`}>
+                                {status.label}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {activeTab === 'attendance' && (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-bold">✅ My Attendance Record</h2>
+            
+            <div className="bg-white p-6 rounded-2xl shadow-lg">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="avanti-gradient-light">
+                    <tr>
+                      <th className="p-3 text-left">Date</th>
+                      <th className="p-3 text-left">Status</th>
+                      <th className="p-3 text-left">Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {studentAttendance.length === 0 ? (
+                      <tr><td colSpan="3" className="p-8 text-center text-gray-500">No attendance records</td></tr>
+                    ) : (
+                      studentAttendance.map((record, idx) => (
+                        <tr key={idx} className="border-b hover:bg-gray-50">
+                          <td className="p-3">{record.date}</td>
+                          <td className="p-3">
+                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                              record.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {record.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-sm">{record.remarks || '—'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <footer className="bg-gray-800 text-white text-center py-4 mt-auto">
+        <p>Made by Anand with ❤️</p>
+      </footer>
+    </div>
+  );
+}
 function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:'',studentId:'',loginType:'teacher'});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);
 const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);
@@ -695,6 +907,11 @@ function AdminStudentProfiles(){
       </div>
     </div>
   );
+}
+
+// ✅ Check if student is logged in
+if(currentUser && currentUser.userType === 'student') {
+  return <StudentDashboard currentUser={currentUser} handleLogout={handleLogout} />;
 }
 
 return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab}/>;
@@ -2706,36 +2923,50 @@ await db.collection('students').doc(docId).set({
   };
 
   const handleDelete = async (student) => {
-  if (!confirm(`⚠️ Delete ${student.name}?\n\nStudent ID: ${student.id}\nSchool: ${student.school}\n\nThis cannot be undone!`)) return;
+  if (!confirm(`⚠️ Delete ${student.name}?\n\nStudent ID: ${student.id}\nSchool: ${student.school}\n\nThis action cannot be undone!`)) return;
   
   try {
-    // ✅ FIX: Build correct document ID
-    const docId = `${student.school.replace(/\s+/g, '_')}_${student.id}`;
+    console.log('=== DELETE ATTEMPT ===');
+    console.log('Student object:', student);
     
-    console.log('🗑️ Attempting to delete:', docId);
-    console.log('Student data:', student);
+    // Try multiple document ID formats
+    const formats = [
+      `${student.school.replace(/\s+/g, '_')}_${student.id}`,
+      `${student.school}_${student.id}`,
+      student.docId
+    ];
     
-    // Check if document exists
-    const docRef = db.collection('students').doc(docId);
-    const docSnap = await docRef.get();
+    console.log('Trying document IDs:', formats);
     
-    if(!docSnap.exists) {
-      alert('❌ Error: Student document not found in database.\n\nDocument ID: ' + docId);
-      return;
+    let deleted = false;
+    
+    for (const docId of formats) {
+      if (!docId) continue;
+      
+      const docRef = db.collection('students').doc(docId);
+      const docSnap = await docRef.get();
+      
+      if (docSnap.exists) {
+        console.log('✅ Found document:', docId);
+        await docRef.delete();
+        deleted = true;
+        break;
+      } else {
+        console.log('❌ Not found:', docId);
+      }
     }
     
-    // Delete the document
-    await docRef.delete();
-    
-    console.log('✅ Deleted successfully:', docId);
-    alert('✅ Student deleted successfully!');
-    
-    // Reload page to reflect changes
-    window.location.reload();
+    if (deleted) {
+      alert('✅ Student deleted successfully!');
+      window.location.reload();
+    } else {
+      alert('❌ Error: Could not find student document.\n\nPlease contact support.');
+      console.error('Tried formats:', formats);
+    }
     
   } catch (e) {
-    console.error('❌ Delete error:', e);
-    alert('Failed to delete student:\n\n' + e.message);
+    console.error('Delete error:', e);
+    alert('Failed to delete:\n\n' + e.message);
   }
 };
 
