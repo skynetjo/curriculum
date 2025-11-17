@@ -1142,23 +1142,24 @@ function StudentDashboard({currentUser, handleLogout}) {
           ))}
         </div>
 
-        {/* Dashboard Tab */}
+                {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
             <h2 className="text-3xl font-bold">Welcome, {currentUser.name}! 👋</h2>
-            
-            <div className="grid md:grid-cols-4 gap-4">
-  <div className="stat-card bg-blue-500 text-white">
-    <div className="text-sm opacity-90">My School</div>
-    <div className="text-xl font-bold">{mySchool}</div>
-  </div>
 
-  <div className="stat-card bg-green-500 text-white">
-    <div className="text-sm opacity-90">My Class</div>
-    <div className="text-2xl font-bold">Class {myGrade}</div>
-  </div>
+            {/* Top stats cards */}
+            <div className="grid md:grid-cols-5 gap-4">
+              <div className="stat-card bg-blue-500 text-white">
+                <div className="text-sm opacity-90">My School</div>
+                <div className="text-xl font-bold">{mySchool}</div>
+              </div>
 
-                <div className="stat-card bg-purple-500 text-white">
+              <div className="stat-card bg-green-500 text-white">
+                <div className="text-sm opacity-90">My Class</div>
+                <div className="text-2xl font-bold">Class {myGrade}</div>
+              </div>
+
+              <div className="stat-card bg-purple-500 text-white">
                 <div className="text-sm opacity-90">Profile Complete</div>
                 <div className="text-2xl font-bold">{profileCompletion}%</div>
               </div>
@@ -1176,14 +1177,7 @@ function StudentDashboard({currentUser, handleLogout}) {
                   {studentAttendance.filter(a => a.status === 'Absent').length}
                 </div>
               </div>
-              
-  <div className="stat-card bg-red-500 text-white md:col-span-1 col-span-2">
-    <div className="text-sm opacity-90">Days Absent</div>
-    <div className="text-2xl font-bold">
-      {studentAttendance.filter(a => a.status === 'Absent').length}
-    </div>
-  </div>
-</div>
+            </div>
 
             {/* My Teachers */}
             <div className="bg-white p-6 rounded-2xl shadow-lg">
