@@ -1548,7 +1548,21 @@ const handleLogin=async()=>{
     setAuthLoading(false); // ⬅️ MAKE SURE THIS EXISTS
   }
 };
-const handleLogout=async()=>{try{await auth.signOut();setActiveTab('overview')}catch(e){console.error('logout error',e)}};
+const handleLogout=async()=>{
+  try{
+    // For teachers/admins who use Firebase Auth
+    if(auth.currentUser){
+      await auth.signOut();
+    }
+    // Reset state for all users (including students)
+    setCurrentUser(null);
+    setIsAdmin(false);
+    setActiveTab('overview');
+    setLoginForm({loginType:'teacher',email:'',password:'',studentId:''});
+  }catch(e){
+    console.error('logout error',e);
+  }
+};
 const updateChapterProgress = useCallback(async (school, chapterId, field, value) => {
   try {
     const docId = `${school}_${chapterId}`;
