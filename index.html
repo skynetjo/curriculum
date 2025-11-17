@@ -2430,14 +2430,17 @@ function ClassView({grade, currentUser, curriculum, chapterProgress, updateChapt
   const [expandedChapters, setExpandedChapters] = useState({});
   const [currentDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Filter curriculum for the specific grade and teacher's subject
+  /// Filter curriculum for the specific grade and teacher's subject
   const gradeCurriculum = useMemo(() => {
     const filtered = {};
     Object.keys(curriculum).forEach(subject => {
       if (currentUser.subject === 'All' || subject === currentUser.subject) {
-        filtered[subject] = (curriculum[subject] || []).filter(
-          ch => ch.grade === grade
+        const chapters = (curriculum[subject] || []).filter(
+          ch => String(ch.grade) === String(grade) || ch.grade === `Class ${grade}`
         );
+        if (chapters.length > 0) {
+          filtered[subject] = chapters;
+        }
       }
     });
     return filtered;
