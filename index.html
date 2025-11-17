@@ -366,17 +366,24 @@ function StudentProfileForm({ currentUser }) {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
 
+  // Helper for updating fields safely
+  const handleChange = (field) => (e) => {
+    const value = e.target.value;
+    setProfile(prev => ({ ...prev, [field]: value }));
+  };
+
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         setLoading(true);
         const docSnap = await db.collection('studentProfiles').doc(myId).get();
         if (docSnap.exists) {
-          setProfile(prev => ({ ...prev, ...docSnap.data() }));
+          const data = docSnap.data();
+          setProfile(prev => ({ ...prev, ...data }));
         }
-        setLoading(false);
       } catch (e) {
         console.error('Error fetching profile:', e);
+      } finally {
         setLoading(false);
       }
     };
@@ -396,26 +403,21 @@ function StudentProfileForm({ currentUser }) {
     return Math.round((filled / requiredFields.length) * 100);
   };
 
-  const handleSave = async () => {
-    await db.collection('studentProfiles').doc(myId).set({
-      ...profile,
-      studentId: myId,
-      updatedAt: new Date().toISOString()
-    });
-    alert('✅ Profile saved successfully!');
-  };
+  const completion = calculateCompletion();
 
-  const handleToggleEdit = async () => {
-    if (isEditing) {
-      // closing edit → save
-      await handleSave();
+  const handleSave = async () => {
+    try {
+      await db.collection('studentProfiles').doc(myId).set({
+        ...profile,
+        studentId: myId,
+        updatedAt: new Date().toISOString()
+      });
+      alert('✅ Profile saved successfully!');
       setIsEditing(false);
-    } else {
-      setIsEditing(true);
+    } catch (e) {
+      alert('Failed to save: ' + e.message);
     }
   };
-
-  const completion = calculateCompletion();
 
   const inputCls = (extra = '') =>
     `w-full border-2 px-4 py-3 rounded-xl ${extra} ${
@@ -448,10 +450,15 @@ function StudentProfileForm({ currentUser }) {
             >
               {completion}%
             </div>
+            <div className="text-xs text-gray-500">
+              {100 - completion}% remaining
+            </div>
           </div>
           <button
-            onClick={handleToggleEdit}
-            className="px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold"
+            onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
+            className={`px-4 py-2 rounded-xl font-semibold ${
+              isEditing ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'
+            }`}
           >
             {isEditing ? 'Save' : 'Edit'}
           </button>
@@ -477,7 +484,7 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.firstName}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, firstName: e.target.value })}
+                onChange={handleChange('firstName')}
                 className={inputCls()}
               />
             </div>
@@ -487,7 +494,7 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.lastName}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, lastName: e.target.value })}
+                onChange={handleChange('lastName')}
                 className={inputCls()}
               />
             </div>
@@ -497,7 +504,7 @@ function StudentProfileForm({ currentUser }) {
                 type="email"
                 value={profile.email}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, email: e.target.value })}
+                onChange={handleChange('email')}
                 className={inputCls()}
               />
             </div>
@@ -507,7 +514,7 @@ function StudentProfileForm({ currentUser }) {
                 type="tel"
                 value={profile.phone}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, phone: e.target.value })}
+                onChange={handleChange('phone')}
                 className={inputCls()}
               />
             </div>
@@ -517,7 +524,7 @@ function StudentProfileForm({ currentUser }) {
                 type="date"
                 value={profile.dob}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, dob: e.target.value })}
+                onChange={handleChange('dob')}
                 className={inputCls()}
               />
             </div>
@@ -526,7 +533,7 @@ function StudentProfileForm({ currentUser }) {
               <select
                 value={profile.grade}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, grade: e.target.value })}
+                onChange={handleChange('grade')}
                 className={inputCls()}
               >
                 <option value="">Select</option>
@@ -539,7 +546,7 @@ function StudentProfileForm({ currentUser }) {
               <select
                 value={profile.category}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, category: e.target.value })}
+                onChange={handleChange('category')}
                 className={inputCls()}
               >
                 <option value="">Select</option>
@@ -553,7 +560,7 @@ function StudentProfileForm({ currentUser }) {
               <select
                 value={profile.stream}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, stream: e.target.value })}
+                onChange={handleChange('stream')}
                 className={inputCls()}
               >
                 <option value="">Select</option>
@@ -567,7 +574,7 @@ function StudentProfileForm({ currentUser }) {
               <select
                 value={profile.school}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, school: e.target.value })}
+                onChange={handleChange('school')}
                 className={inputCls()}
               >
                 <option value="">Select</option>
@@ -585,7 +592,7 @@ function StudentProfileForm({ currentUser }) {
                 step="0.01"
                 value={profile.percentage10th}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, percentage10th: e.target.value })}
+                onChange={handleChange('percentage10th')}
                 className={inputCls()}
                 placeholder="e.g. 85.5"
               />
@@ -599,7 +606,7 @@ function StudentProfileForm({ currentUser }) {
                 step="0.01"
                 value={profile.percentage11th}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, percentage11th: e.target.value })}
+                onChange={handleChange('percentage11th')}
                 className={inputCls()}
                 placeholder="e.g. 80.0"
               />
@@ -617,7 +624,7 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.fatherName}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, fatherName: e.target.value })}
+                onChange={handleChange('fatherName')}
                 className={inputCls()}
               />
             </div>
@@ -627,7 +634,7 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.motherName}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, motherName: e.target.value })}
+                onChange={handleChange('motherName')}
                 className={inputCls()}
               />
             </div>
@@ -637,7 +644,17 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.fatherOccupation}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, fatherOccupation: e.target.value })}
+                onChange={handleChange('fatherOccupation')}
+                className={inputCls()}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Other (Father)</label>
+              <input
+                type="text"
+                value={profile.fatherOccupationOther}
+                disabled={disabled}
+                onChange={handleChange('fatherOccupationOther')}
                 className={inputCls()}
               />
             </div>
@@ -647,7 +664,17 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.motherOccupation}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, motherOccupation: e.target.value })}
+                onChange={handleChange('motherOccupation')}
+                className={inputCls()}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Other (Mother)</label>
+              <input
+                type="text"
+                value={profile.motherOccupationOther}
+                disabled={disabled}
+                onChange={handleChange('motherOccupationOther')}
                 className={inputCls()}
               />
             </div>
@@ -657,7 +684,7 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.fatherEducation}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, fatherEducation: e.target.value })}
+                onChange={handleChange('fatherEducation')}
                 className={inputCls()}
               />
             </div>
@@ -667,17 +694,17 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.motherEducation}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, motherEducation: e.target.value })}
+                onChange={handleChange('motherEducation')}
                 className={inputCls()}
               />
             </div>
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-bold mb-2">Family Income *</label>
               <input
                 type="text"
                 value={profile.familyIncome}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, familyIncome: e.target.value })}
+                onChange={handleChange('familyIncome')}
                 className={inputCls()}
               />
             </div>
@@ -694,7 +721,7 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.address}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, address: e.target.value })}
+                onChange={handleChange('address')}
                 className={inputCls()}
               />
             </div>
@@ -704,7 +731,7 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.state}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, state: e.target.value })}
+                onChange={handleChange('state')}
                 className={inputCls()}
               />
             </div>
@@ -714,7 +741,7 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.district}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, district: e.target.value })}
+                onChange={handleChange('district')}
                 className={inputCls()}
               />
             </div>
@@ -724,7 +751,7 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.pincode}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, pincode: e.target.value })}
+                onChange={handleChange('pincode')}
                 className={inputCls()}
               />
             </div>
@@ -734,13 +761,17 @@ function StudentProfileForm({ currentUser }) {
                 type="text"
                 value={profile.whatsappNumber}
                 disabled={disabled}
-                onChange={e => setProfile({ ...profile, whatsappNumber: e.target.value })}
+                onChange={handleChange('whatsappNumber')}
                 className={inputCls()}
               />
             </div>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
       {/* Academic Info (optional extras – currently just shows percentages again if needed) */}
       <div className="border-4 border-indigo-500 rounded-2xl p-6 bg-indigo-50">
         <div className="flex justify-between items-center mb-4">
