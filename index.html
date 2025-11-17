@@ -365,20 +365,21 @@ function StudentProfileForm({currentUser}) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const docSnap = await db.collection('studentProfiles').doc(myId).get();
-        if (docSnap.exists) {
-          setProfile({ ...profile, ...docSnap.data() });
-        }
-        setLoading(false);
-      } catch (e) {
-        console.error('Error fetching profile:', e);
-        setLoading(false);
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);  // ⬅️ ADD THIS
+      const docSnap = await db.collection('studentProfiles').doc(myId).get();
+      if (docSnap.exists) {
+        setStudentProfile({ ...studentProfile, ...docSnap.data() });
       }
-    };
-    fetchProfile();
-  }, [myId]);
+    } catch (e) {
+      console.error('Error fetching profile:', e);
+    } finally {
+      setLoading(false);  // ⬅️ ADD THIS
+    }
+  };
+  fetchProfile();
+}, [myId]);
 
   const calculateCompletion = () => {
     const requiredFields = [
@@ -778,6 +779,7 @@ function StudentExamRegistration({currentUser}) {
 // ========================================
 function StudentDashboard({currentUser, handleLogout}) {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [loading, setLoading] = useState(true);  // ⬅️ ADD THIS LINE
   const [curriculum, setCurriculum] = useState({});
   const [chapterProgress, setChapterProgress] = useState({});
   const [studentAttendance, setStudentAttendance] = useState([]);
