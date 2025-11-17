@@ -397,21 +397,35 @@ const handleLogin=async()=>{
     
     if(loginType==='student'){
       // STUDENT LOGIN
-      if(!studentId||!password){
-        alert('Please enter Student ID and password');
-        setAuthLoading(false);
-        return;
-      }
-      if(password!=='pass123'){
-        alert('Invalid password. Default password is: pass123');
-        setAuthLoading(false);
-        return;
-      }
-      // Fetch student from students collection
-      const studentSnap=await db.collection('students')
-        .where('id','==',studentId)
-        .limit(1)
-        .get();
+if(!studentId||!password){
+  alert('Please enter Student ID and password');
+  setAuthLoading(false);
+  return;
+}
+if(password!=='pass123'){
+  alert('Invalid password. Default password is: pass123');
+  setAuthLoading(false);
+  return;
+}
+
+// ✅ FIX: Search across all schools for student ID
+const allStudentsSnap = await db.collection('students').get();
+const studentDoc = allStudentsSnap.docs.find(doc => doc.data().id === studentId);
+
+if(studentDoc){
+  const studentData = studentDoc.data();
+  setCurrentUser({
+    ...studentData,
+    userType:'student',
+    studentId:studentId
+  });
+  setIsAdmin(false);
+  setActiveTab('dashboard');
+}else{
+  alert('Student ID not found. Please contact your teacher.');
+  setAuthLoading(false);
+  return;
+}
       
       if(!studentSnap.empty){
         const studentData=studentSnap.docs[0].data();
@@ -2430,25 +2444,27 @@ function StudentManagement({students}){
     return;
   }
   try{
-    // ✅ USE COMPOUND KEY: school + student ID as document ID
     const docId=`${form.school.replace(/\s+/g,'_')}_${form.id}`;
     
     if(editingStudent){
-      // UPDATE: Check if changing ID conflicts
+      // ✅ FIX: Properly handle student edits
       const originalDocId=`${editingStudent.school.replace(/\s+/g,'_')}_${editingStudent.id}`;
       
-      if(docId!==originalDocId){
-        // ID/school changed - check conflicts
-        const existingSnap=await db.collection('students').doc(docId).get();
+      // Check if student ID or school changed
+      if(docId !== originalDocId){
+        // Check if new ID already exists
+        const existingSnap = await db.collection('students').doc(docId).get();
         if(existingSnap.exists){
-          alert('Student ID already exists in this school!');
+          alert('This Student ID already exists in this school!');
           return;
         }
-        // Delete old doc
+        
+        // Delete old document
         await db.collection('students').doc(originalDocId).delete();
+        console.log('Deleted old document:', originalDocId);
       }
       
-      // Save with new/same doc ID
+      // Save with new document ID
       await db.collection('students').doc(docId).set({
         school:form.school,
         grade:form.grade,
@@ -2457,12 +2473,13 @@ function StudentManagement({students}){
         id:form.id,
         updatedAt:new Date().toISOString()
       });
-      alert('Student updated! Login ID: '+form.id);
+      
+      alert('✅ Student updated successfully!');
     }else{
-      // ADD NEW
+      // ✅ ADD NEW STUDENT
       const existingSnap=await db.collection('students').doc(docId).get();
       if(existingSnap.exists){
-        alert('Student ID already exists! Use unique ID.');
+        alert('This Student ID already exists! Please use a unique ID.');
         return;
       }
       
@@ -2474,13 +2491,20 @@ function StudentManagement({students}){
         id:form.id,
         createdAt:new Date().toISOString()
       });
-      alert('Student added! Login:\nID: '+form.id+'\nPassword: pass123');
+      
+      alert('✅ Student added! Login:\nID: '+form.id+'\nPassword: pass123');
     }
+    
     setShowModal(false);
     setEditingStudent(null);
     setForm({school:'',grade:'',name:'',gender:'',id:''});
+    
+    // ✅ Reload page to show changes
+    window.location.reload();
+    
   }catch(e){
-    alert('Failed: '+e.message);
+    console.error('Save error:', e);
+    alert('Failed to save: '+e.message);
   }
 };
 
@@ -2491,7 +2515,9 @@ function StudentManagement({students}){
   };
 
   const openEditModal=(student)=>{
-  setEditingStudent(student); // Store whole student
+  console.log('Editing student:', student); // ✅ Debug log
+  
+  setEditingStudent(student); // ✅ Store entire student object
   setForm({
     school:student.school,
     grade:student.grade,
@@ -2666,14 +2692,24 @@ await db.collection('students').doc(docId).set({
   };
 
   const handleDelete = async (student) => {
-  if (!confirm(`Delete ${student.name}?`)) return;
+  if (!confirm(`Delete ${student.name}? This will remove all their data.`)) return;
+  
   try {
-    // ✅ Use compound key
+    // ✅ FIX: Use correct document ID format
     const docId = `${student.school.replace(/\s+/g, '_')}_${student.id}`;
+    
+    console.log('Deleting student:', docId);
+    
     await db.collection('students').doc(docId).delete();
-    alert('Student deleted!');
+    
+    alert('✅ Student deleted successfully!');
+    
+    // Reload to show changes
+    window.location.reload();
+    
   } catch (e) {
-    alert('Failed: ' + e.message);
+    console.error('Delete error:', e);
+    alert('Failed to delete: ' + e.message);
   }
 };
 
