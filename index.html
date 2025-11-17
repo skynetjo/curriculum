@@ -762,7 +762,7 @@ function StudentProfileForm({ currentUser }) {
             <input
               type="number"
               step="0.01"
-              className={inputBase}
+              className={inputCls()}
               disabled={!isEditing}
               value={profile.percentage10th}
               onChange={e => setProfile({ ...profile, percentage10th: e.target.value })}
@@ -773,7 +773,7 @@ function StudentProfileForm({ currentUser }) {
             <input
               type="number"
               step="0.01"
-              className={inputBase}
+              className={inputCls()}
               disabled={!isEditing}
               value={profile.percentage11th}
               onChange={e => setProfile({ ...profile, percentage11th: e.target.value })}
