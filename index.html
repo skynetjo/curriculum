@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -397,19 +398,28 @@ function StudentProfileForm({ currentUser }) {
   };
 
   const handleSave = async () => {
-    await db.collection('studentProfiles').doc(myId).set({
-      ...profile,
-      studentId: myId,
-      updatedAt: new Date().toISOString()
-    });
-    alert('✅ Profile saved successfully!');
+    try {
+      await db.collection('studentProfiles').doc(myId).set({
+        ...profile,
+        studentId: myId,
+        updatedAt: new Date().toISOString()
+      });
+      alert('✅ Profile saved successfully!');
+      return true;
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      alert('❌ Error saving profile: ' + error.message);
+      return false;
+    }
   };
 
   const handleToggleEdit = async () => {
     if (isEditing) {
       // closing edit → save
-      await handleSave();
-      setIsEditing(false);
+      const saved = await handleSave();
+      if (saved) {
+        setIsEditing(false);
+      }
     } else {
       setIsEditing(true);
     }
