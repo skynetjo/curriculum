@@ -1145,9 +1145,11 @@ useEffect(() => {
 const handleLogin=async()=>{
   setAuthLoading(true);
   try{
-    const email=(loginForm.email||'').trim().toLowerCase();
+    const email=
+(loginForm.email||'').trim().toLowerCase();
     const password=loginForm.password;
-    const studentId=(loginForm.studentId||'').trim();
+    const studentId=
+(loginForm.studentId||'').trim();
     const loginType=loginForm.loginType||'teacher'; // NEW: track login type
     
     if(loginType==='student'){
