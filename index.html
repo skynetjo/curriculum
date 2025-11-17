@@ -1713,53 +1713,204 @@ if(currentUser && currentUser.userType === 'student') {
 return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab}/>;
 }
 
-function TeacherView({currentUser,handleLogout,showConfetti,Confetti,celebrationMessage,teachers,students,curriculum,chapterProgress,studentAttendance,teacherAttendance,schoolInfo,updateChapterProgress,activeTab,setActiveTab}) {
-  return(
-  <div className="min-h-screen bg-gray-50 flex flex-col">
-    {showConfetti&&<Confetti/>}
-<InstallPrompt/>
+function TeacherView({
+  currentUser,
+  handleLogout,
+  showConfetti,
+  Confetti,
+  celebrationMessage,
+  teachers,
+  students,
+  curriculum,
+  chapterProgress,
+  studentAttendance,
+  teacherAttendance,
+  schoolInfo,
+  updateChapterProgress,
+  activeTab,
+  setActiveTab
+}) {
+  const teacherTabs = [
+    { id: 'overview', label: 'Dashboard' },
+    { id: 'analytics', label: 'Analytics' },
+    { id: 'class11', label: 'Class 11' },
+    { id: 'class12', label: 'Class 12' },
+    { id: 'students', label: 'Students' },
+    { id: 'attendance', label: 'Student Attendance' },
+    { id: 'attendancedash', label: 'Attendance Dashboard' },
+    { id: 'myattendance', label: 'My Attendance' },
+    { id: 'schoolinfo', label: 'School Info' },
+    { id: 'examstats', label: 'Exam Stats' }
+  ];
 
-{/* Manual Install Button - Always Visible */}
-<div className="fixed bottom-20 right-4 z-[9998]">
-  <button 
-    onClick={() => {
-      if (window.matchMedia('(display-mode: standalone)').matches) {
-        alert('App is already installed! ✓');
-      } else {
-        alert('To install:\n\n📱 Mobile: Tap browser menu → "Add to Home Screen"\n\n💻 Desktop: Look for install icon in address bar (⊕ or 🔽)');
-      }
-    }}
-    className="bg-blue-600 text-white px-4 py-3 rounded-full shadow-2xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
-  >
-    📱 Install App
-  </button>
-</div>
-    <InstallPrompt/>  {/* ⬅️ ADD THIS LINE */}
-    <nav className="avanti-gradient shadow-lg sticky top-0 z-50"><div className="max-w-7xl mx-auto px-4 py-4"><div className="flex justify-between items-center"><div className="flex items-center gap-3"><img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12"/><div><h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1><p className="text-sm text-white opacity-90">Avanti Fellows</p></div></div><div className="flex items-center gap-4"><div className="text-right hidden sm:block"><p className="text-white font-semibold">{currentUser.name}</p><p className="text-sm text-white opacity-90">{currentUser.school}</p></div><button onClick={handleLogout} className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold">Logout</button></div></div></div></nav>{celebrationMessage&&<div className="avanti-gradient text-white text-center py-4 text-xl font-bold">{celebrationMessage}</div>}<div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full"><div className="flex gap-3 mb-6 overflow-x-auto pb-2">{['overview','analytics','class11','class12','attendance','attendancedash','myattendance','schoolinfo','birthdays','examstats'].map(tab=>(
-  <button key={tab} onClick={()=>setActiveTab(tab)} className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab===tab?'avanti-gradient text-white':'bg-white'}`}>
-    {tab==='overview'&&'📊 Overview'}
-    {tab==='analytics'&&'📈 Analytics'}
-    {tab==='class11'&&'📚 Class 11'}
-    {tab==='class12'&&'📖 Class 12'}
-    {tab==='attendance'&&'✅ Mark Attendance'}
-    {tab==='attendancedash'&&'📊 Attendance Dashboard'}
-    {tab==='myattendance'&&'👤 My Attendance'}
-    {tab==='schoolinfo'&&'🏫 School Info'}
-    {tab==='birthdays'&&'🎂 Celebrations'}
-    {tab==='examstats'&&'📊 Exam Stats'}
-  </button>
-))}</div>
-{activeTab==='overview'&&<TeacherOverview currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} teachers={teachers} teacherAttendance={teacherAttendance} studentAttendance={studentAttendance}/>}
-{activeTab==='analytics'&&<TeacherAnalytics currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress}/>}
-{activeTab==='class11'&&<TeacherCurriculum grade="11" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}
-{activeTab==='class12'&&<TeacherCurriculum grade="12" currentUser={currentUser} curriculum={curriculum} chapterProgress={chapterProgress} updateChapterProgress={updateChapterProgress}/>}
-{activeTab==='birthdays'&&<BirthdaysPage teachers={teachers} currentUser={currentUser}/>}
-{activeTab==='attendance'&&<StudentAttendanceView currentUser={currentUser} students={students} studentAttendance={studentAttendance}/>}
-{activeTab==='attendancedash'&&<TeacherAttendanceDashboard currentUser={currentUser} students={students} teachers={teachers} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance}/>}
-{activeTab==='myattendance'&&<TeacherAttendanceView currentUser={currentUser} teacherAttendance={teacherAttendance}/>}
-{activeTab==='schoolinfo'&&<SchoolInfoView currentUser={currentUser} schoolInfo={schoolInfo}/>}
-{activeTab==='examstats'&&<TeacherExamStats currentUser={currentUser}/>}
-</div><footer className="bg-gray-800 text-white text-center py-4 mt-auto"><p>Made by Anand with ❤️</p></footer></div>)}
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {showConfetti && <Confetti />}
+
+      {/* PWA install helper */}
+      <InstallPrompt />
+
+      {/* Manual Install Button - always visible */}
+      <div className="fixed bottom-20 right-4 z-[9998]">
+        <button
+          onClick={() => {
+            if (window.matchMedia('(display-mode: standalone)').matches) {
+              alert('App is already installed! ✓');
+            } else {
+              alert(
+                'To install:\n\n' +
+                  '📱 Mobile: Tap browser menu → "Add to Home Screen"\n\n' +
+                  '💻 Desktop: Look for install icon in address bar (⊕ or 📥)'
+              );
+            }
+          }}
+          className="bg-blue-600 text-white px-4 py-3 rounded-full shadow-2xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
+        >
+          📱 Install App
+        </button>
+      </div>
+
+      {/* Top nav */}
+      <nav className="avanti-gradient shadow-lg sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12" />
+              <div>
+                <h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1>
+                <p className="text-sm text-white opacity-90">Avanti Fellows</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right hidden sm:block">
+                <p className="text-white font-semibold">{currentUser.name}</p>
+                <p className="text-sm text-white opacity-90">{currentUser.school}</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {celebrationMessage && (
+        <div className="avanti-gradient text-white text-center py-4 text-xl font-bold">
+          {celebrationMessage}
+        </div>
+      )}
+
+      {/* Main content */}
+      <div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
+        {/* Tab buttons */}
+        <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
+          {teacherTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={
+                'px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ' +
+                (activeTab === tab.id
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-white text-gray-700 border')
+              }
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        {activeTab === 'overview' && (
+          <TeacherOverview
+            currentUser={currentUser}
+            teachers={teachers}
+            students={students}
+            curriculum={curriculum}
+            chapterProgress={chapterProgress}
+            studentAttendance={studentAttendance}
+            teacherAttendance={teacherAttendance}
+            schoolInfo={schoolInfo}
+          />
+        )}
+
+        {activeTab === 'analytics' && (
+          <TeacherAnalytics
+            currentUser={currentUser}
+            curriculum={curriculum}
+            chapterProgress={chapterProgress}
+          />
+        )}
+
+        {activeTab === 'class11' && (
+          <ClassView
+            grade="11"
+            currentUser={currentUser}
+            curriculum={curriculum}
+            chapterProgress={chapterProgress}
+            updateChapterProgress={updateChapterProgress}
+          />
+        )}
+
+        {activeTab === 'class12' && (
+          <ClassView
+            grade="12"
+            currentUser={currentUser}
+            curriculum={curriculum}
+            chapterProgress={chapterProgress}
+            updateChapterProgress={updateChapterProgress}
+          />
+        )}
+
+        {activeTab === 'students' && (
+          <StudentManagement
+            students={students}
+            teachers={teachers}
+            currentUser={currentUser}
+          />
+        )}
+
+        {activeTab === 'attendance' && (
+          <StudentAttendanceView
+            currentUser={currentUser}
+            students={students}
+            studentAttendance={studentAttendance}
+          />
+        )}
+
+        {activeTab === 'attendancedash' && (
+          <TeacherAttendanceDashboard
+            currentUser={currentUser}
+            students={students}
+            teachers={teachers}
+            studentAttendance={studentAttendance}
+            teacherAttendance={teacherAttendance}
+          />
+        )}
+
+        {activeTab === 'myattendance' && (
+          <TeacherAttendanceView
+            currentUser={currentUser}
+            teacherAttendance={teacherAttendance}
+          />
+        )}
+
+        {activeTab === 'schoolinfo' && (
+          <SchoolInfoView currentUser={currentUser} schoolInfo={schoolInfo} />
+        )}
+
+        {activeTab === 'examstats' && <TeacherExamStats currentUser={currentUser} />}
+      </div>
+
+      <footer className="bg-gray-800 text-white text-center py-4 mt-auto">
+        <p>Made by Anand with ❤️</p>
+      </footer>
+    </div>
+  );
+}
 // ========================================
 // ADMIN EXAM STATISTICS COMPONENT
 // ========================================
