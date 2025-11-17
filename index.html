@@ -651,16 +651,15 @@ const handleLogin=async()=>{
     setAuthLoading(false);
     return;
   }
+}else{
+  // TEACHER/ADMIN LOGIN (existing code)
+  if(!email||!password){
+    alert('Please enter email and password');
+    setAuthLoading(false);
+    return;
+  }
+  await auth.signInWithEmailAndPassword(email,password);
 }
-    }else{
-      // TEACHER/ADMIN LOGIN (existing code)
-      if(!email||!password){
-        alert('Please enter email and password');
-        setAuthLoading(false);
-        return;
-      }
-      await auth.signInWithEmailAndPassword(email,password);
-    }
   }catch(e){
     console.error('login error',e);
     alert('Login failed: '+e.message);
