@@ -845,7 +845,19 @@ function StudentDashboard({currentUser, handleLogout}) {
   };
 
   const profileCompletion = calculateCompletion();
+  
+  // Debug logging
+  console.log('=== STUDENT PROFILE DEBUG ===');
+  console.log('📊 Profile Completion:', profileCompletion + '%');
+  console.log('👤 Student Data:', studentProfile);
+  console.log('🔢 Student ID:', myId);
+  console.log('🏫 School:', mySchool);
+  console.log('📚 Grade:', myGrade);
+  console.log('============================');
 
+  if (loading) {
+    return <div className="text-center py-8">Loading profile...</div>;
+  }
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <nav className="avanti-gradient shadow-lg sticky top-0 z-50">
@@ -1157,7 +1169,8 @@ const handleLogin=async()=>{
     allStudentsSnap.docs.forEach(doc => {
       const data = doc.data();
       if(data.id === studentId) {
-        foundStudent = data;
+        foundStudent = { ...data, docId: doc.id };
+console.log('✅ Found student:', foundStudent);
       }
     });
     
