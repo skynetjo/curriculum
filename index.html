@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -994,10 +993,11 @@ function StudentDashboard({currentUser, handleLogout}) {
         progressSnap.docs.forEach(d => progressMap[d.id] = d.data());
         setChapterProgress(progressMap);
 
-        // Fetch attendance
+        // Fetch attendance (from November 1st, 2024 onwards)
         const attSnap = await db.collection('studentAttendance')
           .where('studentId', '==', myId)
           .where('school', '==', mySchool)
+          .where('date', '>=', '2024-11-01')
           .get();
         setStudentAttendance(attSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
         
