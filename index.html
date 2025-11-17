@@ -826,17 +826,21 @@ function StudentDashboard({currentUser, handleLogout}) {
         }
 
         // Fetch exam registrations
-        const examSnap = await db.collection('studentExamRegistrations').doc(myId).get();
-        if (examSnap.exists) {
-          setExamRegistrations(examSnap.data());
-        }
-        
-      } catch (e) {
-        console.error('Data fetch error:', e);
+      const examSnap = await db.collection('studentExamRegistrations').doc(myId).get();
+      if (examSnap.exists) {
+        setExamRegistrations(examSnap.data());
       }
-    };
-    fetchData();
-  }, [mySchool, myGrade, myId]);
+
+      // ✅ END OF SUCCESSFUL FETCH
+      setLoading(false);
+    } catch (e) {
+      console.error('Data fetch error:', e);
+      // ✅ ENSURE LOADING STOPS EVEN ON ERROR
+      setLoading(false);
+    }
+  };
+  fetchData();
+}, [mySchool, myGrade, myId]);
 
   // Calculate profile completion
   const calculateCompletion = () => {
