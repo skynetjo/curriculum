@@ -2087,83 +2087,66 @@ function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teache
     {teacherAttendance.filter(a=>a.teacherId===currentUser.afid&&getMonthYear(a.date)===getMonthYear(getTodayDate())).length} days
   </div>
   <div className="text-sm mt-2">Marked this month</div>
+  <>
   <div className="bg-white p-6 rounded-2xl shadow-lg">
-  <h3 className="text-2xl font-bold mb-4">📊 Quick Attendance Overview</h3>
-  <div className="grid md:grid-cols-2 gap-4">
-    <div className="border-2 rounded-xl p-4">
-      <h4 className="font-bold mb-2">Today's Student Attendance</h4>
-      <p className="text-sm text-gray-600">
-        Present: <strong className="text-green-600">
-          {studentAttendance.filter(a=>a.date===getTodayDate()&&a.school===currentUser.school&&a.status==='Present').length}
-        </strong>
-      </p>
-      <p className="text-sm text-gray-600">
-        Absent: <strong className="text-red-600">
-          {studentAttendance.filter(a=>a.date===getTodayDate()&&a.school===currentUser.school&&a.status==='Absent').length}
-        </strong>
-      </p>
+    <h3 className="text-2xl font-bold mb-4">📊 Quick Attendance Overview</h3>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="bg-green-50 p-4 rounded-xl">
+        <p className="text-sm text-gray-500">Days Present (this month)</p>
+        <p className="text-2xl font-bold text-green-700">{presentDays}</p>
+      </div>
+      <div className="bg-red-50 p-4 rounded-xl">
+        <p className="text-sm text-gray-500">Days Absent (this month)</p>
+        <p className="text-2xl font-bold text-red-700">{absentDays}</p>
+      </div>
+      <div className="bg-blue-50 p-4 rounded-xl">
+        <p className="text-sm text-gray-500">Total Marked Days</p>
+        <p className="text-2xl font-bold text-blue-700">
+          {presentDays + absentDays}
+        </p>
+      </div>
+      <div className="bg-purple-50 p-4 rounded-xl">
+        <p className="text-sm text-gray-500">Longest Present Streak</p>
+        <p className="text-2xl font-bold text-purple-700">
+          {longestStreak} days
+        </p>
+      </div>
     </div>
-    <div className="border-2 rounded-xl p-4">
-      <h4 className="font-bold mb-2">My Attendance Status</h4>
-      {teacherAttendance.find(a=>a.teacherId===currentUser.afid&&a.date===getTodayDate())?
-        <div className="text-sm">
-          <p className="text-green-600 font-bold">✓ Marked for today</p>
-          <p className="text-gray-600">
-            Status: {teacherAttendance.find(a=>a.teacherId===currentUser.afid&&a.date===getTodayDate()).status}
-          </p>
-        </div>
-      :
-        <p className="text-orange-600 font-bold">⚠️ Not marked yet</p>
-      }
+    <div className="mt-4 text-sm text-gray-500">
+      Marked this month: {presentDays + absentDays} days
     </div>
   </div>
-</div>
+
   <div className="bg-white p-6 rounded-2xl shadow-lg">
-  <h3 className="text-2xl font-bold mb-4">⏰ Today's Punch-In Times - {mySchool}</h3>
-  <div className="space-y-2 max-h-96 overflow-y-auto">
-    {teachers
-      .filter(t=>t.school===mySchool)
-      .map(teacher=>{
-        const todayAttendance=teacherAttendance.find(
-          a=>a.teacherId===teacher.afid&&a.date===getTodayDate()
-        );
-        return(
-          <div key={teacher.afid} className={`p-4 rounded-xl border-2 ${
-            teacher.afid===currentUser.afid?'bg-yellow-50 border-yellow-400':'bg-gray-50 border-gray-200'
-          }`}>
-            <div className="flex justify-between items-center">
-              <div className="flex-1">
-                <div className="font-bold text-lg">
-                  {teacher.name} {teacher.afid===currentUser.afid&&'(You)'}
-                </div>
-                <div className="text-sm text-gray-600">{teacher.subject}</div>
-              </div>
-              <div className="text-right">
-                {todayAttendance?(
-                  <>
-                    <div className={`text-2xl font-bold ${
-                      todayAttendance.status==='Present'?'text-green-600':'text-orange-600'
-                    }`}>
-                      ⏰ {todayAttendance.punchInTime||'--:--'}
-                    </div>
-                    <div className={`text-xs font-semibold ${
-                      todayAttendance.status==='Present'?'text-green-600':'text-orange-600'
-                    }`}>
-                      {todayAttendance.status}
-                    </div>
-                  </>
-                ):(
-                  <div className="text-gray-400 font-semibold">Not Marked</div>
-                )}
-              </div>
+    <h3 className="text-2xl font-bold mb-4">
+      ⏰ Today's Punch-In Times - {mySchool}
+    </h3>
+    <div className="space-y-2 max-h-96 overflow-y-auto">
+      {todaysPunchIns.length === 0 ? (
+        <p className="text-gray-500">No punch-ins recorded yet.</p>
+      ) : (
+        todaysPunchIns.map((entry, idx) => (
+          <div
+            key={idx}
+            className="flex justify-between items-center border-b pb-2"
+          >
+            <div>
+              <p className="font-semibold">
+                {entry.teacherName || 'Unknown'} - {entry.subject || '—'}
+              </p>
+              <p className="text-xs text-gray-500">
+                Grade {entry.grade || '—'}
+              </p>
+            </div>
+            <div className="text-sm text-gray-700">
+              {entry.punchInTime || '—'}
             </div>
           </div>
-        );
-      })
-    }
+        ))
+      )}
+    </div>
   </div>
-</div>
-</div></div>)}
+</>
 function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
   const chart1Ref=useRef(null);
   const chart2Ref=useRef(null);
