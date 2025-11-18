@@ -541,7 +541,9 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
     { id: 'q12', text: 'The teacher comes fully prepared for the class', type: 'rating' },
     { id: 'q13', text: 'The teacher provides guidance and counselling in academic and non-academic matters', type: 'rating' },
     { id: 'q14', text: 'Overall effectiveness', type: 'rating' },
-    { id: 'q15', text: 'Learning value (in terms of skills, concepts, knowledge, analytical abilities)', type: 'rating' }
+    { id: 'q15', text: 'Learning value (in terms of skills, concepts, knowledge, analytical abilities)', type: 'rating' },
+    { id: 'q16', text: `Any Improvements or suggestions for ${teacher.name} you want to share?`, type: 'opentext' },
+    { id: 'q17', text: 'Anything you want to share regarding the Avanti Program? How can we improve this more?', type: 'opentext' }
   ];
 
   const currentQ = questions[currentQuestion];
@@ -568,6 +570,16 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
     setShowExplanation(value === 'No');
   };
 
+  const handleOpenTextChange = (text) => {
+    setFeedback({
+      ...feedback,
+      responses: {
+        ...feedback.responses,
+        [currentQ.id]: { text: text }
+      }
+    });
+  };
+
   const handleExplanationChange = (text) => {
     setFeedback({
       ...feedback,
@@ -591,6 +603,8 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
     } else if (currentQ.type === 'yesno') {
       if (!response.answer) return false;
       if (response.answer === 'No' && !response.explanation) return false;
+    } else if (currentQ.type === 'opentext') {
+      if (!response.text || response.text.trim() === '') return false;
     }
     return true;
   };
@@ -602,8 +616,10 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
       const nextResponse = feedback.responses[nextQ.id];
       if (nextQ.type === 'rating') {
         setShowExplanation(nextResponse?.rating < 6);
-      } else {
+      } else if (nextQ.type === 'yesno') {
         setShowExplanation(nextResponse?.answer === 'No');
+      } else if (nextQ.type === 'opentext') {
+        setShowExplanation(false);
       }
     }
   };
@@ -615,8 +631,10 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
       const prevResponse = feedback.responses[prevQ.id];
       if (prevQ.type === 'rating') {
         setShowExplanation(prevResponse?.rating < 6);
-      } else {
+      } else if (prevQ.type === 'yesno') {
         setShowExplanation(prevResponse?.answer === 'No');
+      } else if (prevQ.type === 'opentext') {
+        setShowExplanation(false);
       }
     }
   };
@@ -723,6 +741,18 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
                   >
                     ❌ No
                   </button>
+                </div>
+              )}
+
+              {currentQ.type === 'opentext' && (
+                <div className="mt-2">
+                  <textarea
+                    value={feedback.responses[currentQ.id]?.text || ''}
+                    onChange={(e) => handleOpenTextChange(e.target.value)}
+                    className="w-full border-2 px-4 py-3 rounded-xl min-h-[120px] focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200"
+                    placeholder="Please share your thoughts here..."
+                  />
+                  <p className="text-sm text-gray-500 mt-2">Your feedback helps us improve!</p>
                 </div>
               )}
 
@@ -1732,12 +1762,25 @@ function StudentDashboard({currentUser, handleLogout}) {
         setChapterProgress(progressMap);
 
         // Fetch attendance (from November 1st, 2024 onwards)
-        const attSnap = await db.collection('studentAttendance')
-          .where('studentId', '==', myId)
+        console.log('Fetching attendance for studentId:', myId, 'school:', mySchool);
+        let attSnap = await db.collection('studentAttendance')
+          .where('studentId', '==', String(myId))
           .where('school', '==', mySchool)
           .where('date', '>=', '2024-11-01')
           .get();
-        setStudentAttendance(attSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+        
+        // If no results, try without date filter to check if any attendance exists
+        if (attSnap.docs.length === 0) {
+          console.log('No attendance with date filter, trying without date filter');
+          attSnap = await db.collection('studentAttendance')
+            .where('studentId', '==', String(myId))
+            .where('school', '==', mySchool)
+            .get();
+        }
+        
+        const attendanceData = attSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
+        console.log('Attendance records found:', attendanceData.length, attendanceData);
+        setStudentAttendance(attendanceData);
         
         // Fetch teachers
         const teacherSnap = await db.collection('teachers')
@@ -5846,33 +5889,6 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
     }
   };
   
-  const lockAttendance=async()=>{
-    const confirmation=confirm('Are you sure you want to lock attendance for this date?\n\nOnce locked:\n- No teacher can mark or change attendance\n- Only admins can unlock it\n\nThis prevents duplicate entries.');
-    
-    if(!confirmation)return;
-    
-    try{
-      setIsLoading(true);
-      const lockId=`${mySchool}_${selectedGrade}_${selectedDate}`;
-      
-      await db.collection('attendanceLocks').doc(lockId).set({
-        school:mySchool,
-        grade:selectedGrade,
-        date:selectedDate,
-        lockedBy:currentUser.afid,
-        lockedAt:new Date().toISOString(),
-        lockedByName:currentUser.name||currentUser.afid
-      });
-      
-      alert('✅ Attendance locked successfully!\n\nNo one can modify attendance for this date now.');
-      checkAttendanceLock();
-    }catch(e){
-      alert('Failed to lock: '+e.message);
-    }finally{
-      setIsLoading(false);
-    }
-  };
-  
   const unlockAttendance=async()=>{
     if(currentUser.role!=='admin'){
       alert('Only admins can unlock attendance.');
@@ -5899,7 +5915,7 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   const handleAttendanceChange=async(studentId,status,remarks='')=>{
     // ✅ CHECK IF LOCKED
     if(isLocked){
-      alert('❌ Attendance is locked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\nContact admin to unlock.');
+      alert('❌ Attendance is already marked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\n⚠️ Contact admin to unlock if you need to make changes.');
       return;
     }
     
@@ -5920,17 +5936,48 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
         markedBy:currentUser.afid,
         markedAt:new Date().toISOString()
       });
+      
+      // ✅ AUTO-LOCK: Check if all students are marked
+      const updatedMap={...attendanceMap,[studentId]:status};
+      const totalStudents=filteredStudents.length;
+      const markedStudents=Object.keys(updatedMap).filter(id=>updatedMap[id]).length;
+      
+      if(markedStudents===totalStudents&&totalStudents>0){
+        // All students marked - auto lock!
+        await autoLockAttendance();
+      }
     }catch(e){
       // ✅ Rollback UI if save fails
       setAttendanceMap(prev=>({...prev,[studentId]:prev[studentId]||''}));
       alert('Failed: '+e.message);
     }
   };
+  
+  const autoLockAttendance=async()=>{
+    try{
+      const lockId=`${mySchool}_${selectedGrade}_${selectedDate}`;
+      
+      await db.collection('attendanceLocks').doc(lockId).set({
+        school:mySchool,
+        grade:selectedGrade,
+        date:selectedDate,
+        lockedBy:currentUser.afid,
+        lockedAt:new Date().toISOString(),
+        lockedByName:currentUser.name||currentUser.afid,
+        autoLocked:true
+      });
+      
+      console.log('✅ Attendance auto-locked for',mySchool,selectedGrade,selectedDate);
+      checkAttendanceLock();
+    }catch(e){
+      console.error('Failed to auto-lock:',e);
+    }
+  };
 
   const handleSelectAll=async()=>{
     // ✅ CHECK IF LOCKED
     if(isLocked){
-      alert('❌ Attendance is locked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\nContact admin to unlock.');
+      alert('❌ Attendance is already marked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\n⚠️ Contact admin to unlock if you need to make changes.');
       return;
     }
     
@@ -5951,7 +5998,11 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
       const newMap={};
       filteredStudents.forEach(s=>newMap[s.id]='Present');
       setAttendanceMap(newMap);
-      alert('All students marked present!');
+      
+      // ✅ AUTO-LOCK: All students marked as present
+      await autoLockAttendance();
+      
+      alert('✅ All students marked present!\n🔒 Attendance automatically locked.');
     }catch(e){
       alert('Failed: '+e.message);
     }
@@ -5961,45 +6012,41 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
     <div className="space-y-6">
       <h2 className="text-3xl font-bold">Student Attendance - {mySchool}</h2>
 
-      {/* ✅ LOCK STATUS BANNER */}
+      {/* ✅ LOCKED STATUS BANNER */}
       {isLocked&&(
         <div className="bg-red-100 border-2 border-red-500 p-4 rounded-xl">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-bold text-red-800">🔒 Attendance is LOCKED for this date</div>
-              <div className="text-sm text-red-700 mt-1">
-                Locked by: <strong>{lockInfo.lockedByName}</strong> on {new Date(lockInfo.lockedAt).toLocaleString()}
+              <div className="font-bold text-red-800 text-lg">🔒 Attendance Already Marked for This Date</div>
+              <div className="text-sm text-red-700 mt-2">
+                Marked by: <strong>{lockInfo.lockedByName}</strong> on {new Date(lockInfo.lockedAt).toLocaleString()}
               </div>
-              <div className="text-sm text-red-700">No changes can be made to attendance for this date.</div>
+              <div className="text-sm text-red-700 mt-1">
+                ⚠️ <strong>Contact admin to unlock</strong> if you need to make changes.
+              </div>
             </div>
             {currentUser.role==='admin'&&(
               <button 
                 onClick={unlockAttendance} 
                 disabled={isLoading}
                 className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-xl font-semibold disabled:opacity-50">
-                {isLoading?'Unlocking...':'🔓 Unlock (Admin)'}
+                {isLoading?'Unlocking...':'🔓 Unlock'}
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* ✅ SUCCESS BANNER WHEN UNLOCKED */}
-      {!isLocked&&selectedDate===getTodayDate()&&(
+      {/* ✅ UNLOCKED STATUS - READY TO MARK */}
+      {!isLocked&&(
         <div className="bg-green-100 border-2 border-green-500 p-4 rounded-xl">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-bold text-green-800">✅ Attendance is UNLOCKED</div>
+              <div className="font-bold text-green-800 text-lg">✅ Attendance is UNLOCKED</div>
               <div className="text-sm text-green-700 mt-1">
-                You can mark/modify attendance. Remember to lock it after completion to prevent duplicates.
+                You can mark/modify attendance. Attendance will <strong>automatically lock</strong> once all students are marked.
               </div>
             </div>
-            <button 
-              onClick={lockAttendance} 
-              disabled={isLoading}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold disabled:opacity-50">
-              {isLoading?'Locking...':'🔒 Lock Attendance'}
-            </button>
           </div>
         </div>
       )}
