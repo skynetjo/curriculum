@@ -5813,20 +5813,34 @@ function SchoolInfoView({currentUser,schoolInfo}){
     setFormData({...formData,otherAssets:updated});
   };
 
-  const handleSubmit=async()=>{
-    try{
-      const docId=mySchool.replace(/\s+/g,'_');
-      await db.collection('schoolInfo').doc(docId).set({
-        ...formData,
-        school:mySchool,
-        updatedBy:currentUser.afid,
-        updatedAt:new Date().toISOString()
-      });
-      alert('School information saved successfully!');
-    }catch(e){
-      alert('Failed to save: '+e.message);
-    }
-  };
+  const handleSubmit = async () => {
+  try {
+    const docId = mySchool.replace(/\s+/g, '_');
+    const now = new Date().toISOString();
+
+    const historyEntry = {
+      updatedBy: currentUser.afid,
+      updatedByName: currentUser.name,
+      updatedAt: now
+    };
+
+    await db.collection('schoolInfo').doc(docId).set({
+      ...formData,
+      school: mySchool,
+      // latest info
+      updatedBy: currentUser.afid,
+      updatedByName: currentUser.name,
+      updatedAt: now,
+      // full history
+      updateHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry)
+    }, { merge: true });
+
+    alert('School information saved successfully!');
+  } catch (e) {
+    alert('Failed to save: ' + e.message);
+  }
+};
+
 
   // Generate month/year options
   const generateMonthYearOptions=()=>{
@@ -5841,10 +5855,41 @@ function SchoolInfoView({currentUser,schoolInfo}){
   };
 
   return(
-    <div className="space-y-6">
-      <h2 className="text-3xl font-bold">🏫 School Information - {mySchool}</h2>
+  <div className="space-y-6">
+    <h2 className="text-3xl font-bold">🏫 School Information - {mySchool}</h2>
 
-      <div className="bg-white p-6 rounded-2xl shadow-lg space-y-6">
+    {existingInfo && (
+      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-xl text-sm">
+        <div>
+          Last updated:{' '}
+          {existingInfo.updatedAt
+            ? new Date(existingInfo.updatedAt).toLocaleString()
+            : 'Not filled yet'}
+          {existingInfo.updatedByName && (
+            <> by <span className="font-semibold">{existingInfo.updatedByName}</span></>
+          )}
+        </div>
+
+        {existingInfo.updateHistory && existingInfo.updateHistory.length > 0 && (
+          <div className="mt-2">
+            <div className="font-semibold mb-1">Edit history</div>
+            <ul className="max-h-32 overflow-y-auto space-y-1">
+              {existingInfo.updateHistory
+                .slice()
+                .sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt)) // first → last
+                .map((entry, idx) => (
+                  <li key={idx}>
+                    {new Date(entry.updatedAt).toLocaleString()} — {entry.updatedByName || entry.updatedBy}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    )}
+
+    <div className="bg-white p-6 rounded-2xl shadow-lg space-y-6">
+
         
         {/* Principal Information */}
         <div className="border-4 border-blue-500 rounded-2xl p-6 bg-blue-50">
@@ -6310,12 +6355,34 @@ function AdminSchoolInfo({schoolInfo}){
         <div className="space-y-6">
           {schoolInfo.map(info=>
             <div key={info.id} className="bg-white p-6 rounded-2xl shadow-lg">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold">{info.school}</h3>
-                <span className="text-sm text-gray-600">
-                  Last Updated: {info.updatedAt?new Date(info.updatedAt).toLocaleString():'N/A'}
-                </span>
-              </div>
+              <div className="flex justify-between items-center mb-2">
+  <h3 className="text-2xl font-bold">{info.school}</h3>
+  <div className="text-right text-sm text-gray-600">
+    <div>
+      Last updated:{' '}
+      {info.updatedAt ? new Date(info.updatedAt).toLocaleString() : 'N/A'}
+    </div>
+    {info.updatedByName && (
+      <div>By: {info.updatedByName} ({info.updatedBy})</div>
+    )}
+  </div>
+</div>
+
+{info.updateHistory && info.updateHistory.length > 0 && (
+  <div className="mb-4 bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded">
+    <div className="font-semibold mb-1">Edit history</div>
+    <ul className="text-xs max-h-32 overflow-y-auto space-y-1">
+      {info.updateHistory
+        .slice()
+        .sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt))
+        .map((entry, idx) => (
+          <li key={idx}>
+            {new Date(entry.updatedAt).toLocaleString()} — {entry.updatedByName || entry.updatedBy}
+          </li>
+        ))}
+    </ul>
+  </div>
+)}
 
               {/* Principal Info */}
               <div className="border-2 border-blue-300 rounded-xl p-4 mb-4 bg-blue-50">
