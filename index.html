@@ -2438,6 +2438,7 @@ function TeacherView({
     { id: 'class11', label: 'Class 11' },
     { id: 'class12', label: 'Class 12' },
     { id: 'students', label: 'Students' },
+    { id: 'directory', label: '📖 Directory' },
     { id: 'attendance', label: 'Student Attendance' },
     { id: 'attendancedash', label: 'Attendance Dashboard' },
     { id: 'myattendance', label: 'My Attendance' },
@@ -2573,6 +2574,10 @@ function TeacherView({
             teachers={teachers}
             currentUser={currentUser}
           />
+        )}
+
+        {activeTab === 'directory' && (
+          <TeacherDirectory teachers={teachers} currentUser={currentUser} />
         )}
 
         {activeTab === 'attendance' && (
@@ -2807,6 +2812,7 @@ function AdminView({
           {[
             'teachers',
             'students',
+            'directory',
             'curriculum',
             'analytics',
             'chapter-details',
@@ -2825,6 +2831,7 @@ function AdminView({
             >
               {tab === 'teachers' && '👥 Teachers'}
               {tab === 'students' && '👨‍🎓 Students'}
+              {tab === 'directory' && '📖 Directory'}
               {tab === 'curriculum' && '📚 Curriculum'}
               {tab === 'analytics' && '📊 Analytics'}
               {tab === 'chapter-details' && '📋 Chapter Details'}
@@ -2841,6 +2848,10 @@ function AdminView({
         {activeTab === 'teachers' && <TeacherManagement teachers={teachers} />}
 
         {activeTab === 'students' && <StudentManagement students={students} />}
+
+        {activeTab === 'directory' && (
+          <TeacherDirectory teachers={teachers} currentUser={currentUser} />
+        )}
 
         {activeTab === 'curriculum' && (
           <AdminCurriculum
@@ -7209,6 +7220,375 @@ function AdminSchoolInfo({schoolInfo}){
               )}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+// ========================================
+// TEACHER DIRECTORY
+// ========================================
+function TeacherDirectory({ teachers, currentUser }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterSchool, setFilterSchool] = useState('All');
+  const [filterSubject, setFilterSubject] = useState('All');
+  const [selectedTeacher, setSelectedTeacher] = useState(null);
+
+  // Get unique schools
+  const schools = ['All', ...new Set(teachers.map(t => t.school))];
+
+  // Filter teachers
+  const filteredTeachers = teachers.filter(teacher => {
+    const matchesSearch = teacher.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         teacher.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         teacher.phone?.includes(searchTerm);
+    const matchesSchool = filterSchool === 'All' || teacher.school === filterSchool;
+    const matchesSubject = filterSubject === 'All' || teacher.subject === filterSubject;
+    return matchesSearch && matchesSchool && matchesSubject;
+  });
+
+  // Get subject icon
+  const getSubjectIcon = (subject) => {
+    const icons = {
+      'Physics': '⚛️',
+      'Chemistry': '🧪',
+      'Mathematics': '📐',
+      'Biology': '🧬'
+    };
+    return icons[subject] || '📚';
+  };
+
+  // Get school color
+  const getSchoolColor = (school) => {
+    const colors = {
+      'CoE Barwani': 'from-blue-500 to-blue-600',
+      'CoE Cuttak': 'from-green-500 to-green-600',
+      'CoE Bundi': 'from-purple-500 to-purple-600',
+      'CoE Mahisagar': 'from-orange-500 to-orange-600',
+      'EMRS Bhopal': 'from-pink-500 to-pink-600',
+      'JNV Bharuch': 'from-red-500 to-red-600'
+    };
+    return colors[school] || 'from-gray-500 to-gray-600';
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold">📖 Teacher Directory</h2>
+        <div className="text-lg font-semibold text-gray-600">
+          {filteredTeachers.length} {filteredTeachers.length === 1 ? 'Teacher' : 'Teachers'}
+        </div>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <div className="grid md:grid-cols-3 gap-4">
+          {/* Search */}
+          <div>
+            <label className="block text-sm font-semibold mb-2">🔍 Search</label>
+            <input
+              type="text"
+              placeholder="Name, email, or phone..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-yellow-500"
+            />
+          </div>
+
+          {/* School Filter */}
+          <div>
+            <label className="block text-sm font-semibold mb-2">🏫 School</label>
+            <select
+              value={filterSchool}
+              onChange={(e) => setFilterSchool(e.target.value)}
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-yellow-500"
+            >
+              {schools.map(school => (
+                <option key={school} value={school}>{school}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Subject Filter */}
+          <div>
+            <label className="block text-sm font-semibold mb-2">📚 Subject</label>
+            <select
+              value={filterSubject}
+              onChange={(e) => setFilterSubject(e.target.value)}
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-yellow-500"
+            >
+              <option value="All">All Subjects</option>
+              {SUBJECTS.map(subject => (
+                <option key={subject} value={subject}>{subject}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Teacher Cards Grid */}
+      {filteredTeachers.length === 0 ? (
+        <div className="bg-white p-12 rounded-2xl shadow-lg text-center">
+          <div className="text-6xl mb-4">🔍</div>
+          <div className="text-xl font-semibold text-gray-600">No teachers found</div>
+          <div className="text-gray-500 mt-2">Try adjusting your search filters</div>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTeachers.map((teacher) => (
+            <div
+              key={teacher.docId}
+              className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer transform hover:-translate-y-1"
+              onClick={() => setSelectedTeacher(teacher)}
+            >
+              {/* Header with gradient */}
+              <div className={`bg-gradient-to-r ${getSchoolColor(teacher.school)} p-4 text-white`}>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="text-xs font-semibold opacity-90 mb-1">{teacher.school}</div>
+                    <div className="text-sm opacity-90">{teacher.grade || 'Class 11 & 12'}</div>
+                  </div>
+                  <div className="text-3xl">
+                    {getSubjectIcon(teacher.subject)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Profile Photo */}
+              <div className="flex justify-center -mt-10 mb-4">
+                {teacher.profilePhoto ? (
+                  <img
+                    src={teacher.profilePhoto}
+                    alt={teacher.name}
+                    className="w-20 h-20 rounded-full border-4 border-white shadow-lg object-cover"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-full border-4 border-white shadow-lg bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-3xl font-bold text-white">
+                    {teacher.name?.charAt(0) || '?'}
+                  </div>
+                )}
+              </div>
+
+              {/* Teacher Info */}
+              <div className="px-4 pb-4 space-y-3">
+                {/* Name */}
+                <div className="text-center">
+                  <div className="text-xl font-bold text-gray-800">{teacher.name}</div>
+                  <div className="text-sm font-semibold text-gray-600">{teacher.subject}</div>
+                </div>
+
+                {/* Contact Info */}
+                <div className="space-y-2 text-sm">
+                  {teacher.phone && (
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <span className="text-lg">📱</span>
+                      <span className="font-medium">{teacher.phone}</span>
+                    </div>
+                  )}
+                  
+                  {teacher.whatsapp && (
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <span className="text-lg">💬</span>
+                      <span className="font-medium">{teacher.whatsapp}</span>
+                    </div>
+                  )}
+                  
+                  {teacher.email && (
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <span className="text-lg">📧</span>
+                      <span className="font-medium text-xs break-all">{teacher.email}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Dates */}
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                  {teacher.dateOfJoining && (
+                    <div className="text-center">
+                      <div className="text-xs text-gray-500">Joined</div>
+                      <div className="text-sm font-semibold text-gray-700">
+                        {new Date(teacher.dateOfJoining).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </div>
+                    </div>
+                  )}
+                  {teacher.dateOfBirth && (
+                    <div className="text-center">
+                      <div className="text-xs text-gray-500">Birthday</div>
+                      <div className="text-sm font-semibold text-gray-700">
+                        {new Date(teacher.dateOfBirth).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Click for more */}
+                <div className="text-center pt-2">
+                  <button className="text-xs text-blue-600 font-semibold hover:text-blue-800">
+                    Click for full details →
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Teacher Detail Modal */}
+      {selectedTeacher && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedTeacher(null)}>
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className={`bg-gradient-to-r ${getSchoolColor(selectedTeacher.school)} p-6 text-white relative`}>
+              <button
+                onClick={() => setSelectedTeacher(null)}
+                className="absolute top-4 right-4 text-white text-2xl hover:text-gray-200 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20"
+              >
+                ×
+              </button>
+              <div className="flex items-center gap-4">
+                {selectedTeacher.profilePhoto ? (
+                  <img
+                    src={selectedTeacher.profilePhoto}
+                    alt={selectedTeacher.name}
+                    className="w-24 h-24 rounded-full border-4 border-white shadow-lg object-cover"
+                  />
+                ) : (
+                  <div className="w-24 h-24 rounded-full border-4 border-white shadow-lg bg-white/30 flex items-center justify-center text-4xl font-bold">
+                    {selectedTeacher.name?.charAt(0) || '?'}
+                  </div>
+                )}
+                <div className="flex-1">
+                  <div className="text-2xl font-bold">{selectedTeacher.name}</div>
+                  <div className="text-lg opacity-90">{selectedTeacher.subject}</div>
+                  <div className="text-sm opacity-80 mt-1">{selectedTeacher.school}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Contact Information */}
+              <div>
+                <div className="text-lg font-bold mb-3 flex items-center gap-2">
+                  <span>📞</span> Contact Information
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                  {selectedTeacher.phone && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 font-medium">Phone:</span>
+                      <a href={`tel:${selectedTeacher.phone}`} className="text-blue-600 font-semibold hover:underline">
+                        {selectedTeacher.phone}
+                      </a>
+                    </div>
+                  )}
+                  {selectedTeacher.whatsapp && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 font-medium">WhatsApp:</span>
+                      <a href={`https://wa.me/${selectedTeacher.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-600 font-semibold hover:underline">
+                        {selectedTeacher.whatsapp}
+                      </a>
+                    </div>
+                  )}
+                  {selectedTeacher.email && (
+                    <div className="flex items-start justify-between">
+                      <span className="text-gray-600 font-medium">Email:</span>
+                      <a href={`mailto:${selectedTeacher.email}`} className="text-blue-600 font-semibold hover:underline text-right break-all">
+                        {selectedTeacher.email}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Personal Information */}
+              <div>
+                <div className="text-lg font-bold mb-3 flex items-center gap-2">
+                  <span>👤</span> Personal Information
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600 font-medium">Class:</span>
+                    <span className="font-semibold">{selectedTeacher.grade || 'Class 11 & 12'}</span>
+                  </div>
+                  {selectedTeacher.dateOfBirth && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 font-medium">Date of Birth:</span>
+                      <span className="font-semibold">
+                        {new Date(selectedTeacher.dateOfBirth).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </span>
+                    </div>
+                  )}
+                  {selectedTeacher.dateOfJoining && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 font-medium">Date of Joining:</span>
+                      <span className="font-semibold">
+                        {new Date(selectedTeacher.dateOfJoining).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </span>
+                    </div>
+                  )}
+                  {selectedTeacher.anniversary && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 font-medium">Anniversary:</span>
+                      <span className="font-semibold">
+                        {new Date(selectedTeacher.anniversary).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Additional Details */}
+              {(selectedTeacher.additionalDetails || selectedTeacher.qualification || selectedTeacher.experience) && (
+                <div>
+                  <div className="text-lg font-bold mb-3 flex items-center gap-2">
+                    <span>📝</span> Additional Information
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                    {selectedTeacher.qualification && (
+                      <div>
+                        <span className="text-gray-600 font-medium">Qualification:</span>
+                        <div className="font-semibold mt-1">{selectedTeacher.qualification}</div>
+                      </div>
+                    )}
+                    {selectedTeacher.experience && (
+                      <div>
+                        <span className="text-gray-600 font-medium">Experience:</span>
+                        <div className="font-semibold mt-1">{selectedTeacher.experience}</div>
+                      </div>
+                    )}
+                    {selectedTeacher.additionalDetails && (
+                      <div>
+                        <span className="text-gray-600 font-medium">Notes:</span>
+                        <div className="font-semibold mt-1">{selectedTeacher.additionalDetails}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                {selectedTeacher.phone && (
+                  <a
+                    href={`tel:${selectedTeacher.phone}`}
+                    className="bg-blue-500 text-white px-4 py-3 rounded-xl font-semibold text-center hover:bg-blue-600 transition-colors"
+                  >
+                    📱 Call
+                  </a>
+                )}
+                {selectedTeacher.whatsapp && (
+                  <a
+                    href={`https://wa.me/${selectedTeacher.whatsapp.replace(/[^0-9]/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-green-500 text-white px-4 py-3 rounded-xl font-semibold text-center hover:bg-green-600 transition-colors"
+                  >
+                    💬 WhatsApp
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
