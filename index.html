@@ -1,6 +1,3 @@
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -990,7 +987,7 @@ function StudentExamRegistration({currentUser}) {
             <div className="grid md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-sm font-bold mb-2">Exam Name *</label>
-                <select value={exam.examName} onChange={e => handleExamChange(index, 'examName', e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+                <select value={exam.examName} onChange={e => handleExamChange(index, 'examName', e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                   <option value="">Select Exam</option>
                   {examList.map(e => <option key={e} value={e}>{e}</option>)}
                 </select>
@@ -1000,7 +997,7 @@ function StudentExamRegistration({currentUser}) {
                 <>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-bold mb-2">Registration Completed? *</label>
-                    <select value={exam.registrationStatus} onChange={e => handleExamChange(index, 'registrationStatus', e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <select value={exam.registrationStatus} onChange={e => handleExamChange(index, 'registrationStatus', e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                       <option value="No">No</option>
                       <option value="Partially">Partially Completed</option>
                       <option value="Yes">Yes - Fully Completed</option>
@@ -1011,19 +1008,19 @@ function StudentExamRegistration({currentUser}) {
                     <>
                       <div>
                         <label className="block text-sm font-bold mb-2">Registration Number *</label>
-                        <input type="text" value={exam.registrationNumber} onChange={e => handleExamChange(index, 'registrationNumber', e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl" />
+                        <input type="text" value={exam.registrationNumber} onChange={e => handleExamChange(index, 'registrationNumber', e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" />
                       </div>
                       <div>
                         <label className="block text-sm font-bold mb-2">Password *</label>
-                        <input type="text" value={exam.password} onChange={e => handleExamChange(index, 'password', e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl" />
+                        <input type="text" value={exam.password} onChange={e => handleExamChange(index, 'password', e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" />
                       </div>
                       <div>
                         <label className="block text-sm font-bold mb-2">Email Used for Registration *</label>
-                        <input type="email" value={exam.emailUsed} onChange={e => handleExamChange(index, 'emailUsed', e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl" />
+                        <input type="email" value={exam.emailUsed} onChange={e => handleExamChange(index, 'emailUsed', e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" />
                       </div>
                       <div>
                         <label className="block text-sm font-bold mb-2">Phone Number Used *</label>
-                        <input type="tel" value={exam.phoneUsed} onChange={e => handleExamChange(index, 'phoneUsed', e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl" />
+                        <input type="tel" value={exam.phoneUsed} onChange={e => handleExamChange(index, 'phoneUsed', e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" />
                       </div>
                     </>
                   )}
@@ -1037,7 +1034,7 @@ function StudentExamRegistration({currentUser}) {
 
                   <div className="md:col-span-2">
                     <label className="block text-sm font-bold mb-2">Do you need help/support to complete this application? *</label>
-                    <select value={exam.needSupport} onChange={e => handleExamChange(index, 'needSupport', e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <select value={exam.needSupport} onChange={e => handleExamChange(index, 'needSupport', e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                       <option value="No">No</option>
                       <option value="Yes">Yes</option>
                     </select>
@@ -1755,14 +1752,14 @@ function AdminStudentProfiles(){
         <div className="grid md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold mb-2">School</label>
-            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="All">All Schools</option>
               {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
-            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="All">All Grades</option>
               <option value="11">Class 11</option>
               <option value="12">Class 12</option>
@@ -2100,14 +2097,14 @@ function AdminExamStats(){
         <div className="grid md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold mb-2">School</label>
-            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="All">All Schools</option>
               {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
-            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="All">All Grades</option>
               <option value="11">Class 11</option>
               <option value="12">Class 12</option>
@@ -3258,7 +3255,7 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
     },
     error:()=>alert('Failed to parse CSV')
   });
-};return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum Management</h2><div className="bg-white p-6 rounded-2xl shadow-lg"><div className="grid md:grid-cols-3 gap-4 mb-4"><div><label className="block text-sm font-bold mb-2">School</label><select value={selectedSchool} onChange={e=>setSelectedSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Subject</label><select value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Grade</label><select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"><option value="11">Class 11</option><option value="12">Class 12</option></select></div></div><div className="flex gap-3"><button onClick={()=>{setEditingChapter(null);setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(!showAddForm)}} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">{showAddForm?'Cancel':'+ Add Chapter'}</button><label className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer">📤 Import CSV<input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVImport} className="hidden"/></label></div></div>{showAddForm&&<div className="bg-white p-6 rounded-2xl shadow-lg"><h4 className="text-xl font-bold mb-4">{editingChapter?'Edit Chapter':'Add New Chapter'}</h4><div className="space-y-4"><div><label className="block text-sm font-bold mb-2">Chapter Name *</label><input type="text" value={chapterForm.name} onChange={e=>setChapterForm({...chapterForm,name:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/></div><div><label className="block text-sm font-bold mb-2">Target Date</label><input type="date" value={chapterForm.targetDate} onChange={e=>setChapterForm({...chapterForm,targetDate:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/></div><div>
+};return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum Management</h2><div className="bg-white p-6 rounded-2xl shadow-lg"><div className="grid md:grid-cols-3 gap-4 mb-4"><div><label className="block text-sm font-bold mb-2">School</label><select value={selectedSchool} onChange={e=>setSelectedSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Subject</label><select value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Grade</label><select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"><option value="11">Class 11</option><option value="12">Class 12</option></select></div></div><div className="flex gap-3"><button onClick={()=>{setEditingChapter(null);setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(!showAddForm)}} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">{showAddForm?'Cancel':'+ Add Chapter'}</button><label className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer">📤 Import CSV<input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVImport} className="hidden"/></label></div></div>{showAddForm&&<div className="bg-white p-6 rounded-2xl shadow-lg"><h4 className="text-xl font-bold mb-4">{editingChapter?'Edit Chapter':'Add New Chapter'}</h4><div className="space-y-4"><div><label className="block text-sm font-bold mb-2">Chapter Name *</label><input type="text" value={chapterForm.name} onChange={e=>setChapterForm({...chapterForm,name:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/></div><div><label className="block text-sm font-bold mb-2">Target Date</label><input type="date" value={chapterForm.targetDate} onChange={e=>setChapterForm({...chapterForm,targetDate:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/></div><div>
   <label className="block text-sm font-bold mb-2">Priority Level</label>
   <select 
     value={chapterForm.priority||'medium'} 
@@ -3658,7 +3655,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
             <select 
               value={filterSchool} 
               onChange={e=>setFilterSchool(e.target.value)}
-              className="w-full border-2 px-4 py-3 rounded-xl"
+              disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <option value="All">All Schools</option>
               {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
@@ -3669,7 +3666,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
             <select 
               value={filterGrade} 
               onChange={e=>setFilterGrade(e.target.value)}
-              className="w-full border-2 px-4 py-3 rounded-xl"
+              disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <option value="All">All Grades</option>
               <option value="11">Class 11</option>
@@ -3681,7 +3678,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
             <select 
               value={filterTeacher} 
               onChange={e=>setFilterTeacher(e.target.value)}
-              className="w-full border-2 px-4 py-3 rounded-xl"
+              disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <option value="All">All Teachers</option>
               {teachers.map(t=><option key={t.afid} value={t.afid}>{t.name} ({t.afid})</option>)}
@@ -3813,7 +3810,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
   );
 }
 
-function AdminChapterDetails({curriculum,chapterProgress}){const[filterSchool,setFilterSchool]=useState('All');const[filterSubject,setFilterSubject]=useState('All');const[filterGrade,setFilterGrade]=useState('All');const chapterDetails=useMemo(()=>{const details=[];const schoolsToProcess=filterSchool==='All'?SCHOOLS:[filterSchool];const subjectsToProcess=filterSubject==='All'?SUBJECTS:[filterSubject];const gradesToProcess=filterGrade==='All'?['11','12']:[filterGrade];schoolsToProcess.forEach(school=>{subjectsToProcess.forEach(subject=>{gradesToProcess.forEach(grade=>{const docId=`${school}_${subject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];chapters.forEach(ch=>{const progressId=`${school}_${ch.id}`;const prog=chapterProgress[progressId]||{};details.push({school,subject,grade:`Class ${grade}`,chapterName:ch.name,targetDate:ch.targetDate||'—',completed:prog.completed||'No',completionDate:prog.completionDate||'—',testConducted:prog.testConducted||'No',notes:prog.notes||'—'})})})})});return details},[curriculum,chapterProgress,filterSchool,filterSubject,filterGrade]);const handleExport=()=>{exportToExcel(chapterDetails,'chapter_details')};return(<div className="space-y-6"><div className="flex justify-between items-center"><h2 className="text-3xl font-bold">Chapter Details</h2><button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">📊 Export to Excel</button></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="font-bold mb-4">Filters</h3><div className="grid md:grid-cols-3 gap-4"><div><label className="block text-sm font-bold mb-2">School</label><select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"><option value="All">All Schools</option>{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Subject</label><select value={filterSubject} onChange={e=>setFilterSubject(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"><option value="All">All Subjects</option>{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Grade</label><select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"><option value="All">All Grades</option><option value="11">Class 11</option><option value="12">Class 12</option></select></div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto"><h3 className="font-bold mb-4">All Chapters ({chapterDetails.length})</h3><table className="w-full"><thead className="avanti-gradient-light"><tr><th className="p-3 text-left">School</th><th className="p-3 text-left">Subject</th><th className="p-3 text-left">Grade</th><th className="p-3 text-left">Chapter Name</th><th className="p-3 text-left">Target Date</th><th className="p-3 text-left">Completed</th><th className="p-3 text-left">Completion Date</th><th className="p-3 text-left">Test Conducted</th><th className="p-3 text-left">Notes</th></tr></thead><tbody>{chapterDetails.length===0?<tr><td colSpan="9" className="p-8 text-center text-gray-500">No chapters found</td></tr>:chapterDetails.map((ch,idx)=><tr key={idx} className="border-b hover:bg-gray-50"><td className="p-3">{ch.school}</td><td className="p-3">{ch.subject}</td><td className="p-3">{ch.grade}</td><td className="p-3 font-semibold">{ch.chapterName}</td><td className="p-3 text-sm">{ch.targetDate}</td><td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${ch.completed==='Yes'?'bg-green-100 text-green-700':'bg-gray-100'}`}>{ch.completed}</span></td><td className="p-3 text-sm">{ch.completionDate}</td><td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${ch.testConducted==='Yes'?'bg-blue-100 text-blue-700':'bg-orange-100 text-orange-700'}`}>{ch.testConducted}</span></td><td className="p-3 text-sm">{ch.notes}</td></tr>)}</tbody></table></div></div>)}
+function AdminChapterDetails({curriculum,chapterProgress}){const[filterSchool,setFilterSchool]=useState('All');const[filterSubject,setFilterSubject]=useState('All');const[filterGrade,setFilterGrade]=useState('All');const chapterDetails=useMemo(()=>{const details=[];const schoolsToProcess=filterSchool==='All'?SCHOOLS:[filterSchool];const subjectsToProcess=filterSubject==='All'?SUBJECTS:[filterSubject];const gradesToProcess=filterGrade==='All'?['11','12']:[filterGrade];schoolsToProcess.forEach(school=>{subjectsToProcess.forEach(subject=>{gradesToProcess.forEach(grade=>{const docId=`${school}_${subject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];chapters.forEach(ch=>{const progressId=`${school}_${ch.id}`;const prog=chapterProgress[progressId]||{};details.push({school,subject,grade:`Class ${grade}`,chapterName:ch.name,targetDate:ch.targetDate||'—',completed:prog.completed||'No',completionDate:prog.completionDate||'—',testConducted:prog.testConducted||'No',notes:prog.notes||'—'})})})})});return details},[curriculum,chapterProgress,filterSchool,filterSubject,filterGrade]);const handleExport=()=>{exportToExcel(chapterDetails,'chapter_details')};return(<div className="space-y-6"><div className="flex justify-between items-center"><h2 className="text-3xl font-bold">Chapter Details</h2><button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">📊 Export to Excel</button></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="font-bold mb-4">Filters</h3><div className="grid md:grid-cols-3 gap-4"><div><label className="block text-sm font-bold mb-2">School</label><select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"><option value="All">All Schools</option>{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Subject</label><select value={filterSubject} onChange={e=>setFilterSubject(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"><option value="All">All Subjects</option>{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Grade</label><select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"><option value="All">All Grades</option><option value="11">Class 11</option><option value="12">Class 12</option></select></div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto"><h3 className="font-bold mb-4">All Chapters ({chapterDetails.length})</h3><table className="w-full"><thead className="avanti-gradient-light"><tr><th className="p-3 text-left">School</th><th className="p-3 text-left">Subject</th><th className="p-3 text-left">Grade</th><th className="p-3 text-left">Chapter Name</th><th className="p-3 text-left">Target Date</th><th className="p-3 text-left">Completed</th><th className="p-3 text-left">Completion Date</th><th className="p-3 text-left">Test Conducted</th><th className="p-3 text-left">Notes</th></tr></thead><tbody>{chapterDetails.length===0?<tr><td colSpan="9" className="p-8 text-center text-gray-500">No chapters found</td></tr>:chapterDetails.map((ch,idx)=><tr key={idx} className="border-b hover:bg-gray-50"><td className="p-3">{ch.school}</td><td className="p-3">{ch.subject}</td><td className="p-3">{ch.grade}</td><td className="p-3 font-semibold">{ch.chapterName}</td><td className="p-3 text-sm">{ch.targetDate}</td><td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${ch.completed==='Yes'?'bg-green-100 text-green-700':'bg-gray-100'}`}>{ch.completed}</span></td><td className="p-3 text-sm">{ch.completionDate}</td><td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${ch.testConducted==='Yes'?'bg-blue-100 text-blue-700':'bg-orange-100 text-orange-700'}`}>{ch.testConducted}</span></td><td className="p-3 text-sm">{ch.notes}</td></tr>)}</tbody></table></div></div>)}
 // ========================================
 // ADMIN STUDENT PROFILES VIEW
 // ========================================
@@ -3880,14 +3877,14 @@ function AdminStudentProfiles(){
         <div className="grid md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold mb-2">School</label>
-            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="All">All Schools</option>
               {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
-            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="All">All Grades</option>
               <option value="11">Class 11</option>
               <option value="12">Class 12</option>
@@ -4805,7 +4802,7 @@ function TeacherAttendanceDashboard({currentUser,students,teachers,studentAttend
         <div className="grid md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-bold mb-2">Student Grade</label>
-            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="All">All Grades</option>
               <option value="11">Class 11</option>
               <option value="12">Class 12</option>
@@ -4813,18 +4810,18 @@ function TeacherAttendanceDashboard({currentUser,students,teachers,studentAttend
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Teacher Subject</label>
-            <select value={filterSubject} onChange={e=>setFilterSubject(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <select value={filterSubject} onChange={e=>setFilterSubject(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="All">All Subjects</option>
               {SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Start Date</label>
-            <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">End Date</label>
-            <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
           </div>
         </div>
         <div className="flex gap-3 mt-4">
@@ -4976,7 +4973,7 @@ function RemarksModal({student,onSave,onClose}){
             <select 
               value={selectedRemark} 
               onChange={e=>setSelectedRemark(e.target.value)} 
-              className="w-full border-2 px-4 py-3 rounded-xl"
+              disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               {ABSENCE_REASONS.map(reason=>
                 <option key={reason} value={reason}>{reason}</option>
@@ -5106,14 +5103,14 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
         <div className="grid md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
-            <select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="11">Class 11</option>
               <option value="12">Class 12</option>
             </select>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Date</label>
-            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
           </div>
           <div className="flex items-end">
             <button onClick={handleSelectAll} className="w-full px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
@@ -5256,7 +5253,7 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-bold mb-2">Date</label>
-            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
           </div>
 
           <div>
@@ -5280,7 +5277,7 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
           {status==='On Leave'&&(
             <div>
               <label className="block text-sm font-bold mb-2">Reason *</label>
-              <select value={reason} onChange={e=>setReason(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <select value={reason} onChange={e=>setReason(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                 {LEAVE_REASONS.filter(r=>r!=='Present').map(r=><option key={r} value={r}>{r}</option>)}
               </select>
             </div>
@@ -5586,14 +5583,14 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
         <div className="grid md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-bold mb-2">School</label>
-            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="All">All Schools</option>
               {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
-            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="All">All Grades</option>
               <option value="11">Class 11</option>
               <option value="12">Class 12</option>
@@ -5601,15 +5598,15 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Start Date</label>
-            <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">End Date</label>
-            <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Today's View</label>
-            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
           </div>
         </div>
       </div>
@@ -5700,6 +5697,7 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
 function SchoolInfoView({currentUser,schoolInfo}){
   const mySchool=currentUser.school;
   const existingInfo=schoolInfo.find(info=>info.school===mySchool);
+  const[isEditing,setIsEditing]=useState(false);
   
   const[formData,setFormData]=useState({
     // Principal Info
@@ -5762,6 +5760,9 @@ function SchoolInfoView({currentUser,schoolInfo}){
   useEffect(()=>{
     if(existingInfo){
       setFormData({...existingInfo});
+      setIsEditing(false);
+    }else{
+      setIsEditing(true);
     }
   },[existingInfo]);
 
@@ -5837,6 +5838,7 @@ function SchoolInfoView({currentUser,schoolInfo}){
       updateHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry)
     }, { merge: true });
 
+    setIsEditing(false);
     alert('School information saved successfully!');
   } catch (e) {
     alert('Failed to save: ' + e.message);
@@ -5858,7 +5860,19 @@ function SchoolInfoView({currentUser,schoolInfo}){
 
   return(
   <div className="space-y-6">
-    <h2 className="text-3xl font-bold">🏫 School Information - {mySchool}</h2>
+    <div className="flex justify-between items-center">
+      <h2 className="text-3xl font-bold">🏫 School Information - {mySchool}</h2>
+      {!isEditing && existingInfo && (
+        <button onClick={()=>setIsEditing(true)} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700">
+          ✏️ Edit Information
+        </button>
+      )}
+      {isEditing && existingInfo && (
+        <button onClick={()=>{setFormData({...existingInfo});setIsEditing(false);}} className="px-6 py-3 bg-gray-600 text-white rounded-xl font-semibold hover:bg-gray-700">
+          ❌ Cancel
+        </button>
+      )}
+    </div>
 
     {existingInfo && (
       <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-xl text-sm">
@@ -5874,11 +5888,11 @@ function SchoolInfoView({currentUser,schoolInfo}){
 
         {existingInfo.updateHistory && existingInfo.updateHistory.length > 0 && (
           <div className="mt-2">
-            <div className="font-semibold mb-1">Edit history</div>
+            <div className="font-semibold mb-1">Edit History (Newest First)</div>
             <ul className="max-h-32 overflow-y-auto space-y-1">
               {existingInfo.updateHistory
                 .slice()
-                .sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt)) // first → last
+                .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
                 .map((entry, idx) => (
                   <li key={idx}>
                     {new Date(entry.updatedAt).toLocaleString()} — {entry.updatedByName || entry.updatedBy}
@@ -5899,15 +5913,15 @@ function SchoolInfoView({currentUser,schoolInfo}){
           <div className="grid md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2">Principal Name *</label>
-              <input type="text" value={formData.principalName} onChange={e=>setFormData({...formData,principalName:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="text" value={formData.principalName} onChange={e=>setFormData({...formData,principalName:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">Phone Number *</label>
-              <input type="tel" value={formData.principalPhone} onChange={e=>setFormData({...formData,principalPhone:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="tel" value={formData.principalPhone} onChange={e=>setFormData({...formData,principalPhone:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">Email ID *</label>
-              <input type="email" value={formData.principalEmail} onChange={e=>setFormData({...formData,principalEmail:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="email" value={formData.principalEmail} onChange={e=>setFormData({...formData,principalEmail:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
             </div>
           </div>
         </div>
@@ -5918,15 +5932,15 @@ function SchoolInfoView({currentUser,schoolInfo}){
           <div className="grid md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2">Vice Principal Name *</label>
-              <input type="text" value={formData.vicePrincipalName} onChange={e=>setFormData({...formData,vicePrincipalName:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="text" value={formData.vicePrincipalName} onChange={e=>setFormData({...formData,vicePrincipalName:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">Phone Number *</label>
-              <input type="tel" value={formData.vicePrincipalPhone} onChange={e=>setFormData({...formData,vicePrincipalPhone:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="tel" value={formData.vicePrincipalPhone} onChange={e=>setFormData({...formData,vicePrincipalPhone:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">Email ID *</label>
-              <input type="email" value={formData.vicePrincipalEmail} onChange={e=>setFormData({...formData,vicePrincipalEmail:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="email" value={formData.vicePrincipalEmail} onChange={e=>setFormData({...formData,vicePrincipalEmail:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
             </div>
           </div>
         </div>
@@ -5937,15 +5951,15 @@ function SchoolInfoView({currentUser,schoolInfo}){
           <div className="grid md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2">Coordinator Name *</label>
-              <input type="text" value={formData.coordinatorName} onChange={e=>setFormData({...formData,coordinatorName:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="text" value={formData.coordinatorName} onChange={e=>setFormData({...formData,coordinatorName:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">Phone Number *</label>
-              <input type="tel" value={formData.coordinatorPhone} onChange={e=>setFormData({...formData,coordinatorPhone:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="tel" value={formData.coordinatorPhone} onChange={e=>setFormData({...formData,coordinatorPhone:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">Email ID *</label>
-              <input type="email" value={formData.coordinatorEmail} onChange={e=>setFormData({...formData,coordinatorEmail:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="email" value={formData.coordinatorEmail} onChange={e=>setFormData({...formData,coordinatorEmail:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
             </div>
           </div>
         </div>
@@ -6062,34 +6076,36 @@ function SchoolInfoView({currentUser,schoolInfo}){
             <div key={idx} className="bg-white p-4 rounded-xl mb-4 border-2 border-yellow-300">
               <div className="flex justify-between items-center mb-3">
                 <h4 className="font-bold text-lg">Book {idx+1}</h4>
-                <button onClick={()=>handleRemoveBook(idx)} className="px-4 py-2 bg-red-500 text-white rounded-lg">
-                  Remove
-                </button>
+                {isEditing && (
+                    <button onClick={()=>handleRemoveBook(idx)} className="px-4 py-2 bg-red-500 text-white rounded-lg">
+                      Remove
+                    </button>
+                  )}
               </div>
               <div className="grid md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-bold mb-2">Book Name *</label>
-                  <input type="text" value={book.bookName} onChange={e=>handleBookChange(idx,'bookName',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="text" value={book.bookName} onChange={e=>handleBookChange(idx,'bookName',e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Publisher Name *</label>
-                  <input type="text" value={book.publisher} onChange={e=>handleBookChange(idx,'publisher',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="text" value={book.publisher} onChange={e=>handleBookChange(idx,'publisher',e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Author Name *</label>
-                  <input type="text" value={book.author} onChange={e=>handleBookChange(idx,'author',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="text" value={book.author} onChange={e=>handleBookChange(idx,'author',e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Price *</label>
-                  <input type="text" value={book.price} onChange={e=>handleBookChange(idx,'price',e.target.value)} placeholder="₹ Amount" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="text" value={book.price} onChange={e=>handleBookChange(idx,'price',e.target.value)} placeholder="₹ Amount" disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">In Stock *</label>
-                  <input type="number" value={book.inStock} onChange={e=>handleBookChange(idx,'inStock',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="number" value={book.inStock} onChange={e=>handleBookChange(idx,'inStock',e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Distributed *</label>
-                  <input type="number" value={book.distributed} onChange={e=>handleBookChange(idx,'distributed',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="number" value={book.distributed} onChange={e=>handleBookChange(idx,'distributed',e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
               </div>
             </div>
@@ -6240,9 +6256,11 @@ function SchoolInfoView({currentUser,schoolInfo}){
         <div className="border-4 border-teal-500 rounded-2xl p-6 bg-teal-50">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-2xl font-bold text-teal-800">📦 Other Assets</h3>
-            <button onClick={handleAddAsset} className="px-6 py-3 bg-teal-600 text-white rounded-xl font-semibold">
-              + Add Asset
-            </button>
+            {isEditing && (
+              <button onClick={handleAddAsset} className="px-6 py-3 bg-teal-600 text-white rounded-xl font-semibold">
+                + Add Asset
+              </button>
+            )}
           </div>
           {formData.otherAssets.length===0?(
             <p className="text-gray-600 text-center py-4">No other assets added yet. Click "+ Add Asset" to add.</p>
@@ -6251,22 +6269,24 @@ function SchoolInfoView({currentUser,schoolInfo}){
               <div key={idx} className="bg-white p-4 rounded-xl mb-4 border-2 border-teal-300">
                 <div className="flex justify-between items-center mb-3">
                   <h4 className="font-bold text-lg">Asset {idx+1}</h4>
-                  <button onClick={()=>handleRemoveAsset(idx)} className="px-4 py-2 bg-red-500 text-white rounded-lg">
-                    Remove
-                  </button>
+                  {isEditing && (
+                    <button onClick={()=>handleRemoveAsset(idx)} className="px-4 py-2 bg-red-500 text-white rounded-lg">
+                      Remove
+                    </button>
+                  )}
                 </div>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold mb-2">Asset Name *</label>
-                    <input type="text" value={asset.assetName} onChange={e=>handleAssetChange(idx,'assetName',e.target.value)} placeholder="e.g., Projector, Whiteboard" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                    <input type="text" value={asset.assetName} onChange={e=>handleAssetChange(idx,'assetName',e.target.value)} placeholder="e.g., Projector, Whiteboard" disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                   </div>
                   <div>
                     <label className="block text-sm font-bold mb-2">Quantity *</label>
-                    <input type="number" value={asset.assetQuantity} onChange={e=>handleAssetChange(idx,'assetQuantity',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                    <input type="number" value={asset.assetQuantity} onChange={e=>handleAssetChange(idx,'assetQuantity',e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                   </div>
                   <div>
                     <label className="block text-sm font-bold mb-2">Condition *</label>
-                    <select value={asset.assetCondition} onChange={e=>handleAssetChange(idx,'assetCondition',e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+                    <select value={asset.assetCondition} onChange={e=>handleAssetChange(idx,'assetCondition',e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                       <option value="">Select</option>
                       <option value="Working">Working</option>
                       <option value="Not Working">Not Working</option>
@@ -6275,7 +6295,7 @@ function SchoolInfoView({currentUser,schoolInfo}){
                   </div>
                   <div>
                     <label className="block text-sm font-bold mb-2">Notes</label>
-                    <input type="text" value={asset.assetNotes} onChange={e=>handleAssetChange(idx,'assetNotes',e.target.value)} placeholder="Additional details" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                    <input type="text" value={asset.assetNotes} onChange={e=>handleAssetChange(idx,'assetNotes',e.target.value)} placeholder="Additional details" disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                   </div>
                 </div>
               </div>
@@ -6283,9 +6303,11 @@ function SchoolInfoView({currentUser,schoolInfo}){
           )}
         </div>
 
+        {isEditing && (
         <button onClick={handleSubmit} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-xl">
           💾 Save School Information
         </button>
+      )}
       </div>
     </div>
   );
