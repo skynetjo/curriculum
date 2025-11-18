@@ -5797,6 +5797,9 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   const[attendanceMap,setAttendanceMap]=useState({});
   const[showRemarksModal,setShowRemarksModal]=useState(false);
   const[selectedStudent,setSelectedStudent]=useState(null);
+  const[isLocked,setIsLocked]=useState(false);
+  const[lockInfo,setLockInfo]=useState(null);
+  const[isLoading,setIsLoading]=useState(false);
 
   const mySchool=currentUser.school;
   const filteredStudents=students
@@ -5820,8 +5823,86 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
         map[a.studentId]=a.status;
       });
     setAttendanceMap(map);
+    
+    // ✅ Check if attendance is locked for this date
+    checkAttendanceLock();
   },[selectedDate,mySchool,selectedGrade]);
+  
+  const checkAttendanceLock=async()=>{
+    try{
+      const lockId=`${mySchool}_${selectedGrade}_${selectedDate}`;
+      const lockDoc=await db.collection('attendanceLocks').doc(lockId).get();
+      
+      if(lockDoc.exists){
+        const lockData=lockDoc.data();
+        setIsLocked(true);
+        setLockInfo(lockData);
+      }else{
+        setIsLocked(false);
+        setLockInfo(null);
+      }
+    }catch(e){
+      console.error('Error checking lock:',e);
+    }
+  };
+  
+  const lockAttendance=async()=>{
+    const confirmation=confirm('Are you sure you want to lock attendance for this date?\n\nOnce locked:\n- No teacher can mark or change attendance\n- Only admins can unlock it\n\nThis prevents duplicate entries.');
+    
+    if(!confirmation)return;
+    
+    try{
+      setIsLoading(true);
+      const lockId=`${mySchool}_${selectedGrade}_${selectedDate}`;
+      
+      await db.collection('attendanceLocks').doc(lockId).set({
+        school:mySchool,
+        grade:selectedGrade,
+        date:selectedDate,
+        lockedBy:currentUser.afid,
+        lockedAt:new Date().toISOString(),
+        lockedByName:currentUser.name||currentUser.afid
+      });
+      
+      alert('✅ Attendance locked successfully!\n\nNo one can modify attendance for this date now.');
+      checkAttendanceLock();
+    }catch(e){
+      alert('Failed to lock: '+e.message);
+    }finally{
+      setIsLoading(false);
+    }
+  };
+  
+  const unlockAttendance=async()=>{
+    if(currentUser.role!=='admin'){
+      alert('Only admins can unlock attendance.');
+      return;
+    }
+    
+    const confirmation=confirm('Are you sure you want to unlock attendance for this date?\n\nTeachers will be able to mark/modify attendance again.');
+    
+    if(!confirmation)return;
+    
+    try{
+      setIsLoading(true);
+      const lockId=`${mySchool}_${selectedGrade}_${selectedDate}`;
+      await db.collection('attendanceLocks').doc(lockId).delete();
+      
+      alert('✅ Attendance unlocked successfully!');
+      checkAttendanceLock();
+    }catch(e){
+      alert('Failed to unlock: '+e.message);
+    }finally{
+      setIsLoading(false);
+    }
+  };
   const handleAttendanceChange=async(studentId,status,remarks='')=>{
+    // ✅ CHECK IF LOCKED
+    if(isLocked){
+      alert('❌ Attendance is locked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\nContact admin to unlock.');
+      return;
+    }
+    
     try{
       // ✅ UPDATE UI FIRST (Optimistic update)
       setAttendanceMap(prev=>({...prev,[studentId]:status}));
@@ -5847,6 +5928,12 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   };
 
   const handleSelectAll=async()=>{
+    // ✅ CHECK IF LOCKED
+    if(isLocked){
+      alert('❌ Attendance is locked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\nContact admin to unlock.');
+      return;
+    }
+    
     try{
       for(const student of filteredStudents){
         const docId=`${mySchool}_${selectedGrade}_${student.id}_${selectedDate}`;
@@ -5874,21 +5961,67 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
     <div className="space-y-6">
       <h2 className="text-3xl font-bold">Student Attendance - {mySchool}</h2>
 
+      {/* ✅ LOCK STATUS BANNER */}
+      {isLocked&&(
+        <div className="bg-red-100 border-2 border-red-500 p-4 rounded-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-bold text-red-800">🔒 Attendance is LOCKED for this date</div>
+              <div className="text-sm text-red-700 mt-1">
+                Locked by: <strong>{lockInfo.lockedByName}</strong> on {new Date(lockInfo.lockedAt).toLocaleString()}
+              </div>
+              <div className="text-sm text-red-700">No changes can be made to attendance for this date.</div>
+            </div>
+            {currentUser.role==='admin'&&(
+              <button 
+                onClick={unlockAttendance} 
+                disabled={isLoading}
+                className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-xl font-semibold disabled:opacity-50">
+                {isLoading?'Unlocking...':'🔓 Unlock (Admin)'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ✅ SUCCESS BANNER WHEN UNLOCKED */}
+      {!isLocked&&selectedDate===getTodayDate()&&(
+        <div className="bg-green-100 border-2 border-green-500 p-4 rounded-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-bold text-green-800">✅ Attendance is UNLOCKED</div>
+              <div className="text-sm text-green-700 mt-1">
+                You can mark/modify attendance. Remember to lock it after completion to prevent duplicates.
+              </div>
+            </div>
+            <button 
+              onClick={lockAttendance} 
+              disabled={isLoading}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold disabled:opacity-50">
+              {isLoading?'Locking...':'🔒 Lock Attendance'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white p-6 rounded-2xl shadow-lg">
         <div className="grid md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
-            <select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
+            <select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} disabled={isLocked} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
               <option value="11">Class 11</option>
               <option value="12">Class 12</option>
             </select>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Date</label>
-            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
+            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
           </div>
           <div className="flex items-end">
-            <button onClick={handleSelectAll} className="w-full px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
+            <button 
+              onClick={handleSelectAll} 
+              disabled={isLocked}
+              className="w-full px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
               ✅ Mark All Present
             </button>
           </div>
@@ -5915,16 +6048,20 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
                 <div className="flex gap-2">
                   <button 
                     onClick={()=>handleAttendanceChange(student.id,'Present')}
-                    className={`px-6 py-2 rounded-lg font-semibold ${attendanceMap[student.id]==='Present'?'bg-green-500 text-white':'bg-gray-200'}`}
+                    disabled={isLocked}
+                    className={`px-6 py-2 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${attendanceMap[student.id]==='Present'?'bg-green-500 text-white':'bg-gray-200'}`}
                   >
                     ✓ Present
                   </button>
                   <button 
                     onClick={()=>{
-                      setSelectedStudent(student);
-                      setShowRemarksModal(true);
+                      if(!isLocked){
+                        setSelectedStudent(student);
+                        setShowRemarksModal(true);
+                      }
                     }}
-                    className={`px-6 py-2 rounded-lg font-semibold ${attendanceMap[student.id]==='Absent'?'bg-red-500 text-white':'bg-gray-200'}`}
+                    disabled={isLocked}
+                    className={`px-6 py-2 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${attendanceMap[student.id]==='Absent'?'bg-red-500 text-white':'bg-gray-200'}`}
                   >
                     ✗ Absent
                   </button>
