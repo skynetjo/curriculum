@@ -5857,7 +5857,19 @@ function SchoolInfoView({currentUser,schoolInfo}){
 
   return(
   <div className="space-y-6">
-    <h2 className="text-3xl font-bold">🏫 School Information - {mySchool}</h2>
+      return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold">🏫 School Information - {mySchool}</h2>
+
+        <button
+          type="button"
+          onClick={handleSubmit}
+          className="px-4 py-2 rounded-xl avanti-gradient text-white font-semibold"
+        >
+          💾 Save School Information
+        </button>
+      </div>
 
     {existingInfo && (
       <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-xl text-sm">
