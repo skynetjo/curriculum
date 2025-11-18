@@ -1946,24 +1946,24 @@ function TeacherView({
         )}
 
         {activeTab === 'class11' && (
-          <ClassView
-            grade="11"
-            currentUser={currentUser}
-            curriculum={curriculum}
-            chapterProgress={chapterProgress}
-            updateChapterProgress={updateChapterProgress}
-          />
-        )}
+  <TeacherCurriculum
+    grade="11"
+    currentUser={currentUser}
+    curriculum={curriculum}
+    chapterProgress={chapterProgress}
+    updateChapterProgress={updateChapterProgress}
+  />
+)}
 
         {activeTab === 'class12' && (
-          <ClassView
-            grade="12"
-            currentUser={currentUser}
-            curriculum={curriculum}
-            chapterProgress={chapterProgress}
-            updateChapterProgress={updateChapterProgress}
-          />
-        )}
+  <TeacherCurriculum
+    grade="12"
+    currentUser={currentUser}
+    curriculum={curriculum}
+    chapterProgress={chapterProgress}
+    updateChapterProgress={updateChapterProgress}
+  />
+)}
 
         {activeTab === 'students' && (
           <StudentManagement
