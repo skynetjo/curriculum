@@ -1,5 +1,6 @@
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1480,77 +1481,74 @@ useEffect(() => {
   const interval = setInterval(fetchData, 2 * 60 * 1000);
   return () => clearInterval(interval);
 }, []);
-const handleLogin = async () => {
+const handleLogin=async()=>{
   setAuthLoading(true);
-  try {
-    const email = (loginForm.email || '').trim().toLowerCase();
-    const password = loginForm.password;
-    const studentId = (loginForm.studentId || '').trim();
-    const loginType = loginForm.loginType || 'teacher';
-
-    if (loginType === 'student') {
+  try{
+    const email=(loginForm.email||'').trim().toLowerCase();
+    const password=loginForm.password;
+    const studentId=(loginForm.studentId||'').trim();
+    const loginType=loginForm.loginType||'teacher';
+    
+    if(loginType==='student'){
       // STUDENT LOGIN
-      if (!studentId || !password) {
+      if(!studentId||!password){
         alert('Please enter Student ID and password');
         setAuthLoading(false);
         return;
       }
-
-      if (password !== 'pass123') {
+      if(password!=='pass123'){
         alert('Invalid password. Default password is: pass123');
         setAuthLoading(false);
         return;
       }
-
+      
       try {
         // ✅ Get all students and search for matching ID
         const allStudentsSnap = await db.collection('students').get();
         let foundStudent = null;
-
+        
         allStudentsSnap.docs.forEach(doc => {
           const data = doc.data();
-          if (data.id === studentId) {
-            // ✅ correct spread syntax
+          if(data.id === studentId) {
             foundStudent = { ...data, docId: doc.id };
             console.log('✅ Found student:', foundStudent);
           }
         });
-
-        if (foundStudent) {
+        
+        if(foundStudent){
           setCurrentUser({
             ...foundStudent,
-            userType: 'student',
-            studentId: studentId
+            userType:'student',
+            studentId:studentId
           });
           setIsAdmin(false);
-          setActiveTab('overview'); // or 'dashboard' if you prefer
-          setAuthLoading(false);
-        } else {
+          setActiveTab('dashboard');
+          setAuthLoading(false); // ⬅️ ADD THIS
+        }else{
           alert('Student ID not found. Please contact your teacher.');
           setAuthLoading(false);
           return;
         }
-      } catch (e) {
+      } catch(e) {
         console.error('Student login error:', e);
         alert('Login failed: ' + e.message);
         setAuthLoading(false);
         return;
       }
-    } else {
+    }else{
       // TEACHER/ADMIN LOGIN (existing code)
-      if (!email || !password) {
+      if(!email||!password){
         alert('Please enter email and password');
         setAuthLoading(false);
         return;
       }
-
-      await auth.signInWithEmailAndPassword(email, password);
-      setAuthLoading(false);
+      await auth.signInWithEmailAndPassword(email,password);
+      setAuthLoading(false); // ⬅️ ADD THIS
     }
-  } catch (e) {
-    console.error('login error', e);
-    alert('Login failed: ' + e.message);
-    setAuthLoading(false);
+  }catch(e){
+    console.error('login error',e);
+    alert('Login failed: '+e.message);
+    setAuthLoading(false); // ⬅️ MAKE SURE THIS EXISTS
   }
 };
 const handleLogout=async()=>{
@@ -5860,19 +5858,7 @@ function SchoolInfoView({currentUser,schoolInfo}){
 
   return(
   <div className="space-y-6">
-      return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold">🏫 School Information - {mySchool}</h2>
-
-        <button
-          type="button"
-          onClick={handleSubmit}
-          className="px-4 py-2 rounded-xl avanti-gradient text-white font-semibold"
-        >
-          💾 Save School Information
-        </button>
-      </div>
+    <h2 className="text-3xl font-bold">🏫 School Information - {mySchool}</h2>
 
     {existingInfo && (
       <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-xl text-sm">
