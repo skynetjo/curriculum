@@ -1762,24 +1762,55 @@ function StudentDashboard({currentUser, handleLogout}) {
         setChapterProgress(progressMap);
 
         // Fetch attendance (from November 1st, 2024 onwards)
-        console.log('Fetching attendance for studentId:', myId, 'school:', mySchool);
+        console.log('=== ATTENDANCE FETCH START ===');
+        console.log('Student ID (myId):', myId, 'Type:', typeof myId);
+        console.log('School (mySchool):', mySchool, 'Type:', typeof mySchool);
+        console.log('Student ID as String:', String(myId));
+        
         let attSnap = await db.collection('studentAttendance')
           .where('studentId', '==', String(myId))
           .where('school', '==', mySchool)
           .where('date', '>=', '2024-11-01')
           .get();
         
-        // If no results, try without date filter to check if any attendance exists
+        console.log('First query (with date filter) returned:', attSnap.docs.length, 'records');
+        
+        // If no results, try without date filter
         if (attSnap.docs.length === 0) {
-          console.log('No attendance with date filter, trying without date filter');
+          console.log('Trying without date filter...');
           attSnap = await db.collection('studentAttendance')
             .where('studentId', '==', String(myId))
             .where('school', '==', mySchool)
             .get();
+          console.log('Second query (no date filter) returned:', attSnap.docs.length, 'records');
+        }
+        
+        // If still no results, try with just studentId
+        if (attSnap.docs.length === 0) {
+          console.log('Trying with ONLY studentId...');
+          attSnap = await db.collection('studentAttendance')
+            .where('studentId', '==', String(myId))
+            .get();
+          console.log('Third query (only studentId) returned:', attSnap.docs.length, 'records');
+          
+          // Show what schools were found
+          if (attSnap.docs.length > 0) {
+            const schools = attSnap.docs.map(d => d.data().school);
+            console.log('Found attendance for schools:', [...new Set(schools)]);
+            console.log('Your school is:', mySchool);
+          }
         }
         
         const attendanceData = attSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
-        console.log('Attendance records found:', attendanceData.length, attendanceData);
+        console.log('=== FINAL ATTENDANCE DATA ===');
+        console.log('Total records:', attendanceData.length);
+        if (attendanceData.length > 0) {
+          console.log('Sample record:', attendanceData[0]);
+          console.log('Present count:', attendanceData.filter(a => a.status === 'Present').length);
+          console.log('Absent count:', attendanceData.filter(a => a.status === 'Absent').length);
+        }
+        console.log('=== ATTENDANCE FETCH END ===');
+        
         setStudentAttendance(attendanceData);
         
         // Fetch teachers
@@ -2219,7 +2250,8 @@ const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);
 const[schoolInfo,setSchoolInfo]=useState([]);               
 const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
-useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){if(user.email==='admin@avantifellows.org'){setIsAdmin(true);setCurrentUser({name:'Administrator',email:user.email,afid:'ADMIN',school:'Admin'});setActiveTab('teachers')}else{const teacherSnapshot=await db.collection('teachers').where('email','==',user.email).limit(1).get();if(!teacherSnapshot.empty){const teacherData=teacherSnapshot.docs[0].data();setCurrentUser(teacherData);setIsAdmin(false);setActiveTab('overview');if(teacherData.dob){const d=new Date(teacherData.dob);const now=new Date();if(d.getMonth()===now.getMonth()&&d.getDate()===now.getDate()){setShowConfetti(true);setCelebrationMessage(`🎂 Happy Birthday, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}if(teacherData.joiningDate){const j=new Date(teacherData.joiningDate);const now=new Date();if(j.getMonth()===now.getMonth()&&j.getDate()===now.getDate()&&j.getFullYear()<now.getFullYear()){const years=now.getFullYear()-j.getFullYear();setShowConfetti(true);setCelebrationMessage(`🎉 Happy ${years} Year Work Anniversary, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}}else{alert('Teacher profile not found. Please contact admin.');await auth.signOut()}}}else{setCurrentUser(null);setIsAdmin(false)}setLoading(false)});return()=>unsubscribe()},[]);
+useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){if(user.email==='admin@avantifellows.org'){setIsAdmin(true);setCurrentUser({name:'Administrator',email:user.email,afid:'ADMIN',school:'Admin'});setActiveTab('teachers')}else{const teacherSnapshot=await db.collection('teachers').where('email','==',user.email).limit(1).get();if(!teacherSnapshot.empty){const teacherData=teacherSnapshot.docs[0].data();setCurrentUser(teacherData);setIsAdmin(false);setActiveTab('overview');if(teacherData.dob){const d=new Date(teacherData.dob);const now=new Date();if(d.getMonth()===now.getMonth()&&d.getDate()===now.getDate()){setShowConfetti(true);setCelebrationMessage(`🎂 Happy Birthday, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}if(teacherData.joiningDate){const j=new Date(teacherData.joiningDate);const now=new Date();if(j.getMonth()===now.getMonth()&&j.getDate()===now.getDate()&&j.getFullYear()<now.getFullYear()){const years=now.getFullYear()-j.getFullYear();setShowConfetti(true);setCelebrationMessage(`🎉 Happy ${years} Year Work Anniversary, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}}else{alert('Teacher profile not found. Please contact admin.');await auth.signOut()}}}else{// Check for student session in localStorage
+const studentSession=localStorage.getItem('studentSession');if(studentSession){try{const studentData=JSON.parse(studentSession);console.log('✅ Restored student session:',studentData);setCurrentUser(studentData);setIsAdmin(false);setActiveTab('dashboard')}catch(e){console.error('Failed to restore student session:',e);localStorage.removeItem('studentSession')}}else{setCurrentUser(null);setIsAdmin(false)}}setLoading(false)});return()=>unsubscribe()},[]);
   // ✅ OPTIMIZED: Fetch data once on load, refresh only when needed
 useEffect(() => {
   const fetchData = async () => {
@@ -2307,11 +2339,14 @@ const handleLogin=async()=>{
         });
         
         if(foundStudent){
-          setCurrentUser({
+          const studentUser = {
             ...foundStudent,
             userType:'student',
             studentId:studentId
-          });
+          };
+          // ✅ Save to localStorage for session persistence
+          localStorage.setItem('studentSession', JSON.stringify(studentUser));
+          setCurrentUser(studentUser);
           setIsAdmin(false);
           setActiveTab('dashboard');
           setAuthLoading(false); // ⬅️ ADD THIS
@@ -2344,6 +2379,8 @@ const handleLogin=async()=>{
 };
 const handleLogout=async()=>{
   try{
+    // Clear student session from localStorage
+    localStorage.removeItem('studentSession');
     // For teachers/admins who use Firebase Auth
     if(auth.currentUser){
       await auth.signOut();
