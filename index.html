@@ -5414,8 +5414,9 @@ await db.collection('students').doc(docId).set({
 function TeacherAttendanceDashboard({currentUser,students,teachers,studentAttendance,teacherAttendance}){
   const[filterGrade,setFilterGrade]=useState('All');
   const[filterSubject,setFilterSubject]=useState('All');
-  const[startDate,setStartDate]=useState(getTodayDate().slice(0,7)+'-01');
-  const[endDate,setEndDate]=useState(getTodayDate());
+  const today = getTodayDate();
+  const[startDate,setStartDate]=useState(today);
+  const[endDate,setEndDate]=useState(today);
 
   const mySchool=currentUser.school;
 
@@ -5889,6 +5890,33 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
     }
   };
   
+  const lockAttendance=async()=>{
+    const confirmation=confirm('Are you sure you want to lock attendance for this date?\n\nOnce locked:\n- No teacher can mark or change attendance\n- Only admins can unlock it\n\nThis prevents duplicate entries.');
+    
+    if(!confirmation)return;
+    
+    try{
+      setIsLoading(true);
+      const lockId=`${mySchool}_${selectedGrade}_${selectedDate}`;
+      
+      await db.collection('attendanceLocks').doc(lockId).set({
+        school:mySchool,
+        grade:selectedGrade,
+        date:selectedDate,
+        lockedBy:currentUser.afid,
+        lockedAt:new Date().toISOString(),
+        lockedByName:currentUser.name||currentUser.afid
+      });
+      
+      alert('✅ Attendance locked successfully!\n\nNo one can modify attendance for this date now.');
+      checkAttendanceLock();
+    }catch(e){
+      alert('Failed to lock: '+e.message);
+    }finally{
+      setIsLoading(false);
+    }
+  };
+  
   const unlockAttendance=async()=>{
     if(currentUser.role!=='admin'){
       alert('Only admins can unlock attendance.');
@@ -5915,7 +5943,7 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   const handleAttendanceChange=async(studentId,status,remarks='')=>{
     // ✅ CHECK IF LOCKED
     if(isLocked){
-      alert('❌ Attendance is already marked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\n⚠️ Contact admin to unlock if you need to make changes.');
+      alert('❌ Attendance is locked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\nContact admin to unlock.');
       return;
     }
     
@@ -5936,48 +5964,17 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
         markedBy:currentUser.afid,
         markedAt:new Date().toISOString()
       });
-      
-      // ✅ AUTO-LOCK: Check if all students are marked
-      const updatedMap={...attendanceMap,[studentId]:status};
-      const totalStudents=filteredStudents.length;
-      const markedStudents=Object.keys(updatedMap).filter(id=>updatedMap[id]).length;
-      
-      if(markedStudents===totalStudents&&totalStudents>0){
-        // All students marked - auto lock!
-        await autoLockAttendance();
-      }
     }catch(e){
       // ✅ Rollback UI if save fails
       setAttendanceMap(prev=>({...prev,[studentId]:prev[studentId]||''}));
       alert('Failed: '+e.message);
     }
   };
-  
-  const autoLockAttendance=async()=>{
-    try{
-      const lockId=`${mySchool}_${selectedGrade}_${selectedDate}`;
-      
-      await db.collection('attendanceLocks').doc(lockId).set({
-        school:mySchool,
-        grade:selectedGrade,
-        date:selectedDate,
-        lockedBy:currentUser.afid,
-        lockedAt:new Date().toISOString(),
-        lockedByName:currentUser.name||currentUser.afid,
-        autoLocked:true
-      });
-      
-      console.log('✅ Attendance auto-locked for',mySchool,selectedGrade,selectedDate);
-      checkAttendanceLock();
-    }catch(e){
-      console.error('Failed to auto-lock:',e);
-    }
-  };
 
   const handleSelectAll=async()=>{
     // ✅ CHECK IF LOCKED
     if(isLocked){
-      alert('❌ Attendance is already marked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\n⚠️ Contact admin to unlock if you need to make changes.');
+      alert('❌ Attendance is locked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\nContact admin to unlock.');
       return;
     }
     
@@ -5998,11 +5995,7 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
       const newMap={};
       filteredStudents.forEach(s=>newMap[s.id]='Present');
       setAttendanceMap(newMap);
-      
-      // ✅ AUTO-LOCK: All students marked as present
-      await autoLockAttendance();
-      
-      alert('✅ All students marked present!\n🔒 Attendance automatically locked.');
+      alert('All students marked present!');
     }catch(e){
       alert('Failed: '+e.message);
     }
@@ -6012,41 +6005,45 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
     <div className="space-y-6">
       <h2 className="text-3xl font-bold">Student Attendance - {mySchool}</h2>
 
-      {/* ✅ LOCKED STATUS BANNER */}
+      {/* ✅ LOCK STATUS BANNER */}
       {isLocked&&(
         <div className="bg-red-100 border-2 border-red-500 p-4 rounded-xl">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-bold text-red-800 text-lg">🔒 Attendance Already Marked for This Date</div>
-              <div className="text-sm text-red-700 mt-2">
-                Marked by: <strong>{lockInfo.lockedByName}</strong> on {new Date(lockInfo.lockedAt).toLocaleString()}
-              </div>
+              <div className="font-bold text-red-800">🔒 Attendance is LOCKED for this date</div>
               <div className="text-sm text-red-700 mt-1">
-                ⚠️ <strong>Contact admin to unlock</strong> if you need to make changes.
+                Locked by: <strong>{lockInfo.lockedByName}</strong> on {new Date(lockInfo.lockedAt).toLocaleString()}
               </div>
+              <div className="text-sm text-red-700">No changes can be made to attendance for this date.</div>
             </div>
             {currentUser.role==='admin'&&(
               <button 
                 onClick={unlockAttendance} 
                 disabled={isLoading}
                 className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-xl font-semibold disabled:opacity-50">
-                {isLoading?'Unlocking...':'🔓 Unlock'}
+                {isLoading?'Unlocking...':'🔓 Unlock (Admin)'}
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* ✅ UNLOCKED STATUS - READY TO MARK */}
-      {!isLocked&&(
+      {/* ✅ SUCCESS BANNER WHEN UNLOCKED */}
+      {!isLocked&&selectedDate===getTodayDate()&&(
         <div className="bg-green-100 border-2 border-green-500 p-4 rounded-xl">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-bold text-green-800 text-lg">✅ Attendance is UNLOCKED</div>
+              <div className="font-bold text-green-800">✅ Attendance is UNLOCKED</div>
               <div className="text-sm text-green-700 mt-1">
-                You can mark/modify attendance. Attendance will <strong>automatically lock</strong> once all students are marked.
+                You can mark/modify attendance. Remember to lock it after completion to prevent duplicates.
               </div>
             </div>
+            <button 
+              onClick={lockAttendance} 
+              disabled={isLoading}
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold disabled:opacity-50">
+              {isLoading?'Locking...':'🔒 Lock Attendance'}
+            </button>
           </div>
         </div>
       )}
