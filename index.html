@@ -213,6 +213,154 @@
     opacity: 1;
   }
 }
+
+/* ========================================
+   VERTICAL SIDEBAR STYLES
+   ======================================== */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  background: linear-gradient(180deg, #F4B41A 0%, #E8B039 50%, #C8342E 100%);
+  box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+  z-index: 1000;
+  overflow-y: auto;
+}
+
+.sidebar.collapsed {
+  width: 70px;
+}
+
+.sidebar.expanded {
+  width: 260px;
+}
+
+.sidebar-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-toggle {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 1.25rem;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+.sidebar-nav {
+  padding: 1rem 0;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 4px solid transparent;
+  gap: 1rem;
+  text-decoration: none;
+}
+
+.sidebar-item:hover {
+  background: rgba(255,255,255,0.1);
+  border-left-color: white;
+}
+
+.sidebar-item.active {
+  background: rgba(255,255,255,0.2);
+  border-left-color: white;
+  font-weight: bold;
+}
+
+.sidebar-icon {
+  font-size: 1.5rem;
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.sidebar-label {
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.3s;
+}
+
+.sidebar.collapsed .sidebar-label {
+  opacity: 0;
+  width: 0;
+}
+
+.sidebar.collapsed .sidebar-header h1 {
+  opacity: 0;
+  width: 0;
+}
+
+.main-content {
+  transition: margin-left 0.3s ease;
+}
+
+.main-content.sidebar-expanded {
+  margin-left: 260px;
+}
+
+.main-content.sidebar-collapsed {
+  margin-left: 70px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .sidebar.expanded {
+    width: 100%;
+  }
+  
+  .main-content.sidebar-expanded,
+  .main-content.sidebar-collapsed {
+    margin-left: 0;
+    padding-top: 60px;
+  }
+  
+  .sidebar {
+    height: auto;
+    max-height: 100vh;
+  }
+  
+  .sidebar.collapsed {
+    height: 60px;
+    overflow: hidden;
+  }
+}
+
+/* Scrollbar styling for sidebar */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.1);
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.3);
+  border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.5);
+}
   </style>
 </head>
 <body>
@@ -2433,21 +2581,23 @@ function TeacherView({
   setActiveTab
 }) {
   const teacherTabs = [
-    { id: 'overview', label: 'Dashboard' },
-    { id: 'analytics', label: 'Analytics' },
-    { id: 'class11', label: 'Class 11' },
-    { id: 'class12', label: 'Class 12' },
-    { id: 'students', label: 'Students' },
-    { id: 'directory', label: '📖 Directory' },
-    { id: 'attendance', label: 'Student Attendance' },
-    { id: 'attendancedash', label: 'Attendance Dashboard' },
-    { id: 'myattendance', label: 'My Attendance' },
-    { id: 'schoolinfo', label: 'School Info' },
-    { id: 'examstats', label: 'Exam Stats' }
+    { id: 'overview', label: 'Dashboard', icon: '📊' },
+    { id: 'analytics', label: 'Analytics', icon: '📈' },
+    { id: 'class11', label: 'Class 11', icon: '📚' },
+    { id: 'class12', label: 'Class 12', icon: '📕' },
+    { id: 'students', label: 'Students', icon: '👨‍🎓' },
+    { id: 'directory', label: 'Directory', icon: '📖' },
+    { id: 'attendance', label: 'Student Attendance', icon: '✅' },
+    { id: 'attendancedash', label: 'Attendance Dashboard', icon: '📊' },
+    { id: 'myattendance', label: 'My Attendance', icon: '🕒' },
+    { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
+    { id: 'examstats', label: 'Exam Stats', icon: '📊' }
   ];
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50">
       {showConfetti && <Confetti />}
 
       {/* PWA install helper */}
@@ -2473,58 +2623,59 @@ function TeacherView({
         </button>
       </div>
 
-      {/* Top nav */}
-      <nav className="avanti-gradient shadow-lg sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12" />
-              <div>
-                <h1 className="text-2xl font-bold text-white">Curriculum Tracker</h1>
-                <p className="text-sm text-white opacity-90">Avanti Fellows</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right hidden sm:block">
-                <p className="text-white font-semibold">{currentUser.name}</p>
-                <p className="text-sm text-white opacity-90">{currentUser.school}</p>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold"
-              >
-                Logout
-              </button>
-            </div>
+      {/* Vertical Sidebar */}
+      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'}`}>
+        <div className="sidebar-header">
+          <div className="flex items-center gap-3">
+            <img src={AVANTI_LOGO} alt="Avanti" className="w-10 h-10" />
+            <h1 className="text-lg font-bold text-white sidebar-label">Curriculum Tracker</h1>
           </div>
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="sidebar-toggle"
+          >
+            {sidebarCollapsed ? '→' : '←'}
+          </button>
         </div>
-      </nav>
 
-      {celebrationMessage && (
-        <div className="avanti-gradient text-white text-center py-4 text-xl font-bold">
-          {celebrationMessage}
-        </div>
-      )}
-
-      {/* Main content */}
-      <div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
-        {/* Tab buttons */}
-        <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
+        <div className="sidebar-nav">
           {teacherTabs.map((tab) => (
-            <button
+            <div
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={
-                'px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap ' +
-                (activeTab === tab.id
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-white text-gray-700 border')
-              }
+              className={`sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
             >
-              {tab.label}
-            </button>
+              <span className="sidebar-icon">{tab.icon}</span>
+              <span className="sidebar-label">{tab.label}</span>
+            </div>
           ))}
         </div>
+
+        {!sidebarCollapsed && (
+          <div className="px-4 py-3 border-t border-white border-opacity-20 mt-auto">
+            <div className="text-white text-sm mb-2">
+              <p className="font-semibold">{currentUser.name}</p>
+              <p className="text-xs opacity-90">{currentUser.school}</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full px-3 py-2 bg-white bg-opacity-20 text-white rounded-lg font-semibold hover:bg-opacity-30 transition"
+            >
+              Logout
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Main content */}
+      <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
+        {celebrationMessage && (
+          <div className="avanti-gradient text-white text-center py-4 text-xl font-bold">
+            {celebrationMessage}
+          </div>
+        )}
+
+        <div className="px-4 py-6">
 
         {/* Tab content */}
         {activeTab === 'overview' && (
@@ -2610,9 +2761,10 @@ function TeacherView({
         )}
 
         {activeTab === 'examstats' && <TeacherExamStats currentUser={currentUser} />}
+        </div>
       </div>
 
-      <footer className="bg-gray-800 text-white text-center py-4 mt-auto">
+      <footer className="bg-gray-800 text-white text-center py-4">
         <p>Made by Anand with ❤️</p>
       </footer>
     </div>
@@ -2785,66 +2937,70 @@ function AdminView({
   deleteChapter
 }) {
   const [activeTab, setActiveTab] = useState('teachers');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const adminTabs = [
+    { id: 'teachers', label: 'Teachers', icon: '👥' },
+    { id: 'students', label: 'Students', icon: '👨‍🎓' },
+    { id: 'directory', label: 'Directory', icon: '📖' },
+    { id: 'curriculum', label: 'Curriculum', icon: '📚' },
+    { id: 'analytics', label: 'Analytics', icon: '📊' },
+    { id: 'chapter-details', label: 'Chapter Details', icon: '📋' },
+    { id: 'attendance', label: 'Attendance Analytics', icon: '📊' },
+    { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
+    { id: 'birthdays', label: 'Celebrations', icon: '🎂' },
+    { id: 'studentprofiles', label: 'Student Profiles', icon: '👨‍🎓' },
+    { id: 'examstats', label: 'Exam Statistics', icon: '📊' },
+    { id: 'studentfeedback', label: 'Student Feedback', icon: '💬' }
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50">
       <InstallPrompt />
-      <nav className="avanti-gradient shadow-lg sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <img src={AVANTI_LOGO} alt="Avanti" className="w-12 h-12" />
-              <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+
+      {/* Vertical Sidebar */}
+      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'}`}>
+        <div className="sidebar-header">
+          <div className="flex items-center gap-3">
+            <img src={AVANTI_LOGO} alt="Avanti" className="w-10 h-10" />
+            <h1 className="text-lg font-bold text-white sidebar-label">Admin Dashboard</h1>
+          </div>
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="sidebar-toggle"
+          >
+            {sidebarCollapsed ? '→' : '←'}
+          </button>
+        </div>
+
+        <div className="sidebar-nav">
+          {adminTabs.map((tab) => (
+            <div
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
+            >
+              <span className="sidebar-icon">{tab.icon}</span>
+              <span className="sidebar-label">{tab.label}</span>
             </div>
+          ))}
+        </div>
+
+        {!sidebarCollapsed && (
+          <div className="px-4 py-3 border-t border-white border-opacity-20 mt-auto">
             <button
               onClick={handleLogout}
-              className="px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold"
+              className="w-full px-3 py-2 bg-white bg-opacity-20 text-white rounded-lg font-semibold hover:bg-opacity-30 transition"
             >
               Logout
             </button>
           </div>
-        </div>
-      </nav>
+        )}
+      </div>
 
-      <div className="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
-        {/* Tabs */}
-        <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
-          {[
-            'teachers',
-            'students',
-            'directory',
-            'curriculum',
-            'analytics',
-            'chapter-details',
-            'attendance',
-            'schoolinfo',
-            'birthdays',
-            'studentprofiles',
-            'examstats',
-            'studentfeedback'
-          ].map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${
-                activeTab === tab ? 'avanti-gradient text-white' : 'bg-white'
-              }`}
-            >
-              {tab === 'teachers' && '👥 Teachers'}
-              {tab === 'students' && '👨‍🎓 Students'}
-              {tab === 'directory' && '📖 Directory'}
-              {tab === 'curriculum' && '📚 Curriculum'}
-              {tab === 'analytics' && '📊 Analytics'}
-              {tab === 'chapter-details' && '📋 Chapter Details'}
-              {tab === 'attendance' && '📊 Attendance Analytics'}
-              {tab === 'schoolinfo' && '🏫 School Info'}
-              {tab === 'birthdays' && '🎂 Celebrations'}
-              {tab === 'studentprofiles' && '👨‍🎓 Student Profiles'}
-              {tab === 'examstats' && '📊 Exam Statistics'}
-              {tab === 'studentfeedback' && '💬 Student Feedback'}
-            </button>
-          ))}
-        </div>
+      {/* Main content */}
+      <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
+        <div className="px-4 py-6">
 
         {/* Tab Content */}
         {activeTab === 'teachers' && <TeacherManagement teachers={teachers} />}
@@ -2900,9 +3056,10 @@ function AdminView({
         {activeTab === 'examstats' && <AdminExamStats />}
         
         {activeTab === 'studentfeedback' && <StudentFeedbackView />}
+        </div>
       </div>
 
-      <footer className="bg-gray-800 text-white text-center py-4 mt-auto">
+      <footer className="bg-gray-800 text-white text-center py-4">
         <p>Made by Anand with ❤️</p>
       </footer>
     </div>
