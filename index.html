@@ -6440,8 +6440,18 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   };
   const handleAttendanceChange=async(studentId,status,remarks='')=>{
     // ✅ CHECK IF LOCKED
-    if(isLocked){
-      alert('❌ Attendance is locked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\nContact admin to unlock.');
+        if (isLocked) {
+      const lockedBy = lockInfo?.lockedByName || 'Unknown';
+      const lockedAt = lockInfo?.lockedAt
+        ? new Date(lockInfo.lockedAt).toLocaleString()
+        : 'Unknown time';
+
+      alert(
+        '❌ Attendance is locked for this date!\n\n' +
+        `Locked by: ${lockedBy}\n` +
+        `Locked at: ${lockedAt}\n\n` +
+        'Contact admin to unlock.'
+      );
       return;
     }
     
@@ -6471,8 +6481,18 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
 
   const handleSelectAll=async()=>{
     // ✅ CHECK IF LOCKED
-    if(isLocked){
-      alert('❌ Attendance is locked for this date!\n\nLocked by: '+lockInfo.lockedByName+'\nLocked at: '+new Date(lockInfo.lockedAt).toLocaleString()+'\n\nContact admin to unlock.');
+        if (isLocked) {
+      const lockedBy = lockInfo?.lockedByName || 'Unknown';
+      const lockedAt = lockInfo?.lockedAt
+        ? new Date(lockInfo.lockedAt).toLocaleString()
+        : 'Unknown time';
+
+      alert(
+        '❌ Attendance is locked for this date!\n\n' +
+        `Locked by: ${lockedBy}\n` +
+        `Locked at: ${lockedAt}\n\n` +
+        'Contact admin to unlock.'
+      );
       return;
     }
     
