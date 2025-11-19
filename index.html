@@ -1742,14 +1742,21 @@ function StudentExamRegistration({currentUser}) {
   };
 
   const toggleEdit = (index) => {
-    const newEditing = new Set(editingExams);
-    if (newEditing.has(index)) {
-      newEditing.delete(index);
-    } else {
-      newEditing.add(index);
-    }
-    setEditingExams(newEditing);
-  };
+  const newEditing = new Set(editingExams);
+  const newExpanded = new Set(expandedExams);
+
+  if (newEditing.has(index)) {
+    // closing edit
+    newEditing.delete(index);
+  } else {
+    // going into edit → also expand this exam
+    newEditing.add(index);
+    newExpanded.add(index);
+  }
+
+  setEditingExams(newEditing);
+  setExpandedExams(newExpanded);
+};
 
   const handleSave = async () => {
     try {
@@ -1938,88 +1945,54 @@ function StudentDashboard({currentUser, handleLogout}) {
   const myGrade = currentUser.grade;
   const myId = currentUser.studentId || currentUser.id;
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch curriculum
-        const currMap = {};
-        const currSnap = await db.collection('curriculum').get();
-        currSnap.docs.forEach(doc => { currMap[doc.id] = doc.data() });
-        setCurriculum(currMap);
+useEffect(() => {
+  const fetchData = async () => {
+    try {
+      // Curriculum
+      const currMap = {};
+      const currSnap = await db.collection('curriculum').get();
+      currSnap.docs.forEach(doc => { currMap[doc.id] = doc.data(); });
+      setCurriculum(currMap);
 
-        // Fetch chapter progress
-        const progressMap = {};
-        const progressSnap = await db.collection('chapterProgress').get();
-        progressSnap.docs.forEach(d => progressMap[d.id] = d.data());
-        setChapterProgress(progressMap);
+      // Chapter progress
+      const progressMap = {};
+      const progressSnap = await db.collection('chapterProgress').get();
+      progressSnap.docs.forEach(d => { progressMap[d.id] = d.data(); });
+      setChapterProgress(progressMap);
 
-        // Fetch attendance (all records)
-        console.log('=== ATTENDANCE FETCH START ===');
-        console.log('Student ID (myId):', myId, 'Type:', typeof myId);
-        console.log('School (mySchool):', mySchool, 'Type:', typeof mySchool);
-        console.log('Student ID as String:', String(myId));
-        
-        let attSnap = await db.collection('studentAttendance')
-          .where('studentId', '==', String(myId))
-          .where('school', '==', mySchool)
-          .get();
-        
-        console.log('Query with studentId and school returned:', attSnap.docs.length, 'records');
-        
-        // If no results, try with just studentId
-        if (attSnap.docs.length === 0) {
-          console.log('Trying with ONLY studentId...');
-          attSnap = await db.collection('studentAttendance')
-            .where('studentId', '==', String(myId))
-            .get();
-          console.log('Query with only studentId returned:', attSnap.docs.length, 'records');
-          
-          // Show what schools were found
-          if (attSnap.docs.length > 0) {
-            const schools = attSnap.docs.map(d => d.data().school);
-            console.log('Found attendance for schools:', [...new Set(schools)]);
-            console.log('Your school is:', mySchool);
-          }
-        }
-        
-        const attendanceData = attSnap.docs
-          .map(d => ({ ...d.data(), docId: d.id }))
-          .sort((a, b) => b.date.localeCompare(a.date)); // Sort by date descending
-        
-        console.log('=== FINAL ATTENDANCE DATA ===');
-        console.log('Total records:', attendanceData.length);
-        if (attendanceData.length > 0) {
-          console.log('Sample record:', attendanceData[0]);
-          console.log('Date range:', attendanceData[attendanceData.length - 1].date, 'to', attendanceData[0].date);
-          console.log('Present count:', attendanceData.filter(a => a.status === 'Present').length);
-          console.log('Absent count:', attendanceData.filter(a => a.status === 'Absent').length);
-        }
-        console.log('=== ATTENDANCE FETCH END ===');
-        
-        setStudentAttendance(attendanceData);
-        
-        // Fetch teachers
-        const teacherSnap = await db.collection('teachers')
-          .where('school', '==', mySchool)
-          .get();
-        setTeachers(teacherSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+      // ✅ ALL attendance records for this student (no date filter)
+      const attSnap = await db.collection('studentAttendance')
+        .where('studentId', '==', String(myId))
+        .get();
 
-        // Fetch exam registrations
+      const attendanceData = attSnap.docs
+        .map(d => ({ ...d.data(), docId: d.id }))
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+      setStudentAttendance(attendanceData);
+
+      // Teachers from this school
+      const teacherSnap = await db.collection('teachers')
+        .where('school', '==', mySchool)
+        .get();
+      setTeachers(teacherSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+
+      // Exam registrations for this student
       const examSnap = await db.collection('studentExamRegistrations').doc(myId).get();
       if (examSnap.exists) {
         setExamRegistrations(examSnap.data());
       }
 
-      // ✅ END OF SUCCESSFUL FETCH
       setLoading(false);
     } catch (e) {
       console.error('Data fetch error:', e);
-      // ✅ ENSURE LOADING STOPS EVEN ON ERROR
       setLoading(false);
     }
   };
+
   fetchData();
 }, [mySchool, myGrade, myId]);
+
 
     // Calculate profile completion (same logic as Profile page)
   const calculateCompletion = () => {
@@ -3114,16 +3087,26 @@ function AdminExamStats(){
   const[filterSchool,setFilterSchool]=useState('All');
   const[filterGrade,setFilterGrade]=useState('All');
 
-  useEffect(()=>{
-    const fetchData=async()=>{
-      const regsSnap=await db.collection('studentExamRegistrations').get();
-      setExamRegistrations(regsSnap.docs.map(d=>({...d.data(),id:d.id})));
-      
-      const stuSnap=await db.collection('students').get();
-      setStudents(stuSnap.docs.map(d=>({...d.data(),id:d.id})));
-    };
-    fetchData();
-  },[]);
+  useEffect(() => {
+  const fetchData = async () => {
+    const regsSnap = await db.collection('studentExamRegistrations').get();
+    setExamRegistrations(regsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+
+    const stuSnap = await db.collection('students').get();
+    const studentsData = stuSnap.docs.map(d => {
+      const data = d.data();
+      let studentId = data.id;
+      if (!studentId) {
+        const parts = d.id.split('_');
+        studentId = parts[parts.length - 1];
+      }
+      return { ...data, id: studentId, docId: d.id };
+    });
+
+    setStudents(studentsData);
+  };
+  fetchData();
+}, []);
 
   const filteredStudents=students.filter(s=>{
     if(filterSchool!=='All'&&s.school!==filterSchool)return false;
@@ -8319,16 +8302,34 @@ function TeacherExamStats({currentUser}){
   const[examRegistrations,setExamRegistrations]=useState([]);
   const[students,setStudents]=useState([]);
 
-  useEffect(()=>{
-    const fetchData=async()=>{
-      const regsSnap=await db.collection('studentExamRegistrations').get();
-      setExamRegistrations(regsSnap.docs.map(d=>({...d.data(),id:d.id})));
-      
-      const stuSnap=await db.collection('students').where('school','==',currentUser.school).get();
-      setStudents(stuSnap.docs.map(d=>({...d.data(),id:d.id})));
-    };
-    fetchData();
-  },[currentUser.school]);
+  useEffect(() => {
+  const fetchData = async () => {
+    // All exam registrations
+    const regsSnap = await db.collection('studentExamRegistrations').get();
+    setExamRegistrations(regsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+
+    // Students of this school – make sure `id` is the Student ID, not docId
+    const stuSnap = await db.collection('students')
+      .where('school', '==', currentUser.school)
+      .get();
+
+    const studentsData = stuSnap.docs.map(d => {
+      const data = d.data();
+      let studentId = data.id;
+
+      // Fallback for old docs: take last part of docId (JNV_Barwani_1234 → 1234)
+      if (!studentId) {
+        const parts = d.id.split('_');
+        studentId = parts[parts.length - 1];
+      }
+
+      return { ...data, id: studentId, docId: d.id };
+    });
+
+    setStudents(studentsData);
+  };
+  fetchData();
+}, [currentUser.school]);
 
   const mySchoolRegs=examRegistrations.filter(r=>{
     const student=students.find(s=>s.id===r.studentId);
