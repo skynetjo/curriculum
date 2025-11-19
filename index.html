@@ -6385,6 +6385,8 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
       }
     }catch(e){
       console.error('Error checking lock:',e);
+      setIsLocked(false);
+      setLockInfo(null);
     }
   };
   
@@ -6530,7 +6532,7 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
             <div>
               <div className="font-bold text-red-800">🔒 Attendance is LOCKED for this date</div>
               <div className="text-sm text-red-700 mt-1">
-                Locked by: <strong>{lockInfo.lockedByName}</strong> on {new Date(lockInfo.lockedAt).toLocaleString()}
+                Locked by: <strong>{lockInfo?.lockedByName || 'Unknown'}</strong> on {lockInfo?.lockedAt ? new Date(lockInfo.lockedAt).toLocaleString() : 'Unknown date'}
               </div>
               <div className="text-sm text-red-700">No changes can be made to attendance for this date.</div>
             </div>
