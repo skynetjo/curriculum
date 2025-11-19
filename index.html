@@ -2284,8 +2284,19 @@ useEffect(() => {
       curriculumSnap.docs.forEach(doc => { currMap[doc.id] = doc.data() });
       setCurriculum(currMap);
 
-      // Process students
-      setStudents(studentsSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+      // Process students - make sure every student has a proper `id`
+setStudents(
+  studentsSnap.docs.map(d => {
+    const data = d.data();
+    // Older students may be missing `id` field – fall back to docId suffix
+    let studentId = data.id;
+    if (!studentId) {
+      const parts = d.id.split('_');       // e.g. "JNV_Bharuch_1234"
+      studentId = parts[parts.length - 1]; // -> "1234"
+    }
+    return { ...data, id: studentId, docId: d.id };
+  })
+);
 
       // Process attendance
       setStudentAttendance(studentAttSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
@@ -5907,7 +5918,7 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
     
     // ✅ Check if attendance is locked for this date
     checkAttendanceLock();
-  },[selectedDate,mySchool,selectedGrade]);
+  }, [selectedDate, mySchool, selectedGrade, studentAttendance]);
   
   const checkAttendanceLock=async()=>{
     try{
