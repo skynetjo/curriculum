@@ -3079,144 +3079,198 @@ function TeacherView({
   );
 }
 // ========================================
-// ADMIN EXAM STATISTICS COMPONENT
+// ADMIN EXAM REGISTRATION STATISTICS
 // ========================================
-function AdminExamStats(){
-  const[examRegistrations,setExamRegistrations]=useState([]);
-  const[students,setStudents]=useState([]);
-  const[filterSchool,setFilterSchool]=useState('All');
-  const[filterGrade,setFilterGrade]=useState('All');
+function AdminExamStats() {
+  const [examRegistrations, setExamRegistrations] = useState([]);
+  const [students, setStudents] = useState([]);
+
+  const [filterSchool, setFilterSchool] = useState('All');
+  const [filterGrade, setFilterGrade] = useState('All');
+  const [filterGender, setFilterGender] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('All'); // Completed / Partial / NotDone / NeedHelp
+  const [filterExam, setFilterExam] = useState('All');
 
   useEffect(() => {
-  const fetchData = async () => {
-    const regsSnap = await db.collection('studentExamRegistrations').get();
-    setExamRegistrations(regsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+    const fetchData = async () => {
+      const regsSnap = await db.collection('studentExamRegistrations').get();
+      setExamRegistrations(regsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
-    const stuSnap = await db.collection('students').get();
-    const studentsData = stuSnap.docs.map(d => {
-      const data = d.data();
-      let studentId = data.id;
-      if (!studentId) {
-        const parts = d.id.split('_');
-        studentId = parts[parts.length - 1];
-      }
-      return { ...data, id: studentId, docId: d.id };
-    });
+      const stuSnap = await db.collection('students').get();
+      const studentsData = stuSnap.docs.map(d => {
+        const data = d.data();
+        let studentId = data.id;
+        if (!studentId) {
+          const parts = d.id.split('_');
+          studentId = parts[parts.length - 1];
+        }
+        return { ...data, id: studentId, docId: d.id };
+      });
+      setStudents(studentsData);
+    };
+    fetchData();
+  }, []);
 
-    setStudents(studentsData);
-  };
-  fetchData();
-}, []);
+  const schoolOptions = SCHOOLS;
+  const gradeOptions = Array.from(new Set(students.map(s => s.grade).filter(Boolean))).sort();
+  const genderOptions = Array.from(new Set(students.map(s => s.gender).filter(Boolean))).sort();
+  const examOptions = Array.from(
+    new Set(examRegistrations.flatMap(r => (r.exams || []).map(e => e.examName)).filter(Boolean))
+  ).sort();
 
-  const filteredStudents=students.filter(s=>{
-    if(filterSchool!=='All'&&s.school!==filterSchool)return false;
-    if(filterGrade!=='All'&&s.grade!==filterGrade)return false;
+  const filteredStudents = students.filter(s => {
+    if (filterSchool !== 'All' && s.school !== filterSchool) return false;
+    if (filterGrade !== 'All' && s.grade !== filterGrade) return false;
+    if (filterGender !== 'All' && (s.gender || '') !== filterGender) return false;
     return true;
   });
 
-  const totalStudents=filteredStudents.length;
-  const studentsWithRegs=new Set(examRegistrations.filter(r=>{
-    const student=students.find(s=>s.id===r.studentId);
-    if(!student)return false;
-    if(filterSchool!=='All'&&student.school!==filterSchool)return false;
-    if(filterGrade!=='All'&&student.grade!==filterGrade)return false;
-    return r.exams&&r.exams.length>0;
-  }).map(r=>r.studentId)).size;
-
-  const pendingStudents=totalStudents-studentsWithRegs;
-
-  // Exam-wise stats
-  const examStats={};
-  examRegistrations.forEach(reg=>{
-    const student=students.find(s=>s.id===reg.studentId);
-    if(!student)return;
-    if(filterSchool!=='All'&&student.school!==filterSchool)return;
-    if(filterGrade!=='All'&&student.grade!==filterGrade)return;
-    
-    (reg.exams||[]).forEach(exam=>{
-      if(!examStats[exam.examName]){
-        examStats[exam.examName]={
-          completed:0,
-          partial:0,
-          notCompleted:0,
-          needSupport:0
-        };
-      }
-      if(exam.registrationStatus==='Yes')examStats[exam.examName].completed++;
-      if(exam.registrationStatus==='Partially')examStats[exam.examName].partial++;
-      if(exam.registrationStatus==='No')examStats[exam.examName].notCompleted++;
-      if(exam.needSupport==='Yes')examStats[exam.examName].needSupport++;
+  const detailRows = [];
+  examRegistrations.forEach(reg => {
+    const student = filteredStudents.find(s => s.id === reg.studentId);
+    if (!student) return;
+    (reg.exams || []).forEach(exam => {
+      if (filterExam !== 'All' && exam.examName !== filterExam) return;
+      if (filterStatus === 'Completed' && exam.registrationStatus !== 'Yes') return;
+      if (filterStatus === 'Partial' && exam.registrationStatus !== 'Partially') return;
+      if (filterStatus === 'NotDone' && exam.registrationStatus !== 'No') return;
+      if (filterStatus === 'NeedHelp' && exam.needSupport !== 'Yes') return;
+      detailRows.push({ student, reg, exam });
     });
   });
 
-  const handleExport=()=>{
-    // Detailed export with all student and exam information
-    const exportData = [];
-    
-    examRegistrations.forEach(reg => {
-      const student = students.find(s => s.id === reg.studentId);
-      if (!student) return;
-      if (filterSchool !== 'All' && student.school !== filterSchool) return;
-      if (filterGrade !== 'All' && student.grade !== filterGrade) return;
-      
-      (reg.exams || []).forEach(exam => {
-        exportData.push({
-          'Student ID': reg.studentId,
-          'Student Name': reg.studentName || student.name,
-          'School': student.school,
-          'Grade': student.grade,
-          'Exam Name': exam.examName,
-          'Registration Status': exam.registrationStatus,
-          'Registration Number': exam.registrationNumber || '-',
-          'Password': exam.password || '-',
-          'Email Used': exam.emailUsed || '-',
-          'Phone Number Used': exam.phoneUsed || '-',
-          'Need Support': exam.needSupport,
-          'Support Type': exam.supportType || '-',
-          'Reason Not Completed': exam.reasonNotCompleted || '-',
-          'Last Updated': reg.updatedAt ? new Date(reg.updatedAt).toLocaleDateString() : '-'
-        });
-      });
-    });
-    
+  const totalStudents = filteredStudents.length;
+  const studentsWithRegs = new Set(detailRows.map(r => r.reg.studentId)).size;
+  const pendingStudents = totalStudents - studentsWithRegs;
+
+  const examStats = {};
+  detailRows.forEach(({ exam }) => {
+    const name = exam.examName || 'Other';
+    if (!examStats[name]) {
+      examStats[name] = { completed: 0, partial: 0, notCompleted: 0, needSupport: 0 };
+    }
+    if (exam.registrationStatus === 'Yes') examStats[name].completed++;
+    if (exam.registrationStatus === 'Partially') examStats[name].partial++;
+    if (exam.registrationStatus === 'No') examStats[name].notCompleted++;
+    if (exam.needSupport === 'Yes') examStats[name].needSupport++;
+  });
+
+  const handleExport = () => {
+    const exportData = detailRows.map(({ student, reg, exam }) => ({
+      'Student ID': reg.studentId,
+      'Student Name': reg.studentName || student.name,
+      'School': student.school,
+      'Grade': student.grade,
+      'Gender': student.gender || '-',
+      'Exam Name': exam.examName,
+      'Registration Status': exam.registrationStatus,
+      'Registration Number': exam.registrationNumber || '-',
+      'Password': exam.password || '-',
+      'Email Used': exam.emailUsed || '-',
+      'Phone Number Used': exam.phoneUsed || '-',
+      'Need Support': exam.needSupport,
+      'Support Type': exam.supportType || '-',
+      'Reason Not Completed': exam.reasonNotCompleted || '-',
+      'Last Updated': reg.updatedAt ? new Date(reg.updatedAt).toLocaleDateString() : '-'
+    }));
+
     if (exportData.length === 0) {
       alert('No data to export!');
       return;
     }
-    
     exportToExcel(exportData, 'exam_registrations_detailed');
   };
 
-  return(
+  return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold">📊 Exam Registration Statistics</h2>
-        <button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
+        <button
+          onClick={handleExport}
+          className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold"
+        >
           📥 Export
         </button>
       </div>
 
+      {/* Filters */}
       <div className="bg-white p-6 rounded-2xl shadow-lg">
         <h3 className="text-xl font-bold mb-4">🔍 Filters</h3>
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className="grid md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-bold mb-2">School</label>
-            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
+            <select
+              value={filterSchool}
+              onChange={e => setFilterSchool(e.target.value)}
+              disabled={!isEditing}
+              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
               <option value="All">All Schools</option>
-              {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+              {schoolOptions.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
             </select>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
-            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
+            <select
+              value={filterGrade}
+              onChange={e => setFilterGrade(e.target.value)}
+              disabled={!isEditing}
+              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
               <option value="All">All Grades</option>
               <option value="11">Class 11</option>
               <option value="12">Class 12</option>
             </select>
           </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Gender</label>
+            <select
+              value={filterGender}
+              onChange={e => setFilterGender(e.target.value)}
+              disabled={!isEditing}
+              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="All">All</option>
+              {genderOptions.map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Exam Name</label>
+            <select
+              value={filterExam}
+              onChange={e => setFilterExam(e.target.value)}
+              disabled={!isEditing}
+              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="All">All Exams</option>
+              {examOptions.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Status</label>
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              disabled={!isEditing}
+              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="All">All</option>
+              <option value="Completed">Completed</option>
+              <option value="Partial">Partial</option>
+              <option value="NotDone">Not Done</option>
+              <option value="NeedHelp">Need Help</option>
+            </select>
+          </div>
         </div>
       </div>
 
+      {/* Summary cards */}
       <div className="grid md:grid-cols-3 gap-4">
         <div className="stat-card bg-blue-500 text-white">
           <div className="text-sm opacity-90">Total Students</div>
@@ -3232,32 +3286,116 @@ function AdminExamStats(){
         </div>
       </div>
 
+      {/* Exam-wise status */}
       <div className="bg-white p-6 rounded-2xl shadow-lg">
         <h3 className="text-xl font-bold mb-4">📋 Exam-wise Registration Status</h3>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="avanti-gradient-light">
               <tr>
-                <th className="p-3 text-left">Exam Name</th>
-                <th className="p-3 text-left">Completed</th>
-                <th className="p-3 text-left">Partial</th>
-                <th className="p-3 text-left">Not Started</th>
-                <th className="p-3 text-left">Need Support</th>
-                <th className="p-3 text-left">Total</th>
+                <th className="p-3 text-left">Exam</th>
+                <th className="p-3 text-center">Completed</th>
+                <th className="p-3 text-center">Partial</th>
+                <th className="p-3 text-center">Not Started</th>
+                <th className="p-3 text-center">Need Support</th>
               </tr>
             </thead>
             <tbody>
-              {Object.keys(examStats).length===0?(
-                <tr><td colSpan="6" className="p-8 text-center text-gray-500">No exam registrations yet</td></tr>
-              ):Object.keys(examStats).map(examName=>
-                <tr key={examName} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-semibold">{examName}</td>
-                  <td className="p-3"><span className="px-3 py-1 bg-green-100 text-green-700 rounded-full font-bold">{examStats[examName].completed}</span></td>
-                  <td className="p-3"><span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full font-bold">{examStats[examName].partial}</span></td>
-                  <td className="p-3"><span className="px-3 py-1 bg-red-100 text-red-700 rounded-full font-bold">{examStats[examName].notCompleted}</span></td>
-                  <td className="p-3"><span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full font-bold">{examStats[examName].needSupport}</span></td>
-                  <td className="p-3 font-bold">{examStats[examName].completed+examStats[examName].partial+examStats[examName].notCompleted}</td>
+              {Object.keys(examStats).length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="p-8 text-center text-gray-500">
+                    No exam registrations yet
+                  </td>
                 </tr>
+              ) : (
+                Object.entries(examStats).map(([examName, stats]) => (
+                  <tr key={examName} className="border-b hover:bg-gray-50">
+                    <td className="p-3 font-semibold">{examName}</td>
+                    <td className="p-3 text-center">
+                      <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 font-bold">
+                        {stats.completed}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
+                        {stats.partial}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 font-bold">
+                        {stats.notCompleted}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className="px-3 py-1 rounded-full bg-orange-100 text-orange-700 font-bold">
+                        {stats.needSupport}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Student-wise details */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">🧑‍🎓 Student-wise Exam Registrations</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="p-3 text-left">Student ID</th>
+                <th className="p-3 text-left">Name</th>
+                <th className="p-3 text-left">School</th>
+                <th className="p-3 text-left">Grade</th>
+                <th className="p-3 text-left">Gender</th>
+                <th className="p-3 text-left">Exam</th>
+                <th className="p-3 text-left">Status</th>
+                <th className="p-3 text-left">Need Help</th>
+                <th className="p-3 text-left">Reg. No.</th>
+                <th className="p-3 text-left">Email</th>
+                <th className="p-3 text-left">Phone</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detailRows.length === 0 ? (
+                <tr>
+                  <td colSpan="11" className="p-6 text-center text-gray-500">
+                    No exam registrations with current filters.
+                  </td>
+                </tr>
+              ) : (
+                detailRows.map((row, idx) => {
+                  const status = row.exam.registrationStatus || 'No';
+                  const needHelp = row.exam.needSupport === 'Yes';
+                  return (
+                    <tr key={idx} className="border-b hover:bg-gray-50">
+                      <td className="p-3">{row.student.id}</td>
+                      <td className="p-3">{row.student.name}</td>
+                      <td className="p-3">{row.student.school}</td>
+                      <td className="p-3">{row.student.grade}</td>
+                      <td className="p-3">{row.student.gender || '—'}</td>
+                      <td className="p-3">{row.exam.examName}</td>
+                      <td className="p-3">
+                        {status === 'Yes' && <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 font-semibold">Completed</span>}
+                        {status === 'Partially' && <span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 font-semibold">Partial</span>}
+                        {status === 'No' && <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 font-semibold">Not Done</span>}
+                      </td>
+                      <td className="p-3">
+                        {needHelp ? (
+                          <span className="px-3 py-1 rounded-full bg-orange-100 text-orange-700 font-semibold">Yes</span>
+                        ) : (
+                          'No'
+                        )}
+                      </td>
+                      <td className="p-3">{row.exam.registrationNumber || '—'}</td>
+                      <td className="p-3">{row.exam.emailUsed || '—'}</td>
+                      <td className="p-3">{row.exam.phoneUsed || '—'}</td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -3266,6 +3404,7 @@ function AdminExamStats(){
     </div>
   );
 }
+
 function AdminView({
   currentUser,
   handleLogout,
@@ -8298,65 +8437,95 @@ function TeacherDirectory({ teachers, currentUser }) {
 // ========================================
 // TEACHER EXAM STATISTICS
 // ========================================
-function TeacherExamStats({currentUser}){
-  const[examRegistrations,setExamRegistrations]=useState([]);
-  const[students,setStudents]=useState([]);
+function TeacherExamStats({ currentUser }) {
+  const [examRegistrations, setExamRegistrations] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [filterGrade, setFilterGrade] = useState('All');
+  const [filterGender, setFilterGender] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('All');   // Completed / Partial / NotDone / NeedHelp
+  const [filterExam, setFilterExam] = useState('All');
 
   useEffect(() => {
-  const fetchData = async () => {
-    // All exam registrations
-    const regsSnap = await db.collection('studentExamRegistrations').get();
-    setExamRegistrations(regsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+    const fetchData = async () => {
+      // All exam registrations
+      const regsSnap = await db.collection('studentExamRegistrations').get();
+      setExamRegistrations(regsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
-    // Students of this school – make sure `id` is the Student ID, not docId
-    const stuSnap = await db.collection('students')
-      .where('school', '==', currentUser.school)
-      .get();
+      // Students of this school – be sure `id` is the student ID
+      const stuSnap = await db.collection('students')
+        .where('school', '==', currentUser.school)
+        .get();
 
-    const studentsData = stuSnap.docs.map(d => {
-      const data = d.data();
-      let studentId = data.id;
+      const studentsData = stuSnap.docs.map(d => {
+        const data = d.data();
+        let studentId = data.id;
+        if (!studentId) {
+          const parts = d.id.split('_');      // e.g. JNV_Barwani_1234
+          studentId = parts[parts.length - 1];
+        }
+        return { ...data, id: studentId, docId: d.id };
+      });
 
-      // Fallback for old docs: take last part of docId (JNV_Barwani_1234 → 1234)
-      if (!studentId) {
-        const parts = d.id.split('_');
-        studentId = parts[parts.length - 1];
-      }
+      setStudents(studentsData);
+    };
+    fetchData();
+  }, [currentUser.school]);
 
-      return { ...data, id: studentId, docId: d.id };
-    });
+  // Options for filters
+  const gradeOptions = Array.from(new Set(students.map(s => s.grade).filter(Boolean))).sort();
+  const genderOptions = Array.from(new Set(students.map(s => s.gender).filter(Boolean))).sort();
+  const examOptions = Array.from(
+    new Set(
+      examRegistrations.flatMap(r => (r.exams || []).map(e => e.examName)).filter(Boolean)
+    )
+  ).sort();
 
-    setStudents(studentsData);
-  };
-  fetchData();
-}, [currentUser.school]);
-
-  const mySchoolRegs=examRegistrations.filter(r=>{
-    const student=students.find(s=>s.id===r.studentId);
-    return student&&student.school===currentUser.school;
+  // Students in this school after basic filters
+  const filteredStudents = students.filter(s => {
+    if (filterGrade !== 'All' && s.grade !== filterGrade) return false;
+    if (filterGender !== 'All' && (s.gender || '') !== filterGender) return false;
+    return true;
   });
 
-  const totalStudents=students.length;
-  const studentsWithRegs=new Set(mySchoolRegs.filter(r=>r.exams&&r.exams.length>0).map(r=>r.studentId)).size;
-  const pendingStudents=totalStudents-studentsWithRegs;
+  // Flatten exam registrations → one row per student+exam, with all filters applied
+  const detailRows = [];
+  examRegistrations.forEach(reg => {
+    const student = filteredStudents.find(s => s.id === reg.studentId);
+    if (!student) return;
+    (reg.exams || []).forEach(exam => {
+      if (filterExam !== 'All' && exam.examName !== filterExam) return;
 
-  const examStats={};
-  mySchoolRegs.forEach(reg=>{
-    (reg.exams||[]).forEach(exam=>{
-      if(!examStats[exam.examName]){
-        examStats[exam.examName]={completed:0,partial:0,notCompleted:0,needSupport:0};
-      }
-      if(exam.registrationStatus==='Yes')examStats[exam.examName].completed++;
-      if(exam.registrationStatus==='Partially')examStats[exam.examName].partial++;
-      if(exam.registrationStatus==='No')examStats[exam.examName].notCompleted++;
-      if(exam.needSupport==='Yes')examStats[exam.examName].needSupport++;
+      if (filterStatus === 'Completed' && exam.registrationStatus !== 'Yes') return;
+      if (filterStatus === 'Partial' && exam.registrationStatus !== 'Partially') return;
+      if (filterStatus === 'NotDone' && exam.registrationStatus !== 'No') return;
+      if (filterStatus === 'NeedHelp' && exam.needSupport !== 'Yes') return;
+
+      detailRows.push({ student, reg, exam });
     });
   });
 
-  return(
+  const totalStudents = filteredStudents.length;
+  const studentsWithRegs = new Set(detailRows.map(r => r.reg.studentId)).size;
+  const pendingStudents = totalStudents - studentsWithRegs;
+
+  // Exam-wise stats from filtered rows
+  const examStats = {};
+  detailRows.forEach(({ exam }) => {
+    const name = exam.examName || 'Other';
+    if (!examStats[name]) {
+      examStats[name] = { completed: 0, partial: 0, notCompleted: 0, needSupport: 0 };
+    }
+    if (exam.registrationStatus === 'Yes') examStats[name].completed++;
+    if (exam.registrationStatus === 'Partially') examStats[name].partial++;
+    if (exam.registrationStatus === 'No') examStats[name].notCompleted++;
+    if (exam.needSupport === 'Yes') examStats[name].needSupport++;
+  });
+
+  return (
     <div className="space-y-6">
       <h2 className="text-3xl font-bold">📊 Exam Statistics - {currentUser.school}</h2>
 
+      {/* Summary cards */}
       <div className="grid md:grid-cols-3 gap-4">
         <div className="stat-card bg-blue-500 text-white">
           <div className="text-sm opacity-90">Total Students</div>
@@ -8372,6 +8541,71 @@ function TeacherExamStats({currentUser}){
         </div>
       </div>
 
+      {/* Filters */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">🔍 Filters</h3>
+        <div className="grid md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">Grade</label>
+            <select
+              value={filterGrade}
+              onChange={e => setFilterGrade(e.target.value)}
+              disabled={!isEditing}
+              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="All">All Grades</option>
+              {gradeOptions.map(g => (
+                <option key={g} value={g}>Class {g}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Gender</label>
+            <select
+              value={filterGender}
+              onChange={e => setFilterGender(e.target.value)}
+              disabled={!isEditing}
+              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="All">All</option>
+              {genderOptions.map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Exam Name</label>
+            <select
+              value={filterExam}
+              onChange={e => setFilterExam(e.target.value)}
+              disabled={!isEditing}
+              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="All">All Exams</option>
+              {examOptions.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Status</label>
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              disabled={!isEditing}
+              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="All">All</option>
+              <option value="Completed">Completed</option>
+              <option value="Partial">Partial</option>
+              <option value="NotDone">Not Done</option>
+              <option value="NeedHelp">Need Help</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Exam-wise status table */}
       <div className="bg-white p-6 rounded-2xl shadow-lg">
         <h3 className="text-xl font-bold mb-4">📋 Exam-wise Status</h3>
         <div className="overflow-x-auto">
@@ -8379,31 +8613,118 @@ function TeacherExamStats({currentUser}){
             <thead className="avanti-gradient-light">
               <tr>
                 <th className="p-3 text-left">Exam</th>
-                <th className="p-3 text-left">✓ Done</th>
-                <th className="p-3 text-left">⚠ Partial</th>
-                <th className="p-3 text-left">✗ Not Done</th>
-                <th className="p-3 text-left">🆘 Need Help</th>
+                <th className="p-3 text-center">✓ Done</th>
+                <th className="p-3 text-center">⚠ Partial</th>
+                <th className="p-3 text-center">✗ Not Done</th>
+                <th className="p-3 text-center">🆘 Need Help</th>
               </tr>
             </thead>
             <tbody>
-              {Object.keys(examStats).length===0?(
-                <tr><td colSpan="5" className="p-8 text-center text-gray-500">No registrations yet</td></tr>
-              ):Object.keys(examStats).map(name=>
-                <tr key={name} className="border-b">
-                  <td className="p-3 font-semibold">{name}</td>
-                  <td className="p-3"><span className="px-3 py-1 bg-green-100 text-green-700 rounded-full">{examStats[name].completed}</span></td>
-                  <td className="p-3"><span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full">{examStats[name].partial}</span></td>
-                  <td className="p-3"><span className="px-3 py-1 bg-red-100 text-red-700 rounded-full">{examStats[name].notCompleted}</span></td>
-                  <td className="p-3"><span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full">{examStats[name].needSupport}</span></td>
+              {Object.keys(examStats).length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="p-8 text-center text-gray-500">
+                    No registrations yet
+                  </td>
                 </tr>
+              ) : (
+                Object.entries(examStats).map(([examName, stats]) => (
+                  <tr key={examName} className="border-b hover:bg-gray-50">
+                    <td className="p-3 font-semibold">{examName}</td>
+                    <td className="p-3 text-center">
+                      <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 font-bold">
+                        {stats.completed}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
+                        {stats.partial}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 font-bold">
+                        {stats.notCompleted}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center">
+                      <span className="px-3 py-1 rounded-full bg-orange-100 text-orange-700 font-bold">
+                        {stats.needSupport}
+                      </span>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* NEW: Student-wise detail table */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">🧑‍🎓 Student-wise Exam Registrations</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="p-3 text-left">Student ID</th>
+                <th className="p-3 text-left">Name</th>
+                <th className="p-3 text-left">Grade</th>
+                <th className="p-3 text-left">Gender</th>
+                <th className="p-3 text-left">Exam</th>
+                <th className="p-3 text-left">Status</th>
+                <th className="p-3 text-left">Need Help</th>
+                <th className="p-3 text-left">Reg. No.</th>
+                <th className="p-3 text-left">Email</th>
+                <th className="p-3 text-left">Phone</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detailRows.length === 0 ? (
+                <tr>
+                  <td colSpan="10" className="p-6 text-center text-gray-500">
+                    No exam registrations found with current filters.
+                  </td>
+                </tr>
+              ) : (
+                detailRows.map((row, idx) => {
+                  const status = row.exam.registrationStatus || 'No';
+                  const needHelp = row.exam.needSupport === 'Yes';
+                  return (
+                    <tr key={idx} className="border-b hover:bg-gray-50">
+                      <td className="p-3">{row.student.id}</td>
+                      <td className="p-3">{row.student.name}</td>
+                      <td className="p-3">{row.student.grade}</td>
+                      <td className="p-3">{row.student.gender || '—'}</td>
+                      <td className="p-3">{row.exam.examName}</td>
+                      <td className="p-3">
+                        {status === 'Yes' && <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 font-semibold">Completed</span>}
+                        {status === 'Partially' && <span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 font-semibold">Partial</span>}
+                        {status === 'No' && <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 font-semibold">Not Done</span>}
+                      </td>
+                      <td className="p-3">
+                        {needHelp ? (
+                          <span className="px-3 py-1 rounded-full bg-orange-100 text-orange-700 font-semibold">Yes</span>
+                        ) : (
+                          'No'
+                        )}
+                      </td>
+                      <td className="p-3">{row.exam.registrationNumber || '—'}</td>
+                      <td className="p-3">{row.exam.emailUsed || '—'}</td>
+                      <td className="p-3">{row.exam.phoneUsed || '—'}</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <footer className="bg-gray-800 text-white text-center py-4 mt-auto">
+        <p>Made by Anand with ❤️</p>
+      </footer>
     </div>
   );
-}    
+}
 
 // ========================================
 // STUDENT FEEDBACK VIEW (ADMIN)
