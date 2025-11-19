@@ -61,14 +61,14 @@
     /* Priority Badge Gradients */
 .priority-badge {
   display: inline-block;
-  padding: 0.4rem 0.8rem;  /* Smaller padding */
+  padding: 0.4rem 0.8rem;
   border-radius: 0.4rem;
-  font-size: 0.75rem;  /* Smaller text */
+  font-size: 0.75rem;
   font-weight: 600;
   color: white;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   text-align: center;
-  min-width: 100px;  /* Smaller width */
+  min-width: 100px;
   letter-spacing: 0.02em;
 }
 
@@ -85,6 +85,134 @@
 }
     :root{--avanti-yellow:#F4B41A;--avanti-orange:#E8B039;--avanti-red:#C8342E}
     *{box-sizing:border-box}
+    
+    /* Enhanced Mobile Sidebar Styles */
+    .mobile-sidebar-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 998;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+    
+    .mobile-sidebar-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .mobile-sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 280px;
+      max-width: 85vw;
+      background: white;
+      z-index: 999;
+      transform: translateX(-100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    .mobile-sidebar.active {
+      transform: translateX(0);
+    }
+    
+    /* Desktop sidebar adjustments */
+    @media (min-width: 768px) {
+      .mobile-sidebar {
+        position: relative;
+        transform: translateX(0) !important;
+        width: 16rem;
+        max-width: none;
+        box-shadow: none;
+      }
+      
+      .mobile-sidebar-overlay {
+        display: none;
+      }
+    }
+    
+    /* Responsive card improvements */
+    @media (max-width: 768px) {
+      .stat-card {
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+      }
+      
+      .chapter-card {
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+      }
+      
+      .modal-content {
+        width: 95%;
+        padding: 1.25rem;
+        margin: 10px;
+      }
+      
+      .ranking-card {
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+      }
+      
+      /* Better table responsiveness */
+      table {
+        font-size: 0.875rem;
+      }
+      
+      th, td {
+        padding: 0.5rem !important;
+      }
+    }
+    
+    /* Touch-friendly buttons */
+    button, .button {
+      min-height: 44px;
+      touch-action: manipulation;
+    }
+    
+    /* Better spacing for mobile */
+    @media (max-width: 768px) {
+      .p-6 {
+        padding: 1rem !important;
+      }
+      
+      .p-8 {
+        padding: 1.5rem !important;
+      }
+      
+      .gap-6 {
+        gap: 1rem !important;
+      }
+      
+      .space-y-6 > * + * {
+        margin-top: 1rem !important;
+      }
+      
+      /* Responsive grid adjustments */
+      .grid-cols-2, .grid-cols-3, .grid-cols-4 {
+        grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+      }
+      
+      .md\:grid-cols-2, .md\:grid-cols-3 {
+        grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+      }
+    }
+    
+    /* Small screens - 2 columns for some grids */
+    @media (min-width: 480px) and (max-width: 768px) {
+      .grid-cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      }
+    }
     @keyframes confetti-fall{0%{transform:translateY(-100vh) rotate(0) scale(1);opacity:1}100%{transform:translateY(100vh) rotate(720deg) scale(.5);opacity:0}}
     .confetti-piece{position:fixed;pointer-events:none;z-index:9999;animation:confetti-fall 4s cubic-bezier(.25,.46,.45,.94) forwards}
     .chapter-card{transition:all .3s ease;position:relative;overflow:hidden}
@@ -323,24 +451,15 @@
 
 /* Mobile responsive */
 @media (max-width: 768px) {
-  .sidebar.expanded {
+  .main-content.sidebar-expanded,
+  .main-content.sidebar-collapsed {
+    margin-left: 0 !important;
+    padding-top: 70px;
     width: 100%;
   }
   
-  .main-content.sidebar-expanded,
-  .main-content.sidebar-collapsed {
-    margin-left: 0;
-    padding-top: 60px;
-  }
-  
-  .sidebar {
-    height: auto;
-    max-height: 100vh;
-  }
-  
-  .sidebar.collapsed {
-    height: 60px;
-    overflow: hidden;
+  .sidebar-toggle {
+    display: none;
   }
 }
 
@@ -2248,7 +2367,8 @@ function StudentDashboard({currentUser, handleLogout}) {
 function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:'',studentId:'',loginType:'teacher'});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);
 const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);
-const[schoolInfo,setSchoolInfo]=useState([]);               
+const[schoolInfo,setSchoolInfo]=useState([]);
+const[isSidebarOpen,setIsSidebarOpen]=useState(false);               
 const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
 useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){if(user.email==='admin@avantifellows.org'){setIsAdmin(true);setCurrentUser({name:'Administrator',email:user.email,afid:'ADMIN',school:'Admin'});setActiveTab('teachers')}else{const teacherSnapshot=await db.collection('teachers').where('email','==',user.email).limit(1).get();if(!teacherSnapshot.empty){const teacherData=teacherSnapshot.docs[0].data();setCurrentUser(teacherData);setIsAdmin(false);setActiveTab('overview');if(teacherData.dob){const d=new Date(teacherData.dob);const now=new Date();if(d.getMonth()===now.getMonth()&&d.getDate()===now.getDate()){setShowConfetti(true);setCelebrationMessage(`🎂 Happy Birthday, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}if(teacherData.joiningDate){const j=new Date(teacherData.joiningDate);const now=new Date();if(j.getMonth()===now.getMonth()&&j.getDate()===now.getDate()&&j.getFullYear()<now.getFullYear()){const years=now.getFullYear()-j.getFullYear();setShowConfetti(true);setCelebrationMessage(`🎉 Happy ${years} Year Work Anniversary, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}}else{alert('Teacher profile not found. Please contact admin.');await auth.signOut()}}}else{// Check for student session in localStorage
 const studentSession=localStorage.getItem('studentSession');if(studentSession){try{const studentData=JSON.parse(studentSession);console.log('✅ Restored student session:',studentData);setCurrentUser(studentData);setIsAdmin(false);setActiveTab('dashboard')}catch(e){console.error('Failed to restore student session:',e);localStorage.removeItem('studentSession')}}else{setCurrentUser(null);setIsAdmin(false)}}setLoading(false)});return()=>unsubscribe()},[]);
@@ -2686,6 +2806,50 @@ function TeacherView({
   ];
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  
+  // Handle navigation and auto-close on mobile
+  const handleTabClick = (tabId) => {
+    setActiveTab(tabId);
+    // Close sidebar on mobile after navigation
+    if (window.innerWidth < 768) {
+      setIsMobileSidebarOpen(false);
+    }
+  };
+  
+  // Swipe gesture detection
+  useEffect(() => {
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    const handleTouchStart = (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    };
+    
+    const handleTouchEnd = (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    };
+    
+    const handleSwipe = () => {
+      const swipeThreshold = 50;
+      if (touchEndX - touchStartX > swipeThreshold && touchStartX < 50) {
+        // Swipe right from left edge - open sidebar
+        setIsMobileSidebarOpen(true);
+      } else if (touchStartX - touchEndX > swipeThreshold) {
+        // Swipe left - close sidebar
+        setIsMobileSidebarOpen(false);
+      }
+    };
+    
+    document.addEventListener('touchstart', handleTouchStart);
+    document.addEventListener('touchend', handleTouchEnd);
+    
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -2693,6 +2857,14 @@ function TeacherView({
 
       {/* PWA install helper */}
       <InstallPrompt />
+      
+      {/* Mobile Menu Button */}
+      <button
+        onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+        className="md:hidden fixed top-4 left-4 z-[1000] bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-3 rounded-lg shadow-lg"
+      >
+        {isMobileSidebarOpen ? '✕' : '☰'}
+      </button>
 
       {/* Manual Install Button - always visible */}
       <div className="fixed bottom-20 right-4 z-[9998]">
@@ -2713,9 +2885,15 @@ function TeacherView({
           📱 Install App
         </button>
       </div>
+      
+      {/* Mobile Sidebar Overlay */}
+      <div 
+        className={`mobile-sidebar-overlay ${isMobileSidebarOpen ? 'active' : ''}`}
+        onClick={() => setIsMobileSidebarOpen(false)}
+      />
 
       {/* Vertical Sidebar */}
-      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'}`}>
+      <div className={`sidebar mobile-sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} ${isMobileSidebarOpen ? 'active' : ''}`}>
         <div className="sidebar-header">
           <div className="flex items-center gap-3">
             <img src={AVANTI_LOGO} alt="Avanti" className="w-10 h-10" />
@@ -2723,7 +2901,7 @@ function TeacherView({
           </div>
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="sidebar-toggle"
+            className="sidebar-toggle hidden md:block"
           >
             {sidebarCollapsed ? '→' : '←'}
           </button>
@@ -2733,7 +2911,7 @@ function TeacherView({
           {teacherTabs.map((tab) => (
             <div
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabClick(tab.id)}
               className={`sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
             >
               <span className="sidebar-icon">{tab.icon}</span>
@@ -3029,6 +3207,7 @@ function AdminView({
 }) {
   const [activeTab, setActiveTab] = useState('teachers');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const adminTabs = [
     { id: 'teachers', label: 'Teachers', icon: '👥' },
@@ -3044,13 +3223,70 @@ function AdminView({
     { id: 'examstats', label: 'Exam Statistics', icon: '📊' },
     { id: 'studentfeedback', label: 'Student Feedback', icon: '💬' }
   ];
+  
+  // Handle navigation and auto-close on mobile
+  const handleTabClick = (tabId) => {
+    setActiveTab(tabId);
+    // Close sidebar on mobile after navigation
+    if (window.innerWidth < 768) {
+      setIsMobileSidebarOpen(false);
+    }
+  };
+  
+  // Swipe gesture detection
+  useEffect(() => {
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    const handleTouchStart = (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    };
+    
+    const handleTouchEnd = (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    };
+    
+    const handleSwipe = () => {
+      const swipeThreshold = 50;
+      if (touchEndX - touchStartX > swipeThreshold && touchStartX < 50) {
+        // Swipe right from left edge - open sidebar
+        setIsMobileSidebarOpen(true);
+      } else if (touchStartX - touchEndX > swipeThreshold) {
+        // Swipe left - close sidebar
+        setIsMobileSidebarOpen(false);
+      }
+    };
+    
+    document.addEventListener('touchstart', handleTouchStart);
+    document.addEventListener('touchend', handleTouchEnd);
+    
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <InstallPrompt />
+      
+      {/* Mobile Menu Button */}
+      <button
+        onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+        className="md:hidden fixed top-4 left-4 z-[1000] bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-3 rounded-lg shadow-lg"
+      >
+        {isMobileSidebarOpen ? '✕' : '☰'}
+      </button>
+      
+      {/* Mobile Sidebar Overlay */}
+      <div 
+        className={`mobile-sidebar-overlay ${isMobileSidebarOpen ? 'active' : ''}`}
+        onClick={() => setIsMobileSidebarOpen(false)}
+      />
 
       {/* Vertical Sidebar */}
-      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'}`}>
+      <div className={`sidebar mobile-sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} ${isMobileSidebarOpen ? 'active' : ''}`}>
         <div className="sidebar-header">
           <div className="flex items-center gap-3">
             <img src={AVANTI_LOGO} alt="Avanti" className="w-10 h-10" />
@@ -3058,7 +3294,7 @@ function AdminView({
           </div>
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="sidebar-toggle"
+            className="sidebar-toggle hidden md:block"
           >
             {sidebarCollapsed ? '→' : '←'}
           </button>
@@ -3068,7 +3304,7 @@ function AdminView({
           {adminTabs.map((tab) => (
             <div
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabClick(tab.id)}
               className={`sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
             >
               <span className="sidebar-icon">{tab.icon}</span>
