@@ -8765,6 +8765,68 @@ function StudentFeedbackView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+    // ----- Helpers to derive summary fields from 19-question responses -----
+  const getCategoryFromRating = (rating) => {
+    if (rating == null) return null;
+    if (rating >= 9) return 'Excellent';
+    if (rating >= 7) return 'Good';
+    if (rating >= 5) return 'Average';
+    return 'Needs Improvement';
+  };
+
+  const getExplanationSummary = (responses = {}) => {
+    // Use technical + communication questions as proxy
+    const rating =
+      responses.q4?.rating ??
+      responses.q5?.rating ??
+      responses.q6?.rating ??
+      null;
+    return getCategoryFromRating(rating);
+  };
+
+  const getDoubtSummary = (responses = {}) => {
+    // Use Q13 – guidance / counselling
+    const rating = responses.q13?.rating;
+    if (rating == null) return null;
+    if (rating >= 9) return 'Always';
+    if (rating >= 7) return 'Sometimes';
+    return 'Rarely';
+  };
+
+  const getPaceSummary = (responses = {}) => {
+    // Use Q11 – engages full duration & completes course
+    const rating = responses.q11?.rating;
+    if (rating == null) return null;
+    if (rating >= 7) return 'Just Right';
+    return 'Needs Change';
+  };
+
+  const getCommentsSummary = (responses = {}) => {
+    // Q16 – suggestions for teacher
+    return responses.q16?.text || '';
+  };
+
+  // Labels for raw export of all questions
+  const QUESTION_DEFS = [
+    { id: 'q1',  label: 'Q1 Content level (1-10)', type: 'rating' },
+    { id: 'q2',  label: 'Q2 Content relevance (1-10)', type: 'rating' },
+    { id: 'q3',  label: 'Q3 Beyond syllabus (1-10)', type: 'rating' },
+    { id: 'q4',  label: 'Q4 Technical content (1-10)', type: 'rating' },
+    { id: 'q5',  label: 'Q5 Communication skills (1-10)', type: 'rating' },
+    { id: 'q6',  label: 'Q6 Discusses topic details (1-10)', type: 'rating' },
+    { id: 'q7',  label: 'Q7 Deep knowledge (1-10)', type: 'rating' },
+    { id: 'q8',  label: 'Q8 Communicates clearly (1-10)', type: 'rating' },
+    { id: 'q9',  label: 'Q9 Inspires with examples (1-10)', type: 'rating' },
+    { id: 'q10', label: 'Q10 Comes to class on time', type: 'yesno' },
+    { id: 'q11', label: 'Q11 Engages full duration (1-10)', type: 'rating' },
+    { id: 'q12', label: 'Q12 Fully prepared (1-10)', type: 'rating' },
+    { id: 'q13', label: 'Q13 Guidance & counselling (1-10)', type: 'rating' },
+    { id: 'q14', label: 'Q14 Overall effectiveness (1-10)', type: 'rating' },
+    { id: 'q15', label: 'Q15 Learning value (1-10)', type: 'rating' },
+    { id: 'q16', label: 'Q16 Suggestions for teacher', type: 'text' },
+    { id: 'q17', label: 'Q17 Feedback on Avanti', type: 'text' },
+  ];
+
 
   // Fetch all data
   useEffect(() => {
@@ -8776,6 +8838,7 @@ function StudentFeedbackView() {
 const feedbackSnap = await db.collection('teacherFeedback').get();
 const feedbackData = feedbackSnap.docs.map(doc => {
   const data = doc.data();
+  const responses = data.responses || {};
 
   // Make sure submittedAt is always a real JS Date
   let submittedAt = new Date(); // default = now
@@ -8797,10 +8860,16 @@ const feedbackData = feedbackSnap.docs.map(doc => {
     id: doc.id,
     ...data,
     submittedAt,
-    // use averageRating if simple rating is missing
+    // use averageRating (1–10) if simple rating is missing
     rating: data.rating || data.averageRating || 0,
+    // derive summary fields from 19-question responses when old fields are missing
+    explanationQuality: data.explanationQuality || getExplanationSummary(responses),
+    doubtResolution: data.doubtResolution || getDoubtSummary(responses),
+    teachingPace: data.teachingPace || getPaceSummary(responses),
+    comments: data.comments || getCommentsSummary(responses),
   };
 });
+
 
 
         
@@ -8941,24 +9010,28 @@ const feedbackData = feedbackSnap.docs.map(doc => {
     document.body.removeChild(link);
   };
 
-  // Get rating badge
+    // Get rating badge (1–10 scale)
   const getRatingBadge = (rating) => {
-    if (rating >= 4.5) return { text: 'Excellent', class: 'rating-excellent' };
-    if (rating >= 3.5) return { text: 'Good', class: 'rating-good' };
-    if (rating >= 2.5) return { text: 'Average', class: 'rating-average' };
+    if (rating >= 9) return { text: 'Excellent', class: 'rating-excellent' };
+    if (rating >= 7) return { text: 'Good', class: 'rating-good' };
+    if (rating >= 5) return { text: 'Average', class: 'rating-average' };
     return { text: 'Needs Improvement', class: 'rating-poor' };
   };
 
-  // Statistics
+  // Statistics for cards (1–10 scale)
   const stats = {
     total: filteredFeedback.length,
-    avgRating: filteredFeedback.length > 0 
-      ? (filteredFeedback.reduce((sum, f) => sum + (f.rating || 0), 0) / filteredFeedback.length).toFixed(1)
-      : 0,
-    excellent: filteredFeedback.filter(f => f.rating >= 4.5).length,
-    good: filteredFeedback.filter(f => f.rating >= 3.5 && f.rating < 4.5).length,
-    average: filteredFeedback.filter(f => f.rating >= 2.5 && f.rating < 3.5).length,
-    poor: filteredFeedback.filter(f => f.rating < 2.5).length
+    avgRating:
+      filteredFeedback.length > 0
+        ? (
+            filteredFeedback.reduce((sum, f) => sum + (f.rating || 0), 0) /
+            filteredFeedback.length
+          ).toFixed(1)
+        : 0,
+    excellent: filteredFeedback.filter(f => (f.rating || 0) >= 9).length,
+    good:      filteredFeedback.filter(f => (f.rating || 0) >= 7 && (f.rating || 0) < 9).length,
+    average:   filteredFeedback.filter(f => (f.rating || 0) >= 5 && (f.rating || 0) < 7).length,
+    poor:      filteredFeedback.filter(f => (f.rating || 0) < 5).length,
   };
 
   if (loading) {
