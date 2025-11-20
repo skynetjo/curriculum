@@ -8955,7 +8955,7 @@ const feedbackData = feedbackSnap.docs.map(doc => {
   const uniqueGrades = [...new Set(students.map(s => s.grade))].filter(Boolean).sort();
   const uniqueTeachers = [...new Set(feedbackList.map(f => getTeacherName(f.teacherId)))].filter(Boolean).sort();
 
-  // Export to CSV
+    // Export to CSV (includes all Q1–Q17 raw answers)
   const exportToCSV = () => {
     if (filteredFeedback.length === 0) {
       alert('No feedback to export');
@@ -8965,8 +8965,10 @@ const feedbackData = feedbackSnap.docs.map(doc => {
     const csvData = filteredFeedback.map(feedback => {
       const student = getStudentDetails(feedback.studentId);
       const teacherName = getTeacherName(feedback.teacherId);
-      
-      return {
+      const responses = feedback.responses || {};
+
+      // Base columns (same as before)
+      const row = {
         'Date': feedback.submittedAt.toLocaleDateString('en-IN'),
         'Time': feedback.submittedAt.toLocaleTimeString('en-IN'),
         'School': student.school || 'N/A',
@@ -8975,27 +8977,52 @@ const feedbackData = feedbackSnap.docs.map(doc => {
         'Grade': student.grade || 'N/A',
         'Teacher Name': teacherName,
         'Subject': feedback.subject || 'N/A',
-        'Rating': feedback.rating || 0,
-        'Explanation Quality': feedback.explanationQuality || 'N/A',
-        'Doubt Resolution': feedback.doubtResolution || 'N/A',
-        'Teaching Pace': feedback.teachingPace || 'N/A',
-        'Comments': feedback.comments || ''
+        'Overall Rating (1-10)': feedback.rating || 0,
+        'Explanation Quality (summary)': feedback.explanationQuality || 'N/A',
+        'Doubt Resolution (summary)': feedback.doubtResolution || 'N/A',
+        'Teaching Pace (summary)': feedback.teachingPace || 'N/A',
+        'Comments (summary)': feedback.comments || '',
       };
+
+      // Add one column per question + optional explanation
+      QUESTION_DEFS.forEach(q => {
+        const resp = responses[q.id] || {};
+        let value = '';
+
+        if (q.type === 'rating') {
+          value = resp.rating != null ? resp.rating : '';
+        } else if (q.type === 'yesno') {
+          // your yes/no answers are stored as .answer
+          value = resp.answer != null ? resp.answer : '';
+        } else {
+          value = resp.text || '';
+        }
+
+        row[q.label] = value;
+
+        // If student wrote explanation (when rating < 6)
+        if (resp.explanation) {
+          row[`${q.label} - Explanation`] = resp.explanation;
+        }
+      });
+
+      return row;
     });
 
     // Convert to CSV
     const headers = Object.keys(csvData[0]);
     const csvContent = [
       headers.join(','),
-      ...csvData.map(row => 
-        headers.map(header => {
-          const value = row[header]?.toString() || '';
-          // Escape quotes and wrap in quotes if contains comma
-          return value.includes(',') || value.includes('"') 
-            ? `"${value.replace(/"/g, '""')}"` 
-            : value;
-        }).join(',')
-      )
+      ...csvData.map(row =>
+        headers
+          .map(header => {
+            const value = row[header]?.toString() || '';
+            return value.includes(',') || value.includes('"')
+              ? `"${value.replace(/"/g, '""')}"`
+              : value;
+          })
+          .join(',')
+      ),
     ].join('\n');
 
     // Download
@@ -9003,7 +9030,10 @@ const feedbackData = feedbackSnap.docs.map(doc => {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `student_feedback_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute(
+      'download',
+      `student_feedback_${new Date().toISOString().split('T')[0]}.csv`
+    );
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
