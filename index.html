@@ -8772,12 +8772,25 @@ function StudentFeedbackView() {
         setLoading(true);
         
         // Fetch feedback
-        const feedbackSnap = await db.collection('teacherFeedback').get();
-        const feedbackData = feedbackSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          submittedAt: doc.data().submittedAt?.toDate() || new Date()
-        }));
+const feedbackSnap = await db.collection('teacherFeedback').get();
+const feedbackData = feedbackSnap.docs.map(doc => {
+  const data = doc.data();
+  let submittedAt;
+
+  if (data.submittedAt instanceof firebase.firestore.Timestamp) {
+    submittedAt = data.submittedAt.toDate();
+  } else if (typeof data.submittedAt === 'string') {
+    submittedAt = new Date(data.submittedAt);
+  } else {
+    submittedAt = new Date();
+  }
+
+  return {
+    id: doc.id,
+    ...data,
+    submittedAt,
+  };
+});
         
         // Fetch students
         const studentsSnap = await db.collection('students').get();
