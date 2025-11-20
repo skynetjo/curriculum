@@ -8772,13 +8772,29 @@ function StudentFeedbackView() {
       try {
         setLoading(true);
         
-        // Fetch feedback
-        const feedbackSnap = await db.collection('teacherFeedback').get();
-        const feedbackData = feedbackSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          submittedAt: doc.data().submittedAt?.toDate() || new Date()
-        }));
+        /// Fetch feedback
+const feedbackSnap = await db.collection('teacherFeedback').get();
+const feedbackData = feedbackSnap.docs.map(doc => {
+  const data = doc.data();
+  let submittedAt = new Date(); // default
+
+  if (data.submittedAt) {
+    if (typeof data.submittedAt.toDate === 'function') {
+      // Firestore Timestamp
+      submittedAt = data.submittedAt.toDate();
+    } else {
+      // String / normal date
+      submittedAt = new Date(data.submittedAt);
+    }
+  }
+
+  return {
+    id: doc.id,
+    ...data,
+    submittedAt,
+  };
+});
+
         
         // Fetch students
         const studentsSnap = await db.collection('students').get();
