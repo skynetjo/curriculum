@@ -8772,28 +8772,36 @@ function StudentFeedbackView() {
       try {
         setLoading(true);
         
-        /// Fetch feedback
+        // Fetch feedback
 const feedbackSnap = await db.collection('teacherFeedback').get();
 const feedbackData = feedbackSnap.docs.map(doc => {
   const data = doc.data();
-  let submittedAt = new Date(); // default
+
+  // Handle all possible date formats
+  let submittedAt = new Date(); // default now
 
   if (data.submittedAt) {
     if (typeof data.submittedAt.toDate === 'function') {
       // Firestore Timestamp
       submittedAt = data.submittedAt.toDate();
     } else {
-      // String / normal date
+      // ISO string / JS Date stored as plain value
       submittedAt = new Date(data.submittedAt);
     }
+  } else if (data.completedAt) {
+    // Fallback if only completedAt exists
+    submittedAt = new Date(data.completedAt);
   }
 
   return {
     id: doc.id,
     ...data,
     submittedAt,
+    // use averageRating if simple rating is missing
+    rating: data.rating || data.averageRating || 0,
   };
 });
+
 
         
         // Fetch students
