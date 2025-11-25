@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3132,53 +3131,82 @@ function AdminExamStats() {
     return true;
   });
 
-  const detailRows = [];
+  // Get all student IDs who have at least one exam registration
+  const studentsWithAnyReg = new Set();
   examRegistrations.forEach(reg => {
     const student = filteredStudents.find(s => s.id === reg.studentId);
-    if (!student) return;
-    (reg.exams || []).forEach(exam => {
-      if (filterExam !== 'All' && exam.examName !== filterExam) return;
-      if (filterStatus === 'Completed' && exam.registrationStatus !== 'Yes') return;
-      if (filterStatus === 'Partial' && exam.registrationStatus !== 'Partially') return;
-      if (filterStatus === 'NotDone' && exam.registrationStatus !== 'No') return;
-      if (filterStatus === 'NeedHelp' && exam.needSupport !== 'Yes') return;
-      detailRows.push({ student, reg, exam });
-    });
+    if (student && reg.exams && reg.exams.length > 0) {
+      studentsWithAnyReg.add(reg.studentId);
+    }
   });
+
+  // Calculate pending students (those without any registration)
+  const pendingStudentsList = filteredStudents.filter(s => !studentsWithAnyReg.has(s.id));
+
+  const detailRows = [];
+  
+  // If Pending filter is selected, show students without registrations
+  if (filterStatus === 'Pending') {
+    pendingStudentsList.forEach(student => {
+      detailRows.push({ 
+        student, 
+        reg: { studentId: student.id, studentName: student.name }, 
+        exam: { examName: 'No Registration', registrationStatus: 'Pending', needSupport: 'No' },
+        isPending: true
+      });
+    });
+  } else {
+    // Normal filtering for students with registrations
+    examRegistrations.forEach(reg => {
+      const student = filteredStudents.find(s => s.id === reg.studentId);
+      if (!student) return;
+      (reg.exams || []).forEach(exam => {
+        if (filterExam !== 'All' && exam.examName !== filterExam) return;
+        if (filterStatus === 'Completed' && exam.registrationStatus !== 'Yes') return;
+        if (filterStatus === 'Partial' && exam.registrationStatus !== 'Partially') return;
+        if (filterStatus === 'NotDone' && exam.registrationStatus !== 'No') return;
+        if (filterStatus === 'NeedHelp' && exam.needSupport !== 'Yes') return;
+        detailRows.push({ student, reg, exam, isPending: false });
+      });
+    });
+  }
 
   const totalStudents = filteredStudents.length;
-  const studentsWithRegs = new Set(detailRows.map(r => r.reg.studentId)).size;
-  const pendingStudents = totalStudents - studentsWithRegs;
+  const studentsWithRegs = studentsWithAnyReg.size;
+  const pendingStudents = pendingStudentsList.length;
 
   const examStats = {};
-  detailRows.forEach(({ exam }) => {
-    const name = exam.examName || 'Other';
-    if (!examStats[name]) {
-      examStats[name] = { completed: 0, partial: 0, notCompleted: 0, needSupport: 0 };
-    }
-    if (exam.registrationStatus === 'Yes') examStats[name].completed++;
-    if (exam.registrationStatus === 'Partially') examStats[name].partial++;
-    if (exam.registrationStatus === 'No') examStats[name].notCompleted++;
-    if (exam.needSupport === 'Yes') examStats[name].needSupport++;
-  });
+  // Only calculate exam stats when not showing pending
+  if (filterStatus !== 'Pending') {
+    detailRows.forEach(({ exam }) => {
+      const name = exam.examName || 'Other';
+      if (!examStats[name]) {
+        examStats[name] = { completed: 0, partial: 0, notCompleted: 0, needSupport: 0 };
+      }
+      if (exam.registrationStatus === 'Yes') examStats[name].completed++;
+      if (exam.registrationStatus === 'Partially') examStats[name].partial++;
+      if (exam.registrationStatus === 'No') examStats[name].notCompleted++;
+      if (exam.needSupport === 'Yes') examStats[name].needSupport++;
+    });
+  }
 
   const handleExport = () => {
-    const exportData = detailRows.map(({ student, reg, exam }) => ({
-      'Student ID': reg.studentId,
+    const exportData = detailRows.map(({ student, reg, exam, isPending }) => ({
+      'Student ID': reg.studentId || student.id,
       'Student Name': reg.studentName || student.name,
       'School': student.school,
       'Grade': student.grade,
       'Gender': student.gender || '-',
-      'Exam Name': exam.examName,
-      'Registration Status': exam.registrationStatus,
-      'Registration Number': exam.registrationNumber || '-',
-      'Password': exam.password || '-',
-      'Email Used': exam.emailUsed || '-',
-      'Phone Number Used': exam.phoneUsed || '-',
-      'Need Support': exam.needSupport,
-      'Support Type': exam.supportType || '-',
-      'Reason Not Completed': exam.reasonNotCompleted || '-',
-      'Last Updated': reg.updatedAt ? new Date(reg.updatedAt).toLocaleDateString() : '-'
+      'Exam Name': isPending ? 'No Registration' : exam.examName,
+      'Registration Status': isPending ? 'Pending' : exam.registrationStatus,
+      'Registration Number': isPending ? '-' : (exam.registrationNumber || '-'),
+      'Password': isPending ? '-' : (exam.password || '-'),
+      'Email Used': isPending ? '-' : (exam.emailUsed || '-'),
+      'Phone Number Used': isPending ? '-' : (exam.phoneUsed || '-'),
+      'Need Support': isPending ? '-' : exam.needSupport,
+      'Support Type': isPending ? '-' : (exam.supportType || '-'),
+      'Reason Not Completed': isPending ? '-' : (exam.reasonNotCompleted || '-'),
+      'Last Updated': isPending ? '-' : (reg.updatedAt ? new Date(reg.updatedAt).toLocaleDateString() : '-')
     }));
 
     if (exportData.length === 0) {
@@ -3272,6 +3300,7 @@ function AdminExamStats() {
               <option value="Partial">Partial</option>
               <option value="NotDone">Not Done</option>
               <option value="NeedHelp">Need Help</option>
+              <option value="Pending">Pending (No Registration)</option>
             </select>
           </div>
         </div>
@@ -3279,17 +3308,27 @@ function AdminExamStats() {
 
       {/* Summary cards */}
       <div className="grid md:grid-cols-3 gap-4">
-        <div className="stat-card bg-blue-500 text-white">
+        <div 
+          className="stat-card bg-blue-500 text-white cursor-pointer hover:bg-blue-600 transition-colors"
+          onClick={() => setFilterStatus('All')}
+        >
           <div className="text-sm opacity-90">Total Students</div>
           <div className="text-5xl font-bold">{totalStudents}</div>
         </div>
-        <div className="stat-card bg-green-500 text-white">
+        <div 
+          className="stat-card bg-green-500 text-white cursor-pointer hover:bg-green-600 transition-colors"
+          onClick={() => setFilterStatus('All')}
+        >
           <div className="text-sm opacity-90">Registered for Exams</div>
           <div className="text-5xl font-bold">{studentsWithRegs}</div>
         </div>
-        <div className="stat-card bg-orange-500 text-white">
+        <div 
+          className="stat-card bg-orange-500 text-white cursor-pointer hover:bg-orange-600 transition-colors"
+          onClick={() => setFilterStatus('Pending')}
+        >
           <div className="text-sm opacity-90">Pending Registration</div>
           <div className="text-5xl font-bold">{pendingStudents}</div>
+          <div className="text-xs opacity-75 mt-1">Click to view list</div>
         </div>
       </div>
 
@@ -3377,6 +3416,7 @@ function AdminExamStats() {
                 detailRows.map((row, idx) => {
                   const status = row.exam.registrationStatus || 'No';
                   const needHelp = row.exam.needSupport === 'Yes';
+                  const isPending = row.isPending;
                   return (
                     <tr key={idx} className="border-b hover:bg-gray-50">
                       <td className="p-3">{row.student.id}</td>
@@ -3384,22 +3424,23 @@ function AdminExamStats() {
                       <td className="p-3">{row.student.school}</td>
                       <td className="p-3">{row.student.grade}</td>
                       <td className="p-3">{row.student.gender || '—'}</td>
-                      <td className="p-3">{row.exam.examName}</td>
+                      <td className="p-3">{isPending ? '—' : row.exam.examName}</td>
                       <td className="p-3">
-                        {status === 'Yes' && <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 font-semibold">Completed</span>}
-                        {status === 'Partially' && <span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 font-semibold">Partial</span>}
-                        {status === 'No' && <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 font-semibold">Not Done</span>}
+                        {isPending && <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-700 font-semibold">Pending</span>}
+                        {!isPending && status === 'Yes' && <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 font-semibold">Completed</span>}
+                        {!isPending && status === 'Partially' && <span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 font-semibold">Partial</span>}
+                        {!isPending && status === 'No' && <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 font-semibold">Not Done</span>}
                       </td>
                       <td className="p-3">
-                        {needHelp ? (
+                        {isPending ? '—' : (needHelp ? (
                           <span className="px-3 py-1 rounded-full bg-orange-100 text-orange-700 font-semibold">Yes</span>
                         ) : (
                           'No'
-                        )}
+                        ))}
                       </td>
-                      <td className="p-3">{row.exam.registrationNumber || '—'}</td>
-                      <td className="p-3">{row.exam.emailUsed || '—'}</td>
-                      <td className="p-3">{row.exam.phoneUsed || '—'}</td>
+                      <td className="p-3">{isPending ? '—' : (row.exam.registrationNumber || '—')}</td>
+                      <td className="p-3">{isPending ? '—' : (row.exam.emailUsed || '—')}</td>
+                      <td className="p-3">{isPending ? '—' : (row.exam.phoneUsed || '—')}</td>
                     </tr>
                   );
                 })
