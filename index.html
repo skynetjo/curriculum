@@ -539,7 +539,61 @@ const db=firebase.firestore();
 const auth=firebase.auth();
 const SUBJECTS=['Physics','Chemistry','Maths','Biology'];
 const SCHOOLS=['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal','JNV Bharuch'];
-const LEAVE_REASONS=['Present','Personal Leave','Sick Leave','Weekly Off','Public Holiday','Organization Holiday','School Holiday','Emergency Leave'];
+const LEAVE_REASONS=['Present','Personal Leave','Sick Leave','Weekly Off','Public Holiday','Organization Holiday','School Holiday','Emergency Leave','Maternity Leave','Paternity Leave'];
+
+// Leave entitlements per year
+const LEAVE_ENTITLEMENTS = {
+  'Personal Leave': 35,
+  'Sick Leave': 35,
+  'Emergency Leave': 35,
+  'Maternity Leave': 180,
+  'Paternity Leave': 15
+};
+
+// Leave categories that count against entitlement
+const ENTITLED_LEAVE_TYPES = ['Personal Leave', 'Sick Leave', 'Emergency Leave'];
+const MATERNITY_LEAVE_TYPES = ['Maternity Leave'];
+const PATERNITY_LEAVE_TYPES = ['Paternity Leave'];
+
+// Helper function to calculate leave balance for a teacher
+function calculateLeaveBalance(teacherAttendance, teacherId) {
+  const teacherLeaves = teacherAttendance.filter(a => 
+    a.teacherId === teacherId && a.status === 'On Leave'
+  );
+  
+  // Calculate days used for each category
+  let entitledUsed = 0;
+  let maternityUsed = 0;
+  let paternityUsed = 0;
+  
+  teacherLeaves.forEach(leave => {
+    if (ENTITLED_LEAVE_TYPES.includes(leave.reason)) {
+      entitledUsed++;
+    } else if (MATERNITY_LEAVE_TYPES.includes(leave.reason)) {
+      maternityUsed++;
+    } else if (PATERNITY_LEAVE_TYPES.includes(leave.reason)) {
+      paternityUsed++;
+    }
+  });
+  
+  return {
+    entitled: {
+      total: 35,
+      used: entitledUsed,
+      remaining: Math.max(0, 35 - entitledUsed)
+    },
+    maternity: {
+      total: 180,
+      used: maternityUsed,
+      remaining: Math.max(0, 180 - maternityUsed)
+    },
+    paternity: {
+      total: 15,
+      used: paternityUsed,
+      remaining: Math.max(0, 15 - paternityUsed)
+    }
+  };
+}
 const GENDERS=['Male','Female','Other'];
 const isEditing = true;   // keep all admin filters enabled
 
@@ -3592,7 +3646,7 @@ function AdminView({
         <div className="px-4 py-6">
 
         {/* Tab Content */}
-        {activeTab === 'teachers' && <TeacherManagement teachers={teachers} />}
+        {activeTab === 'teachers' && <TeacherManagement teachers={teachers} teacherAttendance={teacherAttendance} />}
 
         {activeTab === 'students' && <StudentManagement students={students} />}
 
@@ -4553,7 +4607,240 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
 
 function BirthdaysPage({teachers}){const todayBirthdays=useMemo(()=>getBirthdays(teachers,'today'),[teachers]);const weekBirthdays=useMemo(()=>getBirthdays(teachers,'week'),[teachers]);const monthBirthdays=useMemo(()=>getBirthdays(teachers,'month'),[teachers]);const todayAnniversaries=useMemo(()=>getAnniversaries(teachers,'today'),[teachers]);const weekAnniversaries=useMemo(()=>getAnniversaries(teachers,'week'),[teachers]);return(<div className="space-y-6"><h2 className="text-3xl font-bold">🎉 Celebrations</h2><div className="grid md:grid-cols-2 gap-6"><>{todayBirthdays.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎂 Today's Birthdays</h3>{todayBirthdays.map(t=><div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{t.school}</div></div>)}</div>}{todayAnniversaries.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎉 Today's Anniversaries</h3>{todayAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{years} Years at Avanti</div></div>)})}</div>}</></div><div className="grid md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Week's Birthdays</h3>{weekBirthdays.length===0?<p className="text-gray-500">No birthdays this week</p>:<div className="space-y-2">{weekBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month's Birthdays</h3>{monthBirthdays.length===0?<p className="text-gray-500">No birthdays this month</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div></div></div>)}
 
-function TeacherManagement({teachers}){const[showModal,setShowModal]=useState(false);const[editingTeacher,setEditingTeacher]=useState(null);const[form,setForm]=useState({name:'',afid:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});const openAddModal=()=>{setEditingTeacher(null);setForm({name:'',afid:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});setShowModal(true)};const openEditModal=teacher=>{setEditingTeacher(teacher);setForm({...teacher,password:''});setShowModal(true)};const handleSave=async()=>{if(!form.afid||!form.name||!form.email||!form.subject||!form.school){alert('Please fill all required fields (AFID, Name, Email, Subject, School)');return}try{await db.collection('teachers').doc(form.afid).set({afid:form.afid,name:form.name,email:form.email.toLowerCase(),subject:form.subject,school:form.school,dob:form.dob||null,joiningDate:form.joiningDate||null,phone:form.phone||null});if(!editingTeacher&&form.password){alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`)}else{alert('Teacher updated!')}setShowModal(false)}catch(e){alert('Failed: '+e.message)}};const handleDelete=async teacher=>{if(!confirm(`Delete ${teacher.name}?`))return;try{await db.collection('teachers').doc(teacher.afid).delete();alert('Teacher deleted!')}catch(e){alert('Failed: '+e.message)}};return(<div className="space-y-6"><div className="flex justify-between items-center"><h2 className="text-3xl font-bold">Teacher Management</h2><button onClick={openAddModal} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">+ Add Teacher</button></div><div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto"><table className="w-full"><thead className="avanti-gradient-light"><tr><th className="p-3 text-left">AFID</th><th className="p-3 text-left">Name</th><th className="p-3 text-left">Email</th><th className="p-3 text-left">Subject</th><th className="p-3 text-left">School</th><th className="p-3 text-left">Actions</th></tr></thead><tbody>{teachers.map(t=><tr key={t.id} className="border-b hover:bg-gray-50"><td className="p-3 font-mono">{t.afid}</td><td className="p-3">{t.name}</td><td className="p-3 text-sm">{t.email}</td><td className="p-3">{t.subject}</td><td className="p-3">{t.school}</td><td className="p-3"><div className="flex gap-2"><button onClick={()=>openEditModal(t)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>handleDelete(t)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></td></tr>)}</tbody></table></div>{showModal&&<div className="modal-overlay" onClick={()=>setShowModal(false)}><div className="modal-content" onClick={e=>e.stopPropagation()}><h3 className="text-2xl font-bold mb-4">{editingTeacher?'Edit Teacher':'Add New Teacher'}</h3><div className="space-y-4"><div><label className="block text-sm font-bold mb-1">AFID *</label><input type="text" value={form.afid} onChange={e=>setForm({...form,afid:e.target.value})} disabled={!!editingTeacher} className="w-full border-2 px-3 py-2 rounded-lg"/></div><div><label className="block text-sm font-bold mb-1">Name *</label><input type="text" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/></div><div><label className="block text-sm font-bold mb-1">Email *</label><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/></div>{!editingTeacher&&<div><label className="block text-sm font-bold mb-1">Password *</label><input type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/></div>}<div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold mb-1">Subject *</label><select value={form.subject} onChange={e=>setForm({...form,subject:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"><option value="">Select</option>{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-1">School *</label><select value={form.school} onChange={e=>setForm({...form,school:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"><option value="">Select</option>{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div></div><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold mb-1">Date of Birth</label><input type="date" value={form.dob} onChange={e=>setForm({...form,dob:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/></div><div><label className="block text-sm font-bold mb-1">Joining Date</label><input type="date" value={form.joiningDate} onChange={e=>setForm({...form,joiningDate:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/></div></div><div><label className="block text-sm font-bold mb-1">Phone</label><input type="text" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/></div><div className="flex gap-3"><button onClick={handleSave} className="flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold">Save</button><button onClick={()=>setShowModal(false)} className="flex-1 bg-gray-300 py-3 rounded-xl font-semibold">Cancel</button></div></div></div></div>}</div>)}
+function TeacherManagement({teachers, teacherAttendance}){
+  const[showModal,setShowModal]=useState(false);
+  const[editingTeacher,setEditingTeacher]=useState(null);
+  const[showLeaveModal,setShowLeaveModal]=useState(false);
+  const[selectedTeacherLeave,setSelectedTeacherLeave]=useState(null);
+  const[form,setForm]=useState({name:'',afid:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});
+  
+  const openAddModal=()=>{setEditingTeacher(null);setForm({name:'',afid:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});setShowModal(true)};
+  const openEditModal=teacher=>{setEditingTeacher(teacher);setForm({...teacher,password:''});setShowModal(true)};
+  
+  const openLeaveModal=(teacher)=>{
+    const balance = calculateLeaveBalance(teacherAttendance || [], teacher.afid);
+    setSelectedTeacherLeave({teacher, balance});
+    setShowLeaveModal(true);
+  };
+  
+  const handleSave=async()=>{if(!form.afid||!form.name||!form.email||!form.subject||!form.school){alert('Please fill all required fields (AFID, Name, Email, Subject, School)');return}try{await db.collection('teachers').doc(form.afid).set({afid:form.afid,name:form.name,email:form.email.toLowerCase(),subject:form.subject,school:form.school,dob:form.dob||null,joiningDate:form.joiningDate||null,phone:form.phone||null});if(!editingTeacher&&form.password){alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`)}else{alert('Teacher updated!')}setShowModal(false)}catch(e){alert('Failed: '+e.message)}};
+  
+  const handleDelete=async teacher=>{if(!confirm(`Delete ${teacher.name}?`))return;try{await db.collection('teachers').doc(teacher.afid).delete();alert('Teacher deleted!')}catch(e){alert('Failed: '+e.message)}};
+  
+  // Helper to get leave balance for display
+  const getLeaveBalanceDisplay = (teacherId) => {
+    const balance = calculateLeaveBalance(teacherAttendance || [], teacherId);
+    return balance;
+  };
+  
+  return(
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">Teacher Management</h2>
+        <button onClick={openAddModal} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">+ Add Teacher</button>
+      </div>
+      
+      <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
+        <table className="w-full">
+          <thead className="avanti-gradient-light">
+            <tr>
+              <th className="p-3 text-left">AFID</th>
+              <th className="p-3 text-left">Name</th>
+              <th className="p-3 text-left">Email</th>
+              <th className="p-3 text-left">Subject</th>
+              <th className="p-3 text-left">School</th>
+              <th className="p-3 text-center">Leave Balance</th>
+              <th className="p-3 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {teachers.map(t => {
+              const balance = getLeaveBalanceDisplay(t.afid);
+              return (
+                <tr key={t.id} className="border-b hover:bg-gray-50">
+                  <td className="p-3 font-mono">{t.afid}</td>
+                  <td className="p-3">{t.name}</td>
+                  <td className="p-3 text-sm">{t.email}</td>
+                  <td className="p-3">{t.subject}</td>
+                  <td className="p-3">{t.school}</td>
+                  <td className="p-3">
+                    <button 
+                      onClick={() => openLeaveModal(t)}
+                      className="flex flex-col items-center gap-1 w-full hover:bg-gray-100 p-2 rounded-lg transition-colors"
+                    >
+                      <div className="flex gap-2 text-xs">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full" title="Entitled Leave">
+                          E: {balance.entitled.remaining}/{balance.entitled.total}
+                        </span>
+                      </div>
+                      <div className="flex gap-2 text-xs">
+                        <span className="px-2 py-0.5 bg-pink-100 text-pink-700 rounded-full" title="Maternity Leave">
+                          M: {balance.maternity.remaining}
+                        </span>
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full" title="Paternity Leave">
+                          P: {balance.paternity.remaining}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-400">Click for details</span>
+                    </button>
+                  </td>
+                  <td className="p-3">
+                    <div className="flex gap-2">
+                      <button onClick={()=>openEditModal(t)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button>
+                      <button onClick={()=>handleDelete(t)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      
+      {/* Leave Balance Modal */}
+      {showLeaveModal && selectedTeacherLeave && (
+        <div className="modal-overlay" onClick={() => setShowLeaveModal(false)}>
+          <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
+            <h3 className="text-2xl font-bold mb-4">📊 Leave Balance - {selectedTeacherLeave.teacher.name}</h3>
+            
+            <div className="space-y-4">
+              {/* Entitled Leave */}
+              <div className="bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-bold text-blue-800">Entitled Leave</span>
+                  <span className="text-2xl font-bold text-blue-600">
+                    {selectedTeacherLeave.balance.entitled.remaining}/{selectedTeacherLeave.balance.entitled.total}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm text-blue-700">
+                  <span>Used: {selectedTeacherLeave.balance.entitled.used} days</span>
+                  <span>Remaining: {selectedTeacherLeave.balance.entitled.remaining} days</span>
+                </div>
+                <div className="mt-2 bg-blue-200 rounded-full h-3">
+                  <div 
+                    className="bg-blue-500 h-3 rounded-full transition-all" 
+                    style={{width: `${(selectedTeacherLeave.balance.entitled.remaining/selectedTeacherLeave.balance.entitled.total)*100}%`}}
+                  />
+                </div>
+                <p className="text-xs text-blue-600 mt-2">Includes: Personal Leave, Sick Leave, Emergency Leave</p>
+              </div>
+              
+              {/* Maternity Leave */}
+              <div className="bg-pink-50 p-4 rounded-xl border-2 border-pink-200">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-bold text-pink-800">Maternity Leave</span>
+                  <span className="text-2xl font-bold text-pink-600">
+                    {selectedTeacherLeave.balance.maternity.remaining}/{selectedTeacherLeave.balance.maternity.total}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm text-pink-700">
+                  <span>Used: {selectedTeacherLeave.balance.maternity.used} days</span>
+                  <span>Remaining: {selectedTeacherLeave.balance.maternity.remaining} days</span>
+                </div>
+                <div className="mt-2 bg-pink-200 rounded-full h-3">
+                  <div 
+                    className="bg-pink-500 h-3 rounded-full transition-all" 
+                    style={{width: `${(selectedTeacherLeave.balance.maternity.remaining/selectedTeacherLeave.balance.maternity.total)*100}%`}}
+                  />
+                </div>
+              </div>
+              
+              {/* Paternity Leave */}
+              <div className="bg-purple-50 p-4 rounded-xl border-2 border-purple-200">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-bold text-purple-800">Paternity Leave</span>
+                  <span className="text-2xl font-bold text-purple-600">
+                    {selectedTeacherLeave.balance.paternity.remaining}/{selectedTeacherLeave.balance.paternity.total}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm text-purple-700">
+                  <span>Used: {selectedTeacherLeave.balance.paternity.used} days</span>
+                  <span>Remaining: {selectedTeacherLeave.balance.paternity.remaining} days</span>
+                </div>
+                <div className="mt-2 bg-purple-200 rounded-full h-3">
+                  <div 
+                    className="bg-purple-500 h-3 rounded-full transition-all" 
+                    style={{width: `${(selectedTeacherLeave.balance.paternity.remaining/selectedTeacherLeave.balance.paternity.total)*100}%`}}
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <button 
+              onClick={() => setShowLeaveModal(false)} 
+              className="w-full mt-6 bg-gray-300 py-3 rounded-xl font-semibold"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Add/Edit Teacher Modal */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3 className="text-2xl font-bold mb-4">{editingTeacher ? 'Edit Teacher' : 'Add New Teacher'}</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold mb-1">AFID *</label>
+                <input type="text" value={form.afid} onChange={e => setForm({...form, afid: e.target.value})} disabled={!!editingTeacher} className="w-full border-2 px-3 py-2 rounded-lg"/>
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1">Name *</label>
+                <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/>
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1">Email *</label>
+                <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/>
+              </div>
+              {!editingTeacher && (
+                <div>
+                  <label className="block text-sm font-bold mb-1">Password *</label>
+                  <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1">Subject *</label>
+                  <select value={form.subject} onChange={e => setForm({...form, subject: e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg">
+                    <option value="">Select</option>
+                    {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-1">School *</label>
+                  <select value={form.school} onChange={e => setForm({...form, school: e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg">
+                    <option value="">Select</option>
+                    {SCHOOLS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1">Date of Birth</label>
+                  <input type="date" value={form.dob} onChange={e => setForm({...form, dob: e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-1">Joining Date</label>
+                  <input type="date" value={form.joiningDate} onChange={e => setForm({...form, joiningDate: e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1">Phone</label>
+                <input type="text" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={handleSave} className="flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold">Save</button>
+                <button onClick={() => setShowModal(false)} className="flex-1 bg-gray-300 py-3 rounded-xl font-semibold">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){const[selectedSchool,setSelectedSchool]=useState(SCHOOLS[0]);const[selectedSubject,setSelectedSubject]=useState(SUBJECTS[0]);const[selectedGrade,setSelectedGrade]=useState('11');const[showAddForm,setShowAddForm]=useState(false);const[editingChapter,setEditingChapter]=useState(null);const[chapterForm,setChapterForm]=useState({name:'',topics:[],targetDate:'',priority:'medium'});const[newTopic,setNewTopic]=useState('');const fileInputRef=useRef(null);const docId=`${selectedSchool}_${selectedSubject}_${selectedGrade}`;const chapters=curriculum[docId]?.chapters||[];const handleSaveChapter=()=>{if(!chapterForm.name){alert('Chapter name is required');return}if(editingChapter){updateChapter(selectedSchool,selectedSubject,selectedGrade,editingChapter.id,chapterForm);setEditingChapter(null)}else{addChapter(selectedSchool,selectedSubject,selectedGrade,chapterForm)}setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(false)};const handleEditChapter=chapter=>{setEditingChapter(chapter);setChapterForm({
   name:chapter.name,
@@ -6707,12 +6994,20 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
 // ========================================
 function TeacherAttendanceView({currentUser,teacherAttendance}){
   const[selectedDate,setSelectedDate]=useState(getTodayDate());
+  const[endDate,setEndDate]=useState(getTodayDate());
+  const[isDateRange,setIsDateRange]=useState(false);
   const[status,setStatus]=useState('Present');
   const[reason,setReason]=useState('Present');
   const[location,setLocation]=useState('');
   const[fetchingLocation,setFetchingLocation]=useState(false);
+  const[submitting,setSubmitting]=useState(false);
 
   const todayRecord=teacherAttendance.find(a=>a.teacherId===currentUser.afid&&a.date===selectedDate);
+  
+  // Calculate leave balance
+  const leaveBalance = useMemo(() => {
+    return calculateLeaveBalance(teacherAttendance, currentUser.afid);
+  }, [teacherAttendance, currentUser.afid]);
 
   useEffect(()=>{
     if(todayRecord){
@@ -6721,6 +7016,14 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
       setLocation(todayRecord.location||'');
     }
   },[todayRecord]);
+
+  // Reset date range when switching back to Present
+  useEffect(() => {
+    if (status === 'Present') {
+      setIsDateRange(false);
+      setEndDate(selectedDate);
+    }
+  }, [status, selectedDate]);
 
   const getLocation=()=>{
     setFetchingLocation(true);
@@ -6742,30 +7045,103 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
     }
   };
 
+  // Generate array of dates between start and end
+  const getDateRange = (start, end) => {
+    const dates = [];
+    let currentDate = new Date(start);
+    const endDateObj = new Date(end);
+    
+    while (currentDate <= endDateObj) {
+      dates.push(currentDate.toISOString().split('T')[0]);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    return dates;
+  };
+
+  // Calculate how many days will be marked
+  const daysToMark = useMemo(() => {
+    if (!isDateRange || status === 'Present') return 1;
+    return getDateRange(selectedDate, endDate).length;
+  }, [isDateRange, selectedDate, endDate, status]);
+
   const handleSubmit=async()=>{
     if(status!=='Present'&&!reason){
       alert('Please select a reason');
       return;
     }
+
+    // Validate date range
+    if (isDateRange && endDate < selectedDate) {
+      alert('End date must be after or equal to start date');
+      return;
+    }
+
+    // Check leave balance for entitled leaves
+    if (status === 'On Leave') {
+      if (ENTITLED_LEAVE_TYPES.includes(reason) && daysToMark > leaveBalance.entitled.remaining) {
+        const proceed = confirm(`Warning: You only have ${leaveBalance.entitled.remaining} entitled leave days remaining, but you're marking ${daysToMark} days.\n\nDo you want to continue?`);
+        if (!proceed) return;
+      }
+      if (MATERNITY_LEAVE_TYPES.includes(reason) && daysToMark > leaveBalance.maternity.remaining) {
+        const proceed = confirm(`Warning: You only have ${leaveBalance.maternity.remaining} maternity leave days remaining, but you're marking ${daysToMark} days.\n\nDo you want to continue?`);
+        if (!proceed) return;
+      }
+      if (PATERNITY_LEAVE_TYPES.includes(reason) && daysToMark > leaveBalance.paternity.remaining) {
+        const proceed = confirm(`Warning: You only have ${leaveBalance.paternity.remaining} paternity leave days remaining, but you're marking ${daysToMark} days.\n\nDo you want to continue?`);
+        if (!proceed) return;
+      }
+    }
+
+    setSubmitting(true);
+    
     try{
       const now=new Date();
       const punchInTime=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
       
-      const docId=`${currentUser.afid}_${selectedDate}`;
-      await db.collection('teacherAttendance').doc(docId).set({
-        teacherId:currentUser.afid,
-        teacherName:currentUser.name,
-        school:currentUser.school,
-        date:selectedDate,
-        status,
-        reason:status==='Present'?'Present':reason,
-        location:location||'Not provided',
-        punchInTime:punchInTime,
-        markedAt:new Date().toISOString()
+      // If date range is enabled for leave, mark all dates
+      const datesToMark = (isDateRange && status === 'On Leave') 
+        ? getDateRange(selectedDate, endDate)
+        : [selectedDate];
+      
+      // Create batch for multiple dates
+      const batch = db.batch();
+      
+      datesToMark.forEach(date => {
+        const docId = `${currentUser.afid}_${date}`;
+        const docRef = db.collection('teacherAttendance').doc(docId);
+        batch.set(docRef, {
+          teacherId: currentUser.afid,
+          teacherName: currentUser.name,
+          school: currentUser.school,
+          date: date,
+          status,
+          reason: status === 'Present' ? 'Present' : reason,
+          location: location || 'Not provided',
+          punchInTime: date === getTodayDate() ? punchInTime : 'Leave applied',
+          markedAt: new Date().toISOString(),
+          // Store date range info for reference
+          isPartOfRange: datesToMark.length > 1,
+          rangeStart: datesToMark.length > 1 ? selectedDate : null,
+          rangeEnd: datesToMark.length > 1 ? endDate : null
+        });
       });
-      alert(`Attendance marked! ✓\nPunch-in time: ${punchInTime}`);
+      
+      await batch.commit();
+      
+      if (datesToMark.length > 1) {
+        alert(`Leave marked for ${datesToMark.length} days! ✓\nFrom: ${selectedDate}\nTo: ${endDate}`);
+      } else {
+        alert(`Attendance marked! ✓\nPunch-in time: ${punchInTime}`);
+      }
+      
+      // Reset date range after successful submission
+      setIsDateRange(false);
+      setEndDate(selectedDate);
+      
     }catch(e){
       alert('Failed: '+e.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -6773,13 +7149,71 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
     <div className="space-y-6">
       <h2 className="text-3xl font-bold">My Attendance</h2>
 
+      {/* Leave Balance Cards */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-xl shadow-lg border-l-4 border-blue-500">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm text-gray-600">Entitled Leave</p>
+              <p className="text-2xl font-bold text-blue-600">{leaveBalance.entitled.remaining}/{leaveBalance.entitled.total}</p>
+            </div>
+            <div className="text-right">
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                Used: {leaveBalance.entitled.used}
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-blue-500 h-2 rounded-full transition-all" 
+              style={{width: `${(leaveBalance.entitled.remaining/leaveBalance.entitled.total)*100}%`}}
+            />
+          </div>
+        </div>
+        
+        <div className="bg-white p-4 rounded-xl shadow-lg border-l-4 border-pink-500">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm text-gray-600">Maternity Leave</p>
+              <p className="text-2xl font-bold text-pink-600">{leaveBalance.maternity.remaining}/{leaveBalance.maternity.total}</p>
+            </div>
+            <div className="text-right">
+              <span className="text-xs bg-pink-100 text-pink-700 px-2 py-1 rounded-full">
+                Used: {leaveBalance.maternity.used}
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-pink-500 h-2 rounded-full transition-all" 
+              style={{width: `${(leaveBalance.maternity.remaining/leaveBalance.maternity.total)*100}%`}}
+            />
+          </div>
+        </div>
+        
+        <div className="bg-white p-4 rounded-xl shadow-lg border-l-4 border-purple-500">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-sm text-gray-600">Paternity Leave</p>
+              <p className="text-2xl font-bold text-purple-600">{leaveBalance.paternity.remaining}/{leaveBalance.paternity.total}</p>
+            </div>
+            <div className="text-right">
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
+                Used: {leaveBalance.paternity.used}
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-purple-500 h-2 rounded-full transition-all" 
+              style={{width: `${(leaveBalance.paternity.remaining/leaveBalance.paternity.total)*100}%`}}
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white p-6 rounded-2xl shadow-lg max-w-2xl mx-auto">
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-bold mb-2">Date</label>
-            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
-          </div>
-
           <div>
             <label className="block text-sm font-bold mb-2">Status *</label>
             <div className="flex gap-3">
@@ -6799,27 +7233,97 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
           </div>
 
           {status==='On Leave'&&(
+            <>
+              <div>
+                <label className="block text-sm font-bold mb-2">Reason *</label>
+                <select value={reason} onChange={e=>setReason(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+                  {LEAVE_REASONS.filter(r=>r!=='Present').map(r=><option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              
+              {/* Date Range Toggle */}
+              <div className="bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={isDateRange}
+                    onChange={e => {
+                      setIsDateRange(e.target.checked);
+                      if (!e.target.checked) {
+                        setEndDate(selectedDate);
+                      }
+                    }}
+                    className="w-5 h-5 rounded"
+                  />
+                  <span className="font-semibold text-blue-800">Apply leave for multiple days</span>
+                </label>
+                <p className="text-sm text-blue-600 mt-1 ml-8">Enable this if you're taking 2 or more days of leave</p>
+              </div>
+            </>
+          )}
+
+          <div className={`grid ${isDateRange && status === 'On Leave' ? 'md:grid-cols-2' : 'grid-cols-1'} gap-4`}>
             <div>
-              <label className="block text-sm font-bold mb-2">Reason *</label>
-              <select value={reason} onChange={e=>setReason(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
-                {LEAVE_REASONS.filter(r=>r!=='Present').map(r=><option key={r} value={r}>{r}</option>)}
-              </select>
+              <label className="block text-sm font-bold mb-2">
+                {isDateRange && status === 'On Leave' ? 'Start Date' : 'Date'}
+              </label>
+              <input 
+                type="date" 
+                value={selectedDate} 
+                onChange={e => {
+                  setSelectedDate(e.target.value);
+                  if (!isDateRange || e.target.value > endDate) {
+                    setEndDate(e.target.value);
+                  }
+                }} 
+                className="w-full border-2 px-4 py-3 rounded-xl"
+              />
+            </div>
+            
+            {isDateRange && status === 'On Leave' && (
+              <div>
+                <label className="block text-sm font-bold mb-2">End Date</label>
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  min={selectedDate}
+                  onChange={e => setEndDate(e.target.value)} 
+                  className="w-full border-2 px-4 py-3 rounded-xl"
+                />
+              </div>
+            )}
+          </div>
+
+          {isDateRange && status === 'On Leave' && daysToMark > 0 && (
+            <div className="bg-yellow-50 p-4 rounded-xl border-2 border-yellow-300">
+              <p className="font-semibold text-yellow-800">
+                📅 {daysToMark} day{daysToMark > 1 ? 's' : ''} will be marked as {reason}
+              </p>
+              <p className="text-sm text-yellow-700 mt-1">
+                From {selectedDate} to {endDate}
+              </p>
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-bold mb-2">Location</label>
-            <div className="flex gap-2">
-              <input type="text" value={location} onChange={e=>setLocation(e.target.value)} className="flex-1 border-2 px-4 py-3 rounded-xl" placeholder="Enter location or fetch GPS"/>
-              <button onClick={getLocation} disabled={fetchingLocation} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold disabled:opacity-50">
-                {fetchingLocation?'📍 Fetching...':'📍 Get GPS'}
-              </button>
+          {status === 'Present' && (
+            <div>
+              <label className="block text-sm font-bold mb-2">Location</label>
+              <div className="flex gap-2">
+                <input type="text" value={location} onChange={e=>setLocation(e.target.value)} className="flex-1 border-2 px-4 py-3 rounded-xl" placeholder="Enter location or fetch GPS"/>
+                <button onClick={getLocation} disabled={fetchingLocation} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold disabled:opacity-50">
+                  {fetchingLocation?'📍 Fetching...':'📍 Get GPS'}
+                </button>
+              </div>
+              {location&&<p className="text-sm text-gray-600 mt-2">📍 {location}</p>}
             </div>
-            {location&&<p className="text-sm text-gray-600 mt-2">📍 {location}</p>}
-          </div>
+          )}
 
-          <button onClick={handleSubmit} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg">
-            Submit Attendance
+          <button 
+            onClick={handleSubmit} 
+            disabled={submitting}
+            className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-50"
+          >
+            {submitting ? 'Submitting...' : (isDateRange && status === 'On Leave' ? `Submit Leave (${daysToMark} days)` : 'Submit Attendance')}
           </button>
 
           {todayRecord&&(
@@ -9372,7 +9876,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // FORCE UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '2.4.0'; // Change this version number with every update (e.g., 2.4.1, 2.5.0, etc.)
+  const CURRENT_VERSION = '2.5.0'; // Change this version number with every update (e.g., 2.4.1, 2.5.0, etc.)
 
   // Check and prompt for updates
   function checkForUpdates() {
