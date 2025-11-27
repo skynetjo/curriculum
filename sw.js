@@ -1,122 +1,134 @@
-// ========================================
-// SERVICE WORKER WITH VERSION MANAGEMENT
-// ========================================
-// UPDATE THIS VERSION WITH EACH DEPLOYMENT (must match index.html)
-const VERSION = '2.4.0';
-const CACHE_NAME = `curriculum-tracker-v${VERSION}`;
+// Service Worker for Curriculum Tracker PWA
+// Version: 2.6.2 - Update this with each deployment
 
-// Files to cache
-const urlsToCache = [
-  '/',
-  '/index.html',
+const CACHE_NAME = 'curriculum-tracker-v2.6.2';
+const STATIC_CACHE = 'static-v2.6.2';
+
+// Files to cache (static assets only, NOT index.html)
+const STATIC_FILES = [
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png'
 ];
 
-// Listen for skip waiting message from main app
-self.addEventListener('message', event => {
-  if (event.data && event.data.action === 'skipWaiting') {
-    console.log('⏭️ Skipping waiting, activating new service worker immediately');
-    self.skipWaiting();
-  }
-});
+// External resources to cache
+const EXTERNAL_CACHE = [
+  'https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js',
+  'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js',
+  'https://unpkg.com/react@18/umd/react.production.min.js',
+  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+  'https://cdn.tailwindcss.com',
+  'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js'
+];
 
-// Install event - cache files
+// Install event - cache static files
 self.addEventListener('install', event => {
-  console.log(`📦 Service Worker ${VERSION} installing...`);
+  console.log('[SW] Installing new service worker...');
+  
+  // Skip waiting to activate immediately
+  self.skipWaiting();
+  
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('📂 Opened cache');
-        return cache.addAll(urlsToCache);
-      })
-      .then(() => {
-        console.log(`✅ Service Worker ${VERSION} installed successfully`);
-        // Force the waiting service worker to become the active service worker
-        return self.skipWaiting();
-      })
-      .catch(err => {
-        console.error('❌ Cache installation failed:', err);
-      })
+    caches.open(STATIC_CACHE).then(cache => {
+      console.log('[SW] Caching static files');
+      return cache.addAll(STATIC_FILES).catch(err => {
+        console.log('[SW] Some static files failed to cache:', err);
+      });
+    })
   );
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
-  console.log(`🔄 Service Worker ${VERSION} activating...`);
+  console.log('[SW] Activating new service worker...');
+  
   event.waitUntil(
-    caches.keys()
-      .then(cacheNames => {
-        return Promise.all(
-          cacheNames.map(cacheName => {
-            if (cacheName !== CACHE_NAME) {
-              console.log('🗑️ Deleting old cache:', cacheName);
-              return caches.delete(cacheName);
-            }
-          })
-        );
-      })
-      .then(() => {
-        console.log(`✅ Service Worker ${VERSION} activated`);
-        // Take control of all pages immediately
-        return self.clients.claim();
-      })
-  );
-});
-
-// Fetch event - serve from cache, fallback to network
-self.addEventListener('fetch', event => {
-  // Skip non-GET requests
-  if (event.request.method !== 'GET') {
-    return;
-  }
-
-  // Skip Firebase and external API requests
-  if (
-    event.request.url.includes('firebaseapp.com') ||
-    event.request.url.includes('googleapis.com') ||
-    event.request.url.includes('gstatic.com') ||
-    event.request.url.includes('unpkg.com') ||
-    event.request.url.includes('cdn.') ||
-    event.request.url.includes('tally.so')
-  ) {
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-
-        // Clone the request
-        const fetchRequest = event.request.clone();
-
-        return fetch(fetchRequest).then(response => {
-          // Check if valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          // Delete old caches
+          if (cacheName !== CACHE_NAME && cacheName !== STATIC_CACHE) {
+            console.log('[SW] Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
           }
-
-          // Clone the response
-          const responseToCache = response.clone();
-
-          caches.open(CACHE_NAME)
-            .then(cache => {
-              cache.put(event.request, responseToCache);
-            });
-
-          return response;
-        }).catch(error => {
-          console.error('Fetch failed:', error);
-          // You can return a custom offline page here if you have one
-        });
-      })
+        })
+      );
+    }).then(() => {
+      // Take control of all pages immediately
+      return self.clients.claim();
+    })
   );
 });
 
-// Log version on activation
-console.log(`📱 Service Worker Version: ${VERSION}`);
+// Fetch event - network-first for HTML, cache-first for static assets
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  
+  // Always fetch HTML from network (never cache index.html)
+  if (event.request.mode === 'navigate' || 
+      url.pathname === '/' || 
+      url.pathname === '/index.html' ||
+      url.pathname.endsWith('.html')) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .catch(() => {
+          // If offline, try cache as fallback
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+  
+  // For API calls - always network
+  if (url.hostname.includes('firebaseio.com') || 
+      url.hostname.includes('googleapis.com') ||
+      url.hostname.includes('firebase')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
+  // For static assets - cache first, then network
+  event.respondWith(
+    caches.match(event.request).then(cachedResponse => {
+      if (cachedResponse) {
+        // Return cached version but also update cache in background
+        fetch(event.request).then(networkResponse => {
+          if (networkResponse && networkResponse.status === 200) {
+            caches.open(STATIC_CACHE).then(cache => {
+              cache.put(event.request, networkResponse);
+            });
+          }
+        }).catch(() => {});
+        return cachedResponse;
+      }
+      
+      // Not in cache - fetch from network
+      return fetch(event.request).then(networkResponse => {
+        // Cache successful responses for static assets
+        if (networkResponse && networkResponse.status === 200) {
+          const responseClone = networkResponse.clone();
+          caches.open(STATIC_CACHE).then(cache => {
+            cache.put(event.request, responseClone);
+          });
+        }
+        return networkResponse;
+      });
+    })
+  );
+});
+
+// Listen for skip waiting message
+self.addEventListener('message', event => {
+  if (event.data && (event.data.type === 'SKIP_WAITING' || event.data.action === 'skipWaiting')) {
+    console.log('[SW] Skip waiting triggered');
+    self.skipWaiting();
+  }
+});
+
+// Background sync for offline support (optional)
+self.addEventListener('sync', event => {
+  console.log('[SW] Background sync:', event.tag);
+});
+
+console.log('[SW] Service Worker loaded - Version 2.6.2');
