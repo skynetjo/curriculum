@@ -10066,180 +10066,151 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   </script>
   <script>
   // ========================================
-  // FORCE UPDATE MECHANISM FOR PWA
+  // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '2.6.1'; // Change this version number with every update (e.g., 2.4.1, 2.5.0, etc.)
+  const CURRENT_VERSION = '2.7.0'; // Change this version number with every update
 
-  // Check and prompt for updates
-  function checkForUpdates() {
-      const storedVersion = localStorage.getItem('appVersion');
+  // Immediately check for updates on every page load
+  (async function immediateUpdateCheck() {
+    try {
+      // Fetch the latest index.html with cache bypass
+      const response = await fetch('/index.html?v=' + Date.now(), { 
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      const html = await response.text();
       
-      if (storedVersion !== CURRENT_VERSION) {
-          // New version detected
-          if (storedVersion) {
-              // Show update notification to existing users
-              if (confirm('🎉 A new version of the app is available!\n\nCurrent Version: ' + storedVersion + '\nNew Version: ' + CURRENT_VERSION + '\n\nClick OK to update now.')) {
-                  updateApp();
-              } else {
-                  // User declined, but show reminder
-                  setTimeout(() => {
-                      if (confirm('⚠️ Please update to get the latest features and fixes.\n\nUpdate now?')) {
-                          updateApp();
-                      }
-                  }, 300000); // Remind after 5 minutes
-              }
-          } else {
-              // First time install
-              localStorage.setItem('appVersion', CURRENT_VERSION);
-              console.log('✅ App version set to:', CURRENT_VERSION);
-          }
-      } else {
-          console.log('✅ App is up to date. Version:', CURRENT_VERSION);
+      // Extract version from fetched HTML
+      const versionMatch = html.match(/CURRENT_VERSION\s*=\s*['"]([^'"]+)['"]/);
+      if (versionMatch && versionMatch[1] !== CURRENT_VERSION) {
+        console.log('🆕 New version available:', versionMatch[1], '(current:', CURRENT_VERSION, ')');
+        // Auto-update without asking
+        performUpdate();
       }
+    } catch (e) {
+      console.log('Version check failed:', e);
+    }
+  })();
+
+  // Check stored version
+  function checkStoredVersion() {
+    const storedVersion = localStorage.getItem('appVersion');
+    if (storedVersion && storedVersion !== CURRENT_VERSION) {
+      console.log('🔄 Stored version mismatch, updating...');
+      performUpdate();
+    } else if (!storedVersion) {
+      localStorage.setItem('appVersion', CURRENT_VERSION);
+    }
   }
 
-  // Force update the app
-  function updateApp() {
-      console.log('🔄 Starting app update process...');
-      
-      // Show loading message
-      const originalBody = document.body.innerHTML;
-      document.body.innerHTML = `
-          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: linear-gradient(135deg, #F4B41A 0%, #E8B039 50%, #C8342E 100%); color: white; font-family: Arial, sans-serif;">
-              <div style="text-align: center;">
-                  <div style="font-size: 4rem; margin-bottom: 1rem;">🔄</div>
-                  <h1 style="font-size: 2rem; margin-bottom: 1rem;">Updating App...</h1>
-                  <p style="font-size: 1.2rem; opacity: 0.9;">Please wait while we install the latest version</p>
-                  <div style="margin-top: 2rem;">
-                      <div style="width: 200px; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px; overflow: hidden;">
-                          <div style="width: 100%; height: 100%; background: white; animation: progress 2s ease-in-out infinite;"></div>
-                      </div>
-                  </div>
-              </div>
-          </div>
-          <style>
-              @keyframes progress {
-                  0% { transform: translateX(-100%); }
-                  100% { transform: translateX(100%); }
-              }
-          </style>
-      `;
-      
+  // Perform the update
+  async function performUpdate() {
+    console.log('🔄 Starting auto-update...');
+    
+    // Show update indicator
+    const updateBanner = document.createElement('div');
+    updateBanner.innerHTML = `
+      <div style="position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(90deg, #F4B41A, #E8B039); color: white; padding: 12px 20px; text-align: center; z-index: 99999; font-family: Arial, sans-serif; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+        <span style="font-size: 16px;">🔄 Updating to latest version... Please wait</span>
+      </div>
+    `;
+    document.body.prepend(updateBanner);
+
+    try {
       // Clear all caches
       if ('caches' in window) {
-          caches.keys().then(names => {
-              names.forEach(name => {
-                  caches.delete(name);
-                  console.log('🗑️ Deleted cache:', name);
-              });
-          });
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+        console.log('🗑️ All caches cleared');
       }
-      
+
       // Unregister all service workers
       if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(registrations => {
-              registrations.forEach(registration => {
-                  registration.unregister();
-                  console.log('🗑️ Unregistered service worker');
-              });
-          });
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(reg => reg.unregister()));
+        console.log('🗑️ Service workers unregistered');
       }
-      
-      // Clear local storage except critical user data
-      const authToken = localStorage.getItem('authToken');
-      const userEmail = localStorage.getItem('userEmail');
-      const userRole = localStorage.getItem('userRole');
-      const userSchool = localStorage.getItem('userSchool');
-      
-      // Clear all localStorage
+
+      // Preserve user session
+      const sessionData = {
+        studentSession: localStorage.getItem('studentSession'),
+        authToken: localStorage.getItem('authToken')
+      };
+
+      // Clear storage
       localStorage.clear();
-      console.log('🗑️ Cleared localStorage');
-      
-      // Restore critical user data
-      if (authToken) localStorage.setItem('authToken', authToken);
-      if (userEmail) localStorage.setItem('userEmail', userEmail);
-      if (userRole) localStorage.setItem('userRole', userRole);
-      if (userSchool) localStorage.setItem('userSchool', userSchool);
+      sessionStorage.clear();
+
+      // Restore session
+      if (sessionData.studentSession) localStorage.setItem('studentSession', sessionData.studentSession);
+      if (sessionData.authToken) localStorage.setItem('authToken', sessionData.authToken);
       
       // Set new version
       localStorage.setItem('appVersion', CURRENT_VERSION);
-      console.log('✅ Updated to version:', CURRENT_VERSION);
-      
-      // Clear session storage
-      sessionStorage.clear();
-      
-      // Reload the page with cache bypass
+
+      // Force reload with cache bypass
       setTimeout(() => {
-          window.location.reload(true);
-      }, 1000);
+        window.location.href = window.location.pathname + '?updated=' + Date.now();
+      }, 500);
+
+    } catch (e) {
+      console.error('Update failed:', e);
+      window.location.reload(true);
+    }
   }
 
-  // Manual update function (can be called from UI)
-  window.forceUpdate = function() {
-      if (confirm('🔄 This will update the app to the latest version.\n\nYour login information will be preserved.\n\nContinue?')) {
-          updateApp();
-      }
-  };
+  // Manual update function
+  window.forceUpdate = performUpdate;
 
-  // Service Worker registration with update detection
+  // Register service worker with immediate update behavior
   if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-              .then(registration => {
-                  console.log('✅ Service Worker registered successfully');
-                  
-                  // Check for updates every hour
-                  setInterval(() => {
-                      registration.update();
-                      console.log('🔍 Checking for service worker updates...');
-                  }, 3600000); // 1 hour
-                  
-                  // Listen for service worker updates
-                  registration.addEventListener('updatefound', () => {
-                      const newWorker = registration.installing;
-                      console.log('🆕 New service worker found!');
-                      
-                      newWorker.addEventListener('statechange', () => {
-                          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                              // New service worker is ready
-                              console.log('✅ New service worker installed');
-                              if (confirm('🎉 App update is ready!\n\nClick OK to activate the new version.')) {
-                                  newWorker.postMessage({ action: 'skipWaiting' });
-                              }
-                          }
-                      });
-                  });
-              })
-              .catch(err => {
-                  console.error('❌ Service Worker registration failed:', err);
-              });
-          
-          // Reload when new service worker takes control
-          navigator.serviceWorker.addEventListener('controllerchange', () => {
-              console.log('🔄 New service worker activated, reloading...');
-              window.location.reload(true);
+    window.addEventListener('load', async () => {
+      try {
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        console.log('✅ Service Worker registered');
+
+        // Check for updates immediately
+        registration.update();
+
+        // Check for updates every 5 minutes
+        setInterval(() => registration.update(), 5 * 60 * 1000);
+
+        // Handle updates
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // Skip waiting and activate immediately
+              newWorker.postMessage({ type: 'SKIP_WAITING' });
+            }
           });
-      });
+        });
+
+        // Reload on controller change
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          window.location.reload(true);
+        });
+
+      } catch (err) {
+        console.error('SW registration failed:', err);
+      }
+    });
   }
 
-  // Check for version updates on page load
-  window.addEventListener('load', () => {
-      // Small delay to ensure everything is loaded
-      setTimeout(checkForUpdates, 1000);
-  });
-
-  // Also check when app comes back to foreground (for mobile)
+  // Also check on visibility change (when user returns to app)
   document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) {
-          checkForUpdates();
-      }
+    if (!document.hidden) {
+      checkStoredVersion();
+    }
   });
 
-  // Log version info on console
-  console.log('%c📱 Curriculum Tracker App', 'color: #F4B41A; font-size: 20px; font-weight: bold;');
-  console.log('%cVersion: ' + CURRENT_VERSION, 'color: #666; font-size: 14px;');
-  console.log('%cTo manually update, type: forceUpdate()', 'color: #666; font-size: 12px;');
+  // Check on load
+  window.addEventListener('load', () => setTimeout(checkStoredVersion, 2000));
+
+  // Log version
+  console.log('%c📱 Curriculum Tracker v' + CURRENT_VERSION, 'color: #F4B41A; font-size: 16px; font-weight: bold;');
+  console.log('%cType forceUpdate() to manually update', 'color: #666; font-size: 12px;');
 </script>
   <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
