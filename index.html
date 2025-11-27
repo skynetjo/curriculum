@@ -2889,7 +2889,7 @@ if(currentUser && currentUser.userType === 'student') {
   return <StudentDashboard currentUser={currentUser} handleLogout={handleLogout} />;
 }
 
-return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab}/>;
+return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments}/>;
 }
 
 function TeacherView({
@@ -2907,7 +2907,8 @@ function TeacherView({
   schoolInfo,
   updateChapterProgress,
   activeTab,
-  setActiveTab
+  setActiveTab,
+  leaveAdjustments
 }) {
   const teacherTabs = [
     { id: 'overview', label: 'Dashboard', icon: '📊' },
@@ -3539,7 +3540,9 @@ function AdminView({
   schoolInfo,
   addChapter,
   updateChapter,
-  deleteChapter
+  deleteChapter,
+  leaveAdjustments,
+  setLeaveAdjustments
 }) {
   const [activeTab, setActiveTab] = useState('teachers');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -10066,7 +10069,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // FORCE UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '2.6.0'; // Change this version number with every update (e.g., 2.4.1, 2.5.0, etc.)
+  const CURRENT_VERSION = '2.6.1'; // Change this version number with every update (e.g., 2.4.1, 2.5.0, etc.)
 
   // Check and prompt for updates
   function checkForUpdates() {
