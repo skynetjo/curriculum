@@ -1,25 +1,14 @@
 // Service Worker for Curriculum Tracker PWA
-// Version: 2.6.2 - Update this with each deployment
+// Version: 2.7.0 - Update this with each deployment
 
-const CACHE_NAME = 'curriculum-tracker-v2.6.2';
-const STATIC_CACHE = 'static-v2.6.2';
+const CACHE_NAME = 'curriculum-tracker-v2.7.0';
+const STATIC_CACHE = 'static-v2.7.0';
 
 // Files to cache (static assets only, NOT index.html)
 const STATIC_FILES = [
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png'
-];
-
-// External resources to cache
-const EXTERNAL_CACHE = [
-  'https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js',
-  'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js',
-  'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js',
-  'https://unpkg.com/react@18/umd/react.production.min.js',
-  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-  'https://cdn.tailwindcss.com',
-  'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js'
 ];
 
 // Install event - cache static files
@@ -126,9 +115,4 @@ self.addEventListener('message', event => {
   }
 });
 
-// Background sync for offline support (optional)
-self.addEventListener('sync', event => {
-  console.log('[SW] Background sync:', event.tag);
-});
-
-console.log('[SW] Service Worker loaded - Version 2.6.2');
+console.log('[SW] Service Worker loaded - Version 2.7.0');
