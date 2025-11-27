@@ -556,12 +556,13 @@ const MATERNITY_LEAVE_TYPES = ['Maternity Leave'];
 const PATERNITY_LEAVE_TYPES = ['Paternity Leave'];
 
 // Helper function to calculate leave balance for a teacher
-function calculateLeaveBalance(teacherAttendance, teacherId) {
+// Now includes manual adjustments from leaveAdjustments collection
+function calculateLeaveBalance(teacherAttendance, teacherId, leaveAdjustments = {}) {
   const teacherLeaves = teacherAttendance.filter(a => 
     a.teacherId === teacherId && a.status === 'On Leave'
   );
   
-  // Calculate days used for each category
+  // Calculate days used for each category from attendance records
   let entitledUsed = 0;
   let maternityUsed = 0;
   let paternityUsed = 0;
@@ -576,21 +577,32 @@ function calculateLeaveBalance(teacherAttendance, teacherId) {
     }
   });
   
+  // Get manual adjustments for this teacher (leaves taken before system was implemented)
+  const adjustment = leaveAdjustments[teacherId] || { entitled: 0, maternity: 0, paternity: 0 };
+  
+  // Add adjustments to used count
+  entitledUsed += (adjustment.entitled || 0);
+  maternityUsed += (adjustment.maternity || 0);
+  paternityUsed += (adjustment.paternity || 0);
+  
   return {
     entitled: {
       total: 35,
       used: entitledUsed,
-      remaining: Math.max(0, 35 - entitledUsed)
+      remaining: Math.max(0, 35 - entitledUsed),
+      adjustment: adjustment.entitled || 0
     },
     maternity: {
       total: 180,
       used: maternityUsed,
-      remaining: Math.max(0, 180 - maternityUsed)
+      remaining: Math.max(0, 180 - maternityUsed),
+      adjustment: adjustment.maternity || 0
     },
     paternity: {
       total: 15,
       used: paternityUsed,
-      remaining: Math.max(0, 15 - paternityUsed)
+      remaining: Math.max(0, 15 - paternityUsed),
+      adjustment: adjustment.paternity || 0
     }
   };
 }
@@ -2460,6 +2472,7 @@ useEffect(() => {
 function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:'',studentId:'',loginType:'teacher'});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);
 const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);
+const[leaveAdjustments,setLeaveAdjustments]=useState({});
 const[schoolInfo,setSchoolInfo]=useState([]);
 const[isSidebarOpen,setIsSidebarOpen]=useState(false);               
 const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
@@ -2470,7 +2483,7 @@ useEffect(() => {
   const fetchData = async () => {
     try {
       // ✅ FETCH ALL DATA IN PARALLEL (MUCH FASTER!)
-      const [progressSnap, teachersSnap, curriculumSnap, studentsSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap] = await Promise.all([
+      const [progressSnap, teachersSnap, curriculumSnap, studentsSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap] = await Promise.all([
         db.collection('chapterProgress').get(),
         db.collection('teachers').get(),
         db.collection('curriculum').get(),
@@ -2481,7 +2494,8 @@ useEffect(() => {
         db.collection('teacherAttendance')
           .where('date', '>=', new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0])
           .get(),
-        db.collection('schoolInfo').get()
+        db.collection('schoolInfo').get(),
+        db.collection('leaveAdjustments').get()
       ]);
 
       // Process chapter progress
@@ -2516,6 +2530,11 @@ setStudents(
       setTeacherAttendance(teacherAttSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
       // Process school info
       setSchoolInfo(schoolInfoSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+      
+      // Process leave adjustments (keyed by teacher AFID)
+      const adjMap = {};
+      leaveAdjSnap.docs.forEach(d => { adjMap[d.id] = d.data() });
+      setLeaveAdjustments(adjMap);
 
     } catch (e) {
       console.error('Data fetch error:', e);
@@ -3121,6 +3140,7 @@ function TeacherView({
           <TeacherAttendanceView
             currentUser={currentUser}
             teacherAttendance={teacherAttendance}
+            leaveAdjustments={leaveAdjustments}
           />
         )}
 
@@ -3646,7 +3666,7 @@ function AdminView({
         <div className="px-4 py-6">
 
         {/* Tab Content */}
-        {activeTab === 'teachers' && <TeacherManagement teachers={teachers} teacherAttendance={teacherAttendance} />}
+        {activeTab === 'teachers' && <TeacherManagement teachers={teachers} teacherAttendance={teacherAttendance} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} />}
 
         {activeTab === 'students' && <StudentManagement students={students} />}
 
@@ -4607,20 +4627,78 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
 
 function BirthdaysPage({teachers}){const todayBirthdays=useMemo(()=>getBirthdays(teachers,'today'),[teachers]);const weekBirthdays=useMemo(()=>getBirthdays(teachers,'week'),[teachers]);const monthBirthdays=useMemo(()=>getBirthdays(teachers,'month'),[teachers]);const todayAnniversaries=useMemo(()=>getAnniversaries(teachers,'today'),[teachers]);const weekAnniversaries=useMemo(()=>getAnniversaries(teachers,'week'),[teachers]);return(<div className="space-y-6"><h2 className="text-3xl font-bold">🎉 Celebrations</h2><div className="grid md:grid-cols-2 gap-6"><>{todayBirthdays.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎂 Today's Birthdays</h3>{todayBirthdays.map(t=><div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{t.school}</div></div>)}</div>}{todayAnniversaries.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎉 Today's Anniversaries</h3>{todayAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{years} Years at Avanti</div></div>)})}</div>}</></div><div className="grid md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Week's Birthdays</h3>{weekBirthdays.length===0?<p className="text-gray-500">No birthdays this week</p>:<div className="space-y-2">{weekBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month's Birthdays</h3>{monthBirthdays.length===0?<p className="text-gray-500">No birthdays this month</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div></div></div>)}
 
-function TeacherManagement({teachers, teacherAttendance}){
+function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLeaveAdjustments}){
   const[showModal,setShowModal]=useState(false);
   const[editingTeacher,setEditingTeacher]=useState(null);
   const[showLeaveModal,setShowLeaveModal]=useState(false);
   const[selectedTeacherLeave,setSelectedTeacherLeave]=useState(null);
+  const[isEditingLeave,setIsEditingLeave]=useState(false);
+  const[leaveForm,setLeaveForm]=useState({entitled: 0, maternity: 0, paternity: 0});
+  const[savingLeave,setSavingLeave]=useState(false);
   const[form,setForm]=useState({name:'',afid:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});
   
   const openAddModal=()=>{setEditingTeacher(null);setForm({name:'',afid:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});setShowModal(true)};
   const openEditModal=teacher=>{setEditingTeacher(teacher);setForm({...teacher,password:''});setShowModal(true)};
   
   const openLeaveModal=(teacher)=>{
-    const balance = calculateLeaveBalance(teacherAttendance || [], teacher.afid);
+    const balance = calculateLeaveBalance(teacherAttendance || [], teacher.afid, leaveAdjustments || {});
+    const currentAdj = leaveAdjustments[teacher.afid] || { entitled: 0, maternity: 0, paternity: 0 };
     setSelectedTeacherLeave({teacher, balance});
+    setLeaveForm({
+      entitled: currentAdj.entitled || 0,
+      maternity: currentAdj.maternity || 0,
+      paternity: currentAdj.paternity || 0
+    });
+    setIsEditingLeave(false);
     setShowLeaveModal(true);
+  };
+  
+  const handleSaveLeaveAdjustment = async () => {
+    if (!selectedTeacherLeave) return;
+    
+    setSavingLeave(true);
+    try {
+      const teacherId = selectedTeacherLeave.teacher.afid;
+      await db.collection('leaveAdjustments').doc(teacherId).set({
+        entitled: parseInt(leaveForm.entitled) || 0,
+        maternity: parseInt(leaveForm.maternity) || 0,
+        paternity: parseInt(leaveForm.paternity) || 0,
+        updatedAt: new Date().toISOString(),
+        updatedBy: 'admin'
+      });
+      
+      // Update local state
+      setLeaveAdjustments(prev => ({
+        ...prev,
+        [teacherId]: {
+          entitled: parseInt(leaveForm.entitled) || 0,
+          maternity: parseInt(leaveForm.maternity) || 0,
+          paternity: parseInt(leaveForm.paternity) || 0
+        }
+      }));
+      
+      // Recalculate balance with new adjustments
+      const newBalance = calculateLeaveBalance(
+        teacherAttendance || [], 
+        teacherId, 
+        {
+          ...leaveAdjustments,
+          [teacherId]: {
+            entitled: parseInt(leaveForm.entitled) || 0,
+            maternity: parseInt(leaveForm.maternity) || 0,
+            paternity: parseInt(leaveForm.paternity) || 0
+          }
+        }
+      );
+      setSelectedTeacherLeave({...selectedTeacherLeave, balance: newBalance});
+      
+      setIsEditingLeave(false);
+      alert('Leave adjustment saved successfully!');
+    } catch (e) {
+      alert('Failed to save: ' + e.message);
+    } finally {
+      setSavingLeave(false);
+    }
   };
   
   const handleSave=async()=>{if(!form.afid||!form.name||!form.email||!form.subject||!form.school){alert('Please fill all required fields (AFID, Name, Email, Subject, School)');return}try{await db.collection('teachers').doc(form.afid).set({afid:form.afid,name:form.name,email:form.email.toLowerCase(),subject:form.subject,school:form.school,dob:form.dob||null,joiningDate:form.joiningDate||null,phone:form.phone||null});if(!editingTeacher&&form.password){alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`)}else{alert('Teacher updated!')}setShowModal(false)}catch(e){alert('Failed: '+e.message)}};
@@ -4629,7 +4707,7 @@ function TeacherManagement({teachers, teacherAttendance}){
   
   // Helper to get leave balance for display
   const getLeaveBalanceDisplay = (teacherId) => {
-    const balance = calculateLeaveBalance(teacherAttendance || [], teacherId);
+    const balance = calculateLeaveBalance(teacherAttendance || [], teacherId, leaveAdjustments || {});
     return balance;
   };
   
@@ -4681,7 +4759,7 @@ function TeacherManagement({teachers, teacherAttendance}){
                           P: {balance.paternity.remaining}
                         </span>
                       </div>
-                      <span className="text-xs text-gray-400">Click for details</span>
+                      <span className="text-xs text-gray-400">Click to view/edit</span>
                     </button>
                   </td>
                   <td className="p-3">
@@ -4699,79 +4777,191 @@ function TeacherManagement({teachers, teacherAttendance}){
       
       {/* Leave Balance Modal */}
       {showLeaveModal && selectedTeacherLeave && (
-        <div className="modal-overlay" onClick={() => setShowLeaveModal(false)}>
+        <div className="modal-overlay" onClick={() => {setShowLeaveModal(false); setIsEditingLeave(false);}}>
           <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
-            <h3 className="text-2xl font-bold mb-4">📊 Leave Balance - {selectedTeacherLeave.teacher.name}</h3>
-            
-            <div className="space-y-4">
-              {/* Entitled Leave */}
-              <div className="bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-bold text-blue-800">Entitled Leave</span>
-                  <span className="text-2xl font-bold text-blue-600">
-                    {selectedTeacherLeave.balance.entitled.remaining}/{selectedTeacherLeave.balance.entitled.total}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm text-blue-700">
-                  <span>Used: {selectedTeacherLeave.balance.entitled.used} days</span>
-                  <span>Remaining: {selectedTeacherLeave.balance.entitled.remaining} days</span>
-                </div>
-                <div className="mt-2 bg-blue-200 rounded-full h-3">
-                  <div 
-                    className="bg-blue-500 h-3 rounded-full transition-all" 
-                    style={{width: `${(selectedTeacherLeave.balance.entitled.remaining/selectedTeacherLeave.balance.entitled.total)*100}%`}}
-                  />
-                </div>
-                <p className="text-xs text-blue-600 mt-2">Includes: Personal Leave, Sick Leave, Emergency Leave</p>
-              </div>
-              
-              {/* Maternity Leave */}
-              <div className="bg-pink-50 p-4 rounded-xl border-2 border-pink-200">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-bold text-pink-800">Maternity Leave</span>
-                  <span className="text-2xl font-bold text-pink-600">
-                    {selectedTeacherLeave.balance.maternity.remaining}/{selectedTeacherLeave.balance.maternity.total}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm text-pink-700">
-                  <span>Used: {selectedTeacherLeave.balance.maternity.used} days</span>
-                  <span>Remaining: {selectedTeacherLeave.balance.maternity.remaining} days</span>
-                </div>
-                <div className="mt-2 bg-pink-200 rounded-full h-3">
-                  <div 
-                    className="bg-pink-500 h-3 rounded-full transition-all" 
-                    style={{width: `${(selectedTeacherLeave.balance.maternity.remaining/selectedTeacherLeave.balance.maternity.total)*100}%`}}
-                  />
-                </div>
-              </div>
-              
-              {/* Paternity Leave */}
-              <div className="bg-purple-50 p-4 rounded-xl border-2 border-purple-200">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="font-bold text-purple-800">Paternity Leave</span>
-                  <span className="text-2xl font-bold text-purple-600">
-                    {selectedTeacherLeave.balance.paternity.remaining}/{selectedTeacherLeave.balance.paternity.total}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm text-purple-700">
-                  <span>Used: {selectedTeacherLeave.balance.paternity.used} days</span>
-                  <span>Remaining: {selectedTeacherLeave.balance.paternity.remaining} days</span>
-                </div>
-                <div className="mt-2 bg-purple-200 rounded-full h-3">
-                  <div 
-                    className="bg-purple-500 h-3 rounded-full transition-all" 
-                    style={{width: `${(selectedTeacherLeave.balance.paternity.remaining/selectedTeacherLeave.balance.paternity.total)*100}%`}}
-                  />
-                </div>
-              </div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-2xl font-bold">📊 Leave Balance - {selectedTeacherLeave.teacher.name}</h3>
+              {!isEditingLeave && (
+                <button 
+                  onClick={() => setIsEditingLeave(true)}
+                  className="px-4 py-2 bg-yellow-400 rounded-lg font-semibold text-sm"
+                >
+                  ✏️ Edit
+                </button>
+              )}
             </div>
             
-            <button 
-              onClick={() => setShowLeaveModal(false)} 
-              className="w-full mt-6 bg-gray-300 py-3 rounded-xl font-semibold"
-            >
-              Close
-            </button>
+            {isEditingLeave ? (
+              /* Edit Mode */
+              <div className="space-y-4">
+                <div className="bg-yellow-50 p-4 rounded-xl border-2 border-yellow-300 mb-4">
+                  <p className="text-sm text-yellow-800">
+                    <strong>📝 Adjust Prior Leaves:</strong> Enter the number of leaves already taken before this system was implemented. These will be added to the system-tracked leaves.
+                  </p>
+                </div>
+                
+                {/* Entitled Leave Edit */}
+                <div className="bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
+                  <label className="block font-bold text-blue-800 mb-2">Entitled Leave (Prior Adjustment)</label>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="35"
+                      value={leaveForm.entitled}
+                      onChange={e => setLeaveForm({...leaveForm, entitled: Math.min(35, Math.max(0, parseInt(e.target.value) || 0))})}
+                      className="w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
+                    />
+                    <span className="text-blue-700">days taken before system</span>
+                  </div>
+                  <p className="text-xs text-blue-600 mt-2">Max: 35 days (Personal, Sick, Emergency combined)</p>
+                </div>
+                
+                {/* Maternity Leave Edit */}
+                <div className="bg-pink-50 p-4 rounded-xl border-2 border-pink-200">
+                  <label className="block font-bold text-pink-800 mb-2">Maternity Leave (Prior Adjustment)</label>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="180"
+                      value={leaveForm.maternity}
+                      onChange={e => setLeaveForm({...leaveForm, maternity: Math.min(180, Math.max(0, parseInt(e.target.value) || 0))})}
+                      className="w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
+                    />
+                    <span className="text-pink-700">days taken before system</span>
+                  </div>
+                  <p className="text-xs text-pink-600 mt-2">Max: 180 days</p>
+                </div>
+                
+                {/* Paternity Leave Edit */}
+                <div className="bg-purple-50 p-4 rounded-xl border-2 border-purple-200">
+                  <label className="block font-bold text-purple-800 mb-2">Paternity Leave (Prior Adjustment)</label>
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="15"
+                      value={leaveForm.paternity}
+                      onChange={e => setLeaveForm({...leaveForm, paternity: Math.min(15, Math.max(0, parseInt(e.target.value) || 0))})}
+                      className="w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
+                    />
+                    <span className="text-purple-700">days taken before system</span>
+                  </div>
+                  <p className="text-xs text-purple-600 mt-2">Max: 15 days</p>
+                </div>
+                
+                <div className="flex gap-3 mt-6">
+                  <button 
+                    onClick={handleSaveLeaveAdjustment}
+                    disabled={savingLeave}
+                    className="flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold disabled:opacity-50"
+                  >
+                    {savingLeave ? 'Saving...' : '💾 Save Adjustment'}
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setIsEditingLeave(false);
+                      const currentAdj = leaveAdjustments[selectedTeacherLeave.teacher.afid] || { entitled: 0, maternity: 0, paternity: 0 };
+                      setLeaveForm({
+                        entitled: currentAdj.entitled || 0,
+                        maternity: currentAdj.maternity || 0,
+                        paternity: currentAdj.paternity || 0
+                      });
+                    }}
+                    className="flex-1 bg-gray-300 py-3 rounded-xl font-semibold"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* View Mode */
+              <div className="space-y-4">
+                {/* Entitled Leave */}
+                <div className="bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-blue-800">Entitled Leave</span>
+                    <span className="text-2xl font-bold text-blue-600">
+                      {selectedTeacherLeave.balance.entitled.remaining}/{selectedTeacherLeave.balance.entitled.total}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm text-blue-700">
+                    <span>Used: {selectedTeacherLeave.balance.entitled.used} days</span>
+                    <span>Remaining: {selectedTeacherLeave.balance.entitled.remaining} days</span>
+                  </div>
+                  {selectedTeacherLeave.balance.entitled.adjustment > 0 && (
+                    <div className="text-xs text-blue-600 mt-1">
+                      (includes {selectedTeacherLeave.balance.entitled.adjustment} prior adjustment)
+                    </div>
+                  )}
+                  <div className="mt-2 bg-blue-200 rounded-full h-3">
+                    <div 
+                      className="bg-blue-500 h-3 rounded-full transition-all" 
+                      style={{width: `${(selectedTeacherLeave.balance.entitled.remaining/selectedTeacherLeave.balance.entitled.total)*100}%`}}
+                    />
+                  </div>
+                  <p className="text-xs text-blue-600 mt-2">Includes: Personal Leave, Sick Leave, Emergency Leave</p>
+                </div>
+                
+                {/* Maternity Leave */}
+                <div className="bg-pink-50 p-4 rounded-xl border-2 border-pink-200">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-pink-800">Maternity Leave</span>
+                    <span className="text-2xl font-bold text-pink-600">
+                      {selectedTeacherLeave.balance.maternity.remaining}/{selectedTeacherLeave.balance.maternity.total}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm text-pink-700">
+                    <span>Used: {selectedTeacherLeave.balance.maternity.used} days</span>
+                    <span>Remaining: {selectedTeacherLeave.balance.maternity.remaining} days</span>
+                  </div>
+                  {selectedTeacherLeave.balance.maternity.adjustment > 0 && (
+                    <div className="text-xs text-pink-600 mt-1">
+                      (includes {selectedTeacherLeave.balance.maternity.adjustment} prior adjustment)
+                    </div>
+                  )}
+                  <div className="mt-2 bg-pink-200 rounded-full h-3">
+                    <div 
+                      className="bg-pink-500 h-3 rounded-full transition-all" 
+                      style={{width: `${(selectedTeacherLeave.balance.maternity.remaining/selectedTeacherLeave.balance.maternity.total)*100}%`}}
+                    />
+                  </div>
+                </div>
+                
+                {/* Paternity Leave */}
+                <div className="bg-purple-50 p-4 rounded-xl border-2 border-purple-200">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-purple-800">Paternity Leave</span>
+                    <span className="text-2xl font-bold text-purple-600">
+                      {selectedTeacherLeave.balance.paternity.remaining}/{selectedTeacherLeave.balance.paternity.total}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm text-purple-700">
+                    <span>Used: {selectedTeacherLeave.balance.paternity.used} days</span>
+                    <span>Remaining: {selectedTeacherLeave.balance.paternity.remaining} days</span>
+                  </div>
+                  {selectedTeacherLeave.balance.paternity.adjustment > 0 && (
+                    <div className="text-xs text-purple-600 mt-1">
+                      (includes {selectedTeacherLeave.balance.paternity.adjustment} prior adjustment)
+                    </div>
+                  )}
+                  <div className="mt-2 bg-purple-200 rounded-full h-3">
+                    <div 
+                      className="bg-purple-500 h-3 rounded-full transition-all" 
+                      style={{width: `${(selectedTeacherLeave.balance.paternity.remaining/selectedTeacherLeave.balance.paternity.total)*100}%`}}
+                    />
+                  </div>
+                </div>
+                
+                <button 
+                  onClick={() => {setShowLeaveModal(false); setIsEditingLeave(false);}}
+                  className="w-full mt-6 bg-gray-300 py-3 rounded-xl font-semibold"
+                >
+                  Close
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -6992,7 +7182,7 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
 // ========================================
 // TEACHER ATTENDANCE VIEW
 // ========================================
-function TeacherAttendanceView({currentUser,teacherAttendance}){
+function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments}){
   const[selectedDate,setSelectedDate]=useState(getTodayDate());
   const[endDate,setEndDate]=useState(getTodayDate());
   const[isDateRange,setIsDateRange]=useState(false);
@@ -7004,10 +7194,10 @@ function TeacherAttendanceView({currentUser,teacherAttendance}){
 
   const todayRecord=teacherAttendance.find(a=>a.teacherId===currentUser.afid&&a.date===selectedDate);
   
-  // Calculate leave balance
+  // Calculate leave balance (including adjustments)
   const leaveBalance = useMemo(() => {
-    return calculateLeaveBalance(teacherAttendance, currentUser.afid);
-  }, [teacherAttendance, currentUser.afid]);
+    return calculateLeaveBalance(teacherAttendance, currentUser.afid, leaveAdjustments || {});
+  }, [teacherAttendance, currentUser.afid, leaveAdjustments]);
 
   useEffect(()=>{
     if(todayRecord){
@@ -9876,7 +10066,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // FORCE UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '2.5.0'; // Change this version number with every update (e.g., 2.4.1, 2.5.0, etc.)
+  const CURRENT_VERSION = '2.6.0'; // Change this version number with every update (e.g., 2.4.1, 2.5.0, etc.)
 
   // Check and prompt for updates
   function checkForUpdates() {
