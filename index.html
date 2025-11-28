@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -555,6 +556,229 @@ const ENTITLED_LEAVE_TYPES = ['Personal Leave', 'Sick Leave', 'Emergency Leave']
 const MATERNITY_LEAVE_TYPES = ['Maternity Leave'];
 const PATERNITY_LEAVE_TYPES = ['Paternity Leave'];
 
+// ========================================
+// CLASSROOM OBSERVATION PARAMETERS
+// ========================================
+const CLASSROOM_OBSERVATION_PARAMETERS = [
+  {
+    id: 'teacherStartedOnTime',
+    type: 'minor',
+    text: 'Teacher started the class on time',
+    maxScore: 1,
+    options: [
+      { label: 'Yes', value: 1 },
+      { label: 'No', value: 0 }
+    ]
+  },
+  {
+    id: 'hygiene',
+    type: 'minor',
+    text: 'Hygiene Parameter: Teacher Grooming - The teacher is formally dressed with proper grooming',
+    maxScore: 1,
+    options: [
+      { label: 'Yes', value: 1 },
+      { label: 'No', value: 0 }
+    ]
+  },
+  {
+    id: 'startNote',
+    type: 'minor',
+    text: 'Start Note of the Class: Greetings to the students along with general discussion to gather the attention of all students',
+    maxScore: 1,
+    options: [
+      { label: 'Yes', value: 1 },
+      { label: 'No', value: 0 }
+    ]
+  },
+  {
+    id: 'preTask',
+    type: 'minor',
+    text: 'Class structure - Pre-task/Check for HW: The teacher is discussing any previous task assigned',
+    maxScore: 1,
+    options: [
+      { label: 'Yes', value: 1 },
+      { label: 'No', value: 0 }
+    ]
+  },
+  {
+    id: 'recall',
+    type: 'major',
+    text: 'Class structure - Recall/Recall test: The session recall needs to be done with two-side communication with simple questions if possible',
+    maxScore: 2,
+    options: [
+      { label: 'Recall done - with questions / students interaction within time', value: 2 },
+      { label: 'Recall done - without questions / Taking more than allotted time', value: 1 },
+      { label: 'Recall is not done', value: 0 }
+    ]
+  },
+  {
+    id: 'learningObjective',
+    type: 'major',
+    text: 'Learning Objective Setting - Agenda of the class: The teacher needs to set the learning outcome or index for the present class',
+    maxScore: 1,
+    options: [
+      { label: 'Agenda clearly given', value: 1 },
+      { label: 'Agenda not given/not clear', value: 0 }
+    ]
+  },
+  {
+    id: 'curiosityIntro',
+    type: 'major',
+    text: 'Curiosity-Introduction: Introduction with practical examples',
+    maxScore: 1,
+    options: [
+      { label: 'Yes', value: 1 },
+      { label: 'No', value: 0 }
+    ]
+  },
+  {
+    id: 'teachingCompetence',
+    type: 'major',
+    text: 'Concept-Teaching competence: Check for: 1) Concept clearly explained, 2) CFU-Check for understanding present, 3) Used physical teaching tools, 4) Teacher was well-prepared',
+    maxScore: 4,
+    options: [
+      { label: 'All 4 parameters met', value: 4 },
+      { label: 'Any 3 parameters met', value: 3 },
+      { label: 'Any 2 parameters met', value: 2 },
+      { label: 'Any 1 parameter met', value: 1 },
+      { label: 'None', value: 0 }
+    ]
+  },
+  {
+    id: 'notesTaking',
+    type: 'major',
+    text: 'Concept-Notes Taking: Teacher provides notes and checks students are noting down',
+    maxScore: 3,
+    options: [
+      { label: 'Notes given & checked + mind maps/tricks/mnemonics provided', value: 3 },
+      { label: 'Notes given and ensured all students are noting down by checking', value: 2 },
+      { label: 'Notes given but not checked with students', value: 1 },
+      { label: 'Notes were not given', value: 0 }
+    ]
+  },
+  {
+    id: 'problemSolving',
+    type: 'major',
+    text: 'Concept-Problem solving: Problems solved with student interaction and PYQs',
+    maxScore: 4,
+    options: [
+      { label: 'Problem solved step by step + student opportunity + PYQ given & solved', value: 4 },
+      { label: 'Problem solved step by step + giving opportunity for students to solve', value: 3 },
+      { label: 'Problem solved step by step with student interaction', value: 2 },
+      { label: 'Problem solved without mistakes', value: 1 },
+      { label: 'No problems solved or solved with mistakes', value: 0 }
+    ]
+  },
+  {
+    id: 'doubtSolving',
+    type: 'major',
+    text: 'Concept-Doubt solving: Doubts solved correctly with good time management',
+    maxScore: 2,
+    options: [
+      { label: 'Doubt solved correctly with good time management', value: 2 },
+      { label: 'Doubt solved correctly but time management not good', value: 1 },
+      { label: 'No doubt asked & teacher did not encourage / doubt solved wrong', value: 0 }
+    ]
+  },
+  {
+    id: 'boardPresentation',
+    type: 'major',
+    text: 'Communication-Board Presentation: 1) Usage of board, 2) Writing is clear, 3) Board representation clear/highlighting formulae',
+    maxScore: 3,
+    options: [
+      { label: 'All 3 parameters met', value: 3 },
+      { label: 'Any 2 parameters met', value: 2 },
+      { label: 'Any 1 parameter met', value: 1 },
+      { label: 'None', value: 0 }
+    ]
+  },
+  {
+    id: 'interaction',
+    type: 'major',
+    text: 'Communication-Interaction: Engaging all students vs limited engagement',
+    maxScore: 2,
+    options: [
+      { label: 'Putting efforts for engaging all the students', value: 2 },
+      { label: 'Student engagement is limited to few students', value: 1 },
+      { label: 'One way teaching / No engagement with students', value: 0 }
+    ]
+  },
+  {
+    id: 'bodyLanguage',
+    type: 'major',
+    text: 'Communication-Body Language & Energy & Voice: 1) Voice clear, 2) Voice modulations, 3) Movement around class, 4) Eye contact, 5) Hand gestures, 6) Adaptive language & fluency',
+    maxScore: 6,
+    options: [
+      { label: 'All 5+ parameters touched', value: 5 },
+      { label: 'Any 4 parameters', value: 4 },
+      { label: 'Any 3 parameters', value: 3 },
+      { label: 'Any 2 parameters', value: 2 },
+      { label: 'Any 1 parameter', value: 1 },
+      { label: 'None', value: 0 }
+    ]
+  },
+  {
+    id: 'conclusion',
+    type: 'minor',
+    text: 'Class structure-Conclusion: Summary, homework, and next class preview',
+    maxScore: 3,
+    options: [
+      { label: 'Class summary + HW given + Idea about next class', value: 3 },
+      { label: 'Both Class summary and HW given', value: 2 },
+      { label: 'Either HW or class summary given, not both', value: 1 },
+      { label: 'No Summary and no home work given', value: 0 }
+    ]
+  },
+  {
+    id: 'paceOfTeaching',
+    type: 'major',
+    text: 'Class structure-Pace of teaching: Appropriate pace maintained throughout',
+    maxScore: 2,
+    options: [
+      { label: 'Pace of teaching is as per class level', value: 2 },
+      { label: 'Pace of teaching is good but not followed throughout', value: 1 },
+      { label: 'Pace of teaching is not good', value: 0 }
+    ]
+  },
+  {
+    id: 'timeManagement',
+    type: 'major',
+    text: 'Class structure-Time management: Completed the learning objectives in the stipulated time',
+    maxScore: 3,
+    options: [
+      { label: 'Agenda completed within time', value: 3 },
+      { label: 'Agenda is completed but rushed towards the end', value: 2 },
+      { label: 'Agenda could not be completed', value: 1 }
+    ]
+  },
+  {
+    id: 'classroomManagement',
+    type: 'major',
+    text: 'Class structure-Classroom management: Teacher set class rules, able to manage entire class well',
+    maxScore: 2,
+    options: [
+      { label: 'Teacher is able to manage the class', value: 2 },
+      { label: 'Teacher mostly able to manage with some disruption', value: 1 },
+      { label: 'Teacher was unable to manage the class', value: 0 }
+    ]
+  },
+  {
+    id: 'genderSensitivity',
+    type: 'major',
+    text: 'Gender Sensitivity: 1) Avoids gender-biased remarks, 2) Uses gender-neutral language, 3) Represents diversity in examples, 4) Encourages balanced participation, 5) Addresses gender topics sensitively',
+    maxScore: 3,
+    options: [
+      { label: 'No violations + any 2 positive indicators', value: 3 },
+      { label: 'No violations + any 1 positive indicator', value: 2 },
+      { label: 'Violation occurred once but teacher corrected it', value: 1 },
+      { label: 'Violation occurred more than once', value: 0 }
+    ]
+  }
+];
+
+// Maximum total score for classroom observation
+const MAX_OBSERVATION_SCORE = CLASSROOM_OBSERVATION_PARAMETERS.reduce((sum, p) => sum + p.maxScore, 0); // = 45
+
 // Helper function to calculate leave balance for a teacher
 // Now includes manual adjustments from leaveAdjustments collection
 function calculateLeaveBalance(teacherAttendance, teacherId, leaveAdjustments = {}) {
@@ -608,6 +832,839 @@ function calculateLeaveBalance(teacherAttendance, teacherId, leaveAdjustments = 
 }
 const GENDERS=['Male','Female','Other'];
 const isEditing = true;   // keep all admin filters enabled
+
+// ========================================
+// CLASSROOM OBSERVATION COMPONENTS
+// ========================================
+
+// Classroom Observation Form Component
+function ClassroomObservationForm({ teacher, observerInfo, onClose, onSubmitSuccess }) {
+  const [grade, setGrade] = useState('11');
+  const [observationDate, setObservationDate] = useState(getTodayDate());
+  const [observationTime, setObservationTime] = useState(new Date().toTimeString().slice(0,5));
+  const [responses, setResponses] = useState({});
+  const [remarks, setRemarks] = useState({});
+  const [strengths, setStrengths] = useState('');
+  const [improvements, setImprovements] = useState('');
+  const [mediaLinks, setMediaLinks] = useState(['']);
+  const [submitting, setSubmitting] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0); // 0 = parameters, 1 = summary
+
+  // Calculate total score
+  const totalScore = useMemo(() => {
+    return Object.values(responses).reduce((sum, val) => sum + (val || 0), 0);
+  }, [responses]);
+
+  const percentageScore = ((totalScore / MAX_OBSERVATION_SCORE) * 100).toFixed(1);
+
+  // Count flagged items (items not at max score)
+  const flaggedCount = useMemo(() => {
+    return CLASSROOM_OBSERVATION_PARAMETERS.filter(p => {
+      const score = responses[p.id];
+      return score !== undefined && score < p.maxScore;
+    }).length;
+  }, [responses]);
+
+  const handleResponseChange = (paramId, value) => {
+    setResponses(prev => ({ ...prev, [paramId]: value }));
+  };
+
+  const handleRemarkChange = (paramId, value) => {
+    setRemarks(prev => ({ ...prev, [paramId]: value }));
+  };
+
+  const addMediaLink = () => {
+    setMediaLinks(prev => [...prev, '']);
+  };
+
+  const updateMediaLink = (index, value) => {
+    setMediaLinks(prev => {
+      const updated = [...prev];
+      updated[index] = value;
+      return updated;
+    });
+  };
+
+  const removeMediaLink = (index) => {
+    setMediaLinks(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async () => {
+    // Validate all required fields
+    const unanswered = CLASSROOM_OBSERVATION_PARAMETERS.filter(p => responses[p.id] === undefined);
+    if (unanswered.length > 0) {
+      alert(`Please answer all observation parameters. ${unanswered.length} unanswered.`);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const observationData = {
+        teacherId: teacher.afid || teacher.docId,
+        teacherName: teacher.name,
+        teacherSubject: teacher.subject,
+        school: teacher.school,
+        grade: grade,
+        observationDate: observationDate,
+        observationTime: observationTime,
+        responses: responses,
+        remarks: remarks,
+        strengths: strengths,
+        improvements: improvements,
+        mediaLinks: mediaLinks.filter(link => link.trim() !== ''),
+        totalScore: totalScore,
+        maxScore: MAX_OBSERVATION_SCORE,
+        percentageScore: parseFloat(percentageScore),
+        flaggedCount: flaggedCount,
+        observerId: observerInfo.id,
+        observerName: observerInfo.name,
+        observerPosition: observerInfo.position || 'Manager',
+        submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        submittedAtISO: new Date().toISOString()
+      };
+
+      await db.collection('classroomObservations').add(observationData);
+      alert('✅ Classroom observation submitted successfully!');
+      onSubmitSuccess && onSubmitSuccess();
+      onClose();
+    } catch (error) {
+      console.error('Error submitting observation:', error);
+      alert('❌ Failed to submit observation: ' + error.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Get score color
+  const getScoreColor = (score, max) => {
+    const pct = (score / max) * 100;
+    if (pct >= 80) return 'bg-green-100 text-green-700 border-green-300';
+    if (pct >= 60) return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+    return 'bg-red-100 text-red-700 border-red-300';
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content max-w-4xl max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-6">
+          {/* Header */}
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">📋 Classroom Observation</h2>
+              <p className="text-gray-600 mt-1">Teacher: <strong>{teacher.name}</strong> ({teacher.subject})</p>
+              <p className="text-gray-500 text-sm">School: {teacher.school}</p>
+            </div>
+            <button onClick={onClose} className="text-3xl font-bold text-gray-400 hover:text-gray-600">×</button>
+          </div>
+
+          {/* Progress indicator */}
+          <div className="mb-6 bg-gray-100 rounded-full h-2">
+            <div 
+              className="avanti-gradient h-2 rounded-full transition-all"
+              style={{ width: `${(Object.keys(responses).length / CLASSROOM_OBSERVATION_PARAMETERS.length) * 100}%` }}
+            />
+          </div>
+
+          {/* Basic Info */}
+          <div className="grid md:grid-cols-3 gap-4 mb-6 bg-gray-50 p-4 rounded-xl">
+            <div>
+              <label className="block text-sm font-bold mb-2">Grade *</label>
+              <select value={grade} onChange={e => setGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+                <option value="11">Class 11</option>
+                <option value="12">Class 12</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Date *</label>
+              <input type="date" value={observationDate} onChange={e => setObservationDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Time *</label>
+              <input type="time" value={observationTime} onChange={e => setObservationTime(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
+            </div>
+          </div>
+
+          {/* Score Summary Card */}
+          <div className={`p-4 rounded-xl mb-6 border-2 ${getScoreColor(totalScore, MAX_OBSERVATION_SCORE)}`}>
+            <div className="flex justify-between items-center">
+              <div>
+                <span className="text-2xl font-bold">{totalScore}/{MAX_OBSERVATION_SCORE}</span>
+                <span className="ml-2 text-lg">({percentageScore}%)</span>
+              </div>
+              <div className="text-right">
+                <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-semibold">
+                  {flaggedCount} flagged items
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Parameters */}
+          <div className="space-y-4 mb-6">
+            <h3 className="text-xl font-bold border-b pb-2">Observation Parameters</h3>
+            
+            {CLASSROOM_OBSERVATION_PARAMETERS.map((param, idx) => (
+              <div key={param.id} className={`p-4 rounded-xl border-2 ${
+                responses[param.id] !== undefined 
+                  ? responses[param.id] === param.maxScore 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-red-50 border-red-200'
+                  : 'bg-white border-gray-200'
+              }`}>
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex-1">
+                    <span className={`inline-block px-2 py-1 text-xs font-bold rounded mb-2 ${
+                      param.type === 'major' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {param.type === 'major' ? '⭐ Major' : '📌 Minor'} ({param.maxScore} pts)
+                    </span>
+                    <p className="font-semibold text-gray-800">{idx + 1}. {param.text}</p>
+                  </div>
+                </div>
+                
+                <select
+                  value={responses[param.id] ?? ''}
+                  onChange={e => handleResponseChange(param.id, e.target.value === '' ? undefined : parseInt(e.target.value))}
+                  className="w-full border-2 px-4 py-3 rounded-xl mb-2"
+                >
+                  <option value="">-- Select --</option>
+                  {param.options.map((opt, optIdx) => (
+                    <option key={optIdx} value={opt.value}>
+                      {opt.label} ({opt.value})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Show remarks field if not full score */}
+                {responses[param.id] !== undefined && responses[param.id] < param.maxScore && (
+                  <div className="mt-2">
+                    <label className="block text-sm font-semibold text-red-600 mb-1">
+                      📝 Remarks (why not full marks?)
+                    </label>
+                    <textarea
+                      value={remarks[param.id] || ''}
+                      onChange={e => handleRemarkChange(param.id, e.target.value)}
+                      placeholder="Please provide remarks for improvement..."
+                      className="w-full border-2 border-red-200 px-4 py-2 rounded-xl text-sm"
+                      rows="2"
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Observer Summary */}
+          <div className="space-y-4 mb-6 bg-blue-50 p-4 rounded-xl">
+            <h3 className="text-xl font-bold text-blue-800">📝 Observer Summary</h3>
+            
+            <div>
+              <label className="block text-sm font-bold mb-2">Strengths Observed</label>
+              <textarea
+                value={strengths}
+                onChange={e => setStrengths(e.target.value)}
+                placeholder="What did the teacher do well?"
+                className="w-full border-2 px-4 py-3 rounded-xl"
+                rows="3"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-bold mb-2">Points of Improvement</label>
+              <textarea
+                value={improvements}
+                onChange={e => setImprovements(e.target.value)}
+                placeholder="What recommendations do you have to improve teaching?"
+                className="w-full border-2 px-4 py-3 rounded-xl"
+                rows="3"
+              />
+            </div>
+          </div>
+
+          {/* Media Links */}
+          <div className="space-y-4 mb-6 bg-gray-50 p-4 rounded-xl">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-bold">📸 Media (Google Drive Links)</h3>
+              <button onClick={addMediaLink} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold">
+                + Add Link
+              </button>
+            </div>
+            
+            {mediaLinks.map((link, idx) => (
+              <div key={idx} className="flex gap-2">
+                <input
+                  type="url"
+                  value={link}
+                  onChange={e => updateMediaLink(idx, e.target.value)}
+                  placeholder="https://drive.google.com/..."
+                  className="flex-1 border-2 px-4 py-2 rounded-xl"
+                />
+                {mediaLinks.length > 1 && (
+                  <button onClick={() => removeMediaLink(idx)} className="px-3 py-2 bg-red-500 text-white rounded-xl">
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Observer Info (Auto-filled) */}
+          <div className="bg-gray-100 p-4 rounded-xl mb-6">
+            <h4 className="font-bold mb-2">Observer Information (Auto-filled)</h4>
+            <div className="grid md:grid-cols-3 gap-4 text-sm">
+              <div><strong>Name:</strong> {observerInfo.name}</div>
+              <div><strong>Position:</strong> {observerInfo.position || 'Manager'}</div>
+              <div><strong>Date/Time:</strong> {new Date().toLocaleString('en-IN')}</div>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <div className="flex gap-4">
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="flex-1 avanti-gradient text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 disabled:opacity-50"
+            >
+              {submitting ? '⏳ Submitting...' : '✅ Submit Observation'}
+            </button>
+            <button onClick={onClose} className="px-8 py-4 bg-gray-300 rounded-xl font-bold">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Teacher Profile View Component (shows observations and feedback)
+function TeacherProfileView({ teacher, onClose, currentUser }) {
+  const [observations, setObservations] = useState([]);
+  const [feedbackData, setFeedbackData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState('All');
+  const [selectedObservation, setSelectedObservation] = useState(null);
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+
+  // Fetch observations and feedback for this teacher
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch observations
+        const obsSnap = await db.collection('classroomObservations')
+          .where('teacherId', '==', teacher.afid || teacher.docId)
+          .orderBy('submittedAt', 'desc')
+          .get();
+        
+        const obsData = obsSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          submittedAt: doc.data().submittedAt?.toDate() || new Date(doc.data().submittedAtISO)
+        }));
+        setObservations(obsData);
+
+        // Fetch feedback
+        const feedbackSnap = await db.collection('teacherFeedback')
+          .where('teacherId', '==', teacher.afid || teacher.docId)
+          .get();
+        
+        const fbData = feedbackSnap.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            submittedAt: data.submittedAt?.toDate ? data.submittedAt.toDate() : new Date(data.submittedAt || data.completedAt)
+          };
+        });
+        setFeedbackData(fbData);
+
+      } catch (error) {
+        console.error('Error fetching teacher profile data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [teacher]);
+
+  // Get unique months from observations
+  const availableMonths = useMemo(() => {
+    const months = new Set();
+    observations.forEach(obs => {
+      const date = new Date(obs.observationDate || obs.submittedAt);
+      months.add(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+    });
+    return Array.from(months).sort().reverse();
+  }, [observations]);
+
+  // Filter observations by month
+  const filteredObservations = useMemo(() => {
+    if (selectedMonth === 'All') return observations;
+    return observations.filter(obs => {
+      const date = new Date(obs.observationDate || obs.submittedAt);
+      const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      return month === selectedMonth;
+    });
+  }, [observations, selectedMonth]);
+
+  // Calculate average feedback scores
+  const feedbackAverages = useMemo(() => {
+    if (feedbackData.length === 0) return null;
+    
+    const questionAverages = {};
+    const questionLabels = {
+      q1: 'Content Level',
+      q2: 'Content Relevance', 
+      q3: 'Beyond Syllabus',
+      q4: 'Technical Content',
+      q5: 'Communication Skills',
+      q6: 'Topic Details',
+      q7: 'Deep Knowledge',
+      q8: 'Clear Communication',
+      q9: 'Inspiring Examples',
+      q10: 'Punctuality',
+      q11: 'Full Duration',
+      q12: 'Prepared',
+      q13: 'Guidance',
+      q14: 'Overall Effectiveness',
+      q15: 'Learning Value'
+    };
+
+    Object.keys(questionLabels).forEach(qId => {
+      const ratings = feedbackData
+        .map(fb => fb.responses?.[qId]?.rating)
+        .filter(r => r !== undefined && r !== null);
+      
+      if (ratings.length > 0) {
+        questionAverages[qId] = {
+          label: questionLabels[qId],
+          average: (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1),
+          count: ratings.length
+        };
+      }
+    });
+
+    return questionAverages;
+  }, [feedbackData]);
+
+  // Overall average rating
+  const overallRating = useMemo(() => {
+    if (!feedbackAverages) return null;
+    const values = Object.values(feedbackAverages).map(v => parseFloat(v.average));
+    if (values.length === 0) return null;
+    return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+  }, [feedbackAverages]);
+
+  // Chart for observation trends
+  useEffect(() => {
+    if (chartInstance.current) {
+      chartInstance.current.destroy();
+    }
+
+    if (chartRef.current && observations.length > 0) {
+      const ctx = chartRef.current.getContext('2d');
+      
+      // Group by month
+      const monthlyData = {};
+      observations.forEach(obs => {
+        const date = new Date(obs.observationDate || obs.submittedAt);
+        const month = date.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+        if (!monthlyData[month]) {
+          monthlyData[month] = [];
+        }
+        monthlyData[month].push(obs.percentageScore);
+      });
+
+      const labels = Object.keys(monthlyData);
+      const avgScores = labels.map(month => {
+        const scores = monthlyData[month];
+        return (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+      });
+
+      chartInstance.current = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Observation Score %',
+            data: avgScores,
+            borderColor: '#F4B41A',
+            backgroundColor: 'rgba(244, 180, 26, 0.1)',
+            tension: 0.4,
+            fill: true,
+            pointBackgroundColor: '#F4B41A',
+            pointRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: true, text: 'Observation Score Trend', font: { size: 16, weight: 'bold' } },
+            legend: { display: false }
+          },
+          scales: {
+            y: { beginAtZero: true, max: 100, title: { display: true, text: 'Score %' } }
+          }
+        }
+      });
+    }
+
+    return () => {
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+      }
+    };
+  }, [observations]);
+
+  // Generate PDF Report
+  const generatePDF = async (observation) => {
+    // Create a printable HTML for the observation
+    const printWindow = window.open('', '_blank');
+    
+    const parameterRows = CLASSROOM_OBSERVATION_PARAMETERS.map(param => {
+      const score = observation.responses?.[param.id] ?? 'N/A';
+      const remark = observation.remarks?.[param.id] || '';
+      const isFlagged = score !== param.maxScore;
+      return `
+        <tr style="border-bottom: 1px solid #eee; ${isFlagged ? 'background-color: #FEE2E2;' : ''}">
+          <td style="padding: 8px; font-size: 12px;">${param.type === 'major' ? '⭐' : '📌'} ${param.text}</td>
+          <td style="padding: 8px; text-align: center; font-weight: bold; ${isFlagged ? 'color: #DC2626;' : 'color: #059669;'}">${score}/${param.maxScore}</td>
+          <td style="padding: 8px; font-size: 11px; color: #666;">${remark}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const mediaSection = observation.mediaLinks?.length > 0 ? `
+      <div style="margin-top: 20px;">
+        <h3 style="color: #1F2937; border-bottom: 2px solid #F4B41A; padding-bottom: 5px;">📸 Media Links</h3>
+        <ul style="font-size: 12px;">
+          ${observation.mediaLinks.map((link, i) => `<li><a href="${link}" target="_blank">Media ${i + 1}</a></li>`).join('')}
+        </ul>
+      </div>
+    ` : '';
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Classroom Observation - ${observation.teacherName}</title>
+        <style>
+          @media print {
+            @page { margin: 1cm; size: A4; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+          body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #F4B41A; padding-bottom: 15px; margin-bottom: 20px; }
+          .logo { font-size: 24px; font-weight: bold; color: #F4B41A; }
+          .score-box { background: linear-gradient(135deg, #F4B41A, #E8B039); color: white; padding: 15px 25px; border-radius: 10px; text-align: center; }
+          .score-box .score { font-size: 32px; font-weight: bold; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+          .info-item { padding: 10px; background: #F9FAFB; border-radius: 8px; }
+          .info-item label { font-size: 11px; color: #6B7280; text-transform: uppercase; }
+          .info-item span { display: block; font-weight: bold; color: #1F2937; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+          th { background: #F4B41A; color: white; padding: 10px; text-align: left; }
+          .flagged { background: #FEF2F2; }
+          .footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 10px 20px; font-size: 10px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="logo">अवंती Avanti Fellows</div>
+            <h1 style="margin: 10px 0 5px; font-size: 20px;">Classroom Observation Report</h1>
+            <p style="margin: 0; color: #666;">Teacher: ${observation.teacherName} | ${observation.teacherSubject}</p>
+          </div>
+          <div class="score-box">
+            <div class="score">${observation.totalScore}/${observation.maxScore}</div>
+            <div style="font-size: 14px;">${observation.percentageScore}%</div>
+            <div style="font-size: 12px; margin-top: 5px;">${observation.flaggedCount} flagged</div>
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-item">
+            <label>School</label>
+            <span>${observation.school}</span>
+          </div>
+          <div class="info-item">
+            <label>Grade</label>
+            <span>Class ${observation.grade}</span>
+          </div>
+          <div class="info-item">
+            <label>Observation Date</label>
+            <span>${new Date(observation.observationDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} ${observation.observationTime}</span>
+          </div>
+          <div class="info-item">
+            <label>Observer</label>
+            <span>${observation.observerName} (${observation.observerPosition})</span>
+          </div>
+        </div>
+
+        <h3 style="color: #1F2937; border-bottom: 2px solid #F4B41A; padding-bottom: 5px;">Observation Parameters</h3>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 60%;">Parameter</th>
+              <th style="width: 15%;">Score</th>
+              <th style="width: 25%;">Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${parameterRows}
+          </tbody>
+        </table>
+
+        ${observation.strengths ? `
+          <div style="margin-top: 20px; background: #ECFDF5; padding: 15px; border-radius: 8px;">
+            <h4 style="color: #059669; margin: 0 0 10px;">✅ Strengths Observed</h4>
+            <p style="margin: 0; font-size: 13px;">${observation.strengths}</p>
+          </div>
+        ` : ''}
+
+        ${observation.improvements ? `
+          <div style="margin-top: 15px; background: #FEF3C7; padding: 15px; border-radius: 8px;">
+            <h4 style="color: #D97706; margin: 0 0 10px;">💡 Points of Improvement</h4>
+            <p style="margin: 0; font-size: 13px;">${observation.improvements}</p>
+          </div>
+        ` : ''}
+
+        ${mediaSection}
+
+        <div class="footer">
+          <span>Private & Confidential</span>
+          <span>Page 1</span>
+        </div>
+      </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+  };
+
+  if (loading) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <div className="p-12 text-center">
+            <div className="text-4xl mb-4">⏳</div>
+            <p>Loading teacher profile...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content max-w-5xl max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-6">
+          {/* Header */}
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">👤 Teacher Profile</h2>
+              <p className="text-xl text-gray-700 mt-1">{teacher.name}</p>
+              <p className="text-gray-500">{teacher.subject} | {teacher.school}</p>
+            </div>
+            <button onClick={onClose} className="text-3xl font-bold text-gray-400 hover:text-gray-600">×</button>
+          </div>
+
+          {/* Overall Stats Cards */}
+          <div className="grid md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-4 rounded-xl">
+              <div className="text-sm opacity-90">Total Observations</div>
+              <div className="text-3xl font-bold">{observations.length}</div>
+            </div>
+            <div className="bg-gradient-to-r from-green-400 to-green-600 text-white p-4 rounded-xl">
+              <div className="text-sm opacity-90">Avg Observation Score</div>
+              <div className="text-3xl font-bold">
+                {observations.length > 0 
+                  ? (observations.reduce((sum, o) => sum + o.percentageScore, 0) / observations.length).toFixed(1) + '%'
+                  : 'N/A'}
+              </div>
+            </div>
+            <div className="bg-gradient-to-r from-blue-400 to-blue-600 text-white p-4 rounded-xl">
+              <div className="text-sm opacity-90">Student Feedback Rating</div>
+              <div className="text-3xl font-bold">{overallRating || 'N/A'}/10</div>
+              <div className="text-xs opacity-75">{feedbackData.length} responses</div>
+            </div>
+          </div>
+
+          {/* Observation Trend Chart */}
+          {observations.length > 0 && (
+            <div className="bg-white p-4 rounded-xl shadow mb-6">
+              <div style={{ height: '250px' }}>
+                <canvas ref={chartRef}></canvas>
+              </div>
+            </div>
+          )}
+
+          {/* Classroom Observations Section */}
+          <div className="bg-white p-6 rounded-xl shadow mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">📋 Classroom Observations</h3>
+              <select 
+                value={selectedMonth} 
+                onChange={e => setSelectedMonth(e.target.value)}
+                className="border-2 px-4 py-2 rounded-xl"
+              >
+                <option value="All">All Months</option>
+                {availableMonths.map(month => (
+                  <option key={month} value={month}>
+                    {new Date(month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {filteredObservations.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <div className="text-4xl mb-2">📋</div>
+                <p>No classroom observations recorded yet</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredObservations.map(obs => (
+                  <div key={obs.id} className="border-2 rounded-xl p-4 hover:border-yellow-400 cursor-pointer transition" onClick={() => setSelectedObservation(obs)}>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <div className="font-bold">
+                          {new Date(obs.observationDate || obs.submittedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          <span className="text-gray-500 font-normal ml-2">Class {obs.grade}</span>
+                        </div>
+                        <div className="text-sm text-gray-500">Observer: {obs.observerName}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-2xl font-bold ${
+                          obs.percentageScore >= 80 ? 'text-green-600' : 
+                          obs.percentageScore >= 60 ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
+                          {obs.percentageScore}%
+                        </div>
+                        <div className="text-sm text-gray-500">{obs.totalScore}/{obs.maxScore}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Student Feedback Summary */}
+          <div className="bg-white p-6 rounded-xl shadow">
+            <h3 className="text-xl font-bold mb-4">💬 Student Feedback Summary</h3>
+            
+            {!feedbackAverages ? (
+              <div className="text-center py-8 text-gray-500">
+                <div className="text-4xl mb-2">💬</div>
+                <p>No student feedback received yet</p>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-3 gap-4">
+                {Object.entries(feedbackAverages).map(([qId, data]) => (
+                  <div key={qId} className="bg-gray-50 p-3 rounded-lg">
+                    <div className="text-sm text-gray-600 mb-1">{data.label}</div>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xl font-bold ${
+                        parseFloat(data.average) >= 8 ? 'text-green-600' :
+                        parseFloat(data.average) >= 6 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {data.average}/10
+                      </span>
+                      <span className="text-xs text-gray-400">({data.count} ratings)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Observation Detail Modal */}
+      {selectedObservation && (
+        <div className="modal-overlay" style={{ zIndex: 1001 }} onClick={() => setSelectedObservation(null)}>
+          <div className="modal-content max-w-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-xl font-bold">Observation Details</h3>
+                  <p className="text-gray-500">
+                    {new Date(selectedObservation.observationDate).toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => generatePDF(selectedObservation)} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">
+                    📄 Download PDF
+                  </button>
+                  <button onClick={() => setSelectedObservation(null)} className="text-2xl font-bold text-gray-400">×</button>
+                </div>
+              </div>
+
+              <div className={`p-4 rounded-xl mb-4 ${
+                selectedObservation.percentageScore >= 80 ? 'bg-green-100' :
+                selectedObservation.percentageScore >= 60 ? 'bg-yellow-100' : 'bg-red-100'
+              }`}>
+                <div className="text-center">
+                  <div className="text-3xl font-bold">{selectedObservation.totalScore}/{selectedObservation.maxScore}</div>
+                  <div className="text-xl">{selectedObservation.percentageScore}%</div>
+                  <div className="text-sm text-gray-600">{selectedObservation.flaggedCount} items flagged</div>
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {CLASSROOM_OBSERVATION_PARAMETERS.map(param => {
+                  const score = selectedObservation.responses?.[param.id];
+                  const remark = selectedObservation.remarks?.[param.id];
+                  const isFlagged = score !== undefined && score < param.maxScore;
+                  
+                  return (
+                    <div key={param.id} className={`p-3 rounded-lg ${isFlagged ? 'bg-red-50' : 'bg-green-50'}`}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 text-sm">{param.text}</div>
+                        <div className={`font-bold ml-2 ${isFlagged ? 'text-red-600' : 'text-green-600'}`}>
+                          {score ?? 'N/A'}/{param.maxScore}
+                        </div>
+                      </div>
+                      {remark && <div className="text-xs text-red-600 mt-1">📝 {remark}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {selectedObservation.strengths && (
+                <div className="bg-green-50 p-4 rounded-xl mb-3">
+                  <h4 className="font-bold text-green-700 mb-2">✅ Strengths</h4>
+                  <p className="text-sm">{selectedObservation.strengths}</p>
+                </div>
+              )}
+
+              {selectedObservation.improvements && (
+                <div className="bg-yellow-50 p-4 rounded-xl mb-3">
+                  <h4 className="font-bold text-yellow-700 mb-2">💡 Improvements</h4>
+                  <p className="text-sm">{selectedObservation.improvements}</p>
+                </div>
+              )}
+
+              <div className="text-sm text-gray-500 mt-4">
+                Observer: {selectedObservation.observerName} ({selectedObservation.observerPosition}) | 
+                Submitted: {new Date(selectedObservation.submittedAt).toLocaleString('en-IN')}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 
 // ========================================
@@ -2917,6 +3974,7 @@ function TeacherView({
     { id: 'class12', label: 'Class 12', icon: '📕' },
     { id: 'students', label: 'Students', icon: '👨‍🎓' },
     { id: 'directory', label: 'Directory', icon: '📖' },
+    { id: 'myprofile', label: 'My Profile', icon: '👤' },
     { id: 'attendance', label: 'Student Attendance', icon: '✅' },
     { id: 'attendancedash', label: 'Attendance Dashboard', icon: '📊' },
     { id: 'myattendance', label: 'My Attendance', icon: '🕒' },
@@ -3117,6 +4175,10 @@ function TeacherView({
 
         {activeTab === 'directory' && (
           <TeacherDirectory teachers={teachers} currentUser={currentUser} />
+        )}
+
+        {activeTab === 'myprofile' && (
+          <TeacherSelfProfile currentUser={currentUser} teachers={teachers} />
         )}
 
         {activeTab === 'attendance' && (
@@ -3552,6 +4614,7 @@ function AdminView({
     { id: 'teachers', label: 'Teachers', icon: '👥' },
     { id: 'students', label: 'Students', icon: '👨‍🎓' },
     { id: 'directory', label: 'Directory', icon: '📖' },
+    { id: 'observations', label: 'Class Observations', icon: '📋' },
     { id: 'curriculum', label: 'Curriculum', icon: '📚' },
     { id: 'analytics', label: 'Analytics', icon: '📊' },
     { id: 'chapter-details', label: 'Chapter Details', icon: '📋' },
@@ -3675,6 +4738,10 @@ function AdminView({
 
         {activeTab === 'directory' && (
           <TeacherDirectory teachers={teachers} currentUser={currentUser} />
+        )}
+
+        {activeTab === 'observations' && (
+          <AdminClassroomObservations teachers={teachers} currentUser={currentUser} />
         )}
 
         {activeTab === 'curriculum' && (
@@ -10062,6 +11129,788 @@ const feedbackData = feedbackSnap.docs.map(doc => {
   );
 }
 
+// ========================================
+// TEACHER SELF PROFILE (for teachers to see their own data)
+// ========================================
+function TeacherSelfProfile({ currentUser, teachers }) {
+  // Find the current teacher in teachers array
+  const teacher = teachers.find(t => t.afid === currentUser.afid || t.email === currentUser.email) || {
+    name: currentUser.name || currentUser.email,
+    subject: currentUser.subject,
+    school: currentUser.school,
+    afid: currentUser.afid
+  };
+
+  const [observations, setObservations] = useState([]);
+  const [feedbackData, setFeedbackData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState('All');
+  const [selectedObservation, setSelectedObservation] = useState(null);
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+
+  // Fetch observations and feedback for this teacher
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const teacherId = currentUser.afid || currentUser.uid;
+        
+        // Fetch observations
+        const obsSnap = await db.collection('classroomObservations')
+          .where('teacherId', '==', teacherId)
+          .orderBy('submittedAt', 'desc')
+          .get();
+        
+        const obsData = obsSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          submittedAt: doc.data().submittedAt?.toDate() || new Date(doc.data().submittedAtISO)
+        }));
+        setObservations(obsData);
+
+        // Fetch feedback
+        const feedbackSnap = await db.collection('teacherFeedback')
+          .where('teacherId', '==', teacherId)
+          .get();
+        
+        const fbData = feedbackSnap.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            submittedAt: data.submittedAt?.toDate ? data.submittedAt.toDate() : new Date(data.submittedAt || data.completedAt)
+          };
+        });
+        setFeedbackData(fbData);
+
+      } catch (error) {
+        console.error('Error fetching teacher profile data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [currentUser]);
+
+  // Get unique months from observations
+  const availableMonths = useMemo(() => {
+    const months = new Set();
+    observations.forEach(obs => {
+      const date = new Date(obs.observationDate || obs.submittedAt);
+      months.add(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
+    });
+    return Array.from(months).sort().reverse();
+  }, [observations]);
+
+  // Filter observations by month
+  const filteredObservations = useMemo(() => {
+    if (selectedMonth === 'All') return observations;
+    return observations.filter(obs => {
+      const date = new Date(obs.observationDate || obs.submittedAt);
+      const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      return month === selectedMonth;
+    });
+  }, [observations, selectedMonth]);
+
+  // Calculate average feedback scores
+  const feedbackAverages = useMemo(() => {
+    if (feedbackData.length === 0) return null;
+    
+    const questionAverages = {};
+    const questionLabels = {
+      q1: 'Content Level',
+      q2: 'Content Relevance', 
+      q3: 'Beyond Syllabus',
+      q4: 'Technical Content',
+      q5: 'Communication Skills',
+      q6: 'Topic Details',
+      q7: 'Deep Knowledge',
+      q8: 'Clear Communication',
+      q9: 'Inspiring Examples',
+      q10: 'Punctuality',
+      q11: 'Full Duration',
+      q12: 'Prepared',
+      q13: 'Guidance',
+      q14: 'Overall Effectiveness',
+      q15: 'Learning Value'
+    };
+
+    Object.keys(questionLabels).forEach(qId => {
+      const ratings = feedbackData
+        .map(fb => fb.responses?.[qId]?.rating)
+        .filter(r => r !== undefined && r !== null);
+      
+      if (ratings.length > 0) {
+        questionAverages[qId] = {
+          label: questionLabels[qId],
+          average: (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1),
+          count: ratings.length
+        };
+      }
+    });
+
+    return questionAverages;
+  }, [feedbackData]);
+
+  // Overall average rating
+  const overallRating = useMemo(() => {
+    if (!feedbackAverages) return null;
+    const values = Object.values(feedbackAverages).map(v => parseFloat(v.average));
+    if (values.length === 0) return null;
+    return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+  }, [feedbackAverages]);
+
+  // Chart for observation trends
+  useEffect(() => {
+    if (chartInstance.current) {
+      chartInstance.current.destroy();
+    }
+
+    if (chartRef.current && observations.length > 0) {
+      const ctx = chartRef.current.getContext('2d');
+      
+      // Group by month
+      const monthlyData = {};
+      observations.forEach(obs => {
+        const date = new Date(obs.observationDate || obs.submittedAt);
+        const month = date.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+        if (!monthlyData[month]) {
+          monthlyData[month] = [];
+        }
+        monthlyData[month].push(obs.percentageScore);
+      });
+
+      const labels = Object.keys(monthlyData);
+      const avgScores = labels.map(month => {
+        const scores = monthlyData[month];
+        return (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+      });
+
+      chartInstance.current = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Observation Score %',
+            data: avgScores,
+            borderColor: '#F4B41A',
+            backgroundColor: 'rgba(244, 180, 26, 0.1)',
+            tension: 0.4,
+            fill: true,
+            pointBackgroundColor: '#F4B41A',
+            pointRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: true, text: 'My Observation Score Trend', font: { size: 16, weight: 'bold' } },
+            legend: { display: false }
+          },
+          scales: {
+            y: { beginAtZero: true, max: 100, title: { display: true, text: 'Score %' } }
+          }
+        }
+      });
+    }
+
+    return () => {
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+      }
+    };
+  }, [observations]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="text-4xl mb-4">⏳</div>
+          <p>Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-6 rounded-2xl">
+        <h2 className="text-2xl font-bold">👤 My Profile</h2>
+        <p className="text-xl mt-1">{teacher.name}</p>
+        <p className="opacity-90">{teacher.subject} | {teacher.school}</p>
+      </div>
+
+      {/* Overall Stats Cards */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-yellow-500">
+          <div className="text-sm text-gray-500">Total Observations</div>
+          <div className="text-3xl font-bold text-yellow-600">{observations.length}</div>
+        </div>
+        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-green-500">
+          <div className="text-sm text-gray-500">Avg Observation Score</div>
+          <div className="text-3xl font-bold text-green-600">
+            {observations.length > 0 
+              ? (observations.reduce((sum, o) => sum + o.percentageScore, 0) / observations.length).toFixed(1) + '%'
+              : 'N/A'}
+          </div>
+        </div>
+        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
+          <div className="text-sm text-gray-500">Student Feedback Rating</div>
+          <div className="text-3xl font-bold text-blue-600">{overallRating || 'N/A'}/10</div>
+          <div className="text-xs text-gray-400">{feedbackData.length} responses</div>
+        </div>
+      </div>
+
+      {/* Observation Trend Chart */}
+      {observations.length > 0 && (
+        <div className="bg-white p-4 rounded-xl shadow">
+          <div style={{ height: '250px' }}>
+            <canvas ref={chartRef}></canvas>
+          </div>
+        </div>
+      )}
+
+      {/* My Classroom Observations */}
+      <div className="bg-white p-6 rounded-xl shadow">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold">📋 My Classroom Observations</h3>
+          <select 
+            value={selectedMonth} 
+            onChange={e => setSelectedMonth(e.target.value)}
+            className="border-2 px-4 py-2 rounded-xl"
+          >
+            <option value="All">All Months</option>
+            {availableMonths.map(month => (
+              <option key={month} value={month}>
+                {new Date(month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {filteredObservations.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <div className="text-4xl mb-2">📋</div>
+            <p>No classroom observations yet</p>
+            <p className="text-sm">Your manager will add observations when they visit your class</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredObservations.map(obs => (
+              <div key={obs.id} className="border-2 rounded-xl p-4 hover:border-yellow-400 cursor-pointer transition" onClick={() => setSelectedObservation(obs)}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="font-bold">
+                      {new Date(obs.observationDate || obs.submittedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      <span className="text-gray-500 font-normal ml-2">Class {obs.grade}</span>
+                    </div>
+                    <div className="text-sm text-gray-500">Observer: {obs.observerName}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-2xl font-bold ${
+                      obs.percentageScore >= 80 ? 'text-green-600' : 
+                      obs.percentageScore >= 60 ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
+                      {obs.percentageScore}%
+                    </div>
+                    <div className="text-sm text-gray-500">{obs.totalScore}/{obs.maxScore}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Student Feedback Summary */}
+      <div className="bg-white p-6 rounded-xl shadow">
+        <h3 className="text-xl font-bold mb-4">💬 Student Feedback Summary</h3>
+        <p className="text-sm text-gray-500 mb-4">Average scores from {feedbackData.length} student responses (individual responses are anonymous)</p>
+        
+        {!feedbackAverages ? (
+          <div className="text-center py-8 text-gray-500">
+            <div className="text-4xl mb-2">💬</div>
+            <p>No student feedback received yet</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-4">
+            {Object.entries(feedbackAverages).map(([qId, data]) => (
+              <div key={qId} className="bg-gray-50 p-3 rounded-lg">
+                <div className="text-sm text-gray-600 mb-1">{data.label}</div>
+                <div className="flex items-center justify-between">
+                  <span className={`text-xl font-bold ${
+                    parseFloat(data.average) >= 8 ? 'text-green-600' :
+                    parseFloat(data.average) >= 6 ? 'text-yellow-600' : 'text-red-600'
+                  }`}>
+                    {data.average}/10
+                  </span>
+                  <span className="text-xs text-gray-400">({data.count} ratings)</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Observation Detail Modal */}
+      {selectedObservation && (
+        <div className="modal-overlay" onClick={() => setSelectedObservation(null)}>
+          <div className="modal-content max-w-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-xl font-bold">Observation Details</h3>
+                  <p className="text-gray-500">
+                    {new Date(selectedObservation.observationDate).toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                  </p>
+                </div>
+                <button onClick={() => setSelectedObservation(null)} className="text-2xl font-bold text-gray-400">×</button>
+              </div>
+
+              <div className={`p-4 rounded-xl mb-4 ${
+                selectedObservation.percentageScore >= 80 ? 'bg-green-100' :
+                selectedObservation.percentageScore >= 60 ? 'bg-yellow-100' : 'bg-red-100'
+              }`}>
+                <div className="text-center">
+                  <div className="text-3xl font-bold">{selectedObservation.totalScore}/{selectedObservation.maxScore}</div>
+                  <div className="text-xl">{selectedObservation.percentageScore}%</div>
+                  <div className="text-sm text-gray-600">{selectedObservation.flaggedCount} items flagged</div>
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {CLASSROOM_OBSERVATION_PARAMETERS.map(param => {
+                  const score = selectedObservation.responses?.[param.id];
+                  const remark = selectedObservation.remarks?.[param.id];
+                  const isFlagged = score !== undefined && score < param.maxScore;
+                  
+                  return (
+                    <div key={param.id} className={`p-3 rounded-lg ${isFlagged ? 'bg-red-50' : 'bg-green-50'}`}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1 text-sm">{param.text}</div>
+                        <div className={`font-bold ml-2 ${isFlagged ? 'text-red-600' : 'text-green-600'}`}>
+                          {score ?? 'N/A'}/{param.maxScore}
+                        </div>
+                      </div>
+                      {remark && <div className="text-xs text-red-600 mt-1">📝 {remark}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {selectedObservation.strengths && (
+                <div className="bg-green-50 p-4 rounded-xl mb-3">
+                  <h4 className="font-bold text-green-700 mb-2">✅ Strengths</h4>
+                  <p className="text-sm">{selectedObservation.strengths}</p>
+                </div>
+              )}
+
+              {selectedObservation.improvements && (
+                <div className="bg-yellow-50 p-4 rounded-xl mb-3">
+                  <h4 className="font-bold text-yellow-700 mb-2">💡 Improvements</h4>
+                  <p className="text-sm">{selectedObservation.improvements}</p>
+                </div>
+              )}
+
+              <div className="text-sm text-gray-500 mt-4">
+                Observer: {selectedObservation.observerName} ({selectedObservation.observerPosition}) | 
+                Submitted: {new Date(selectedObservation.submittedAt).toLocaleString('en-IN')}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========================================
+// ADMIN CLASSROOM OBSERVATIONS
+// ========================================
+function AdminClassroomObservations({ teachers, currentUser }) {
+  const [observations, setObservations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [showObservationForm, setShowObservationForm] = useState(false);
+  const [showTeacherProfile, setShowTeacherProfile] = useState(false);
+  const [filterSchool, setFilterSchool] = useState('All');
+  const [filterSubject, setFilterSubject] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // For observation list view
+  const [observationList, setObservationList] = useState([]);
+  const [listFilterSchool, setListFilterSchool] = useState('All');
+  const [listFilterTeacher, setListFilterTeacher] = useState('All');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  // Fetch all observations
+  useEffect(() => {
+    const fetchObservations = async () => {
+      try {
+        setLoading(true);
+        const snapshot = await db.collection('classroomObservations')
+          .orderBy('submittedAt', 'desc')
+          .get();
+        
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          submittedAt: doc.data().submittedAt?.toDate() || new Date(doc.data().submittedAtISO)
+        }));
+        
+        setObservationList(data);
+      } catch (error) {
+        console.error('Error fetching observations:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchObservations();
+  }, []);
+
+  // Filter teachers
+  const filteredTeachers = teachers.filter(t => {
+    const matchesSearch = t.name?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSchool = filterSchool === 'All' || t.school === filterSchool;
+    const matchesSubject = filterSubject === 'All' || t.subject === filterSubject;
+    return matchesSearch && matchesSchool && matchesSubject;
+  });
+
+  // Filter observations list
+  const filteredObservations = observationList.filter(obs => {
+    const matchesSchool = listFilterSchool === 'All' || obs.school === listFilterSchool;
+    const matchesTeacher = listFilterTeacher === 'All' || obs.teacherId === listFilterTeacher;
+    const obsDate = new Date(obs.observationDate || obs.submittedAt).toISOString().split('T')[0];
+    const matchesDateFrom = !dateFrom || obsDate >= dateFrom;
+    const matchesDateTo = !dateTo || obsDate <= dateTo;
+    return matchesSchool && matchesTeacher && matchesDateFrom && matchesDateTo;
+  });
+
+  // Get observation counts per teacher
+  const teacherObservationCounts = useMemo(() => {
+    const counts = {};
+    observationList.forEach(obs => {
+      counts[obs.teacherId] = (counts[obs.teacherId] || 0) + 1;
+    });
+    return counts;
+  }, [observationList]);
+
+  // Get latest score per teacher
+  const teacherLatestScores = useMemo(() => {
+    const scores = {};
+    observationList.forEach(obs => {
+      if (!scores[obs.teacherId]) {
+        scores[obs.teacherId] = obs.percentageScore;
+      }
+    });
+    return scores;
+  }, [observationList]);
+
+  // Observer info for form
+  const observerInfo = {
+    id: currentUser?.afid || currentUser?.uid,
+    name: currentUser?.name || currentUser?.email || 'Admin',
+    position: currentUser?.position || 'Manager'
+  };
+
+  // Handle observation form success
+  const handleObservationSuccess = async () => {
+    // Refresh observation list
+    const snapshot = await db.collection('classroomObservations')
+      .orderBy('submittedAt', 'desc')
+      .get();
+    
+    const data = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      submittedAt: doc.data().submittedAt?.toDate() || new Date(doc.data().submittedAtISO)
+    }));
+    
+    setObservationList(data);
+  };
+
+  // Export observations
+  const handleExport = () => {
+    const exportData = filteredObservations.map(obs => ({
+      'Date': new Date(obs.observationDate || obs.submittedAt).toLocaleDateString('en-IN'),
+      'Time': obs.observationTime || '',
+      'Teacher': obs.teacherName,
+      'Subject': obs.teacherSubject,
+      'School': obs.school,
+      'Grade': obs.grade,
+      'Score': obs.totalScore,
+      'Max Score': obs.maxScore,
+      'Percentage': obs.percentageScore + '%',
+      'Flagged Items': obs.flaggedCount,
+      'Strengths': obs.strengths || '',
+      'Improvements': obs.improvements || '',
+      'Observer': obs.observerName
+    }));
+    exportToExcel(exportData, 'classroom_observations');
+  };
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold">📋 Classroom Observations</h2>
+
+      {/* Stats Cards */}
+      <div className="grid md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-xl">
+          <div className="text-sm opacity-90">Total Observations</div>
+          <div className="text-3xl font-bold">{observationList.length}</div>
+        </div>
+        <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-xl">
+          <div className="text-sm opacity-90">Teachers Observed</div>
+          <div className="text-3xl font-bold">{Object.keys(teacherObservationCounts).length}</div>
+        </div>
+        <div className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white p-4 rounded-xl">
+          <div className="text-sm opacity-90">Avg Score</div>
+          <div className="text-3xl font-bold">
+            {observationList.length > 0 
+              ? (observationList.reduce((sum, o) => sum + o.percentageScore, 0) / observationList.length).toFixed(1) + '%'
+              : 'N/A'}
+          </div>
+        </div>
+        <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-4 rounded-xl">
+          <div className="text-sm opacity-90">This Month</div>
+          <div className="text-3xl font-bold">
+            {observationList.filter(o => {
+              const d = new Date(o.observationDate || o.submittedAt);
+              const now = new Date();
+              return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            }).length}
+          </div>
+        </div>
+      </div>
+
+      {/* Teacher Selection for New Observation */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">👥 Select Teacher for Observation</h3>
+        
+        {/* Filters */}
+        <div className="grid md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">Search Teacher</label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Type name..."
+              className="w-full border-2 px-4 py-3 rounded-xl"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">School</label>
+            <select value={filterSchool} onChange={e => setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="All">All Schools</option>
+              {SCHOOLS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Subject</label>
+            <select value={filterSubject} onChange={e => setFilterSubject(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="All">All Subjects</option>
+              {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Teacher Cards */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredTeachers.map(teacher => (
+            <div key={teacher.docId || teacher.afid} className="border-2 rounded-xl p-4 hover:border-yellow-400 transition">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <div className="font-bold text-lg">{teacher.name}</div>
+                  <div className="text-sm text-gray-500">{teacher.subject} | {teacher.school}</div>
+                </div>
+                {teacherObservationCounts[teacher.afid] && (
+                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">
+                    {teacherObservationCounts[teacher.afid]} obs
+                  </span>
+                )}
+              </div>
+              
+              {teacherLatestScores[teacher.afid] !== undefined && (
+                <div className="mb-3">
+                  <span className="text-sm text-gray-500">Latest Score: </span>
+                  <span className={`font-bold ${
+                    teacherLatestScores[teacher.afid] >= 80 ? 'text-green-600' :
+                    teacherLatestScores[teacher.afid] >= 60 ? 'text-yellow-600' : 'text-red-600'
+                  }`}>
+                    {teacherLatestScores[teacher.afid]}%
+                  </span>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setSelectedTeacher(teacher);
+                    setShowObservationForm(true);
+                  }}
+                  className="flex-1 px-3 py-2 avanti-gradient text-white rounded-lg text-sm font-semibold"
+                >
+                  📝 New Observation
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedTeacher(teacher);
+                    setShowTeacherProfile(true);
+                  }}
+                  className="flex-1 px-3 py-2 bg-gray-200 rounded-lg text-sm font-semibold hover:bg-gray-300"
+                >
+                  👤 Profile
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Observation History */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold">📊 Observation History</h3>
+          <button onClick={handleExport} className="px-4 py-2 bg-green-600 text-white rounded-xl font-semibold">
+            📥 Export to Excel
+          </button>
+        </div>
+
+        {/* List Filters */}
+        <div className="grid md:grid-cols-4 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">School</label>
+            <select value={listFilterSchool} onChange={e => setListFilterSchool(e.target.value)} className="w-full border-2 px-4 py-2 rounded-xl">
+              <option value="All">All Schools</option>
+              {SCHOOLS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Teacher</label>
+            <select value={listFilterTeacher} onChange={e => setListFilterTeacher(e.target.value)} className="w-full border-2 px-4 py-2 rounded-xl">
+              <option value="All">All Teachers</option>
+              {teachers.map(t => <option key={t.afid} value={t.afid}>{t.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">From Date</label>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full border-2 px-4 py-2 rounded-xl"/>
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">To Date</label>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full border-2 px-4 py-2 rounded-xl"/>
+          </div>
+        </div>
+
+        {/* Observations Table */}
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-2">⏳</div>
+            <p>Loading observations...</p>
+          </div>
+        ) : filteredObservations.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <div className="text-4xl mb-2">📋</div>
+            <p>No observations found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="avanti-gradient-light">
+                <tr>
+                  <th className="p-3 text-left">Date</th>
+                  <th className="p-3 text-left">Teacher</th>
+                  <th className="p-3 text-left">Subject</th>
+                  <th className="p-3 text-left">School</th>
+                  <th className="p-3 text-left">Grade</th>
+                  <th className="p-3 text-left">Score</th>
+                  <th className="p-3 text-left">Flagged</th>
+                  <th className="p-3 text-left">Observer</th>
+                  <th className="p-3 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredObservations.map(obs => (
+                  <tr key={obs.id} className="border-b hover:bg-gray-50">
+                    <td className="p-3">
+                      <div className="font-semibold">{new Date(obs.observationDate || obs.submittedAt).toLocaleDateString('en-IN')}</div>
+                      <div className="text-xs text-gray-500">{obs.observationTime}</div>
+                    </td>
+                    <td className="p-3 font-semibold">{obs.teacherName}</td>
+                    <td className="p-3">{obs.teacherSubject}</td>
+                    <td className="p-3">{obs.school}</td>
+                    <td className="p-3">Class {obs.grade}</td>
+                    <td className="p-3">
+                      <span className={`px-3 py-1 rounded-full font-bold ${
+                        obs.percentageScore >= 80 ? 'bg-green-100 text-green-700' :
+                        obs.percentageScore >= 60 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {obs.percentageScore}%
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-sm">
+                        {obs.flaggedCount}
+                      </span>
+                    </td>
+                    <td className="p-3 text-sm">{obs.observerName}</td>
+                    <td className="p-3">
+                      <button
+                        onClick={() => {
+                          const teacher = teachers.find(t => t.afid === obs.teacherId);
+                          if (teacher) {
+                            setSelectedTeacher(teacher);
+                            setShowTeacherProfile(true);
+                          }
+                        }}
+                        className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Observation Form Modal */}
+      {showObservationForm && selectedTeacher && (
+        <ClassroomObservationForm
+          teacher={selectedTeacher}
+          observerInfo={observerInfo}
+          onClose={() => {
+            setShowObservationForm(false);
+            setSelectedTeacher(null);
+          }}
+          onSubmitSuccess={handleObservationSuccess}
+        />
+      )}
+
+      {/* Teacher Profile Modal */}
+      {showTeacherProfile && selectedTeacher && (
+        <TeacherProfileView
+          teacher={selectedTeacher}
+          currentUser={currentUser}
+          onClose={() => {
+            setShowTeacherProfile(false);
+            setSelectedTeacher(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 ReactDOM.render(<App/>,document.getElementById('root'));
   </script>
   <script>
@@ -10069,7 +11918,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '2.7.0'; // Change this version number with every update
+  const CURRENT_VERSION = '2.8.0'; // Change this version number with every update
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
