@@ -1,28 +1,25 @@
-// Service Worker for Curriculum Tracker PWA
-// Version: 2.7.0 - Update this with each deployment
+// ========================================
+// SERVICE WORKER - Curriculum Tracker PWA
+// ========================================
+// Version - Must match CURRENT_VERSION in index.html
+const VERSION = '2.8.0';
+const STATIC_CACHE = 'static-v' + VERSION;
 
-const CACHE_NAME = 'curriculum-tracker-v2.7.0';
-const STATIC_CACHE = 'static-v2.7.0';
-
-// Files to cache (static assets only, NOT index.html)
-const STATIC_FILES = [
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
-];
-
-// Install event - cache static files
+// Install event - cache essential files
 self.addEventListener('install', event => {
-  console.log('[SW] Installing new service worker...');
+  console.log('[SW] Installing version:', VERSION);
   
   // Skip waiting to activate immediately
   self.skipWaiting();
   
   event.waitUntil(
     caches.open(STATIC_CACHE).then(cache => {
-      console.log('[SW] Caching static files');
-      return cache.addAll(STATIC_FILES).catch(err => {
-        console.log('[SW] Some static files failed to cache:', err);
+      return cache.addAll([
+        '/manifest.json',
+        '/icon-192.png',
+        '/icon-512.png'
+      ]).catch(err => {
+        console.log('[SW] Some files failed to cache:', err);
       });
     })
   );
@@ -30,46 +27,45 @@ self.addEventListener('install', event => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
-  console.log('[SW] Activating new service worker...');
+  console.log('[SW] Activating version:', VERSION);
   
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          // Delete old caches
-          if (cacheName !== CACHE_NAME && cacheName !== STATIC_CACHE) {
-            console.log('[SW] Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => {
-      // Take control of all pages immediately
-      return self.clients.claim();
-    })
+    Promise.all([
+      // Clean up old caches
+      caches.keys().then(cacheNames => {
+        return Promise.all(
+          cacheNames.map(cacheName => {
+            if (cacheName !== STATIC_CACHE) {
+              console.log('[SW] Deleting old cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+      // Take control of all clients immediately
+      self.clients.claim()
+    ])
   );
 });
 
-// Fetch event - network-first for HTML, cache-first for static assets
+// Fetch event - network first for HTML, cache first for static assets
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   
   // Always fetch HTML from network (never cache index.html)
   if (event.request.mode === 'navigate' || 
-      url.pathname === '/' || 
-      url.pathname === '/index.html' ||
-      url.pathname.endsWith('.html')) {
+      url.pathname.endsWith('.html') || 
+      url.pathname === '/') {
     event.respondWith(
-      fetch(event.request, { cache: 'no-store' })
-        .catch(() => {
-          // If offline, try cache as fallback
-          return caches.match(event.request);
-        })
+      fetch(event.request).catch(() => {
+        // If offline, try to return cached version
+        return caches.match(event.request);
+      })
     );
     return;
   }
   
-  // For API calls - always network
+  // Skip Firebase and external API requests
   if (url.hostname.includes('firebaseio.com') || 
       url.hostname.includes('googleapis.com') ||
       url.hostname.includes('firebase')) {
@@ -115,4 +111,4 @@ self.addEventListener('message', event => {
   }
 });
 
-console.log('[SW] Service Worker loaded - Version 2.7.0');
+console.log('[SW] Service Worker loaded - Version ' + VERSION);
