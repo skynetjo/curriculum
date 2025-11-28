@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1217,21 +1216,21 @@ function TeacherProfileView({ teacher, onClose, currentUser }) {
     
     const questionAverages = {};
     const questionLabels = {
-      q1: 'Content Level',
-      q2: 'Content Relevance', 
-      q3: 'Beyond Syllabus',
-      q4: 'Technical Content',
-      q5: 'Communication Skills',
-      q6: 'Topic Details',
-      q7: 'Deep Knowledge',
-      q8: 'Clear Communication',
-      q9: 'Inspiring Examples',
-      q10: 'Punctuality',
-      q11: 'Full Duration',
-      q12: 'Prepared',
-      q13: 'Guidance',
-      q14: 'Overall Effectiveness',
-      q15: 'Learning Value'
+      q1: 'Punctuality',
+      q2: 'Academic Level', 
+      q3: 'Problem Solving',
+      q4: 'Explanation Clarity',
+      q5: 'Handwriting & Voice',
+      q6: 'Time Management',
+      q7: 'Guidance & Motivation',
+      q8: 'Student Participation',
+      q9: 'Equal Attention',
+      
+      
+      
+      
+      
+      
     };
 
     Object.keys(questionLabels).forEach(qId => {
@@ -1792,23 +1791,107 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
   const [showExplanation, setShowExplanation] = useState(false);
 
   const questions = [
-    { id: 'q1', text: 'The content was at an appropriate level', type: 'rating' },
-    { id: 'q2', text: 'The content was relevant to my subject', type: 'rating' },
-    { id: 'q3', text: 'Has the teacher covered relevant topics beyond the syllabus', type: 'rating' },
-    { id: 'q4', text: 'Effectiveness of teachers in terms of Technical content', type: 'rating' },
-    { id: 'q5', text: 'Effectiveness of teachers in terms of communication skills', type: 'rating' },
-    { id: 'q6', text: 'The teacher discusses topic details', type: 'rating' },
-    { id: 'q7', text: 'The teacher possesses deep knowledge of the subject taught', type: 'rating' },
-    { id: 'q8', text: 'The teacher communicates clearly', type: 'rating' },
-    { id: 'q9', text: 'The teacher inspires me by his/her knowledge through examples, real life examples, relevant props', type: 'rating' },
-    { id: 'q10', text: 'The Teacher comes to the class on time', type: 'yesno' },
-    { id: 'q11', text: 'The teacher engages the class for the full duration and complete the course in time', type: 'rating' },
-    { id: 'q12', text: 'The teacher comes fully prepared for the class', type: 'rating' },
-    { id: 'q13', text: 'The teacher provides guidance and counselling in academic and non-academic matters', type: 'rating' },
-    { id: 'q14', text: 'Overall effectiveness', type: 'rating' },
-    { id: 'q15', text: 'Learning value (in terms of skills, concepts, knowledge, analytical abilities)', type: 'rating' },
-    { id: 'q16', text: `Any Improvements or suggestions for ${teacher.name} you want to share?`, type: 'opentext' },
-    { id: 'q17', text: 'Anything you want to share regarding the Avanti Program? How can we improve this more?', type: 'opentext' }
+    { 
+      id: 'q1', 
+      text: 'Does the teacher start and end the class on time?', 
+      type: 'mcq',
+      options: [
+        { value: 'a', text: 'The teacher is always on time and ends the class on time.', rating: 5 },
+        { value: 'b', text: 'The teacher is sometimes late or does not end the class on time.', rating: 3 },
+        { value: 'c', text: 'The teacher is mostly late / early and ends class early / late.', rating: 1 },
+        { value: 'other', text: 'Other (please specify)', rating: null }
+      ]
+    },
+    { 
+      id: 'q2', 
+      text: 'What is the academic / content level of the teacher?', 
+      type: 'mcq',
+      options: [
+        { value: 'a', text: 'The teacher can teach concepts up to the JEE Advanced curriculum.', rating: 5 },
+        { value: 'b', text: 'The teacher can teach concepts up to the JEE Mains/NEET curriculum.', rating: 3 },
+        { value: 'c', text: 'The teacher can teach concepts up to the CBSE curriculum.', rating: 1 },
+        { value: 'other', text: 'Other (please specify)', rating: null }
+      ]
+    },
+    { 
+      id: 'q3', 
+      text: 'How effectively does the teacher solve problems and clear doubts in class?', 
+      type: 'mcq',
+      options: [
+        { value: 'a', text: 'The teacher regularly solves mock tests/PYQs in class and clears all doubts.', rating: 5 },
+        { value: 'b', text: 'The teacher sometimes solves questions and clears some doubts.', rating: 3 },
+        { value: 'c', text: 'The teacher rarely solves questions or clears doubts.', rating: 1 },
+        { value: 'other', text: 'Other (please specify)', rating: null }
+      ]
+    },
+    { 
+      id: 'q4', 
+      text: 'How clear and easy is the teacher\'s explanation and use of language during class?', 
+      type: 'mcq',
+      options: [
+        { value: 'a', text: 'The teacher speaks clearly and explains concepts in an easy-to-understand way.', rating: 5 },
+        { value: 'b', text: 'The teacher is clear sometimes and a bit confusing.', rating: 3 },
+        { value: 'c', text: 'It\'s hard to understand the teacher\'s language or explanation.', rating: 1 },
+        { value: 'other', text: 'Other (please specify)', rating: null }
+      ]
+    },
+    { 
+      id: 'q5', 
+      text: 'Is the teacher\'s handwriting clear and voice clearly audible during the session?', 
+      type: 'mcq',
+      options: [
+        { value: 'a', text: 'The teacher\'s writing is always clear and voice is always audible.', rating: 5 },
+        { value: 'b', text: 'The writing or voice is unclear sometimes.', rating: 3 },
+        { value: 'c', text: 'It\'s hard to read the writing and hear the teacher properly.', rating: 1 },
+        { value: 'other', text: 'Other (please specify)', rating: null }
+      ]
+    },
+    { 
+      id: 'q6', 
+      text: 'Does the teacher manage time well and teach at an appropriate speed?', 
+      type: 'mcq',
+      options: [
+        { value: 'a', text: 'The teacher finishes the topic on time and teaches at a good pace.', rating: 5 },
+        { value: 'b', text: 'The speed varies to a small extent.', rating: 3 },
+        { value: 'c', text: 'The speed is too fast or too slow, so it\'s hard to understand.', rating: 1 },
+        { value: 'other', text: 'Other (please specify)', rating: null }
+      ]
+    },
+    { 
+      id: 'q7', 
+      text: 'Does the teacher provide guidance and motivation related to exams and careers?', 
+      type: 'mcq',
+      options: [
+        { value: 'a', text: 'The teacher gives useful exam/career guidance and motivates the class often.', rating: 5 },
+        { value: 'b', text: 'The teacher sometimes gives guidance and motivation.', rating: 3 },
+        { value: 'c', text: 'The teacher doesn\'t guide the class and demotivates the students.', rating: 1 },
+        { value: 'other', text: 'Other (please specify)', rating: null }
+      ]
+    },
+    { 
+      id: 'q8', 
+      text: 'How well does the teacher encourage students to participate and ask questions in class?', 
+      type: 'mcq',
+      options: [
+        { value: 'a', text: 'The teacher always encourages us to ask questions and take part in class.', rating: 5 },
+        { value: 'b', text: 'The teacher sometimes asks us to participate or share doubts.', rating: 3 },
+        { value: 'c', text: 'The teacher doesn\'t ask us to participate or think deeply.', rating: 1 },
+        { value: 'other', text: 'Other (please specify)', rating: null }
+      ]
+    },
+    { 
+      id: 'q9', 
+      text: 'Does the teacher give equal attention to all students?', 
+      type: 'mcq',
+      options: [
+        { value: 'a', text: 'The teacher gives equal attention to everyone in class.', rating: 5 },
+        { value: 'b', text: 'The teacher gives attention to some students more than others.', rating: 3 },
+        { value: 'c', text: 'The teacher is often biased and does not give equal attention to everyone.', rating: 1 },
+        { value: 'other', text: 'Other (please specify)', rating: null }
+      ]
+    },
+    { id: 'q10', text: `What did you like most about the class or ${teacher.name}?`, type: 'opentext' },
+    { id: 'q11', text: `What can be improved about the class or ${teacher.name}?`, type: 'opentext' }
   ];
 
   const currentQ = questions[currentQuestion];
@@ -1821,7 +1904,39 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
         [currentQ.id]: { rating: value }
       }
     });
-    setShowExplanation(value < 6);
+    setShowExplanation(value < 3);
+  };
+
+  const handleMCQChange = (option) => {
+    const newResponse = {
+      selectedOption: option.value,
+      selectedText: option.text,
+      rating: option.rating // null if 'other' selected
+    };
+    
+    setFeedback({
+      ...feedback,
+      responses: {
+        ...feedback.responses,
+        [currentQ.id]: newResponse
+      }
+    });
+    
+    // Show explanation field if 'other' is selected
+    setShowExplanation(option.value === 'other');
+  };
+
+  const handleOtherTextChange = (text) => {
+    setFeedback({
+      ...feedback,
+      responses: {
+        ...feedback.responses,
+        [currentQ.id]: {
+          ...feedback.responses[currentQ.id],
+          otherText: text
+        }
+      }
+    });
   };
 
   const handleYesNoChange = (value) => {
@@ -1862,9 +1977,13 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
     const response = feedback.responses[currentQ.id];
     if (!response) return false;
     
-    if (currentQ.type === 'rating') {
+    if (currentQ.type === 'mcq') {
+      if (!response.selectedOption) return false;
+      // If 'other' is selected, require the otherText field
+      if (response.selectedOption === 'other' && (!response.otherText || response.otherText.trim() === '')) return false;
+    } else if (currentQ.type === 'rating') {
       if (!response.rating) return false;
-      if (response.rating < 6 && !response.explanation) return false;
+      if (response.rating < 3 && !response.explanation) return false;
     } else if (currentQ.type === 'yesno') {
       if (!response.answer) return false;
       if (response.answer === 'No' && !response.explanation) return false;
@@ -1879,8 +1998,10 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
       setCurrentQuestion(currentQuestion + 1);
       const nextQ = questions[currentQuestion + 1];
       const nextResponse = feedback.responses[nextQ.id];
-      if (nextQ.type === 'rating') {
-        setShowExplanation(nextResponse?.rating < 6);
+      if (nextQ.type === 'mcq') {
+        setShowExplanation(nextResponse?.selectedOption === 'other');
+      } else if (nextQ.type === 'rating') {
+        setShowExplanation(nextResponse?.rating < 3);
       } else if (nextQ.type === 'yesno') {
         setShowExplanation(nextResponse?.answer === 'No');
       } else if (nextQ.type === 'opentext') {
@@ -1894,8 +2015,10 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
       setCurrentQuestion(currentQuestion - 1);
       const prevQ = questions[currentQuestion - 1];
       const prevResponse = feedback.responses[prevQ.id];
-      if (prevQ.type === 'rating') {
-        setShowExplanation(prevResponse?.rating < 6);
+      if (prevQ.type === 'mcq') {
+        setShowExplanation(prevResponse?.selectedOption === 'other');
+      } else if (prevQ.type === 'rating') {
+        setShowExplanation(prevResponse?.rating < 3);
       } else if (prevQ.type === 'yesno') {
         setShowExplanation(prevResponse?.answer === 'No');
       } else if (prevQ.type === 'opentext') {
@@ -1908,17 +2031,22 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
     try {
       let totalRating = 0;
       let ratingCount = 0;
+      
+      // Calculate average from MCQ responses (only those with valid ratings, not 'other')
       Object.values(feedback.responses).forEach(response => {
-        if (response.rating) {
+        // For MCQ questions, use the rating from the selected option (if not 'other')
+        if (response.rating !== null && response.rating !== undefined) {
           totalRating += response.rating;
           ratingCount++;
         }
       });
+      
       const averageRating = ratingCount > 0 ? totalRating / ratingCount : 0;
 
       const feedbackData = {
         ...feedback,
-        averageRating: averageRating,
+        averageRating: averageRating, // Now on 1-5 scale
+        maxRating: 5, // Store max rating for reference
         completedAt: new Date().toISOString()
       };
 
@@ -1979,8 +2107,58 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
                     onChange={handleRatingChange}
                   />
                   <div className="text-center text-sm text-gray-600">
-                    {feedback.responses[currentQ.id]?.rating || 0} / 10
+                    {feedback.responses[currentQ.id]?.rating || 0} / 5
                   </div>
+                </div>
+              )}
+
+              {currentQ.type === 'mcq' && (
+                <div className="space-y-3">
+                  {currentQ.options.map((option, idx) => (
+                    <button
+                      key={option.value}
+                      onClick={() => handleMCQChange(option)}
+                      className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                        feedback.responses[currentQ.id]?.selectedOption === option.value
+                          ? 'border-yellow-500 bg-yellow-50 shadow-md'
+                          : 'border-gray-200 bg-white hover:border-yellow-300 hover:bg-yellow-25'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                          feedback.responses[currentQ.id]?.selectedOption === option.value
+                            ? 'border-yellow-500 bg-yellow-500'
+                            : 'border-gray-300'
+                        }`}>
+                          {feedback.responses[currentQ.id]?.selectedOption === option.value && (
+                            <span className="text-white text-sm">✓</span>
+                          )}
+                        </div>
+                        <span className={`text-base ${
+                          feedback.responses[currentQ.id]?.selectedOption === option.value
+                            ? 'font-semibold text-gray-800'
+                            : 'text-gray-700'
+                        }`}>
+                          {option.text}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                  
+                  {/* Show text input when 'Other' is selected */}
+                  {feedback.responses[currentQ.id]?.selectedOption === 'other' && (
+                    <div className="mt-4">
+                      <label className="block text-sm font-semibold mb-2 text-gray-700">
+                        Please specify:
+                      </label>
+                      <textarea
+                        value={feedback.responses[currentQ.id]?.otherText || ''}
+                        onChange={(e) => handleOtherTextChange(e.target.value)}
+                        className="w-full border-2 px-4 py-3 rounded-xl min-h-[80px] focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200"
+                        placeholder="Please describe your answer..."
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2021,11 +2199,11 @@ function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
                 </div>
               )}
 
-              {showExplanation && (
+              {showExplanation && currentQ.type !== 'mcq' && (
                 <div className="mt-4">
                   <label className="block text-sm font-semibold mb-2 text-gray-700">
                     {currentQ.type === 'rating' 
-                      ? 'Why do you feel it\'s very low/Average?' 
+                      ? 'Why do you feel it\'s low?' 
                       : 'Can you please explain why?'}
                   </label>
                   <textarea
@@ -10608,63 +10786,53 @@ function StudentFeedbackView() {
     // ----- Helpers to derive summary fields from 19-question responses -----
   const getCategoryFromRating = (rating) => {
     if (rating == null) return null;
-    if (rating >= 9) return 'Excellent';
-    if (rating >= 7) return 'Good';
-    if (rating >= 5) return 'Average';
+    if (rating >= 5) return 'Excellent';
+    if (rating >= 4) return 'Good';
+    if (rating >= 3) return 'Average';
     return 'Needs Improvement';
   };
 
   const getExplanationSummary = (responses = {}) => {
-    // Use technical + communication questions as proxy
-    const rating =
-      responses.q4?.rating ??
-      responses.q5?.rating ??
-      responses.q6?.rating ??
-      null;
+    // Use Q4 - Explanation Clarity as proxy
+    const rating = responses.q4?.rating ?? null;
     return getCategoryFromRating(rating);
   };
 
   const getDoubtSummary = (responses = {}) => {
-    // Use Q13 – guidance / counselling
-    const rating = responses.q13?.rating;
+    // Use Q3 – Problem Solving / Doubt Clearing
+    const rating = responses.q3?.rating;
     if (rating == null) return null;
-    if (rating >= 9) return 'Always';
-    if (rating >= 7) return 'Sometimes';
+    if (rating >= 5) return 'Always';
+    if (rating >= 3) return 'Sometimes';
     return 'Rarely';
   };
 
   const getPaceSummary = (responses = {}) => {
-    // Use Q11 – engages full duration & completes course
-    const rating = responses.q11?.rating;
+    // Use Q6 – Time Management
+    const rating = responses.q6?.rating;
     if (rating == null) return null;
-    if (rating >= 7) return 'Just Right';
+    if (rating >= 4) return 'Just Right';
     return 'Needs Change';
   };
 
   const getCommentsSummary = (responses = {}) => {
-    // Q16 – suggestions for teacher
-    return responses.q16?.text || '';
+    // Q10 – what they liked most
+    return responses.q10?.text || '';
   };
 
   // Labels for raw export of all questions
   const QUESTION_DEFS = [
-    { id: 'q1',  label: 'Q1 Content level (1-10)', type: 'rating' },
-    { id: 'q2',  label: 'Q2 Content relevance (1-10)', type: 'rating' },
-    { id: 'q3',  label: 'Q3 Beyond syllabus (1-10)', type: 'rating' },
-    { id: 'q4',  label: 'Q4 Technical content (1-10)', type: 'rating' },
-    { id: 'q5',  label: 'Q5 Communication skills (1-10)', type: 'rating' },
-    { id: 'q6',  label: 'Q6 Discusses topic details (1-10)', type: 'rating' },
-    { id: 'q7',  label: 'Q7 Deep knowledge (1-10)', type: 'rating' },
-    { id: 'q8',  label: 'Q8 Communicates clearly (1-10)', type: 'rating' },
-    { id: 'q9',  label: 'Q9 Inspires with examples (1-10)', type: 'rating' },
-    { id: 'q10', label: 'Q10 Comes to class on time', type: 'yesno' },
-    { id: 'q11', label: 'Q11 Engages full duration (1-10)', type: 'rating' },
-    { id: 'q12', label: 'Q12 Fully prepared (1-10)', type: 'rating' },
-    { id: 'q13', label: 'Q13 Guidance & counselling (1-10)', type: 'rating' },
-    { id: 'q14', label: 'Q14 Overall effectiveness (1-10)', type: 'rating' },
-    { id: 'q15', label: 'Q15 Learning value (1-10)', type: 'rating' },
-    { id: 'q16', label: 'Q16 Suggestions for teacher', type: 'text' },
-    { id: 'q17', label: 'Q17 Feedback on Avanti', type: 'text' },
+    { id: 'q1',  label: 'Q1 Punctuality (1-5)', type: 'mcq' },
+    { id: 'q2',  label: 'Q2 Academic Level (1-5)', type: 'mcq' },
+    { id: 'q3',  label: 'Q3 Problem Solving (1-5)', type: 'mcq' },
+    { id: 'q4',  label: 'Q4 Explanation Clarity (1-5)', type: 'mcq' },
+    { id: 'q5',  label: 'Q5 Handwriting & Voice (1-5)', type: 'mcq' },
+    { id: 'q6',  label: 'Q6 Time Management (1-5)', type: 'mcq' },
+    { id: 'q7',  label: 'Q7 Guidance & Motivation (1-5)', type: 'mcq' },
+    { id: 'q8',  label: 'Q8 Student Participation (1-5)', type: 'mcq' },
+    { id: 'q9',  label: 'Q9 Equal Attention (1-5)', type: 'mcq' },
+    { id: 'q10', label: 'Q10 What they liked most', type: 'text' },
+    { id: 'q11', label: 'Q11 What can be improved', type: 'text' },
   ];
 
 
@@ -11305,21 +11473,21 @@ function TeacherSelfProfile({ currentUser, teachers }) {
     
     const questionAverages = {};
     const questionLabels = {
-      q1: 'Content Level',
-      q2: 'Content Relevance', 
-      q3: 'Beyond Syllabus',
-      q4: 'Technical Content',
-      q5: 'Communication Skills',
-      q6: 'Topic Details',
-      q7: 'Deep Knowledge',
-      q8: 'Clear Communication',
-      q9: 'Inspiring Examples',
-      q10: 'Punctuality',
-      q11: 'Full Duration',
-      q12: 'Prepared',
-      q13: 'Guidance',
-      q14: 'Overall Effectiveness',
-      q15: 'Learning Value'
+      q1: 'Punctuality',
+      q2: 'Academic Level', 
+      q3: 'Problem Solving',
+      q4: 'Explanation Clarity',
+      q5: 'Handwriting & Voice',
+      q6: 'Time Management',
+      q7: 'Guidance & Motivation',
+      q8: 'Student Participation',
+      q9: 'Equal Attention',
+      
+      
+      
+      
+      
+      
     };
 
     Object.keys(questionLabels).forEach(qId => {
@@ -12147,7 +12315,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '2.8.1'; // Change this version number with every update
+  const CURRENT_VERSION = '2.9.0'; // Change this version number with every update
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
