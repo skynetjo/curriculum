@@ -1696,43 +1696,66 @@ function StarRating({ value, onChange, readonly = false }) {
 function TeacherProfileModal({ teacher, onClose, onGiveFeedback, averageRating }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
+      <div className="modal-content max-w-md" onClick={e => e.stopPropagation()}>
         <div className="p-6">
           <div className="flex justify-between items-start mb-4">
-            <h2 className="text-2xl font-bold">{teacher.name}</h2>
+            <div className="flex items-center gap-4">
+              {teacher.profilePhoto ? (
+                <img src={teacher.profilePhoto} alt={teacher.name} className="w-16 h-16 rounded-full object-cover border-2 border-yellow-400"/>
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-2xl font-bold text-white">
+                  {teacher.name?.charAt(0) || '?'}
+                </div>
+              )}
+              <div>
+                <h2 className="text-xl font-bold">{teacher.name}</h2>
+                <p className="text-gray-600">{teacher.subject}</p>
+              </div>
+            </div>
             <button onClick={onClose} className="text-2xl font-bold text-gray-500 hover:text-gray-700">
               ×
             </button>
           </div>
           
-          <div className="space-y-4">
-            <div>
-              <h3 className="font-bold text-lg mb-2">Subject</h3>
-              <p className="text-gray-700">{teacher.subject}</p>
+          <div className="space-y-3">
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-500">Education Qualification</div>
+              <div className="font-semibold">{teacher.qualification || 'Not specified'}</div>
             </div>
             
-            <div>
-              <h3 className="font-bold text-lg mb-2">Education Qualification</h3>
-              <p className="text-gray-700">{teacher.qualification || 'Not specified'}</p>
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-500">Experience</div>
+              <div className="font-semibold">{teacher.experience || 'Not specified'}</div>
             </div>
+
+            {teacher.whatsapp && (
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <div className="text-sm text-gray-500">WhatsApp</div>
+                <a href={`https://wa.me/${teacher.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-green-600 hover:underline">
+                  💬 {teacher.whatsapp}
+                </a>
+              </div>
+            )}
+
+            {teacher.bio && (
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <div className="text-sm text-gray-500">About</div>
+                <div className="font-semibold text-sm">{teacher.bio}</div>
+              </div>
+            )}
             
-            <div>
-              <h3 className="font-bold text-lg mb-2">Experience</h3>
-              <p className="text-gray-700">{teacher.experience || 'Not specified'}</p>
-            </div>
-            
-            <div>
-              <h3 className="font-bold text-lg mb-2">Average Rating</h3>
+            <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+              <div className="text-sm text-gray-500 mb-1">Average Rating</div>
               <div className="flex items-center gap-3">
-                <span className="text-3xl font-bold text-yellow-500">
+                <span className="text-2xl font-bold text-yellow-500">
                   {averageRating ? averageRating.toFixed(1) : 'N/A'}
                 </span>
                 <span className="text-gray-600">/ 10</span>
                 {averageRating && (
-                  <span className={`rating-badge ${
-                    averageRating >= 8 ? 'rating-excellent' :
-                    averageRating >= 6 ? 'rating-good' :
-                    averageRating >= 4 ? 'rating-average' : 'rating-poor'
+                  <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                    averageRating >= 8 ? 'bg-green-100 text-green-700' :
+                    averageRating >= 6 ? 'bg-blue-100 text-blue-700' :
+                    averageRating >= 4 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
                   }`}>
                     {averageRating >= 8 ? '⭐ Excellent' :
                      averageRating >= 6 ? '👍 Good' :
@@ -3974,12 +3997,12 @@ function TeacherView({
     { id: 'class12', label: 'Class 12', icon: '📕' },
     { id: 'students', label: 'Students', icon: '👨‍🎓' },
     { id: 'directory', label: 'Directory', icon: '📖' },
-    { id: 'myprofile', label: 'My Profile', icon: '👤' },
     { id: 'attendance', label: 'Student Attendance', icon: '✅' },
     { id: 'attendancedash', label: 'Attendance Dashboard', icon: '📊' },
     { id: 'myattendance', label: 'My Attendance', icon: '🕒' },
     { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
-    { id: 'examstats', label: 'Exam Stats', icon: '📊' }
+    { id: 'examstats', label: 'Exam Stats', icon: '📊' },
+    { id: 'myprofile', label: 'My Profile', icon: '👤' }
   ];
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -10212,7 +10235,7 @@ function TeacherDirectory({ teachers, currentUser }) {
               </div>
 
               {/* Additional Details */}
-              {(selectedTeacher.additionalDetails || selectedTeacher.qualification || selectedTeacher.experience) && (
+              {(selectedTeacher.additionalDetails || selectedTeacher.qualification || selectedTeacher.experience || selectedTeacher.bio) && (
                 <div>
                   <div className="text-lg font-bold mb-3 flex items-center gap-2">
                     <span>📝</span> Additional Information
@@ -10228,6 +10251,12 @@ function TeacherDirectory({ teachers, currentUser }) {
                       <div>
                         <span className="text-gray-600 font-medium">Experience:</span>
                         <div className="font-semibold mt-1">{selectedTeacher.experience}</div>
+                      </div>
+                    )}
+                    {selectedTeacher.bio && (
+                      <div>
+                        <span className="text-gray-600 font-medium">About:</span>
+                        <div className="font-semibold mt-1">{selectedTeacher.bio}</div>
                       </div>
                     )}
                     {selectedTeacher.additionalDetails && (
@@ -11134,20 +11163,42 @@ const feedbackData = feedbackSnap.docs.map(doc => {
 // ========================================
 function TeacherSelfProfile({ currentUser, teachers }) {
   // Find the current teacher in teachers array
-  const teacher = teachers.find(t => t.afid === currentUser.afid || t.email === currentUser.email) || {
-    name: currentUser.name || currentUser.email,
-    subject: currentUser.subject,
-    school: currentUser.school,
-    afid: currentUser.afid
-  };
-
+  const [teacherData, setTeacherData] = useState(null);
   const [observations, setObservations] = useState([]);
   const [feedbackData, setFeedbackData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState('All');
   const [selectedObservation, setSelectedObservation] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    qualification: '',
+    experience: '',
+    whatsapp: '',
+    profilePhoto: '',
+    bio: ''
+  });
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
+
+  // Fetch teacher data and initialize form
+  useEffect(() => {
+    const teacher = teachers.find(t => t.afid === currentUser.afid || t.email === currentUser.email) || {
+      name: currentUser.name || currentUser.email,
+      subject: currentUser.subject,
+      school: currentUser.school,
+      afid: currentUser.afid,
+      docId: currentUser.afid
+    };
+    setTeacherData(teacher);
+    setEditForm({
+      qualification: teacher.qualification || '',
+      experience: teacher.experience || '',
+      whatsapp: teacher.whatsapp || '',
+      profilePhoto: teacher.profilePhoto || '',
+      bio: teacher.bio || ''
+    });
+  }, [teachers, currentUser]);
 
   // Fetch observations and feedback for this teacher
   useEffect(() => {
@@ -11193,6 +11244,40 @@ function TeacherSelfProfile({ currentUser, teachers }) {
 
     fetchData();
   }, [currentUser]);
+
+  // Save profile updates
+  const handleSaveProfile = async () => {
+    if (!teacherData?.docId) {
+      alert('Unable to update profile. Please contact admin.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await db.collection('teachers').doc(teacherData.docId).update({
+        qualification: editForm.qualification,
+        experience: editForm.experience,
+        whatsapp: editForm.whatsapp,
+        profilePhoto: editForm.profilePhoto,
+        bio: editForm.bio,
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Update local state
+      setTeacherData(prev => ({
+        ...prev,
+        ...editForm
+      }));
+      
+      alert('✅ Profile updated successfully!');
+      setShowEditModal(false);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      alert('❌ Failed to update profile: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Get unique months from observations
   const availableMonths = useMemo(() => {
@@ -11324,7 +11409,7 @@ function TeacherSelfProfile({ currentUser, teachers }) {
     };
   }, [observations]);
 
-  if (loading) {
+  if (loading || !teacherData) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -11337,11 +11422,67 @@ function TeacherSelfProfile({ currentUser, teachers }) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header with Edit Button */}
       <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-6 rounded-2xl">
-        <h2 className="text-2xl font-bold">👤 My Profile</h2>
-        <p className="text-xl mt-1">{teacher.name}</p>
-        <p className="opacity-90">{teacher.subject} | {teacher.school}</p>
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-4">
+            {teacherData.profilePhoto ? (
+              <img src={teacherData.profilePhoto} alt={teacherData.name} className="w-20 h-20 rounded-full border-4 border-white object-cover"/>
+            ) : (
+              <div className="w-20 h-20 rounded-full border-4 border-white bg-white/30 flex items-center justify-center text-3xl font-bold">
+                {teacherData.name?.charAt(0) || '?'}
+              </div>
+            )}
+            <div>
+              <h2 className="text-2xl font-bold">👤 My Profile</h2>
+              <p className="text-xl mt-1">{teacherData.name}</p>
+              <p className="opacity-90">{teacherData.subject} | {teacherData.school}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="px-4 py-2 bg-white text-orange-600 rounded-xl font-semibold hover:bg-orange-50"
+          >
+            ✏️ Edit Profile
+          </button>
+        </div>
+      </div>
+
+      {/* Profile Details */}
+      <div className="bg-white p-6 rounded-xl shadow">
+        <h3 className="text-xl font-bold mb-4">📋 Profile Details</h3>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">Education Qualification</div>
+            <div className="font-semibold">{teacherData.qualification || 'Not specified'}</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">Experience</div>
+            <div className="font-semibold">{teacherData.experience || 'Not specified'}</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">Phone</div>
+            <div className="font-semibold">{teacherData.phone || 'Not specified'}</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">WhatsApp</div>
+            <div className="font-semibold">{teacherData.whatsapp || 'Not specified'}</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">Email</div>
+            <div className="font-semibold">{teacherData.email || 'Not specified'}</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">Average Rating</div>
+            <div className="font-semibold text-yellow-600">{overallRating || 'N/A'}/10</div>
+          </div>
+        </div>
+        {teacherData.bio && (
+          <div className="mt-4 bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">Bio</div>
+            <div className="font-semibold">{teacherData.bio}</div>
+          </div>
+        )}
       </div>
 
       {/* Overall Stats Cards */}
@@ -11455,6 +11596,94 @@ function TeacherSelfProfile({ currentUser, teachers }) {
           </div>
         )}
       </div>
+
+      {/* Edit Profile Modal */}
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold">✏️ Edit Profile</h3>
+                <button onClick={() => setShowEditModal(false)} className="text-2xl font-bold text-gray-400">×</button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold mb-2">Profile Photo URL</label>
+                  <input
+                    type="url"
+                    value={editForm.profilePhoto}
+                    onChange={e => setEditForm({...editForm, profilePhoto: e.target.value})}
+                    placeholder="https://drive.google.com/... (max 2MB image)"
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Use Google Drive or any image URL (under 2MB)</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">Education Qualification</label>
+                  <input
+                    type="text"
+                    value={editForm.qualification}
+                    onChange={e => setEditForm({...editForm, qualification: e.target.value})}
+                    placeholder="e.g., M.Sc Physics, B.Ed"
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">Experience</label>
+                  <input
+                    type="text"
+                    value={editForm.experience}
+                    onChange={e => setEditForm({...editForm, experience: e.target.value})}
+                    placeholder="e.g., 5 years teaching Physics"
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">WhatsApp Number</label>
+                  <input
+                    type="tel"
+                    value={editForm.whatsapp}
+                    onChange={e => setEditForm({...editForm, whatsapp: e.target.value})}
+                    placeholder="e.g., 9876543210"
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">Bio (About Me)</label>
+                  <textarea
+                    value={editForm.bio}
+                    onChange={e => setEditForm({...editForm, bio: e.target.value})}
+                    placeholder="Tell students about yourself..."
+                    rows="3"
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={saving}
+                    className="flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold disabled:opacity-50"
+                  >
+                    {saving ? '⏳ Saving...' : '✅ Save Changes'}
+                  </button>
+                  <button
+                    onClick={() => setShowEditModal(false)}
+                    className="px-6 py-3 bg-gray-300 rounded-xl font-semibold"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Observation Detail Modal */}
       {selectedObservation && (
@@ -11918,7 +12147,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '2.8.0'; // Change this version number with every update
+  const CURRENT_VERSION = '2.8.1'; // Change this version number with every update
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
