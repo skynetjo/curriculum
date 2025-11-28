@@ -2,7 +2,7 @@
 // SERVICE WORKER - Curriculum Tracker PWA
 // ========================================
 // Version - Must match CURRENT_VERSION in index.html
-const VERSION = '2.8.1';
+const VERSION = '2.9.0';
 const STATIC_CACHE = 'static-v' + VERSION;
 
 // Install event - cache essential files
