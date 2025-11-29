@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -548,14 +549,14 @@ let SCHOOLS=['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal
 // ========================================
 const MANAGER_ROLES = {
   SUPER_ADMIN: 'super_admin',     // Full access to everything
-  APH: 'aph',                     // Associate Program Head - sees all reportees' schools
+  APH: 'aph',                     // Program Head - sees all reportees' schools
   PM: 'pm',                       // Program Manager - sees their schools + APM schools
   APM: 'apm'                      // Associate Program Manager - sees only assigned schools
 };
 
 const ROLE_LABELS = {
   'super_admin': 'Super Admin',
-  'aph': 'Associate Program Head',
+  'aph': 'Program Head',
   'pm': 'Program Manager',
   'apm': 'Associate Program Manager'
 };
@@ -678,8 +679,15 @@ const CLASSROOM_OBSERVATION_PARAMETERS = [
   {
     id: 'teachingCompetence',
     type: 'major',
-    text: 'Concept-Teaching competence: Check for: 1) Concept clearly explained, 2) CFU-Check for understanding present, 3) Used physical teaching tools, 4) Teacher was well-prepared',
+    text: 'Concept-Teaching competence',
     maxScore: 4,
+    inputType: 'checkbox',
+    checkboxItems: [
+      { id: 'conceptClear', label: 'Concept clearly explained' },
+      { id: 'cfuPresent', label: 'CFU-Check for understanding present' },
+      { id: 'physicalTools', label: 'Used physical teaching tools' },
+      { id: 'wellPrepared', label: 'Teacher was well-prepared' }
+    ],
     options: [
       { label: 'All 4 parameters met', value: 4 },
       { label: 'Any 3 parameters met', value: 3 },
@@ -727,8 +735,14 @@ const CLASSROOM_OBSERVATION_PARAMETERS = [
   {
     id: 'boardPresentation',
     type: 'major',
-    text: 'Communication-Board Presentation: 1) Usage of board, 2) Writing is clear, 3) Board representation clear/highlighting formulae',
+    text: 'Communication-Board Presentation',
     maxScore: 3,
+    inputType: 'checkbox',
+    checkboxItems: [
+      { id: 'boardUsage', label: 'Usage of board' },
+      { id: 'writingClear', label: 'Writing is clear' },
+      { id: 'boardRepresentation', label: 'Board representation clear/highlighting formulae' }
+    ],
     options: [
       { label: 'All 3 parameters met', value: 3 },
       { label: 'Any 2 parameters met', value: 2 },
@@ -750,10 +764,20 @@ const CLASSROOM_OBSERVATION_PARAMETERS = [
   {
     id: 'bodyLanguage',
     type: 'major',
-    text: 'Communication-Body Language & Energy & Voice: 1) Voice clear, 2) Voice modulations, 3) Movement around class, 4) Eye contact, 5) Hand gestures, 6) Adaptive language & fluency',
+    text: 'Communication-Body Language & Energy & Voice',
     maxScore: 6,
+    inputType: 'checkbox',
+    checkboxItems: [
+      { id: 'voiceClear', label: 'Voice clear' },
+      { id: 'voiceModulations', label: 'Voice modulations' },
+      { id: 'movementAroundClass', label: 'Movement around class' },
+      { id: 'eyeContact', label: 'Eye contact' },
+      { id: 'handGestures', label: 'Hand gestures' },
+      { id: 'adaptiveLanguage', label: 'Adaptive language & fluency' }
+    ],
     options: [
-      { label: 'All 5+ parameters touched', value: 5 },
+      { label: 'All 6 parameters met', value: 6 },
+      { label: 'Any 5 parameters', value: 5 },
       { label: 'Any 4 parameters', value: 4 },
       { label: 'Any 3 parameters', value: 3 },
       { label: 'Any 2 parameters', value: 2 },
@@ -886,13 +910,32 @@ function ClassroomObservationForm({ teacher, observerInfo, onClose, onSubmitSucc
   const [grade, setGrade] = useState('11');
   const [observationDate, setObservationDate] = useState(getTodayDate());
   const [observationTime, setObservationTime] = useState(new Date().toTimeString().slice(0,5));
+  const [chapterName, setChapterName] = useState('');
+  const [topicName, setTopicName] = useState('');
   const [responses, setResponses] = useState({});
+  const [checkboxSelections, setCheckboxSelections] = useState({}); // For checkbox-type parameters
   const [remarks, setRemarks] = useState({});
   const [strengths, setStrengths] = useState('');
   const [improvements, setImprovements] = useState('');
   const [mediaLinks, setMediaLinks] = useState(['']);
   const [submitting, setSubmitting] = useState(false);
   const [currentStep, setCurrentStep] = useState(0); // 0 = parameters, 1 = summary
+
+  // Handle checkbox toggle for checkbox-type parameters
+  const handleCheckboxToggle = (paramId, itemId) => {
+    setCheckboxSelections(prev => {
+      const current = prev[paramId] || {};
+      const newSelection = { ...current, [itemId]: !current[itemId] };
+      
+      // Count checked items
+      const checkedCount = Object.values(newSelection).filter(Boolean).length;
+      
+      // Auto-update the score based on checked count
+      handleResponseChange(paramId, checkedCount);
+      
+      return { ...prev, [paramId]: newSelection };
+    });
+  };
 
   // Calculate total score
   const totalScore = useMemo(() => {
@@ -946,12 +989,16 @@ function ClassroomObservationForm({ teacher, observerInfo, onClose, onSubmitSucc
       const observationData = {
         teacherId: teacher.afid || teacher.docId,
         teacherName: teacher.name,
+        teacherAfCode: teacher.afCode || null,
         teacherSubject: teacher.subject,
         school: teacher.school,
         grade: grade,
+        chapterName: chapterName || null,
+        topicName: topicName || null,
         observationDate: observationDate,
         observationTime: observationTime,
         responses: responses,
+        checkboxSelections: checkboxSelections,
         remarks: remarks,
         strengths: strengths,
         improvements: improvements,
@@ -1028,6 +1075,30 @@ function ClassroomObservationForm({ teacher, observerInfo, onClose, onSubmitSucc
             </div>
           </div>
 
+          {/* Chapter/Topic Info (Optional) */}
+          <div className="grid md:grid-cols-2 gap-4 mb-6 bg-blue-50 p-4 rounded-xl">
+            <div>
+              <label className="block text-sm font-bold mb-2">Chapter Name (Optional)</label>
+              <input 
+                type="text" 
+                value={chapterName} 
+                onChange={e => setChapterName(e.target.value)} 
+                placeholder="e.g., Kinematics, Chemical Bonding" 
+                className="w-full border-2 px-4 py-3 rounded-xl"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Topic Name (Optional)</label>
+              <input 
+                type="text" 
+                value={topicName} 
+                onChange={e => setTopicName(e.target.value)} 
+                placeholder="e.g., Projectile Motion, Hybridization" 
+                className="w-full border-2 px-4 py-3 rounded-xl"
+              />
+            </div>
+          </div>
+
           {/* Score Summary Card */}
           <div className={`p-4 rounded-xl mb-6 border-2 ${getScoreColor(totalScore, MAX_OBSERVATION_SCORE)}`}>
             <div className="flex justify-between items-center">
@@ -1066,18 +1137,60 @@ function ClassroomObservationForm({ teacher, observerInfo, onClose, onSubmitSucc
                   </div>
                 </div>
                 
-                <select
-                  value={responses[param.id] ?? ''}
-                  onChange={e => handleResponseChange(param.id, e.target.value === '' ? undefined : parseInt(e.target.value))}
-                  className="w-full border-2 px-4 py-3 rounded-xl mb-2"
-                >
-                  <option value="">-- Select --</option>
-                  {param.options.map((opt, optIdx) => (
-                    <option key={optIdx} value={opt.value}>
-                      {opt.label} ({opt.value})
-                    </option>
-                  ))}
-                </select>
+                {/* Checkbox-based parameters */}
+                {param.inputType === 'checkbox' && param.checkboxItems ? (
+                  <div className="mb-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3 p-3 bg-gray-50 rounded-xl">
+                      {param.checkboxItems.map(item => {
+                        const isChecked = checkboxSelections[param.id]?.[item.id] || false;
+                        return (
+                          <label 
+                            key={item.id} 
+                            className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all ${
+                              isChecked ? 'bg-green-100 border border-green-300' : 'bg-white border border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            <input 
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleCheckboxToggle(param.id, item.id)}
+                              className="cursor-pointer"
+                            />
+                            <span className={`text-sm ${isChecked ? 'text-green-700 font-semibold' : 'text-gray-700'}`}>
+                              {item.label}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="font-semibold">Score:</span>
+                      <span className={`px-3 py-1 rounded-full font-bold ${
+                        responses[param.id] === param.maxScore ? 'bg-green-100 text-green-700' :
+                        responses[param.id] > 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {responses[param.id] ?? 0} / {param.maxScore}
+                      </span>
+                      <span className="text-gray-500">
+                        ({Object.values(checkboxSelections[param.id] || {}).filter(Boolean).length} items selected)
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  /* Standard dropdown for other parameters */
+                  <select
+                    value={responses[param.id] ?? ''}
+                    onChange={e => handleResponseChange(param.id, e.target.value === '' ? undefined : parseInt(e.target.value))}
+                    className="w-full border-2 px-4 py-3 rounded-xl mb-2"
+                  >
+                    <option value="">-- Select --</option>
+                    {param.options.map((opt, optIdx) => (
+                      <option key={optIdx} value={opt.value}>
+                        {opt.label} ({opt.value})
+                      </option>
+                    ))}
+                  </select>
+                )}
 
                 {/* Show remarks field if not full score */}
                 {responses[param.id] !== undefined && responses[param.id] < param.maxScore && (
@@ -1537,7 +1650,7 @@ function TeacherProfileView({ teacher, onClose, currentUser }) {
             </div>
             <div className="bg-gradient-to-r from-blue-400 to-blue-600 text-white p-4 rounded-xl">
               <div className="text-sm opacity-90">Student Feedback Rating</div>
-              <div className="text-3xl font-bold">{overallRating || 'N/A'}/10</div>
+              <div className="text-3xl font-bold">{overallRating || 'N/A'}/5</div>
               <div className="text-xs opacity-75">{feedbackData.length} responses</div>
             </div>
           </div>
@@ -1621,7 +1734,7 @@ function TeacherProfileView({ teacher, onClose, currentUser }) {
                         parseFloat(data.average) >= 8 ? 'text-green-600' :
                         parseFloat(data.average) >= 6 ? 'text-yellow-600' : 'text-red-600'
                       }`}>
-                        {data.average}/10
+                        {data.average}/5
                       </span>
                       <span className="text-xs text-gray-400">({data.count} ratings)</span>
                     </div>
@@ -1794,16 +1907,16 @@ function TeacherProfileModal({ teacher, onClose, onGiveFeedback, averageRating }
                 <span className="text-2xl font-bold text-yellow-500">
                   {averageRating ? averageRating.toFixed(1) : 'N/A'}
                 </span>
-                <span className="text-gray-600">/ 10</span>
+                <span className="text-gray-600">/ 5</span>
                 {averageRating && (
                   <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                    averageRating >= 8 ? 'bg-green-100 text-green-700' :
-                    averageRating >= 6 ? 'bg-blue-100 text-blue-700' :
-                    averageRating >= 4 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                    averageRating >= 4.5 ? 'bg-green-100 text-green-700' :
+                    averageRating >= 3.5 ? 'bg-blue-100 text-blue-700' :
+                    averageRating >= 2.5 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
                   }`}>
-                    {averageRating >= 8 ? '⭐ Excellent' :
-                     averageRating >= 6 ? '👍 Good' :
-                     averageRating >= 4 ? '😐 Average' : '👎 Needs Improvement'}
+                    {averageRating >= 4.5 ? '⭐ Excellent' :
+                     averageRating >= 3.5 ? '👍 Good' :
+                     averageRating >= 2.5 ? '😐 Average' : '👎 Needs Improvement'}
                   </span>
                 )}
               </div>
@@ -4317,7 +4430,6 @@ function TeacherView({
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'class11', label: 'Class 11', icon: '📚' },
     { id: 'class12', label: 'Class 12', icon: '📕' },
-    { id: 'students', label: 'Students', icon: '👨‍🎓' },
     { id: 'directory', label: 'Directory', icon: '📖' },
     { id: 'attendance', label: 'Student Attendance', icon: '✅' },
     { id: 'attendancedash', label: 'Attendance Dashboard', icon: '📊' },
@@ -4509,14 +4621,6 @@ function TeacherView({
     updateChapterProgress={updateChapterProgress}
   />
 )}
-
-        {activeTab === 'students' && (
-          <StudentManagement
-            students={students}
-            teachers={teachers}
-            currentUser={currentUser}
-          />
-        )}
 
         {activeTab === 'directory' && (
           <TeacherDirectory teachers={teachers} currentUser={currentUser} />
@@ -4944,6 +5048,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
   const [form, setForm] = useState({
     name: '',
     email: '',
+    afCode: '',
     role: MANAGER_ROLES.APH,
     reportsTo: '',
     directSchools: [],
@@ -5066,6 +5171,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
       const managerData = {
         name: form.name,
         email: form.email.toLowerCase(),
+        afCode: form.afCode || null,
         role: form.role,
         reportsTo: form.role === MANAGER_ROLES.APH ? null : form.reportsTo,
         directSchools: form.directSchools,
@@ -5268,7 +5374,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
         <div className="flex flex-wrap gap-3">
           <span className="px-3 py-2 bg-purple-100 text-purple-700 rounded-lg text-sm font-semibold border border-purple-200">👑 Super Admin</span>
           <span className="text-gray-400">→</span>
-          <span className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold border border-blue-200">👔 APH (Associate Program Head)</span>
+          <span className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold border border-blue-200">👔 PH (Program Head)</span>
           <span className="text-gray-400">→</span>
           <span className="px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-semibold border border-green-200">👨‍💼 PM (Program Manager)</span>
           <span className="text-gray-400">→</span>
@@ -5298,7 +5404,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
               className="w-full border-2 px-4 py-3 rounded-xl"
             >
               <option value="All">All Roles</option>
-              <option value={MANAGER_ROLES.APH}>Associate Program Head (APH)</option>
+              <option value={MANAGER_ROLES.APH}>Program Head (PH)</option>
               <option value={MANAGER_ROLES.PM}>Program Manager (PM)</option>
               <option value={MANAGER_ROLES.APM}>Associate Program Manager (APM)</option>
             </select>
@@ -5347,7 +5453,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
           
           {topLevelManagers.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              <p>No managers found. Click "+ Add Manager" to add your first Associate Program Head.</p>
+              <p>No managers found. Click "+ Add Manager" to add your first Program Head.</p>
             </div>
           )}
         </div>
@@ -5444,16 +5550,14 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold mb-1">Role *</label>
-                  <select 
-                    value={form.role} 
-                    onChange={e => setForm({ ...form, role: e.target.value, reportsTo: '' })}
+                  <label className="block text-sm font-bold mb-1">AF Code (e.g. AF355)</label>
+                  <input 
+                    type="text" 
+                    value={form.afCode || ''} 
+                    onChange={e => setForm({ ...form, afCode: e.target.value })}
                     className="w-full border-2 px-3 py-2 rounded-lg"
-                  >
-                    <option value={MANAGER_ROLES.APH}>Associate Program Head (APH)</option>
-                    <option value={MANAGER_ROLES.PM}>Program Manager (PM)</option>
-                    <option value={MANAGER_ROLES.APM}>Associate Program Manager (APM)</option>
-                  </select>
+                    placeholder="e.g., AF355"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-1">Phone</label>
@@ -5467,24 +5571,39 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                 </div>
               </div>
 
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1">Role *</label>
+                  <select 
+                    value={form.role} 
+                    onChange={e => setForm({ ...form, role: e.target.value, reportsTo: '' })}
+                    className="w-full border-2 px-3 py-2 rounded-lg"
+                  >
+                    <option value={MANAGER_ROLES.APH}>Program Head (PH)</option>
+                    <option value={MANAGER_ROLES.PM}>Program Manager (PM)</option>
+                    <option value={MANAGER_ROLES.APM}>Associate Program Manager (APM)</option>
+                  </select>
+                </div>
+              </div>
+
               {(form.role === MANAGER_ROLES.PM || form.role === MANAGER_ROLES.APM) && (
                 <div>
                   <label className="block text-sm font-bold mb-1">
-                    Reports To ({form.role === MANAGER_ROLES.PM ? 'APH' : 'PM'}) *
+                    Reports To ({form.role === MANAGER_ROLES.PM ? 'PH' : 'PM'}) *
                   </label>
                   <select 
                     value={form.reportsTo} 
                     onChange={e => setForm({ ...form, reportsTo: e.target.value })}
                     className="w-full border-2 px-3 py-2 rounded-lg"
                   >
-                    <option value="">Select {form.role === MANAGER_ROLES.PM ? 'Associate Program Head' : 'Program Manager'}</option>
+                    <option value="">Select {form.role === MANAGER_ROLES.PM ? 'Program Head' : 'Program Manager'}</option>
                     {getReportsToOptions(form.role).map(m => (
                       <option key={m.id} value={m.id}>{m.name} ({ROLE_LABELS[m.role]})</option>
                     ))}
                   </select>
                   <p className="text-xs text-gray-600 mt-1">
                     {form.role === MANAGER_ROLES.PM 
-                      ? 'The APH will see all schools assigned to this PM and their APMs'
+                      ? 'The PH will see all schools assigned to this PM and their APMs'
                       : 'The PM will see all schools assigned to this APM'}
                   </p>
                 </div>
@@ -7371,9 +7490,9 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
   const[isEditingLeave,setIsEditingLeave]=useState(false);
   const[leaveForm,setLeaveForm]=useState({entitled: 0, maternity: 0, paternity: 0});
   const[savingLeave,setSavingLeave]=useState(false);
-  const[form,setForm]=useState({name:'',afid:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});
+  const[form,setForm]=useState({name:'',afid:'',afCode:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});
   
-  const openAddModal=()=>{setEditingTeacher(null);setForm({name:'',afid:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});setShowModal(true)};
+  const openAddModal=()=>{setEditingTeacher(null);setForm({name:'',afid:'',afCode:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});setShowModal(true)};
   const openEditModal=teacher=>{setEditingTeacher(teacher);setForm({...teacher,password:''});setShowModal(true)};
   
   const openLeaveModal=(teacher)=>{
@@ -7437,7 +7556,7 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
     }
   };
   
-  const handleSave=async()=>{if(!form.afid||!form.name||!form.email||!form.subject||!form.school){alert('Please fill all required fields (AFID, Name, Email, Subject, School)');return}try{await db.collection('teachers').doc(form.afid).set({afid:form.afid,name:form.name,email:form.email.toLowerCase(),subject:form.subject,school:form.school,dob:form.dob||null,joiningDate:form.joiningDate||null,phone:form.phone||null});if(!editingTeacher&&form.password){alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`)}else{alert('Teacher updated!')}setShowModal(false)}catch(e){alert('Failed: '+e.message)}};
+  const handleSave=async()=>{if(!form.afid||!form.name||!form.email||!form.subject||!form.school){alert('Please fill all required fields (AFID, Name, Email, Subject, School)');return}try{await db.collection('teachers').doc(form.afid).set({afid:form.afid,afCode:form.afCode||null,name:form.name,email:form.email.toLowerCase(),subject:form.subject,school:form.school,dob:form.dob||null,joiningDate:form.joiningDate||null,phone:form.phone||null});if(!editingTeacher&&form.password){alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`)}else{alert('Teacher updated!')}setShowModal(false)}catch(e){alert('Failed: '+e.message)}};
   
   const handleDelete=async teacher=>{if(!confirm(`Delete ${teacher.name}?`))return;try{await db.collection('teachers').doc(teacher.afid).delete();alert('Teacher deleted!')}catch(e){alert('Failed: '+e.message)}};
   
@@ -7459,6 +7578,7 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
           <thead className="avanti-gradient-light">
             <tr>
               <th className="p-3 text-left">AFID</th>
+              <th className="p-3 text-left">AF Code</th>
               <th className="p-3 text-left">Name</th>
               <th className="p-3 text-left">Email</th>
               <th className="p-3 text-left">Subject</th>
@@ -7473,6 +7593,7 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
               return (
                 <tr key={t.id} className="border-b hover:bg-gray-50">
                   <td className="p-3 font-mono">{t.afid}</td>
+                  <td className="p-3 font-mono text-blue-600">{t.afCode || '—'}</td>
                   <td className="p-3">{t.name}</td>
                   <td className="p-3 text-sm">{t.email}</td>
                   <td className="p-3">{t.subject}</td>
@@ -7708,9 +7829,15 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h3 className="text-2xl font-bold mb-4">{editingTeacher ? 'Edit Teacher' : 'Add New Teacher'}</h3>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-bold mb-1">AFID *</label>
-                <input type="text" value={form.afid} onChange={e => setForm({...form, afid: e.target.value})} disabled={!!editingTeacher} className="w-full border-2 px-3 py-2 rounded-lg"/>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1">AFID *</label>
+                  <input type="text" value={form.afid} onChange={e => setForm({...form, afid: e.target.value})} disabled={!!editingTeacher} className="w-full border-2 px-3 py-2 rounded-lg"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-1">AF Code (e.g. AF355)</label>
+                  <input type="text" value={form.afCode || ''} onChange={e => setForm({...form, afCode: e.target.value})} placeholder="AF355" className="w-full border-2 px-3 py-2 rounded-lg"/>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-bold mb-1">Name *</label>
@@ -12056,8 +12183,7 @@ function TeacherExamStats({ currentUser }) {
             <select
               value={filterGrade}
               onChange={e => setFilterGrade(e.target.value)}
-              disabled={!isEditing}
-              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full border-2 px-4 py-3 rounded-xl"
             >
               <option value="All">All Grades</option>
               {gradeOptions.map(g => (
@@ -12070,8 +12196,7 @@ function TeacherExamStats({ currentUser }) {
             <select
               value={filterGender}
               onChange={e => setFilterGender(e.target.value)}
-              disabled={!isEditing}
-              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full border-2 px-4 py-3 rounded-xl"
             >
               <option value="All">All</option>
               {genderOptions.map(g => (
@@ -12084,8 +12209,7 @@ function TeacherExamStats({ currentUser }) {
             <select
               value={filterExam}
               onChange={e => setFilterExam(e.target.value)}
-              disabled={!isEditing}
-              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full border-2 px-4 py-3 rounded-xl"
             >
               <option value="All">All Exams</option>
               {examOptions.map(name => (
@@ -12098,8 +12222,7 @@ function TeacherExamStats({ currentUser }) {
             <select
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value)}
-              disabled={!isEditing}
-              className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full border-2 px-4 py-3 rounded-xl"
             >
               <option value="All">All</option>
               <option value="Completed">Completed</option>
@@ -12224,10 +12347,6 @@ function TeacherExamStats({ currentUser }) {
           </table>
         </div>
       </div>
-
-      <footer className="bg-gray-800 text-white text-center py-4 mt-auto">
-        <p>Made by Anand with ❤️</p>
-      </footer>
     </div>
   );
 }
@@ -12450,7 +12569,7 @@ const feedbackData = feedbackSnap.docs.map(doc => {
         'Grade': student.grade || 'N/A',
         'Teacher Name': teacherName,
         'Subject': feedback.subject || 'N/A',
-        'Overall Rating (1-10)': feedback.rating || 0,
+        'Overall Rating (1-5)': feedback.rating || 0,
         'Explanation Quality (summary)': feedback.explanationQuality || 'N/A',
         'Doubt Resolution (summary)': feedback.doubtResolution || 'N/A',
         'Teaching Pace (summary)': feedback.teachingPace || 'N/A',
@@ -12513,15 +12632,15 @@ const feedbackData = feedbackSnap.docs.map(doc => {
     document.body.removeChild(link);
   };
 
-    // Get rating badge (1–10 scale)
+    // Get rating badge (1–5 scale)
   const getRatingBadge = (rating) => {
-    if (rating >= 9) return { text: 'Excellent', class: 'rating-excellent' };
-    if (rating >= 7) return { text: 'Good', class: 'rating-good' };
-    if (rating >= 5) return { text: 'Average', class: 'rating-average' };
+    if (rating >= 4.5) return { text: 'Excellent', class: 'rating-excellent' };
+    if (rating >= 3.5) return { text: 'Good', class: 'rating-good' };
+    if (rating >= 2.5) return { text: 'Average', class: 'rating-average' };
     return { text: 'Needs Improvement', class: 'rating-poor' };
   };
 
-  // Statistics for cards (1–10 scale)
+  // Statistics for cards (1–5 scale)
   const stats = {
     total: filteredFeedback.length,
     avgRating:
@@ -12531,10 +12650,10 @@ const feedbackData = feedbackSnap.docs.map(doc => {
             filteredFeedback.length
           ).toFixed(1)
         : 0,
-    excellent: filteredFeedback.filter(f => (f.rating || 0) >= 9).length,
-    good:      filteredFeedback.filter(f => (f.rating || 0) >= 7 && (f.rating || 0) < 9).length,
-    average:   filteredFeedback.filter(f => (f.rating || 0) >= 5 && (f.rating || 0) < 7).length,
-    poor:      filteredFeedback.filter(f => (f.rating || 0) < 5).length,
+    excellent: filteredFeedback.filter(f => (f.rating || 0) >= 4.5).length,
+    good:      filteredFeedback.filter(f => (f.rating || 0) >= 3.5 && (f.rating || 0) < 4.5).length,
+    average:   filteredFeedback.filter(f => (f.rating || 0) >= 2.5 && (f.rating || 0) < 3.5).length,
+    poor:      filteredFeedback.filter(f => (f.rating || 0) < 2.5).length,
   };
 
   if (loading) {
@@ -13107,7 +13226,7 @@ function TeacherSelfProfile({ currentUser, teachers }) {
           </div>
           <div className="bg-gray-50 p-4 rounded-lg">
             <div className="text-sm text-gray-500">Average Rating</div>
-            <div className="font-semibold text-yellow-600">{overallRating || 'N/A'}/10</div>
+            <div className="font-semibold text-yellow-600">{overallRating || 'N/A'}/5</div>
           </div>
         </div>
         {teacherData.bio && (
@@ -13134,7 +13253,7 @@ function TeacherSelfProfile({ currentUser, teachers }) {
         </div>
         <div className="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
           <div className="text-sm text-gray-500">Student Feedback Rating</div>
-          <div className="text-3xl font-bold text-blue-600">{overallRating || 'N/A'}/10</div>
+          <div className="text-3xl font-bold text-blue-600">{overallRating || 'N/A'}/5</div>
           <div className="text-xs text-gray-400">{feedbackData.length} responses</div>
         </div>
       </div>
@@ -13220,7 +13339,7 @@ function TeacherSelfProfile({ currentUser, teachers }) {
                     parseFloat(data.average) >= 8 ? 'text-green-600' :
                     parseFloat(data.average) >= 6 ? 'text-yellow-600' : 'text-red-600'
                   }`}>
-                    {data.average}/10
+                    {data.average}/5
                   </span>
                   <span className="text-xs text-gray-400">({data.count} ratings)</span>
                 </div>
@@ -13780,7 +13899,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '2.9.2'; // Change this version number with every update
+  const CURRENT_VERSION = '3.0.0'; // Change this version number with every update
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
