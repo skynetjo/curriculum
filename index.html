@@ -1323,19 +1323,46 @@ function TeacherProfileView({ teacher, onClose, currentUser }) {
         }));
         setObservations(obsData);
 
-        // Fetch feedback
-        const feedbackSnap = await db.collection('teacherFeedback')
-          .where('teacherId', '==', teacher.afid || teacher.docId)
-          .get();
+        // Fetch feedback - check multiple possible teacher ID formats
+        const possibleIds = [teacher.afid, teacher.docId, teacher.id].filter(Boolean);
+        let fbData = [];
         
-        const fbData = feedbackSnap.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            submittedAt: data.submittedAt?.toDate ? data.submittedAt.toDate() : new Date(data.submittedAt || data.completedAt)
-          };
-        });
+        // Query by teacherId
+        for (const id of possibleIds) {
+          const feedbackSnap = await db.collection('teacherFeedback')
+            .where('teacherId', '==', id)
+            .get();
+          
+          feedbackSnap.docs.forEach(doc => {
+            if (!fbData.find(f => f.id === doc.id)) {
+              const data = doc.data();
+              fbData.push({
+                id: doc.id,
+                ...data,
+                submittedAt: data.submittedAt?.toDate ? data.submittedAt.toDate() : new Date(data.submittedAt || data.completedAt)
+              });
+            }
+          });
+        }
+        
+        // Also query by teacherAfid if available
+        if (teacher.afid) {
+          const feedbackByAfid = await db.collection('teacherFeedback')
+            .where('teacherAfid', '==', teacher.afid)
+            .get();
+          
+          feedbackByAfid.docs.forEach(doc => {
+            if (!fbData.find(f => f.id === doc.id)) {
+              const data = doc.data();
+              fbData.push({
+                id: doc.id,
+                ...data,
+                submittedAt: data.submittedAt?.toDate ? data.submittedAt.toDate() : new Date(data.submittedAt || data.completedAt)
+              });
+            }
+          });
+        }
+        
         setFeedbackData(fbData);
 
       } catch (error) {
@@ -1630,6 +1657,10 @@ function TeacherProfileView({ teacher, onClose, currentUser }) {
               <h2 className="text-2xl font-bold">👤 Teacher Profile</h2>
               <p className="text-xl text-gray-700 mt-1">{teacher.name}</p>
               <p className="text-gray-500">{teacher.subject} | {teacher.school}</p>
+              <div className="flex gap-3 mt-2">
+                <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm font-mono">AFID: {teacher.afid}</span>
+                {teacher.afCode && <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-mono">AF Code: {teacher.afCode}</span>}
+              </div>
             </div>
             <button onClick={onClose} className="text-3xl font-bold text-gray-400 hover:text-gray-600">×</button>
           </div>
@@ -1936,13 +1967,18 @@ function TeacherProfileModal({ teacher, onClose, onGiveFeedback, averageRating }
 }
 
 // Teacher Feedback Form Modal
-function TeacherFeedbackForm({ teacher, studentId, onClose, onSubmitSuccess }) {
+function TeacherFeedbackForm({ teacher, studentId, studentInfo, onClose, onSubmitSuccess }) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [feedback, setFeedback] = useState({
-    teacherId: teacher.docId,
+    teacherId: teacher.afid || teacher.docId,
+    teacherDocId: teacher.docId,
+    teacherAfid: teacher.afid,
     teacherName: teacher.name,
     subject: teacher.subject,
+    school: teacher.school,
+    grade: studentInfo?.grade || '',
     studentId: studentId,
+    studentName: studentInfo?.name || '',
     submittedAt: new Date().toISOString(),
     responses: {}
   });
@@ -3863,6 +3899,7 @@ useEffect(() => {
         <TeacherFeedbackForm
           teacher={selectedTeacher}
           studentId={myId}
+          studentInfo={currentUser}
           onClose={() => setShowFeedbackForm(false)}
           onSubmitSuccess={handleFeedbackSubmitSuccess}
         />
@@ -4673,7 +4710,7 @@ function TeacherView({
 // ========================================
 // ADMIN EXAM REGISTRATION STATISTICS
 // ========================================
-function AdminExamStats() {
+function AdminExamStats({ accessibleSchools = [], isSuperAdmin = false }) {
   const [examRegistrations, setExamRegistrations] = useState([]);
   const [students, setStudents] = useState([]);
 
@@ -4703,14 +4740,19 @@ function AdminExamStats() {
     fetchData();
   }, []);
 
-  const schoolOptions = SCHOOLS;
-  const gradeOptions = Array.from(new Set(students.map(s => s.grade).filter(Boolean))).sort();
-  const genderOptions = Array.from(new Set(students.map(s => s.gender).filter(Boolean))).sort();
+  // Use only accessible schools for dropdown
+  const schoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  
+  // Filter students by accessible schools first
+  const accessibleStudents = isSuperAdmin ? students : students.filter(s => accessibleSchools.includes(s.school));
+  
+  const gradeOptions = Array.from(new Set(accessibleStudents.map(s => s.grade).filter(Boolean))).sort();
+  const genderOptions = Array.from(new Set(accessibleStudents.map(s => s.gender).filter(Boolean))).sort();
   const examOptions = Array.from(
     new Set(examRegistrations.flatMap(r => (r.exams || []).map(e => e.examName)).filter(Boolean))
   ).sort();
 
-  const filteredStudents = students.filter(s => {
+  const filteredStudents = accessibleStudents.filter(s => {
     if (filterSchool !== 'All' && s.school !== filterSchool) return false;
     if (filterGrade !== 'All' && s.grade !== filterGrade) return false;
     if (filterGender !== 'All' && (s.gender || '') !== filterGender) return false;
@@ -6560,6 +6602,8 @@ function AdminView({
             teachers={filteredTeachers}
             studentAttendance={filteredStudentAttendance}
             teacherAttendance={filteredTeacherAttendance}
+            accessibleSchools={availableSchools}
+            isSuperAdmin={isSuperAdmin}
           />
         )}
 
@@ -6571,9 +6615,9 @@ function AdminView({
 
         {activeTab === 'studentprofiles' && <AdminStudentProfiles />}
 
-        {activeTab === 'examstats' && <AdminExamStats />}
+        {activeTab === 'examstats' && <AdminExamStats accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} />}
         
-        {activeTab === 'studentfeedback' && <StudentFeedbackView />}
+        {activeTab === 'studentfeedback' && <StudentFeedbackView accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} />}
         </div>
       </div>
 
@@ -10397,12 +10441,15 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
 // ========================================
 // ADMIN ATTENDANCE ANALYTICS
 // ========================================
-function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAttendance}){
+function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAttendance,accessibleSchools=[],isSuperAdmin=false}){
   const[filterSchool,setFilterSchool]=useState('All');
   const[filterGrade,setFilterGrade]=useState('All');
   const[startDate,setStartDate]=useState(getTodayDate().slice(0,7)+'-01');
   const[endDate,setEndDate]=useState(getTodayDate());
   const[selectedDate,setSelectedDate]=useState(getTodayDate());
+  
+  // Use accessible schools for dropdown
+  const schoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
 
   const chart1Ref=useRef(null);
   const chart2Ref=useRef(null);
@@ -10664,14 +10711,14 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
         <div className="grid md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-bold mb-2">School</label>
-            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
+            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
               <option value="All">All Schools</option>
-              {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+              {schoolOptions.map(s=><option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
-            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
+            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
               <option value="All">All Grades</option>
               <option value="11">Class 11</option>
               <option value="12">Class 12</option>
@@ -10679,15 +10726,15 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Start Date</label>
-            <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
+            <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">End Date</label>
-            <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
+            <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Today's View</label>
-            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
+            <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl"/>
           </div>
         </div>
       </div>
@@ -10835,7 +10882,9 @@ function SchoolInfoView({currentUser,schoolInfo}){
     printerBrand:'',
     printerIssuedDate:'',
     // Other Assets
-    otherAssets:[]
+    otherAssets:[],
+    // Meeting Minutes
+    meetingMinutes:[]
   });
 
   useEffect(()=>{
@@ -10895,6 +10944,36 @@ function SchoolInfoView({currentUser,schoolInfo}){
     const updated=[...formData.otherAssets];
     updated[index][field]=value;
     setFormData({...formData,otherAssets:updated});
+  };
+
+  // Meeting Minutes handlers
+  const handleAddMeeting=()=>{
+    setFormData({
+      ...formData,
+      meetingMinutes:[{
+        meetingDate:new Date().toISOString().split('T')[0],
+        meetingTime:new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:false}),
+        attendees:'',
+        discussedPoints:'',
+        actionPoints:'',
+        updatedBy:currentUser.name,
+        updatedAt:new Date().toISOString()
+      }, ...(formData.meetingMinutes || [])]
+    });
+  };
+
+  const handleRemoveMeeting=(index)=>{
+    const updated=[...(formData.meetingMinutes || [])];
+    updated.splice(index,1);
+    setFormData({...formData,meetingMinutes:updated});
+  };
+
+  const handleMeetingChange=(index,field,value)=>{
+    const updated=[...(formData.meetingMinutes || [])];
+    updated[index][field]=value;
+    updated[index].updatedBy=currentUser.name;
+    updated[index].updatedAt=new Date().toISOString();
+    setFormData({...formData,meetingMinutes:updated});
   };
 
   const handleSubmit = async () => {
@@ -11381,6 +11460,103 @@ function SchoolInfoView({currentUser,schoolInfo}){
                 </div>
               </div>
             )
+          )}
+        </div>
+
+        {/* Meeting Minutes Section */}
+        <div className="bg-white p-6 rounded-2xl shadow-lg mt-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold text-purple-700">📝 Minutes of Meeting</h3>
+            {isEditing && (
+              <button onClick={handleAddMeeting} className="px-4 py-2 bg-purple-600 text-white rounded-xl font-semibold">
+                + Add New Meeting
+              </button>
+            )}
+          </div>
+          
+          {(formData.meetingMinutes || []).length === 0 ? (
+            <p className="text-gray-500 text-center py-4">No meeting records yet</p>
+          ) : (
+            <div className="space-y-4">
+              {(formData.meetingMinutes || []).map((meeting, idx) => (
+                <div key={idx} className="border-2 border-purple-200 rounded-xl p-4 bg-purple-50">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex gap-4 items-center">
+                      <span className="px-3 py-1 bg-purple-600 text-white rounded-full text-sm font-semibold">
+                        Meeting #{(formData.meetingMinutes || []).length - idx}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        Last updated: {meeting.updatedAt ? new Date(meeting.updatedAt).toLocaleString() : 'N/A'} by {meeting.updatedBy || 'Unknown'}
+                      </span>
+                    </div>
+                    {isEditing && (
+                      <button onClick={() => handleRemoveMeeting(idx)} className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm">
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="grid md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-bold mb-2">📅 Date *</label>
+                      <input 
+                        type="date" 
+                        value={meeting.meetingDate || ''} 
+                        onChange={e => handleMeetingChange(idx, 'meetingDate', e.target.value)} 
+                        disabled={!isEditing} 
+                        className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold mb-2">🕐 Time *</label>
+                      <input 
+                        type="time" 
+                        value={meeting.meetingTime || ''} 
+                        onChange={e => handleMeetingChange(idx, 'meetingTime', e.target.value)} 
+                        disabled={!isEditing} 
+                        className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label className="block text-sm font-bold mb-2">👥 Attendees *</label>
+                    <input 
+                      type="text" 
+                      value={meeting.attendees || ''} 
+                      onChange={e => handleMeetingChange(idx, 'attendees', e.target.value)} 
+                      placeholder="e.g., Principal, Vice Principal, Team Lead, Teacher A, Teacher B"
+                      disabled={!isEditing} 
+                      className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    />
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label className="block text-sm font-bold mb-2">💬 Discussed Points *</label>
+                    <textarea 
+                      value={meeting.discussedPoints || ''} 
+                      onChange={e => handleMeetingChange(idx, 'discussedPoints', e.target.value)} 
+                      placeholder="Enter the key points discussed in the meeting..."
+                      disabled={!isEditing} 
+                      className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      rows="4"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-bold mb-2">✅ Action Points</label>
+                    <textarea 
+                      value={meeting.actionPoints || ''} 
+                      onChange={e => handleMeetingChange(idx, 'actionPoints', e.target.value)} 
+                      placeholder="Enter action items and next steps..."
+                      disabled={!isEditing} 
+                      className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      rows="3"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
@@ -12354,7 +12530,7 @@ function TeacherExamStats({ currentUser }) {
 // ========================================
 // STUDENT FEEDBACK VIEW (ADMIN)
 // ========================================
-function StudentFeedbackView() {
+function StudentFeedbackView({ accessibleSchools = [], isSuperAdmin = false }) {
   const [feedbackList, setFeedbackList] = useState([]);
   const [students, setStudents] = useState([]);
   const [teachers, setTeachers] = useState([]);
@@ -12493,6 +12669,20 @@ const feedbackData = feedbackSnap.docs.map(doc => {
     fetchData();
   }, []);
 
+  // Use only accessible schools for dropdown
+  const schoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  
+  // Filter feedback by accessible schools first
+  const accessibleFeedback = isSuperAdmin ? feedbackList : feedbackList.filter(f => accessibleSchools.includes(f.school));
+  
+  // Filter teachers by accessible schools for dropdown (Fix #6)
+  const accessibleTeachers = isSuperAdmin ? teachers : teachers.filter(t => accessibleSchools.includes(t.school));
+  
+  // When school filter is selected, further filter teachers to that school only
+  const teachersForDropdown = filterSchool === 'All' 
+    ? accessibleTeachers 
+    : accessibleTeachers.filter(t => t.school === filterSchool);
+
   // Get student details
   const getStudentDetails = (studentId) => {
     return students.find(s => s.id === studentId) || {};
@@ -12504,13 +12694,13 @@ const feedbackData = feedbackSnap.docs.map(doc => {
     return teacher ? teacher.name : 'Unknown Teacher';
   };
 
-  // Filter feedback
-  const filteredFeedback = feedbackList.filter(feedback => {
+  // Filter feedback - using accessibleFeedback which is already filtered by accessible schools
+  const filteredFeedback = accessibleFeedback.filter(feedback => {
     const student = getStudentDetails(feedback.studentId);
     const teacherName = getTeacherName(feedback.teacherId);
     
     // School filter
-    if (filterSchool !== 'All' && student.school !== filterSchool) return false;
+    if (filterSchool !== 'All' && feedback.school !== filterSchool) return false;
     
     // Grade filter
     if (filterGrade !== 'All' && student.grade !== filterGrade) return false;
@@ -12542,10 +12732,11 @@ const feedbackData = feedbackSnap.docs.map(doc => {
     return true;
   });
 
-  // Get unique schools, grades, and teachers for filters
-  const uniqueSchools = [...new Set(students.map(s => s.school))].filter(Boolean).sort();
-  const uniqueGrades = [...new Set(students.map(s => s.grade))].filter(Boolean).sort();
-  const uniqueTeachers = [...new Set(feedbackList.map(f => getTeacherName(f.teacherId)))].filter(Boolean).sort();
+  // Get unique grades from accessible feedback only
+  const uniqueGrades = [...new Set(accessibleFeedback.map(f => {
+    const student = getStudentDetails(f.studentId);
+    return student.grade;
+  }))].filter(Boolean).sort();
 
     // Export to CSV (includes all Q1–Q17 raw answers)
   const exportToCSV = () => {
@@ -12563,13 +12754,13 @@ const feedbackData = feedbackSnap.docs.map(doc => {
       const row = {
         'Date': feedback.submittedAt.toLocaleDateString('en-IN'),
         'Time': feedback.submittedAt.toLocaleTimeString('en-IN'),
-        'School': student.school || 'N/A',
+        'School': feedback.school || student.school || 'N/A',
         'Student ID': student.studentId || 'N/A',
-        'Student Name': student.name || 'N/A',
-        'Grade': student.grade || 'N/A',
+        'Student Name': student.name || feedback.studentName || 'N/A',
+        'Grade': student.grade || feedback.grade || 'N/A',
         'Teacher Name': teacherName,
         'Subject': feedback.subject || 'N/A',
-        'Overall Rating (1-5)': feedback.rating || 0,
+        'Overall Rating (1-5)': feedback.rating || feedback.averageRating || 0,
         'Explanation Quality (summary)': feedback.explanationQuality || 'N/A',
         'Doubt Resolution (summary)': feedback.doubtResolution || 'N/A',
         'Teaching Pace (summary)': feedback.teachingPace || 'N/A',
@@ -12581,18 +12772,24 @@ const feedbackData = feedbackSnap.docs.map(doc => {
         const resp = responses[q.id] || {};
         let value = '';
 
-        if (q.type === 'rating') {
+        if (q.type === 'mcq') {
+          // MCQ type stores rating value (1-5)
+          value = resp.rating != null ? resp.rating : '';
+        } else if (q.type === 'rating') {
           value = resp.rating != null ? resp.rating : '';
         } else if (q.type === 'yesno') {
           // your yes/no answers are stored as .answer
           value = resp.answer != null ? resp.answer : '';
+        } else if (q.type === 'text') {
+          value = resp.text || resp || '';
         } else {
-          value = resp.text || '';
+          // Fallback - try to get any value
+          value = resp.rating || resp.text || resp.answer || resp || '';
         }
 
         row[q.label] = value;
 
-        // If student wrote explanation (when rating < 6)
+        // If student wrote explanation (when rating < threshold)
         if (resp.explanation) {
           row[`${q.label} - Explanation`] = resp.explanation;
         }
@@ -12716,11 +12913,14 @@ const feedbackData = feedbackSnap.docs.map(doc => {
             <label className="block text-sm font-semibold mb-2">School</label>
             <select
               value={filterSchool}
-              onChange={(e) => setFilterSchool(e.target.value)}
+              onChange={(e) => {
+                setFilterSchool(e.target.value);
+                setFilterTeacher('All'); // Reset teacher filter when school changes
+              }}
               className="w-full p-3 border-2 rounded-xl"
             >
               <option value="All">All Schools</option>
-              {uniqueSchools.map(school => (
+              {schoolOptions.map(school => (
                 <option key={school} value={school}>{school}</option>
               ))}
             </select>
@@ -12741,7 +12941,7 @@ const feedbackData = feedbackSnap.docs.map(doc => {
             </select>
           </div>
 
-          {/* Teacher Filter */}
+          {/* Teacher Filter - Now filtered by selected school */}
           <div>
             <label className="block text-sm font-semibold mb-2">Teacher</label>
             <select
@@ -12750,8 +12950,8 @@ const feedbackData = feedbackSnap.docs.map(doc => {
               className="w-full p-3 border-2 rounded-xl"
             >
               <option value="All">All Teachers</option>
-              {uniqueTeachers.map(teacher => (
-                <option key={teacher} value={teacher}>{teacher}</option>
+              {teachersForDropdown.map(teacher => (
+                <option key={teacher.id} value={teacher.name}>{teacher.name}</option>
               ))}
             </select>
           </div>
@@ -12972,19 +13172,45 @@ function TeacherSelfProfile({ currentUser, teachers }) {
         }));
         setObservations(obsData);
 
-        // Fetch feedback
-        const feedbackSnap = await db.collection('teacherFeedback')
-          .where('teacherId', '==', teacherId)
-          .get();
+        // Fetch feedback - check multiple possible teacher ID formats
+        const possibleIds = [currentUser.afid, currentUser.docId, currentUser.id, currentUser.uid].filter(Boolean);
+        let fbData = [];
         
-        const fbData = feedbackSnap.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            submittedAt: data.submittedAt?.toDate ? data.submittedAt.toDate() : new Date(data.submittedAt || data.completedAt)
-          };
-        });
+        for (const id of possibleIds) {
+          const feedbackSnap = await db.collection('teacherFeedback')
+            .where('teacherId', '==', id)
+            .get();
+          
+          feedbackSnap.docs.forEach(doc => {
+            if (!fbData.find(f => f.id === doc.id)) {
+              const data = doc.data();
+              fbData.push({
+                id: doc.id,
+                ...data,
+                submittedAt: data.submittedAt?.toDate ? data.submittedAt.toDate() : new Date(data.submittedAt || data.completedAt)
+              });
+            }
+          });
+        }
+        
+        // Also query by teacherAfid
+        if (currentUser.afid) {
+          const feedbackByAfid = await db.collection('teacherFeedback')
+            .where('teacherAfid', '==', currentUser.afid)
+            .get();
+          
+          feedbackByAfid.docs.forEach(doc => {
+            if (!fbData.find(f => f.id === doc.id)) {
+              const data = doc.data();
+              fbData.push({
+                id: doc.id,
+                ...data,
+                submittedAt: data.submittedAt?.toDate ? data.submittedAt.toDate() : new Date(data.submittedAt || data.completedAt)
+              });
+            }
+          });
+        }
+        
         setFeedbackData(fbData);
 
       } catch (error) {
@@ -13899,7 +14125,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.0.0'; // Change this version number with every update
+  const CURRENT_VERSION = '3.1.0'; // Change this version number with every update
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
@@ -14046,5 +14272,212 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
+
+<!-- START: Global saving-indicator + Firestore write wrapper (added by ChatGPT) -->
+<style>
+/* simple overlay */
+#__global_saving_overlay {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  background: rgba(0,0,0,0.75);
+  color: white;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  z-index: 99999;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  backdrop-filter: blur(4px);
+}
+.__saving_spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.25);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: __spin 1s linear infinite;
+}
+@keyframes __spin { to { transform: rotate(360deg); } }
+
+/* disabled appearance when saving */
+.__global_saving_disabled {
+  pointer-events: none !important;
+  opacity: 0.6 !important;
+}
+</style>
+
+<div id="__global_saving_overlay" aria-live="polite" role="status">
+  <div class="__saving_spinner" aria-hidden="true"></div>
+  <div>Saving…</div>
+</div>
+
+<script>
+(function(){
+  // Small, resilient wrapper that watches Firestore write methods and shows a saving indicator.
+  if (!window || !document) return;
+  const overlay = document.getElementById('__global_saving_overlay');
+  let activeWrites = 0;
+  function updateUI(){
+    if (activeWrites > 0) {
+      overlay.style.display = 'flex';
+      // disable interactive elements except those marked data-allow-during-saving="true"
+      const selectors = 'button, input[type="button"], input[type="submit"], a[role="button"], select, textarea';
+      document.querySelectorAll(selectors).forEach(el=>{
+        if (el.dataset.allowDuringSaving === "true") return;
+        el.__wasDisabledBySaving = el.disabled || false;
+        try { el.disabled = true; } catch(e){}
+        el.classList.add('__global_saving_disabled');
+      });
+    } else {
+      overlay.style.display = 'none';
+      const selectors = 'button, input[type="button"], input[type="submit"], a[role="button"], select, textarea';
+      document.querySelectorAll(selectors).forEach(el=>{
+        try {
+          // restore original disabled state only if we changed it
+          if (el.__wasDisabledBySaving !== undefined) el.disabled = !!el.__wasDisabledBySaving;
+        } catch(e){}
+        el.classList.remove('__global_saving_disabled');
+      });
+    }
+  }
+
+  function startWrite(){ activeWrites++; updateUI(); }
+  function endWrite(){ activeWrites = Math.max(0, activeWrites-1); updateUI(); }
+
+  // Wrap common Firestore write methods if firebase is present.
+  function tryWrapFirestore(firebase){
+    try {
+      const firestore = firebase && firebase.firestore && firebase.firestore();
+      if (!firestore) return;
+      // DocumentReference.prototype.set/update/delete
+      const docProto = firestore.constructor && firestore.constructor.prototype;
+      // Instead, find DocumentReference from an actual doc object if possible
+      let sampleDoc;
+      try {
+        sampleDoc = firestore.collection('_chattmp_').doc('_tmp_');
+      } catch(e){}
+      if (sampleDoc) {
+        const docRefProto = Object.getPrototypeOf(sampleDoc);
+        ['set','update','delete'].forEach(name=>{
+          if (docRefProto && docRefProto[name]) {
+            const orig = docRefProto[name];
+            if (!orig.__wrappedBySaving) {
+              docRefProto[name] = function(...args){
+                startWrite();
+                try {
+                  const result = orig.apply(this,args);
+                  if (result && typeof result.then === 'function') {
+                    return result.finally(endWrite);
+                  } else {
+                    endWrite();
+                    return result;
+                  }
+                } catch(err){
+                  endWrite();
+                  throw err;
+                }
+              };
+              docRefProto[name].__wrappedBySaving = true;
+            }
+          }
+        });
+      }
+      // CollectionReference.add
+      let sampleCol;
+      try { sampleCol = firestore.collection('_chattmp_'); } catch(e){}
+      if (sampleCol) {
+        const colProto = Object.getPrototypeOf(sampleCol);
+        if (colProto && colProto.add && !colProto.add.__wrappedBySaving) {
+          const origAdd = colProto.add;
+          colProto.add = function(...args){
+            startWrite();
+            try {
+              const result = origAdd.apply(this,args);
+              if (result && typeof result.then === 'function') {
+                return result.finally(endWrite);
+              } else {
+                endWrite();
+                return result;
+              }
+            } catch(err){
+              endWrite();
+              throw err;
+            }
+          };
+          colProto.add.__wrappedBySaving = true;
+        }
+      }
+
+      // Wrap write batch commit if available
+      try {
+        const batch = firestore.batch();
+        const batchProto = Object.getPrototypeOf(batch);
+        if (batchProto && batchProto.commit && !batchProto.commit.__wrappedBySaving) {
+          const origCommit = batchProto.commit;
+          batchProto.commit = function(...args){
+            startWrite();
+            try {
+              const res = origCommit.apply(this,args);
+              if (res && typeof res.then === 'function') return res.finally(endWrite);
+              endWrite();
+              return res;
+            } catch(e){
+              endWrite();
+              throw e;
+            }
+          };
+          batchProto.commit.__wrappedBySaving = true;
+        }
+      } catch(e){}
+    } catch(e){}
+  }
+
+  // Try to wrap immediately if firebase exists, otherwise poll until it does (for lazy init)
+  function attemptWrap(){
+    try {
+      if (window.firebase && firebase.firestore) {
+        tryWrapFirestore(window.firebase);
+        return true;
+      }
+    } catch(e){}
+    return false;
+  }
+  if (!attemptWrap()){
+    // poll a few times
+    const maxAttempts = 20;
+    let attempts = 0;
+    const t = setInterval(()=>{
+      attempts++;
+      if (attemptWrap() || attempts >= maxAttempts) clearInterval(t);
+    }, 300);
+  }
+
+  // As a fallback, also watch for global ajax/fetch/XHR calls that return promises — optional
+  // Wrap fetch to show saving indicator if fetch options contain a header 'X-Expect-Save: true'
+  if (window.fetch && !window.fetch.__wrappedBySaving) {
+    const origFetch = window.fetch.bind(window);
+    window.fetch = function(resource, init){
+      const expectSave = init && init.headers && (init.headers['X-Expect-Save'] === 'true' || init.headers.get && init.headers.get('X-Expect-Save') === 'true');
+      if (expectSave) startWrite();
+      const p = origFetch(resource, init);
+      if (expectSave && p && typeof p.then === 'function') return p.finally(()=>endWrite());
+      return p;
+    };
+    window.fetch.__wrappedBySaving = true;
+  }
+
+  // expose controls for debugging
+  window.__savingOverlay = {
+    isActive: ()=> activeWrites > 0,
+    startWrite,
+    endWrite
+  };
+
+})();
+</script>
+<!-- END: Global saving-indicator + Firestore write wrapper (added by ChatGPT) -->
 </body>
 </html>
