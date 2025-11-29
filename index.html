@@ -11555,83 +11555,43 @@ function SchoolInfoView({currentUser,schoolInfo}){
                         onClick={() => {
                           const printWindow = window.open('', '_blank');
                           const meetingNum = (formData.meetingMinutes || []).length - idx;
-                          printWindow.document.write(\`
-                            <!DOCTYPE html>
-                            <html>
-                            <head>
-                              <title>Meeting Minutes - \${mySchool}</title>
-                              <style>
-                                @media print {
-                                  @page { margin: 1cm; size: A4; }
-                                  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                                }
-                                body { font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 800px; margin: 0 auto; }
-                                .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #7C3AED; padding-bottom: 15px; margin-bottom: 20px; }
-                                .logo { font-size: 24px; font-weight: bold; color: #7C3AED; }
-                                .meeting-badge { background: #7C3AED; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; }
-                                .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
-                                .info-item { padding: 12px; background: #F9FAFB; border-radius: 8px; border-left: 4px solid #7C3AED; }
-                                .info-item label { font-size: 11px; color: #6B7280; text-transform: uppercase; display: block; margin-bottom: 4px; }
-                                .info-item span { font-weight: bold; color: #1F2937; font-size: 14px; }
-                                .section { margin-top: 20px; padding: 15px; background: #FAF5FF; border-radius: 8px; border: 1px solid #E9D5FF; }
-                                .section-title { font-weight: bold; color: #7C3AED; margin-bottom: 10px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
-                                .section-content { white-space: pre-wrap; line-height: 1.8; font-size: 13px; color: #374151; }
-                                .footer { margin-top: 30px; padding-top: 15px; border-top: 2px solid #E9D5FF; font-size: 11px; color: #6B7280; display: flex; justify-content: space-between; }
-                                .action-item { padding: 8px 12px; background: white; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #10B981; }
-                              </style>
-                            </head>
-                            <body>
-                              <div class="header">
-                                <div>
-                                  <div class="logo">अवंती Avanti Fellows</div>
-                                  <h1 style="margin: 10px 0 5px; font-size: 22px; color: #1F2937;">Minutes of Meeting</h1>
-                                  <p style="margin: 0; color: #6B7280; font-size: 14px;">🏫 \${mySchool}</p>
-                                </div>
-                                <div class="meeting-badge">Meeting #\${meetingNum}</div>
-                              </div>
-
-                              <div class="info-grid">
-                                <div class="info-item">
-                                  <label>📅 Date</label>
-                                  <span>\${meeting.meetingDate ? new Date(meeting.meetingDate).toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : 'Not specified'}</span>
-                                </div>
-                                <div class="info-item">
-                                  <label>🕐 Time</label>
-                                  <span>\${meeting.meetingTime || 'Not specified'}</span>
-                                </div>
-                              </div>
-
-                              <div class="section">
-                                <div class="section-title">👥 Attendees</div>
-                                <div class="section-content">\${meeting.attendees || 'Not specified'}</div>
-                              </div>
-
-                              <div class="section">
-                                <div class="section-title">💬 Discussion Points</div>
-                                <div class="section-content">\${(meeting.discussedPoints || 'No discussion points recorded').replace(/\\n/g, '<br>')}</div>
-                              </div>
-
-                              <div class="section" style="background: #F0FDF4; border-color: #BBF7D0;">
-                                <div class="section-title" style="color: #059669;">✅ Action Items</div>
-                                <div class="section-content">\${(meeting.actionPoints || 'No action items recorded').replace(/\\n/g, '<br>')}</div>
-                              </div>
-
-                              <div class="footer">
-                                <div>
-                                  <strong>Last Updated:</strong> \${meeting.updatedAt ? new Date(meeting.updatedAt).toLocaleString('en-IN') : 'N/A'}
-                                  \${meeting.updatedBy ? ' by <strong>' + meeting.updatedBy + '</strong>' : ''}
-                                </div>
-                                <div>Generated on: \${new Date().toLocaleString('en-IN')}</div>
-                              </div>
-
-                              <script>
-                                window.onload = function() { 
-                                  setTimeout(function() { window.print(); }, 500);
-                                }
-                              <\\/script>
-                            </body>
-                            </html>
-                          \`);
+                          const dateStr = meeting.meetingDate ? new Date(meeting.meetingDate).toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : 'Not specified';
+                          const timeStr = meeting.meetingTime || 'Not specified';
+                          const attendeesStr = meeting.attendees || 'Not specified';
+                          const discussedStr = (meeting.discussedPoints || 'No discussion points recorded').replace(/\n/g, '<br>');
+                          const actionStr = (meeting.actionPoints || 'No action items recorded').replace(/\n/g, '<br>');
+                          const updatedStr = meeting.updatedAt ? new Date(meeting.updatedAt).toLocaleString('en-IN') : 'N/A';
+                          const updatedByStr = meeting.updatedBy ? ' by <strong>' + meeting.updatedBy + '</strong>' : '';
+                          const nowStr = new Date().toLocaleString('en-IN');
+                          
+                          printWindow.document.write(
+                            '<!DOCTYPE html><html><head><title>Meeting Minutes - ' + mySchool + '</title>' +
+                            '<style>@media print { @page { margin: 1cm; size: A4; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }' +
+                            'body { font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 800px; margin: 0 auto; }' +
+                            '.header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #7C3AED; padding-bottom: 15px; margin-bottom: 20px; }' +
+                            '.logo { font-size: 24px; font-weight: bold; color: #7C3AED; }' +
+                            '.meeting-badge { background: #7C3AED; color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; }' +
+                            '.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }' +
+                            '.info-item { padding: 12px; background: #F9FAFB; border-radius: 8px; border-left: 4px solid #7C3AED; }' +
+                            '.info-item label { font-size: 11px; color: #6B7280; text-transform: uppercase; display: block; margin-bottom: 4px; }' +
+                            '.info-item span { font-weight: bold; color: #1F2937; font-size: 14px; }' +
+                            '.section { margin-top: 20px; padding: 15px; background: #FAF5FF; border-radius: 8px; border: 1px solid #E9D5FF; }' +
+                            '.section-title { font-weight: bold; color: #7C3AED; margin-bottom: 10px; font-size: 14px; }' +
+                            '.section-content { white-space: pre-wrap; line-height: 1.8; font-size: 13px; color: #374151; }' +
+                            '.footer { margin-top: 30px; padding-top: 15px; border-top: 2px solid #E9D5FF; font-size: 11px; color: #6B7280; display: flex; justify-content: space-between; }' +
+                            '</style></head><body>' +
+                            '<div class="header"><div><div class="logo">अवंती Avanti Fellows</div>' +
+                            '<h1 style="margin: 10px 0 5px; font-size: 22px; color: #1F2937;">Minutes of Meeting</h1>' +
+                            '<p style="margin: 0; color: #6B7280; font-size: 14px;">🏫 ' + mySchool + '</p></div>' +
+                            '<div class="meeting-badge">Meeting #' + meetingNum + '</div></div>' +
+                            '<div class="info-grid"><div class="info-item"><label>📅 Date</label><span>' + dateStr + '</span></div>' +
+                            '<div class="info-item"><label>🕐 Time</label><span>' + timeStr + '</span></div></div>' +
+                            '<div class="section"><div class="section-title">👥 Attendees</div><div class="section-content">' + attendeesStr + '</div></div>' +
+                            '<div class="section"><div class="section-title">💬 Discussion Points</div><div class="section-content">' + discussedStr + '</div></div>' +
+                            '<div class="section" style="background: #F0FDF4; border-color: #BBF7D0;"><div class="section-title" style="color: #059669;">✅ Action Items</div><div class="section-content">' + actionStr + '</div></div>' +
+                            '<div class="footer"><div><strong>Last Updated:</strong> ' + updatedStr + updatedByStr + '</div><div>Generated on: ' + nowStr + '</div></div>' +
+                            '<script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</scr' + 'ipt></body></html>'
+                          );
                           printWindow.document.close();
                         }}
                         className="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold text-sm hover:bg-purple-700 flex items-center gap-2"
@@ -11969,66 +11929,44 @@ function AdminSchoolInfo({schoolInfo}){
                             onClick={() => {
                               const printWindow = window.open('', '_blank');
                               const meetingNum = info.meetingMinutes.length - idx;
-                              printWindow.document.write(\`
-                                <!DOCTYPE html>
-                                <html>
-                                <head>
-                                  <title>Meeting Minutes - \${info.school}</title>
-                                  <style>
-                                    @media print { @page { margin: 1cm; size: A4; } body { -webkit-print-color-adjust: exact; } }
-                                    body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; color: #333; }
-                                    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #7C3AED; padding-bottom: 15px; margin-bottom: 20px; }
-                                    .logo { font-size: 24px; font-weight: bold; color: #7C3AED; }
-                                    .meeting-badge { background: #7C3AED; color: white; padding: 8px 16px; border-radius: 20px; }
-                                    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
-                                    .info-item { padding: 12px; background: #F9FAFB; border-radius: 8px; border-left: 4px solid #7C3AED; }
-                                    .info-item label { font-size: 11px; color: #6B7280; text-transform: uppercase; display: block; margin-bottom: 4px; }
-                                    .info-item span { font-weight: bold; color: #1F2937; }
-                                    .section { margin-top: 20px; padding: 15px; background: #FAF5FF; border-radius: 8px; border: 1px solid #E9D5FF; }
-                                    .section-title { font-weight: bold; color: #7C3AED; margin-bottom: 10px; }
-                                    .section-content { white-space: pre-wrap; line-height: 1.8; }
-                                    .footer { margin-top: 30px; padding-top: 15px; border-top: 2px solid #E9D5FF; font-size: 11px; color: #666; display: flex; justify-content: space-between; }
-                                  </style>
-                                </head>
-                                <body>
-                                  <div class="header">
-                                    <div>
-                                      <div class="logo">अवंती Avanti Fellows</div>
-                                      <h1 style="margin: 10px 0 5px; font-size: 22px;">Minutes of Meeting</h1>
-                                      <p style="margin: 0; color: #666;">🏫 \${info.school}</p>
-                                    </div>
-                                    <div class="meeting-badge">Meeting #\${meetingNum}</div>
-                                  </div>
-                                  <div class="info-grid">
-                                    <div class="info-item">
-                                      <label>📅 Date</label>
-                                      <span>\${meeting.meetingDate ? new Date(meeting.meetingDate).toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : 'N/A'}</span>
-                                    </div>
-                                    <div class="info-item">
-                                      <label>🕐 Time</label>
-                                      <span>\${meeting.meetingTime || 'N/A'}</span>
-                                    </div>
-                                  </div>
-                                  <div class="section">
-                                    <div class="section-title">👥 Attendees</div>
-                                    <div class="section-content">\${meeting.attendees || 'Not specified'}</div>
-                                  </div>
-                                  <div class="section">
-                                    <div class="section-title">💬 Discussion Points</div>
-                                    <div class="section-content">\${(meeting.discussedPoints || 'No points recorded').replace(/\\n/g, '<br>')}</div>
-                                  </div>
-                                  <div class="section" style="background: #F0FDF4; border-color: #BBF7D0;">
-                                    <div class="section-title" style="color: #059669;">✅ Action Items</div>
-                                    <div class="section-content">\${(meeting.actionPoints || 'No action items').replace(/\\n/g, '<br>')}</div>
-                                  </div>
-                                  <div class="footer">
-                                    <div>Updated: \${meeting.updatedAt ? new Date(meeting.updatedAt).toLocaleString('en-IN') : 'N/A'} by \${meeting.updatedBy || 'Unknown'}</div>
-                                    <div>Generated: \${new Date().toLocaleString('en-IN')}</div>
-                                  </div>
-                                  <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }<\\/script>
-                                </body>
-                                </html>
-                              \`);
+                              const schoolName = info.school;
+                              const dateStr = meeting.meetingDate ? new Date(meeting.meetingDate).toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : 'N/A';
+                              const timeStr = meeting.meetingTime || 'N/A';
+                              const attendeesStr = meeting.attendees || 'Not specified';
+                              const discussedStr = (meeting.discussedPoints || 'No points recorded').replace(/\n/g, '<br>');
+                              const actionStr = (meeting.actionPoints || 'No action items').replace(/\n/g, '<br>');
+                              const updatedStr = meeting.updatedAt ? new Date(meeting.updatedAt).toLocaleString('en-IN') : 'N/A';
+                              const updatedByStr = meeting.updatedBy || 'Unknown';
+                              const nowStr = new Date().toLocaleString('en-IN');
+                              
+                              printWindow.document.write(
+                                '<!DOCTYPE html><html><head><title>Meeting Minutes - ' + schoolName + '</title>' +
+                                '<style>@media print { @page { margin: 1cm; size: A4; } body { -webkit-print-color-adjust: exact; } }' +
+                                'body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; color: #333; }' +
+                                '.header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #7C3AED; padding-bottom: 15px; margin-bottom: 20px; }' +
+                                '.logo { font-size: 24px; font-weight: bold; color: #7C3AED; }' +
+                                '.meeting-badge { background: #7C3AED; color: white; padding: 8px 16px; border-radius: 20px; }' +
+                                '.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }' +
+                                '.info-item { padding: 12px; background: #F9FAFB; border-radius: 8px; border-left: 4px solid #7C3AED; }' +
+                                '.info-item label { font-size: 11px; color: #6B7280; text-transform: uppercase; display: block; margin-bottom: 4px; }' +
+                                '.info-item span { font-weight: bold; color: #1F2937; }' +
+                                '.section { margin-top: 20px; padding: 15px; background: #FAF5FF; border-radius: 8px; border: 1px solid #E9D5FF; }' +
+                                '.section-title { font-weight: bold; color: #7C3AED; margin-bottom: 10px; }' +
+                                '.section-content { white-space: pre-wrap; line-height: 1.8; }' +
+                                '.footer { margin-top: 30px; padding-top: 15px; border-top: 2px solid #E9D5FF; font-size: 11px; color: #666; display: flex; justify-content: space-between; }' +
+                                '</style></head><body>' +
+                                '<div class="header"><div><div class="logo">अवंती Avanti Fellows</div>' +
+                                '<h1 style="margin: 10px 0 5px; font-size: 22px;">Minutes of Meeting</h1>' +
+                                '<p style="margin: 0; color: #666;">🏫 ' + schoolName + '</p></div>' +
+                                '<div class="meeting-badge">Meeting #' + meetingNum + '</div></div>' +
+                                '<div class="info-grid"><div class="info-item"><label>📅 Date</label><span>' + dateStr + '</span></div>' +
+                                '<div class="info-item"><label>🕐 Time</label><span>' + timeStr + '</span></div></div>' +
+                                '<div class="section"><div class="section-title">👥 Attendees</div><div class="section-content">' + attendeesStr + '</div></div>' +
+                                '<div class="section"><div class="section-title">💬 Discussion Points</div><div class="section-content">' + discussedStr + '</div></div>' +
+                                '<div class="section" style="background: #F0FDF4; border-color: #BBF7D0;"><div class="section-title" style="color: #059669;">✅ Action Items</div><div class="section-content">' + actionStr + '</div></div>' +
+                                '<div class="footer"><div>Updated: ' + updatedStr + ' by ' + updatedByStr + '</div><div>Generated: ' + nowStr + '</div></div>' +
+                                '<script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</scr' + 'ipt></body></html>'
+                              );
                               printWindow.document.close();
                             }}
                             className="px-3 py-1 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700"
