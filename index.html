@@ -1959,6 +1959,271 @@ function TeacherProfileModal({ teacher, onClose, onGiveFeedback, averageRating }
   );
 }
 
+// ========================================
+// PERFORMANCE TREND GRAPH COMPONENT
+// For Line Manager, PM, Program Head, Admin views
+// ========================================
+function PerformanceTrendGraph({ 
+  teachers = [], 
+  curriculum = {}, 
+  chapterProgress = {}, 
+  observations = [],
+  feedbackData = [],
+  accessibleSchools = SCHOOLS,
+  title = "Performance Trend"
+}) {
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+
+  // Calculate monthly performance data
+  const monthlyData = useMemo(() => {
+    const now = new Date();
+    const months = [];
+    
+    // Get last 6 months
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+        label: date.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+        curriculumCompletion: 0,
+        observationScore: 0,
+        feedbackRating: 0,
+        observationCount: 0,
+        feedbackCount: 0
+      });
+    }
+
+    // Calculate curriculum completion for each month
+    // This is cumulative - showing total completed by end of each month
+    let cumulativeCompleted = 0;
+    let totalChapters = 0;
+    
+    accessibleSchools.forEach(school => {
+      SUBJECTS.forEach(subject => {
+        ['11', '12'].forEach(grade => {
+          const docId = `${school}_${subject}_${grade}`;
+          const chapters = curriculum[docId]?.chapters || [];
+          totalChapters += chapters.length;
+          
+          chapters.forEach(ch => {
+            const progressId = `${school}_${ch.id}`;
+            const prog = chapterProgress[progressId] || {};
+            if (prog.completed === 'Yes' && prog.completedDate) {
+              const completedMonth = prog.completedDate.substring(0, 7);
+              // Find which month bucket this falls into
+              months.forEach((m, idx) => {
+                if (completedMonth <= m.key) {
+                  // Don't increment here - we'll calculate cumulative below
+                }
+              });
+            }
+          });
+        });
+      });
+    });
+
+    // Calculate cumulative completion for each month
+    months.forEach((month, idx) => {
+      let completedByMonth = 0;
+      accessibleSchools.forEach(school => {
+        SUBJECTS.forEach(subject => {
+          ['11', '12'].forEach(grade => {
+            const docId = `${school}_${subject}_${grade}`;
+            const chapters = curriculum[docId]?.chapters || [];
+            chapters.forEach(ch => {
+              const progressId = `${school}_${ch.id}`;
+              const prog = chapterProgress[progressId] || {};
+              if (prog.completed === 'Yes' && prog.completedDate) {
+                const completedMonth = prog.completedDate.substring(0, 7);
+                if (completedMonth <= month.key) {
+                  completedByMonth++;
+                }
+              }
+            });
+          });
+        });
+      });
+      month.curriculumCompletion = totalChapters > 0 ? Math.round((completedByMonth / totalChapters) * 100) : 0;
+    });
+
+    // Calculate observation scores by month
+    observations.forEach(obs => {
+      if (obs.submittedAt || obs.observationDate) {
+        const date = new Date(obs.observationDate || obs.submittedAt);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const monthData = months.find(m => m.key === monthKey);
+        if (monthData) {
+          monthData.observationScore += obs.percentageScore || 0;
+          monthData.observationCount++;
+        }
+      }
+    });
+
+    // Calculate feedback ratings by month
+    feedbackData.forEach(fb => {
+      if (fb.submittedAt || fb.completedAt) {
+        const date = new Date(fb.submittedAt || fb.completedAt);
+        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const monthData = months.find(m => m.key === monthKey);
+        if (monthData && fb.responses) {
+          // Calculate average rating from responses
+          const ratings = Object.values(fb.responses)
+            .map(r => r.rating)
+            .filter(r => r !== undefined && r !== null);
+          if (ratings.length > 0) {
+            const avgRating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+            monthData.feedbackRating += avgRating;
+            monthData.feedbackCount++;
+          }
+        }
+      }
+    });
+
+    // Calculate averages
+    months.forEach(month => {
+      if (month.observationCount > 0) {
+        month.observationScore = Math.round(month.observationScore / month.observationCount);
+      }
+      if (month.feedbackCount > 0) {
+        month.feedbackRating = (month.feedbackRating / month.feedbackCount).toFixed(1);
+      }
+    });
+
+    return months;
+  }, [curriculum, chapterProgress, observations, feedbackData, accessibleSchools]);
+
+  // Create/update chart
+  useEffect(() => {
+    if (chartInstance.current) {
+      chartInstance.current.destroy();
+    }
+
+    if (chartRef.current && monthlyData.length > 0) {
+      const ctx = chartRef.current.getContext('2d');
+      
+      chartInstance.current = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: monthlyData.map(m => m.label),
+          datasets: [
+            {
+              label: 'Curriculum Completion %',
+              data: monthlyData.map(m => m.curriculumCompletion),
+              borderColor: '#10B981',
+              backgroundColor: 'rgba(16, 185, 129, 0.1)',
+              tension: 0.4,
+              fill: false,
+              pointBackgroundColor: '#10B981',
+              pointRadius: 5,
+              yAxisID: 'y'
+            },
+            {
+              label: 'Avg Observation Score %',
+              data: monthlyData.map(m => m.observationScore || null),
+              borderColor: '#F4B41A',
+              backgroundColor: 'rgba(244, 180, 26, 0.1)',
+              tension: 0.4,
+              fill: false,
+              pointBackgroundColor: '#F4B41A',
+              pointRadius: 5,
+              yAxisID: 'y',
+              spanGaps: true
+            },
+            {
+              label: 'Avg Feedback Rating',
+              data: monthlyData.map(m => m.feedbackRating ? parseFloat(m.feedbackRating) * 20 : null),
+              borderColor: '#3B82F6',
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              tension: 0.4,
+              fill: false,
+              pointBackgroundColor: '#3B82F6',
+              pointRadius: 5,
+              yAxisID: 'y',
+              spanGaps: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            title: { 
+              display: true, 
+              text: title, 
+              font: { size: 16, weight: 'bold' } 
+            },
+            legend: { 
+              position: 'bottom',
+              labels: { usePointStyle: true }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label.includes('Feedback Rating')) {
+                    const actualRating = context.raw ? (context.raw / 20).toFixed(1) : 'N/A';
+                    return `${label}: ${actualRating}/5`;
+                  }
+                  return `${label}: ${context.raw}%`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: { 
+              beginAtZero: true, 
+              max: 100,
+              title: { display: true, text: 'Percentage / Score' }
+            },
+            x: {
+              title: { display: true, text: 'Month' }
+            }
+          }
+        }
+      });
+    }
+
+    return () => {
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+      }
+    };
+  }, [monthlyData, title]);
+
+  return (
+    <div className="bg-white p-6 rounded-2xl shadow-lg">
+      <div style={{ height: '300px' }}>
+        <canvas ref={chartRef}></canvas>
+      </div>
+      <div className="grid grid-cols-3 gap-4 mt-4">
+        <div className="text-center p-3 bg-green-50 rounded-xl">
+          <div className="text-2xl font-bold text-green-600">
+            {monthlyData[monthlyData.length - 1]?.curriculumCompletion || 0}%
+          </div>
+          <div className="text-xs text-gray-600">Current Curriculum</div>
+        </div>
+        <div className="text-center p-3 bg-yellow-50 rounded-xl">
+          <div className="text-2xl font-bold text-yellow-600">
+            {monthlyData[monthlyData.length - 1]?.observationScore || 'N/A'}%
+          </div>
+          <div className="text-xs text-gray-600">Avg Obs Score (This Month)</div>
+        </div>
+        <div className="text-center p-3 bg-blue-50 rounded-xl">
+          <div className="text-2xl font-bold text-blue-600">
+            {monthlyData[monthlyData.length - 1]?.feedbackRating || 'N/A'}/5
+          </div>
+          <div className="text-xs text-gray-600">Avg Feedback (This Month)</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Teacher Feedback Form Modal
 function TeacherFeedbackForm({ teacher, studentId, studentInfo, onClose, onSubmitSuccess }) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -2746,31 +3011,47 @@ function StudentProfileForm({ currentUser }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold">👤 My Profile</h2>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <div className="text-sm text-gray-600">Profile Completion</div>
-            <div
-              className="text-3xl font-bold"
-              style={{
-                color:
-                  completion >= 80
-                    ? '#10B981'
-                    : completion >= 50
-                    ? '#F59E0B'
-                    : '#EF4444'
-              }}
-            >
-              {completion}%
+      {/* Header with Student ID */}
+      <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg">
+        <div className="flex justify-between items-start flex-wrap gap-4">
+          <div>
+            <h2 className="text-3xl font-bold">👤 My Profile</h2>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <span className="px-3 py-1 bg-white/30 text-white rounded-lg text-sm font-mono">
+                Student ID: {myId}
+              </span>
+              <span className="px-3 py-1 bg-white/30 text-white rounded-lg text-sm">
+                {currentUser.school}
+              </span>
+              <span className="px-3 py-1 bg-white/30 text-white rounded-lg text-sm">
+                Class {currentUser.grade}
+              </span>
             </div>
           </div>
-          <button
-            onClick={handleToggleEdit}
-            className="px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold"
-          >
-            {isEditing ? 'Save' : 'Edit'}
-          </button>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <div className="text-sm opacity-90">Profile Completion</div>
+              <div
+                className="text-3xl font-bold"
+                style={{
+                  color:
+                    completion >= 80
+                      ? '#86EFAC'
+                      : completion >= 50
+                      ? '#FCD34D'
+                      : '#FCA5A5'
+                }}
+              >
+                {completion}%
+              </div>
+            </div>
+            <button
+              onClick={handleToggleEdit}
+              className="px-4 py-2 bg-white text-blue-600 rounded-xl font-semibold hover:bg-blue-50"
+            >
+              {isEditing ? 'Save' : 'Edit'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -4701,6 +4982,210 @@ function TeacherView({
   );
 }
 // ========================================
+// ADMIN DASHBOARD WITH PERFORMANCE TRENDS
+// ========================================
+function AdminDashboard({ 
+  teachers, 
+  students, 
+  curriculum, 
+  chapterProgress, 
+  observations = [],
+  feedbackData = [],
+  accessibleSchools = SCHOOLS,
+  isSuperAdmin = false,
+  currentUser
+}) {
+  // Calculate summary stats
+  const stats = useMemo(() => {
+    let totalChapters = 0;
+    let completedChapters = 0;
+    let onTimeChapters = 0;
+    let delayedChapters = 0;
+
+    accessibleSchools.forEach(school => {
+      SUBJECTS.forEach(subject => {
+        ['11', '12'].forEach(grade => {
+          const docId = `${school}_${subject}_${grade}`;
+          const chapters = curriculum[docId]?.chapters || [];
+          chapters.forEach(ch => {
+            totalChapters++;
+            const progressId = `${school}_${ch.id}`;
+            const prog = chapterProgress[progressId] || {};
+            if (prog.completed === 'Yes') {
+              completedChapters++;
+              if (prog.completedDate && ch.targetDate) {
+                const completed = new Date(prog.completedDate);
+                const expected = new Date(ch.targetDate);
+                if (completed <= expected) {
+                  onTimeChapters++;
+                } else {
+                  delayedChapters++;
+                }
+              }
+            }
+          });
+        });
+      });
+    });
+
+    return {
+      totalChapters,
+      completedChapters,
+      onTimeChapters,
+      delayedChapters,
+      pendingChapters: totalChapters - completedChapters,
+      completionRate: totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0
+    };
+  }, [curriculum, chapterProgress, accessibleSchools]);
+
+  // Calculate average observation score
+  const avgObservationScore = useMemo(() => {
+    if (observations.length === 0) return 0;
+    const total = observations.reduce((sum, o) => sum + (o.percentageScore || 0), 0);
+    return Math.round(total / observations.length);
+  }, [observations]);
+
+  // Calculate average feedback rating
+  const avgFeedbackRating = useMemo(() => {
+    if (feedbackData.length === 0) return 0;
+    let totalRating = 0;
+    let count = 0;
+    feedbackData.forEach(fb => {
+      if (fb.responses) {
+        const ratings = Object.values(fb.responses)
+          .map(r => r.rating)
+          .filter(r => r !== undefined && r !== null);
+        if (ratings.length > 0) {
+          totalRating += ratings.reduce((a, b) => a + b, 0) / ratings.length;
+          count++;
+        }
+      }
+    });
+    return count > 0 ? (totalRating / count).toFixed(1) : 0;
+  }, [feedbackData]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center flex-wrap gap-4">
+        <h2 className="text-3xl font-bold">📊 Dashboard Overview</h2>
+        <div className="flex gap-2 flex-wrap">
+          <span className="px-4 py-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-xl font-bold">
+            {isSuperAdmin ? 'Super Admin' : ROLE_LABELS[currentUser?.role] || 'Admin'}
+          </span>
+          {!isSuperAdmin && (
+            <span className="px-4 py-2 bg-blue-100 text-blue-800 rounded-xl font-semibold">
+              🏫 {accessibleSchools.length} School{accessibleSchools.length > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Summary Stats Cards */}
+      <div className="grid md:grid-cols-4 gap-4">
+        <div className="stat-card bg-gradient-to-br from-green-500 to-emerald-600 text-white">
+          <div className="text-sm opacity-90">Curriculum Completion</div>
+          <div className="text-4xl font-bold mt-2">{stats.completionRate}%</div>
+          <div className="text-sm mt-2">{stats.completedChapters} / {stats.totalChapters} chapters</div>
+        </div>
+        <div className="stat-card bg-gradient-to-br from-yellow-500 to-orange-600 text-white">
+          <div className="text-sm opacity-90">Avg Observation Score</div>
+          <div className="text-4xl font-bold mt-2">{avgObservationScore}%</div>
+          <div className="text-sm mt-2">{observations.length} observations</div>
+        </div>
+        <div className="stat-card bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+          <div className="text-sm opacity-90">Avg Feedback Rating</div>
+          <div className="text-4xl font-bold mt-2">{avgFeedbackRating}/5</div>
+          <div className="text-sm mt-2">{feedbackData.length} responses</div>
+        </div>
+        <div className="stat-card bg-gradient-to-br from-purple-500 to-pink-600 text-white">
+          <div className="text-sm opacity-90">Active Teachers</div>
+          <div className="text-4xl font-bold mt-2">{teachers.length}</div>
+          <div className="text-sm mt-2">{students.length} students</div>
+        </div>
+      </div>
+
+      {/* Performance Trend Graph */}
+      <PerformanceTrendGraph
+        teachers={teachers}
+        curriculum={curriculum}
+        chapterProgress={chapterProgress}
+        observations={observations}
+        feedbackData={feedbackData}
+        accessibleSchools={accessibleSchools}
+        title="📈 Month-wise Performance Trend"
+      />
+
+      {/* Quick Stats Grid */}
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Chapter Status */}
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <h3 className="text-xl font-bold mb-4">📚 Chapter Status Overview</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Completed On Time</span>
+              <span className="font-bold text-green-600">{stats.onTimeChapters} chapters</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Completed (Delayed)</span>
+              <span className="font-bold text-orange-600">{stats.delayedChapters} chapters</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">Pending</span>
+              <span className="font-bold text-red-600">{stats.pendingChapters} chapters</span>
+            </div>
+            <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-green-500 to-emerald-500" 
+                style={{ width: `${stats.completionRate}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* School-wise Summary */}
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <h3 className="text-xl font-bold mb-4">🏫 School-wise Summary</h3>
+          <div className="space-y-3 max-h-64 overflow-y-auto">
+            {accessibleSchools.map(school => {
+              let schoolTotal = 0, schoolCompleted = 0;
+              SUBJECTS.forEach(subject => {
+                ['11', '12'].forEach(grade => {
+                  const docId = `${school}_${subject}_${grade}`;
+                  const chapters = curriculum[docId]?.chapters || [];
+                  chapters.forEach(ch => {
+                    schoolTotal++;
+                    const progressId = `${school}_${ch.id}`;
+                    const prog = chapterProgress[progressId] || {};
+                    if (prog.completed === 'Yes') schoolCompleted++;
+                  });
+                });
+              });
+              const schoolPercentage = schoolTotal > 0 ? Math.round((schoolCompleted / schoolTotal) * 100) : 0;
+              return (
+                <div key={school} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <span className="font-semibold text-sm">{school}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full ${schoolPercentage >= 70 ? 'bg-green-500' : schoolPercentage >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} 
+                        style={{ width: `${schoolPercentage}%` }}
+                      />
+                    </div>
+                    <span className={`text-sm font-bold ${schoolPercentage >= 70 ? 'text-green-600' : schoolPercentage >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                      {schoolPercentage}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ========================================
 // ADMIN EXAM REGISTRATION STATISTICS
 // ========================================
 function AdminExamStats({ accessibleSchools = [], isSuperAdmin = false }) {
@@ -6380,9 +6865,50 @@ function AdminView({
   accessibleSchools,
   academicYearSettings
 }) {
-  const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'managers' : 'teachers');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [dashboardObservations, setDashboardObservations] = useState([]);
+  const [dashboardFeedback, setDashboardFeedback] = useState([]);
+
+  // Fetch observations and feedback for dashboard trend graph
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        // Fetch observations
+        const obsSnap = await db.collection('classroomObservations').get();
+        const obsData = obsSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          submittedAt: doc.data().submittedAt?.toDate() || new Date(doc.data().submittedAtISO)
+        }));
+        
+        // Filter by accessible schools
+        const filteredObs = isSuperAdmin 
+          ? obsData 
+          : obsData.filter(o => accessibleSchools.includes(o.school));
+        setDashboardObservations(filteredObs);
+
+        // Fetch feedback
+        const fbSnap = await db.collection('teacherFeedback').get();
+        const fbData = fbSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          submittedAt: doc.data().submittedAt?.toDate ? doc.data().submittedAt.toDate() : new Date(doc.data().submittedAt || doc.data().completedAt)
+        }));
+        
+        // Filter by accessible schools
+        const filteredFb = isSuperAdmin 
+          ? fbData 
+          : fbData.filter(f => accessibleSchools.includes(f.school));
+        setDashboardFeedback(filteredFb);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      }
+    };
+
+    fetchDashboardData();
+  }, [accessibleSchools, isSuperAdmin]);
 
   // Filter data based on accessible schools for managers/APMs
   const filteredTeachers = isSuperAdmin ? teachers : teachers.filter(t => accessibleSchools.includes(t.school));
@@ -6395,6 +6921,7 @@ function AdminView({
   const availableSchools = isSuperAdmin ? SCHOOLS : accessibleSchools;
 
   const adminTabs = [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     ...(isSuperAdmin ? [
       { id: 'managers', label: 'Managers', icon: '👔' },
       { id: 'academicyear', label: 'Academic Year', icon: '📅' },
@@ -6534,6 +7061,20 @@ function AdminView({
         <div className="px-4 py-6">
 
         {/* Tab Content */}
+        {activeTab === 'dashboard' && (
+          <AdminDashboard 
+            teachers={filteredTeachers}
+            students={filteredStudents}
+            curriculum={curriculum}
+            chapterProgress={chapterProgress}
+            observations={dashboardObservations}
+            feedbackData={dashboardFeedback}
+            accessibleSchools={availableSchools}
+            isSuperAdmin={isSuperAdmin}
+            currentUser={currentUser}
+          />
+        )}
+
         {activeTab === 'managers' && isSuperAdmin && (
           <ManagerManagement managers={managers} currentUser={currentUser} isSuperAdmin={isSuperAdmin} />
         )}
@@ -14258,7 +14799,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.2.0'; // Change this version number with every update
+  const CURRENT_VERSION = '3.3.0'; // Change this version number with every update - Added Dashboard with Performance Trend Graph
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
