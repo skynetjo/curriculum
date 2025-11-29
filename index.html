@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -542,12 +543,46 @@ const SUBJECTS=['Physics','Chemistry','Maths','Biology'];
 // Default schools - will be overridden by dynamic schools from Firebase
 let SCHOOLS=['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal','JNV Bharuch'];
 
-// Manager Role Constants
+// ========================================
+// HIERARCHY ROLE CONSTANTS (4-Level)
+// ========================================
 const MANAGER_ROLES = {
-  SUPER_ADMIN: 'super_admin',
-  MANAGER: 'manager', 
-  APM: 'apm' // Associate Program Manager
+  SUPER_ADMIN: 'super_admin',     // Full access to everything
+  APH: 'aph',                     // Associate Program Head - sees all reportees' schools
+  PM: 'pm',                       // Program Manager - sees their schools + APM schools
+  APM: 'apm'                      // Associate Program Manager - sees only assigned schools
 };
+
+const ROLE_LABELS = {
+  'super_admin': 'Super Admin',
+  'aph': 'Associate Program Head',
+  'pm': 'Program Manager',
+  'apm': 'Associate Program Manager'
+};
+
+const ROLE_COLORS = {
+  'super_admin': { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+  'aph': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+  'pm': { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' },
+  'apm': { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' }
+};
+
+// ========================================
+// ACADEMIC YEAR CONFIGURATION
+// ========================================
+const getCurrentAcademicYear = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-indexed
+  // Academic year starts in April (month 3)
+  if (month >= 3) { // April onwards
+    return `${year}-${year + 1}`;
+  } else { // Jan-March
+    return `${year - 1}-${year}`;
+  }
+};
+
+const CURRENT_ACADEMIC_YEAR = getCurrentAcademicYear();
 
 const LEAVE_REASONS=['Present','Personal Leave','Sick Leave','Weekly Off','Public Holiday','Organization Holiday','School Holiday','Emergency Leave','Maternity Leave','Paternity Leave'];
 
@@ -3737,7 +3772,7 @@ useEffect(() => {
     </div>
   );
 }
-function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[isSuperAdmin,setIsSuperAdmin]=useState(false);const[managerProfile,setManagerProfile]=useState(null);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:'',studentId:'',loginType:'teacher'});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);const[managers,setManagers]=useState([]);const[dynamicSchools,setDynamicSchools]=useState([]);const[accessibleSchools,setAccessibleSchools]=useState([]);
+function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[isSuperAdmin,setIsSuperAdmin]=useState(false);const[managerProfile,setManagerProfile]=useState(null);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:'',studentId:'',loginType:'teacher'});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);const[managers,setManagers]=useState([]);const[accessibleSchools,setAccessibleSchools]=useState([]);const[academicYearSettings,setAcademicYearSettings]=useState(null);
 const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);
 const[leaveAdjustments,setLeaveAdjustments]=useState({});
@@ -3745,15 +3780,25 @@ const[schoolInfo,setSchoolInfo]=useState([]);
 const[isSidebarOpen,setIsSidebarOpen]=useState(false);               
 const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
 
-// Helper function to get accessible schools for a manager
+// Helper function to get accessible schools for a manager (supports 4-level hierarchy)
 const getAccessibleSchools = useCallback((managerData, allManagers) => {
   if (!managerData) return [];
   
   let schools = [...(managerData.directSchools || [])];
   
-  // If manager, also include schools from all reportees
-  if (managerData.role === MANAGER_ROLES.MANAGER || managerData.role === MANAGER_ROLES.SUPER_ADMIN) {
-    const reportees = allManagers.filter(m => m.reportsTo === managerData.id);
+  // Recursive function to get all reportees at all levels
+  const getAllReportees = (managerId) => {
+    const directReportees = allManagers.filter(m => m.reportsTo === managerId && m.status === 'active');
+    let allReportees = [...directReportees];
+    directReportees.forEach(reportee => {
+      allReportees = [...allReportees, ...getAllReportees(reportee.id)];
+    });
+    return allReportees;
+  };
+  
+  // If not APM, include schools from all reportees (recursive)
+  if (managerData.role !== MANAGER_ROLES.APM) {
+    const reportees = getAllReportees(managerData.id);
     reportees.forEach(reportee => {
       schools = [...schools, ...(reportee.directSchools || [])];
     });
@@ -3772,12 +3817,15 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
     const allManagersSnap=await db.collection('managers').where('status','==','active').get();
     const allManagers=allManagersSnap.docs.map(d=>({...d.data(),id:d.id}));
     setManagers(allManagers);
+    // Fetch academic year settings
+    const aySnap = await db.collection('system').doc('academicYear').get();
+    if(aySnap.exists) setAcademicYearSettings(aySnap.data());
     // Super admin sees all schools
     setAccessibleSchools([...SCHOOLS]);
     setCurrentUser({name:'Super Administrator',email:user.email,afid:'SUPER_ADMIN',school:'Admin',role:MANAGER_ROLES.SUPER_ADMIN});
     setActiveTab('managers');
   }else{
-  // Check if user is a manager/APM
+  // Check if user is a manager/APH/PM/APM
   const managerSnapshot=await db.collection('managers').where('email','==',user.email).where('status','==','active').limit(1).get();
   if(!managerSnapshot.empty){
     const managerData={...managerSnapshot.docs[0].data(),id:managerSnapshot.docs[0].id};
@@ -3788,11 +3836,15 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
     const allManagers=allManagersSnap.docs.map(d=>({...d.data(),id:d.id}));
     setManagers(allManagers);
     
+    // Fetch academic year settings
+    const aySnap = await db.collection('system').doc('academicYear').get();
+    if(aySnap.exists) setAcademicYearSettings(aySnap.data());
+    
     const schools=getAccessibleSchools(managerData, allManagers);
     setAccessibleSchools(schools);
     
     setIsAdmin(true);
-    setIsSuperAdmin(managerData.role === MANAGER_ROLES.SUPER_ADMIN);
+    setIsSuperAdmin(false);
     setCurrentUser({
       name:managerData.name,
       email:user.email,
@@ -3814,7 +3866,7 @@ useEffect(() => {
   const fetchData = async () => {
     try {
       // ✅ FETCH ALL DATA IN PARALLEL (MUCH FASTER!)
-      const [progressSnap, teachersSnap, curriculumSnap, studentsSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, managersSnap, schoolsSnap] = await Promise.all([
+      const [progressSnap, teachersSnap, curriculumSnap, studentsSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, managersSnap, schoolsSnap, aySnap] = await Promise.all([
         db.collection('chapterProgress').get(),
         db.collection('teachers').get(),
         db.collection('curriculum').get(),
@@ -3828,7 +3880,8 @@ useEffect(() => {
         db.collection('schoolInfo').get(),
         db.collection('leaveAdjustments').get(),
         db.collection('managers').where('status','==','active').get(),
-        db.collection('schoolsList').get()
+        db.collection('schoolsList').get(),
+        db.collection('system').doc('academicYear').get()
       ]);
 
       // Process chapter progress
@@ -3876,9 +3929,13 @@ setStudents(
       if (!schoolsSnap.empty) {
         const schoolsData = schoolsSnap.docs.map(d => d.data().name).filter(Boolean);
         if (schoolsData.length > 0) {
-          setDynamicSchools(schoolsData);
           SCHOOLS = schoolsData; // Update global SCHOOLS array
         }
+      }
+      
+      // Process academic year settings
+      if (aySnap.exists) {
+        setAcademicYearSettings(aySnap.data());
       }
 
     } catch (e) {
@@ -4234,7 +4291,7 @@ if(currentUser && currentUser.userType === 'student') {
   return <StudentDashboard currentUser={currentUser} handleLogout={handleLogout} />;
 }
 
-return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments}/>;
+return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools} academicYearSettings={academicYearSettings}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments}/>;
 }
 
 function TeacherView({
@@ -4879,7 +4936,7 @@ function AdminExamStats() {
 }
 
 // ========================================
-// MANAGER MANAGEMENT COMPONENT
+// MANAGER MANAGEMENT COMPONENT (4-Level Hierarchy)
 // ========================================
 function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
   const [showModal, setShowModal] = useState(false);
@@ -4887,7 +4944,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
   const [form, setForm] = useState({
     name: '',
     email: '',
-    role: MANAGER_ROLES.MANAGER,
+    role: MANAGER_ROLES.APH,
     reportsTo: '',
     directSchools: [],
     phone: '',
@@ -4913,8 +4970,18 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
     fetchSchools();
   }, []);
 
-  // Get managers for dropdown (only managers, not APMs)
-  const managerOptions = managers.filter(m => m.role === MANAGER_ROLES.MANAGER);
+  // Get managers by role for dropdown options
+  const getManagersByRole = (role) => managers.filter(m => m.role === role && m.status === 'active');
+  
+  // Get valid "reports to" options based on selected role
+  const getReportsToOptions = (role) => {
+    switch(role) {
+      case MANAGER_ROLES.APH: return []; // APH reports to Super Admin (no selection needed)
+      case MANAGER_ROLES.PM: return getManagersByRole(MANAGER_ROLES.APH); // PM reports to APH
+      case MANAGER_ROLES.APM: return getManagersByRole(MANAGER_ROLES.PM); // APM reports to PM
+      default: return [];
+    }
+  };
 
   // Filter managers
   const filteredManagers = managers.filter(m => {
@@ -4924,21 +4991,31 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
     return true;
   });
 
-  // Get reportees for a manager
-  const getReportees = (managerId) => {
+  // Recursive function to get all reportees
+  const getAllReportees = (managerId) => {
+    const directReportees = managers.filter(m => m.reportsTo === managerId);
+    let allReportees = [...directReportees];
+    directReportees.forEach(r => {
+      allReportees = [...allReportees, ...getAllReportees(r.id)];
+    });
+    return allReportees;
+  };
+
+  // Get direct reportees
+  const getDirectReportees = (managerId) => {
     return managers.filter(m => m.reportsTo === managerId);
   };
 
   // Get manager name by ID
   const getManagerName = (managerId) => {
     const manager = managers.find(m => m.id === managerId);
-    return manager ? manager.name : 'None';
+    return manager ? manager.name : 'Super Admin';
   };
 
-  // Calculate total schools for a manager (direct + reportees)
+  // Calculate total schools for a manager (direct + all reportees)
   const getTotalSchools = (manager) => {
     let schools = [...(manager.directSchools || [])];
-    const reportees = getReportees(manager.id);
+    const reportees = getAllReportees(manager.id);
     reportees.forEach(r => {
       schools = [...schools, ...(r.directSchools || [])];
     });
@@ -4950,7 +5027,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
     setForm({
       name: '',
       email: '',
-      role: MANAGER_ROLES.MANAGER,
+      role: MANAGER_ROLES.APH,
       reportsTo: '',
       directSchools: [],
       phone: '',
@@ -4964,7 +5041,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
     setForm({
       name: manager.name || '',
       email: manager.email || '',
-      role: manager.role || MANAGER_ROLES.MANAGER,
+      role: manager.role || MANAGER_ROLES.APH,
       reportsTo: manager.reportsTo || '',
       directSchools: manager.directSchools || [],
       phone: manager.phone || '',
@@ -4978,13 +5055,19 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
       alert('Please fill in required fields');
       return;
     }
+    
+    // Validate reports to for PM and APM
+    if ((form.role === MANAGER_ROLES.PM || form.role === MANAGER_ROLES.APM) && !form.reportsTo) {
+      alert('Please select who this person reports to');
+      return;
+    }
 
     try {
       const managerData = {
         name: form.name,
         email: form.email.toLowerCase(),
         role: form.role,
-        reportsTo: form.role === MANAGER_ROLES.APM ? form.reportsTo : null,
+        reportsTo: form.role === MANAGER_ROLES.APH ? null : form.reportsTo,
         directSchools: form.directSchools,
         phone: form.phone,
         status: form.status,
@@ -4993,19 +5076,18 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
 
       if (editingManager) {
         await db.collection('managers').doc(editingManager.id).update(managerData);
-        alert('✅ Manager updated successfully!');
+        alert('✅ Updated successfully!');
       } else {
         managerData.createdAt = new Date().toISOString();
         await db.collection('managers').add(managerData);
         
-        alert(`✅ ${form.role === MANAGER_ROLES.MANAGER ? 'Manager' : 'APM'} added successfully!\n\n` +
+        alert(`✅ ${ROLE_LABELS[form.role]} added successfully!\n\n` +
               `📧 Email: ${form.email}\n\n` +
-              `⚠️ IMPORTANT: You must also create a Firebase Auth user:\n` +
-              `1. Go to Firebase Console → Authentication → Users\n` +
+              `⚠️ IMPORTANT: Create Firebase Auth user:\n` +
+              `1. Firebase Console → Authentication → Users\n` +
               `2. Click "Add user"\n` +
-              `3. Enter email: ${form.email}\n` +
-              `4. Set a password and share it with them\n\n` +
-              `They can then login with their email and password.`);
+              `3. Enter: ${form.email}\n` +
+              `4. Set password and share with them`);
       }
       
       setShowModal(false);
@@ -5023,7 +5105,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
         status: 'inactive',
         deactivatedAt: new Date().toISOString()
       });
-      alert('✅ Manager deactivated');
+      alert('✅ Deactivated');
       window.location.reload();
     } catch (e) {
       alert('Failed: ' + e.message);
@@ -5036,7 +5118,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
         status: 'active',
         reactivatedAt: new Date().toISOString()
       });
-      alert('✅ Manager reactivated');
+      alert('✅ Reactivated');
       window.location.reload();
     } catch (e) {
       alert('Failed: ' + e.message);
@@ -5063,15 +5145,14 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
       
       setAllSchools([...allSchools, newSchoolName.trim()]);
       setNewSchoolName('');
-      setShowSchoolModal(false);
-      alert('✅ School added successfully!');
+      alert('✅ School added!');
     } catch (e) {
       alert('Failed: ' + e.message);
     }
   };
 
   const handleRemoveSchool = async (schoolName) => {
-    if (!confirm(`Remove "${schoolName}" from the system?\n\n⚠️ This will NOT delete existing data for this school.`)) return;
+    if (!confirm(`Remove "${schoolName}"?\n\n⚠️ Existing data will NOT be deleted.`)) return;
     
     try {
       const schoolsSnap = await db.collection('schoolsList').where('name', '==', schoolName).get();
@@ -5093,6 +5174,76 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
     }
   };
 
+  // Render hierarchy card recursively
+  const renderManagerCard = (manager, level = 0) => {
+    const colors = ROLE_COLORS[manager.role] || ROLE_COLORS['apm'];
+    const reportees = getDirectReportees(manager.id);
+    const totalSchools = getTotalSchools(manager);
+    
+    return (
+      <div key={manager.id} className={`${level > 0 ? 'ml-4 md:ml-8 mt-2' : ''}`}>
+        <div className={`border-2 ${colors.border} rounded-xl p-4 ${colors.bg}`}>
+          <div className="flex items-start justify-between flex-wrap gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-2xl">{manager.role === MANAGER_ROLES.APH ? '👔' : manager.role === MANAGER_ROLES.PM ? '👨‍💼' : '👤'}</span>
+                <span className="text-xl font-bold">{manager.name}</span>
+                <span className={`px-3 py-1 ${colors.bg} ${colors.text} text-xs rounded-full font-bold border ${colors.border}`}>
+                  {ROLE_LABELS[manager.role]}
+                </span>
+                {manager.status !== 'active' && (
+                  <span className="px-3 py-1 bg-red-500 text-white text-xs rounded-full font-bold">INACTIVE</span>
+                )}
+              </div>
+              <div className="text-sm text-gray-600 mt-1">📧 {manager.email}</div>
+              {manager.reportsTo && (
+                <div className="text-sm text-gray-500 mt-1">↳ Reports to: {getManagerName(manager.reportsTo)}</div>
+              )}
+              <div className="mt-2">
+                <span className="text-sm font-semibold">Direct Schools:</span>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {(manager.directSchools || []).map(school => (
+                    <span key={school} className="px-2 py-1 bg-white text-sm rounded border">🏫 {school}</span>
+                  ))}
+                  {(!manager.directSchools || manager.directSchools.length === 0) && (
+                    <span className="text-gray-400 text-sm">No schools assigned</span>
+                  )}
+                </div>
+              </div>
+              {reportees.length > 0 && (
+                <div className="mt-2 text-sm text-green-600 font-semibold">
+                  📊 Total Access: {totalSchools.length} schools (via {reportees.length} reportees)
+                </div>
+              )}
+            </div>
+            {isSuperAdmin && (
+              <div className="flex gap-2">
+                <button onClick={() => openEditModal(manager)} className="px-3 py-1 bg-yellow-400 rounded-lg font-semibold text-sm">Edit</button>
+                {manager.status === 'active' ? (
+                  <button onClick={() => handleDeactivate(manager)} className="px-3 py-1 bg-red-500 text-white rounded-lg font-semibold text-sm">Deactivate</button>
+                ) : (
+                  <button onClick={() => handleReactivate(manager)} className="px-3 py-1 bg-green-500 text-white rounded-lg font-semibold text-sm">Reactivate</button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        {/* Render reportees */}
+        {reportees.map(reportee => renderManagerCard(reportee, level + 1))}
+      </div>
+    );
+  };
+
+  // Get top-level managers (APHs - report to no one)
+  const topLevelManagers = managers.filter(m => m.role === MANAGER_ROLES.APH && m.status === 'active');
+  
+  // Get unassigned managers (PM/APM without valid reportsTo)
+  const unassignedManagers = managers.filter(m => 
+    (m.role === MANAGER_ROLES.PM || m.role === MANAGER_ROLES.APM) && 
+    !m.reportsTo && 
+    m.status === 'active'
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center flex-wrap gap-4">
@@ -5104,10 +5255,24 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                 🏫 Manage Schools
               </button>
               <button onClick={openAddModal} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">
-                + Add Manager/APM
+                + Add Manager
               </button>
             </>
           )}
+        </div>
+      </div>
+
+      {/* Role Legend */}
+      <div className="bg-white p-4 rounded-xl shadow-lg">
+        <h3 className="font-bold mb-3">📋 Role Hierarchy</h3>
+        <div className="flex flex-wrap gap-3">
+          <span className="px-3 py-2 bg-purple-100 text-purple-700 rounded-lg text-sm font-semibold border border-purple-200">👑 Super Admin</span>
+          <span className="text-gray-400">→</span>
+          <span className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold border border-blue-200">👔 APH (Associate Program Head)</span>
+          <span className="text-gray-400">→</span>
+          <span className="px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-semibold border border-green-200">👨‍💼 PM (Program Manager)</span>
+          <span className="text-gray-400">→</span>
+          <span className="px-3 py-2 bg-orange-100 text-orange-700 rounded-lg text-sm font-semibold border border-orange-200">👤 APM (Associate Program Manager)</span>
         </div>
       </div>
 
@@ -5133,8 +5298,9 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
               className="w-full border-2 px-4 py-3 rounded-xl"
             >
               <option value="All">All Roles</option>
-              <option value={MANAGER_ROLES.MANAGER}>Managers</option>
-              <option value={MANAGER_ROLES.APM}>Associate Program Managers</option>
+              <option value={MANAGER_ROLES.APH}>Associate Program Head (APH)</option>
+              <option value={MANAGER_ROLES.PM}>Program Manager (PM)</option>
+              <option value={MANAGER_ROLES.APM}>Associate Program Manager (APM)</option>
             </select>
           </div>
         </div>
@@ -5144,138 +5310,44 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
       <div className="bg-white p-6 rounded-2xl shadow-lg">
         <h3 className="text-xl font-bold mb-4">📊 Organization Hierarchy</h3>
         <div className="space-y-4">
-          {managerOptions.map(manager => (
-            <div key={manager.id} className="border-2 border-blue-200 rounded-xl p-4 bg-blue-50">
-              <div className="flex items-start justify-between flex-wrap gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-2xl">👔</span>
-                    <span className="text-xl font-bold">{manager.name}</span>
-                    <span className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full font-semibold">
-                      MANAGER
-                    </span>
-                    {manager.status !== 'active' && (
-                      <span className="px-3 py-1 bg-red-500 text-white text-xs rounded-full font-semibold">
-                        INACTIVE
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-600 mt-1">📧 {manager.email}</div>
-                  <div className="mt-2">
-                    <span className="text-sm font-semibold">Direct Schools:</span>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {(manager.directSchools || []).map(school => (
-                        <span key={school} className="px-2 py-1 bg-white text-sm rounded border">
-                          🏫 {school}
-                        </span>
-                      ))}
-                      {(!manager.directSchools || manager.directSchools.length === 0) && (
-                        <span className="text-gray-400 text-sm">No schools assigned</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-2 text-sm text-green-600 font-semibold">
-                    📊 Total Access: {getTotalSchools(manager).length} schools
-                  </div>
-                </div>
-                {isSuperAdmin && (
-                  <div className="flex gap-2">
-                    <button onClick={() => openEditModal(manager)} className="px-3 py-1 bg-yellow-400 rounded-lg font-semibold text-sm">
-                      Edit
-                    </button>
-                    {manager.status === 'active' ? (
-                      <button onClick={() => handleDeactivate(manager)} className="px-3 py-1 bg-red-500 text-white rounded-lg font-semibold text-sm">
-                        Deactivate
-                      </button>
-                    ) : (
-                      <button onClick={() => handleReactivate(manager)} className="px-3 py-1 bg-green-500 text-white rounded-lg font-semibold text-sm">
-                        Reactivate
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              {/* Reportees (APMs) */}
-              {getReportees(manager.id).length > 0 && (
-                <div className="mt-4 ml-4 md:ml-8 space-y-2">
-                  <div className="text-sm font-bold text-gray-600">↳ Reports to {manager.name}:</div>
-                  {getReportees(manager.id).map(apm => (
-                    <div key={apm.id} className="border-2 border-green-200 rounded-xl p-3 bg-green-50">
-                      <div className="flex items-start justify-between flex-wrap gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xl">👤</span>
-                            <span className="font-bold">{apm.name}</span>
-                            <span className="px-2 py-1 bg-green-600 text-white text-xs rounded-full font-semibold">
-                              APM
-                            </span>
-                            {apm.status !== 'active' && (
-                              <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full font-semibold">
-                                INACTIVE
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-600">📧 {apm.email}</div>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {(apm.directSchools || []).map(school => (
-                              <span key={school} className="px-2 py-1 bg-white text-sm rounded border">
-                                🏫 {school}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        {isSuperAdmin && (
-                          <div className="flex gap-2">
-                            <button onClick={() => openEditModal(apm)} className="px-3 py-1 bg-yellow-400 rounded-lg font-semibold text-sm">
-                              Edit
-                            </button>
-                            {apm.status === 'active' ? (
-                              <button onClick={() => handleDeactivate(apm)} className="px-3 py-1 bg-red-500 text-white rounded-lg font-semibold text-sm">
-                                Deactivate
-                              </button>
-                            ) : (
-                              <button onClick={() => handleReactivate(apm)} className="px-3 py-1 bg-green-500 text-white rounded-lg font-semibold text-sm">
-                                Reactivate
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+          {/* Super Admin Card */}
+          <div className="border-2 border-purple-200 rounded-xl p-4 bg-purple-50">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">👑</span>
+              <span className="text-xl font-bold">Super Administrator</span>
+              <span className="px-3 py-1 bg-purple-600 text-white text-xs rounded-full font-bold">SUPER ADMIN</span>
             </div>
-          ))}
+            <div className="text-sm text-gray-600 mt-1">📧 admin@avantifellows.org</div>
+            <div className="text-sm text-green-600 font-semibold mt-2">📊 Full Access: All Schools</div>
+          </div>
           
-          {/* APMs without managers */}
-          {managers.filter(m => m.role === MANAGER_ROLES.APM && !m.reportsTo).length > 0 && (
-            <div className="border-2 border-orange-200 rounded-xl p-4 bg-orange-50">
-              <div className="text-lg font-bold text-orange-700 mb-2">⚠️ Unassigned APMs</div>
-              {managers.filter(m => m.role === MANAGER_ROLES.APM && !m.reportsTo).map(apm => (
-                <div key={apm.id} className="border-2 border-orange-300 rounded-xl p-3 bg-white mb-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xl">👤</span>
-                    <span className="font-bold">{apm.name}</span>
-                    <span className="px-2 py-1 bg-orange-600 text-white text-xs rounded-full font-semibold">
-                      APM - No Manager
+          {/* APHs and their tree */}
+          {topLevelManagers.map(manager => renderManagerCard(manager))}
+          
+          {/* Unassigned Managers Warning */}
+          {unassignedManagers.length > 0 && (
+            <div className="border-2 border-red-200 rounded-xl p-4 bg-red-50">
+              <div className="text-lg font-bold text-red-700 mb-2">⚠️ Unassigned Managers ({unassignedManagers.length})</div>
+              <p className="text-sm text-red-600 mb-3">These managers don't have anyone to report to. Please assign them.</p>
+              {unassignedManagers.map(m => (
+                <div key={m.id} className="border border-red-300 rounded-lg p-3 bg-white mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold">{m.name}</span>
+                    <span className={`px-2 py-1 ${ROLE_COLORS[m.role]?.bg} ${ROLE_COLORS[m.role]?.text} text-xs rounded-full font-bold`}>
+                      {ROLE_LABELS[m.role]}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-600">📧 {apm.email}</div>
-                  {isSuperAdmin && (
-                    <button onClick={() => openEditModal(apm)} className="mt-2 px-3 py-1 bg-yellow-400 rounded-lg font-semibold text-sm">
-                      Assign to Manager
-                    </button>
-                  )}
+                  <button onClick={() => openEditModal(m)} className="mt-2 px-3 py-1 bg-yellow-400 rounded-lg font-semibold text-sm">
+                    Assign Manager
+                  </button>
                 </div>
               ))}
             </div>
           )}
           
-          {managers.length === 0 && (
+          {topLevelManagers.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              <p>No managers found. Click "+ Add Manager/APM" to add your first manager.</p>
+              <p>No managers found. Click "+ Add Manager" to add your first Associate Program Head.</p>
             </div>
           )}
         </div>
@@ -5283,7 +5355,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
 
       {/* Table View */}
       <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
-        <h3 className="text-xl font-bold mb-4">📋 All Managers & APMs ({filteredManagers.length})</h3>
+        <h3 className="text-xl font-bold mb-4">📋 All Staff ({filteredManagers.length})</h3>
         <table className="w-full">
           <thead className="avanti-gradient-light">
             <tr>
@@ -5306,13 +5378,11 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                   <td className="p-3 font-semibold">{manager.name}</td>
                   <td className="p-3 text-sm">{manager.email}</td>
                   <td className="p-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      manager.role === MANAGER_ROLES.MANAGER ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                    }`}>
-                      {manager.role === MANAGER_ROLES.MANAGER ? 'Manager' : 'APM'}
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${ROLE_COLORS[manager.role]?.bg} ${ROLE_COLORS[manager.role]?.text}`}>
+                      {ROLE_LABELS[manager.role]}
                     </span>
                   </td>
-                  <td className="p-3">{manager.reportsTo ? getManagerName(manager.reportsTo) : '—'}</td>
+                  <td className="p-3">{manager.reportsTo ? getManagerName(manager.reportsTo) : 'Super Admin'}</td>
                   <td className="p-3">
                     <div className="flex flex-wrap gap-1">
                       {(manager.directSchools || []).slice(0, 2).map(s => (
@@ -5333,9 +5403,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                   </td>
                   {isSuperAdmin && (
                     <td className="p-3">
-                      <button onClick={() => openEditModal(manager)} className="px-3 py-1 bg-yellow-400 rounded-lg font-semibold text-sm">
-                        Edit
-                      </button>
+                      <button onClick={() => openEditModal(manager)} className="px-3 py-1 bg-yellow-400 rounded-lg font-semibold text-sm">Edit</button>
                     </td>
                   )}
                 </tr>
@@ -5345,11 +5413,11 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
         </table>
       </div>
 
-      {/* Add/Edit Manager Modal */}
+      {/* Add/Edit Modal */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content max-w-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-2xl font-bold mb-4">{editingManager ? 'Edit Manager/APM' : 'Add New Manager/APM'}</h3>
+            <h3 className="text-2xl font-bold mb-4">{editingManager ? 'Edit Staff Member' : 'Add New Staff Member'}</h3>
             <div className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
@@ -5382,8 +5450,9 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                     onChange={e => setForm({ ...form, role: e.target.value, reportsTo: '' })}
                     className="w-full border-2 px-3 py-2 rounded-lg"
                   >
-                    <option value={MANAGER_ROLES.MANAGER}>Manager (Program Manager)</option>
-                    <option value={MANAGER_ROLES.APM}>APM (Associate Program Manager)</option>
+                    <option value={MANAGER_ROLES.APH}>Associate Program Head (APH)</option>
+                    <option value={MANAGER_ROLES.PM}>Program Manager (PM)</option>
+                    <option value={MANAGER_ROLES.APM}>Associate Program Manager (APM)</option>
                   </select>
                 </div>
                 <div>
@@ -5398,20 +5467,26 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                 </div>
               </div>
 
-              {form.role === MANAGER_ROLES.APM && (
+              {(form.role === MANAGER_ROLES.PM || form.role === MANAGER_ROLES.APM) && (
                 <div>
-                  <label className="block text-sm font-bold mb-1">Reports To (Manager) *</label>
+                  <label className="block text-sm font-bold mb-1">
+                    Reports To ({form.role === MANAGER_ROLES.PM ? 'APH' : 'PM'}) *
+                  </label>
                   <select 
                     value={form.reportsTo} 
                     onChange={e => setForm({ ...form, reportsTo: e.target.value })}
                     className="w-full border-2 px-3 py-2 rounded-lg"
                   >
-                    <option value="">Select Manager</option>
-                    {managerOptions.map(m => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
+                    <option value="">Select {form.role === MANAGER_ROLES.PM ? 'Associate Program Head' : 'Program Manager'}</option>
+                    {getReportsToOptions(form.role).map(m => (
+                      <option key={m.id} value={m.id}>{m.name} ({ROLE_LABELS[m.role]})</option>
                     ))}
                   </select>
-                  <p className="text-xs text-gray-600 mt-1">The manager will see all schools assigned to this APM</p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {form.role === MANAGER_ROLES.PM 
+                      ? 'The APH will see all schools assigned to this PM and their APMs'
+                      : 'The PM will see all schools assigned to this APM'}
+                  </p>
                 </div>
               )}
 
@@ -5433,24 +5508,14 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                     <p className="text-gray-500 text-center py-4">No schools available. Add schools first.</p>
                   )}
                 </div>
-                <p className="text-xs text-gray-600 mt-1">
-                  Selected: {form.directSchools.length} school(s)
-                </p>
+                <p className="text-xs text-gray-600 mt-1">Selected: {form.directSchools.length} school(s)</p>
               </div>
 
               <div className="flex gap-3">
-                <button 
-                  onClick={handleSubmit}
-                  className="flex-1 avanti-gradient text-white py-3 rounded-xl font-bold"
-                >
-                  {editingManager ? 'Update' : 'Add Manager/APM'}
+                <button onClick={handleSubmit} className="flex-1 avanti-gradient text-white py-3 rounded-xl font-bold">
+                  {editingManager ? 'Update' : 'Add Staff Member'}
                 </button>
-                <button 
-                  onClick={() => setShowModal(false)}
-                  className="px-6 py-3 bg-gray-200 rounded-xl font-bold"
-                >
-                  Cancel
-                </button>
+                <button onClick={() => setShowModal(false)} className="px-6 py-3 bg-gray-200 rounded-xl font-bold">Cancel</button>
               </div>
             </div>
           </div>
@@ -5473,12 +5538,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                   placeholder="e.g., JNV Mumbai"
                   className="flex-1 border-2 px-3 py-2 rounded-lg"
                 />
-                <button 
-                  onClick={handleAddSchool}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold"
-                >
-                  Add
-                </button>
+                <button onClick={handleAddSchool} className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold">Add</button>
               </div>
             </div>
 
@@ -5488,29 +5548,660 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                 {allSchools.map(school => (
                   <div key={school} className="flex items-center justify-between p-3 border-b hover:bg-gray-50">
                     <span className="font-medium">🏫 {school}</span>
-                    <button 
-                      onClick={() => handleRemoveSchool(school)}
-                      className="px-3 py-1 bg-red-100 text-red-600 rounded-lg text-sm font-semibold hover:bg-red-200"
-                    >
-                      Remove
-                    </button>
+                    <button onClick={() => handleRemoveSchool(school)} className="px-3 py-1 bg-red-100 text-red-600 rounded-lg text-sm font-semibold hover:bg-red-200">Remove</button>
                   </div>
                 ))}
-                {allSchools.length === 0 && (
-                  <p className="text-gray-500 text-center py-4">No schools added yet.</p>
-                )}
+                {allSchools.length === 0 && <p className="text-gray-500 text-center py-4">No schools added yet.</p>}
               </div>
             </div>
 
-            <button 
-              onClick={() => setShowSchoolModal(false)}
-              className="w-full mt-4 px-6 py-3 bg-gray-200 rounded-xl font-bold"
-            >
-              Close
-            </button>
+            <button onClick={() => setShowSchoolModal(false)} className="w-full mt-4 px-6 py-3 bg-gray-200 rounded-xl font-bold">Close</button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ========================================
+// ACADEMIC YEAR MANAGEMENT COMPONENT
+// ========================================
+function AcademicYearManagement({ teachers, students, curriculum, chapterProgress, studentAttendance, teacherAttendance, academicYearSettings }) {
+  const [currentAY, setCurrentAY] = useState(academicYearSettings?.currentYear || CURRENT_ACADEMIC_YEAR);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionProgress, setTransitionProgress] = useState(0);
+  const [transitionLog, setTransitionLog] = useState([]);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [newAcademicYear, setNewAcademicYear] = useState('');
+  const [archivedYears, setArchivedYears] = useState([]);
+
+  useEffect(() => {
+    // Fetch archived years
+    const fetchArchived = async () => {
+      const archiveSnap = await db.collection('archives').get();
+      const years = [...new Set(archiveSnap.docs.map(d => d.data().academicYear))].filter(Boolean);
+      setArchivedYears(years);
+    };
+    fetchArchived();
+  }, []);
+
+  // Calculate next academic year
+  const getNextAcademicYear = () => {
+    const parts = currentAY.split('-');
+    const startYear = parseInt(parts[0]) + 1;
+    return `${startYear}-${startYear + 1}`;
+  };
+
+  // Count students by grade
+  const studentsByGrade = useMemo(() => {
+    const counts = { '11': 0, '12': 0 };
+    students.forEach(s => {
+      if (s.grade === '11' || s.grade === 11) counts['11']++;
+      if (s.grade === '12' || s.grade === 12) counts['12']++;
+    });
+    return counts;
+  }, [students]);
+
+  const addLog = (message) => {
+    setTransitionLog(prev => [...prev, `${new Date().toLocaleTimeString()} - ${message}`]);
+  };
+
+  const startTransition = async () => {
+    if (!newAcademicYear || !newAcademicYear.match(/^\d{4}-\d{4}$/)) {
+      alert('Please enter a valid academic year (e.g., 2025-2026)');
+      return;
+    }
+
+    setShowConfirmModal(false);
+    setIsTransitioning(true);
+    setTransitionProgress(0);
+    setTransitionLog([]);
+
+    try {
+      addLog('🚀 Starting academic year transition...');
+      addLog(`📅 From: ${currentAY} → To: ${newAcademicYear}`);
+
+      // Step 1: Archive Curriculum Progress (10%)
+      addLog('📚 Step 1: Archiving curriculum progress...');
+      setTransitionProgress(5);
+      
+      const progressSnap = await db.collection('chapterProgress').get();
+      const batch1 = db.batch();
+      let progressCount = 0;
+      
+      progressSnap.docs.forEach(doc => {
+        const archiveRef = db.collection('archives').doc(`chapterProgress_${currentAY}_${doc.id}`);
+        batch1.set(archiveRef, {
+          ...doc.data(),
+          academicYear: currentAY,
+          archivedAt: new Date().toISOString(),
+          originalDocId: doc.id,
+          type: 'chapterProgress'
+        });
+        progressCount++;
+      });
+      await batch1.commit();
+      addLog(`✅ Archived ${progressCount} curriculum progress records`);
+      setTransitionProgress(15);
+
+      // Step 2: Archive Student Attendance (20%)
+      addLog('📊 Step 2: Archiving student attendance...');
+      const studentAttSnap = await db.collection('studentAttendance').get();
+      const batch2 = db.batch();
+      let studentAttCount = 0;
+      
+      studentAttSnap.docs.forEach(doc => {
+        const archiveRef = db.collection('archives').doc(`studentAttendance_${currentAY}_${doc.id}`);
+        batch2.set(archiveRef, {
+          ...doc.data(),
+          academicYear: currentAY,
+          archivedAt: new Date().toISOString(),
+          originalDocId: doc.id,
+          type: 'studentAttendance'
+        });
+        studentAttCount++;
+      });
+      await batch2.commit();
+      addLog(`✅ Archived ${studentAttCount} student attendance records`);
+      setTransitionProgress(30);
+
+      // Step 3: Archive Teacher Attendance (30%)
+      addLog('👥 Step 3: Archiving teacher attendance...');
+      const teacherAttSnap = await db.collection('teacherAttendance').get();
+      const batch3 = db.batch();
+      let teacherAttCount = 0;
+      
+      teacherAttSnap.docs.forEach(doc => {
+        const archiveRef = db.collection('archives').doc(`teacherAttendance_${currentAY}_${doc.id}`);
+        batch3.set(archiveRef, {
+          ...doc.data(),
+          academicYear: currentAY,
+          archivedAt: new Date().toISOString(),
+          originalDocId: doc.id,
+          type: 'teacherAttendance'
+        });
+        teacherAttCount++;
+      });
+      await batch3.commit();
+      addLog(`✅ Archived ${teacherAttCount} teacher attendance records`);
+      setTransitionProgress(40);
+
+      // Step 4: Archive Student Feedback (40%)
+      addLog('💬 Step 4: Archiving student feedback...');
+      const feedbackSnap = await db.collection('teacherFeedback').get();
+      const batch4 = db.batch();
+      let feedbackCount = 0;
+      
+      feedbackSnap.docs.forEach(doc => {
+        const archiveRef = db.collection('archives').doc(`teacherFeedback_${currentAY}_${doc.id}`);
+        batch4.set(archiveRef, {
+          ...doc.data(),
+          academicYear: currentAY,
+          archivedAt: new Date().toISOString(),
+          originalDocId: doc.id,
+          type: 'teacherFeedback'
+        });
+        feedbackCount++;
+      });
+      await batch4.commit();
+      addLog(`✅ Archived ${feedbackCount} feedback records`);
+      setTransitionProgress(50);
+
+      // Step 5: Archive Exam Registrations (50%)
+      addLog('📝 Step 5: Archiving exam registrations...');
+      const examSnap = await db.collection('studentExamRegistrations').get();
+      const batch5 = db.batch();
+      let examCount = 0;
+      
+      examSnap.docs.forEach(doc => {
+        const archiveRef = db.collection('archives').doc(`examRegistrations_${currentAY}_${doc.id}`);
+        batch5.set(archiveRef, {
+          ...doc.data(),
+          academicYear: currentAY,
+          archivedAt: new Date().toISOString(),
+          originalDocId: doc.id,
+          type: 'examRegistrations'
+        });
+        examCount++;
+      });
+      await batch5.commit();
+      addLog(`✅ Archived ${examCount} exam registration records`);
+      setTransitionProgress(60);
+
+      // Step 6: Save Teacher History (60%)
+      addLog('📈 Step 6: Saving teacher performance history...');
+      const teachersSnap = await db.collection('teachers').get();
+      const batch6 = db.batch();
+      
+      for (const teacherDoc of teachersSnap.docs) {
+        const teacher = teacherDoc.data();
+        
+        // Calculate teacher metrics for this year
+        const teacherProgress = progressSnap.docs.filter(p => {
+          const data = p.data();
+          return data.school === teacher.school && data.subject === teacher.subject;
+        });
+        
+        const totalChapters = teacherProgress.length;
+        const completedChapters = teacherProgress.filter(p => p.data().completed === 'Yes').length;
+        const onTimeChapters = teacherProgress.filter(p => {
+          const data = p.data();
+          if (data.completed !== 'Yes') return false;
+          const completed = new Date(data.completedDate);
+          const expected = new Date(data.expectedDate);
+          return completed <= expected;
+        }).length;
+        
+        // Get feedback for this teacher
+        const teacherFeedback = feedbackSnap.docs.filter(f => f.data().teacherAfid === teacher.afid);
+        const avgRating = teacherFeedback.length > 0 
+          ? teacherFeedback.reduce((sum, f) => sum + (f.data().rating || 0), 0) / teacherFeedback.length 
+          : 0;
+        
+        // Get attendance
+        const teacherAtt = teacherAttSnap.docs.filter(a => a.data().afid === teacher.afid);
+        const presentDays = teacherAtt.filter(a => a.data().status === 'Present').length;
+        const totalWorkDays = teacherAtt.length;
+        
+        const historyRef = db.collection('teacherHistory').doc(`${teacher.afid}_${currentAY}`);
+        batch6.set(historyRef, {
+          afid: teacher.afid,
+          name: teacher.name,
+          email: teacher.email,
+          school: teacher.school,
+          subject: teacher.subject,
+          academicYear: currentAY,
+          metrics: {
+            totalChapters,
+            completedChapters,
+            completionRate: totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0,
+            onTimeChapters,
+            onTimeRate: completedChapters > 0 ? Math.round((onTimeChapters / completedChapters) * 100) : 0,
+            delayedChapters: completedChapters - onTimeChapters,
+            feedbackCount: teacherFeedback.length,
+            avgFeedbackRating: Math.round(avgRating * 10) / 10,
+            presentDays,
+            totalWorkDays,
+            attendanceRate: totalWorkDays > 0 ? Math.round((presentDays / totalWorkDays) * 100) : 0
+          },
+          savedAt: new Date().toISOString()
+        });
+      }
+      await batch6.commit();
+      addLog(`✅ Saved history for ${teachersSnap.docs.length} teachers`);
+      setTransitionProgress(70);
+
+      // Step 7: Promote 11th → 12th (70%)
+      addLog('🎓 Step 7: Promoting 11th grade to 12th...');
+      const studentsSnap = await db.collection('students').get();
+      const batch7 = db.batch();
+      let promoted11to12 = 0;
+      
+      studentsSnap.docs.forEach(doc => {
+        const student = doc.data();
+        if (student.grade === '11' || student.grade === 11) {
+          batch7.update(doc.ref, { 
+            grade: '12',
+            previousGrade: '11',
+            promotedAt: new Date().toISOString(),
+            promotedInYear: newAcademicYear
+          });
+          promoted11to12++;
+        }
+      });
+      await batch7.commit();
+      addLog(`✅ Promoted ${promoted11to12} students from 11th to 12th`);
+      setTransitionProgress(80);
+
+      // Step 8: Move 12th → Alumni (80%)
+      addLog('🎓 Step 8: Moving 12th grade to Alumni...');
+      const batch8 = db.batch();
+      let movedToAlumni = 0;
+      
+      studentsSnap.docs.forEach(doc => {
+        const student = doc.data();
+        if (student.grade === '12' || student.grade === 12) {
+          // Create alumni record
+          const alumniRef = db.collection('alumni').doc(doc.id);
+          batch8.set(alumniRef, {
+            ...student,
+            grade: 'Alumni',
+            graduatedYear: currentAY,
+            movedToAlumniAt: new Date().toISOString(),
+            status: 'alumni'
+          });
+          // Delete from active students
+          batch8.delete(doc.ref);
+          movedToAlumni++;
+        }
+      });
+      await batch8.commit();
+      addLog(`✅ Moved ${movedToAlumni} students to Alumni`);
+      setTransitionProgress(90);
+
+      // Step 9: Clear current year data (90%)
+      addLog('🧹 Step 9: Clearing current year operational data...');
+      
+      // Clear chapter progress for fresh start
+      const batch9 = db.batch();
+      progressSnap.docs.forEach(doc => {
+        batch9.delete(doc.ref);
+      });
+      await batch9.commit();
+      addLog('✅ Cleared chapter progress for fresh start');
+      
+      // Clear attendance for new year
+      const batch10 = db.batch();
+      studentAttSnap.docs.forEach(doc => batch10.delete(doc.ref));
+      teacherAttSnap.docs.forEach(doc => batch10.delete(doc.ref));
+      await batch10.commit();
+      addLog('✅ Cleared attendance records');
+      
+      // Clear feedback
+      const batch11 = db.batch();
+      feedbackSnap.docs.forEach(doc => batch11.delete(doc.ref));
+      await batch11.commit();
+      addLog('✅ Cleared feedback records');
+      
+      setTransitionProgress(95);
+
+      // Step 10: Update system settings (100%)
+      addLog('⚙️ Step 10: Updating system settings...');
+      await db.collection('system').doc('academicYear').set({
+        currentYear: newAcademicYear,
+        previousYear: currentAY,
+        transitionDate: new Date().toISOString(),
+        transitionBy: 'admin@avantifellows.org'
+      });
+      
+      setTransitionProgress(100);
+      addLog('🎉 Academic year transition completed successfully!');
+      addLog(`📅 Current academic year is now: ${newAcademicYear}`);
+      
+      setTimeout(() => {
+        alert(`✅ Academic Year Transition Complete!\n\nFrom: ${currentAY}\nTo: ${newAcademicYear}\n\nSummary:\n• ${progressCount} curriculum records archived\n• ${studentAttCount + teacherAttCount} attendance records archived\n• ${feedbackCount} feedback records archived\n• ${promoted11to12} students promoted to 12th\n• ${movedToAlumni} students moved to Alumni\n\nPlease refresh the page.`);
+        window.location.reload();
+      }, 2000);
+
+    } catch (error) {
+      console.error('Transition error:', error);
+      addLog(`❌ Error: ${error.message}`);
+      alert('Transition failed: ' + error.message);
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center flex-wrap gap-4">
+        <h2 className="text-3xl font-bold">📅 Academic Year Management</h2>
+      </div>
+
+      {/* Current Status */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">📊 Current Status</h3>
+        <div className="grid md:grid-cols-4 gap-4">
+          <div className="bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
+            <div className="text-3xl font-bold text-blue-600">{currentAY}</div>
+            <div className="text-sm text-blue-700">Current Academic Year</div>
+          </div>
+          <div className="bg-green-50 p-4 rounded-xl border-2 border-green-200">
+            <div className="text-3xl font-bold text-green-600">{studentsByGrade['11']}</div>
+            <div className="text-sm text-green-700">11th Grade Students</div>
+          </div>
+          <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-200">
+            <div className="text-3xl font-bold text-orange-600">{studentsByGrade['12']}</div>
+            <div className="text-sm text-orange-700">12th Grade Students</div>
+          </div>
+          <div className="bg-purple-50 p-4 rounded-xl border-2 border-purple-200">
+            <div className="text-3xl font-bold text-purple-600">{teachers.length}</div>
+            <div className="text-sm text-purple-700">Active Teachers</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Transition Section */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">🔄 Start New Academic Year</h3>
+        
+        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4 mb-4">
+          <div className="font-bold text-yellow-800 mb-2">⚠️ Important: This action will:</div>
+          <ul className="text-sm text-yellow-700 space-y-1">
+            <li>✅ Archive all curriculum progress, attendance, feedback, and exam data</li>
+            <li>✅ Save teacher performance history for the current year</li>
+            <li>✅ Promote 11th grade students to 12th grade ({studentsByGrade['11']} students)</li>
+            <li>✅ Move 12th grade students to Alumni ({studentsByGrade['12']} students)</li>
+            <li>✅ Clear operational data for fresh start</li>
+            <li>❌ Teachers and their profiles will remain unchanged</li>
+          </ul>
+        </div>
+
+        <div className="flex items-end gap-4 flex-wrap">
+          <div className="flex-1 min-w-64">
+            <label className="block text-sm font-bold mb-2">New Academic Year *</label>
+            <input 
+              type="text"
+              value={newAcademicYear}
+              onChange={e => setNewAcademicYear(e.target.value)}
+              placeholder={getNextAcademicYear()}
+              className="w-full border-2 px-4 py-3 rounded-xl text-lg"
+              disabled={isTransitioning}
+            />
+            <p className="text-xs text-gray-500 mt-1">Format: YYYY-YYYY (e.g., {getNextAcademicYear()})</p>
+          </div>
+          <button 
+            onClick={() => setShowConfirmModal(true)}
+            disabled={isTransitioning || !newAcademicYear}
+            className={`px-8 py-3 rounded-xl font-bold text-white ${
+              isTransitioning ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'
+            }`}
+          >
+            {isTransitioning ? '⏳ Processing...' : '🚀 Start Transition'}
+          </button>
+        </div>
+      </div>
+
+      {/* Progress Section */}
+      {isTransitioning && (
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <h3 className="text-xl font-bold mb-4">📈 Transition Progress</h3>
+          <div className="mb-4">
+            <div className="flex justify-between mb-2">
+              <span className="font-semibold">Progress</span>
+              <span className="font-bold">{transitionProgress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-4">
+              <div 
+                className="bg-green-500 h-4 rounded-full transition-all duration-500"
+                style={{ width: `${transitionProgress}%` }}
+              ></div>
+            </div>
+          </div>
+          <div className="bg-gray-900 text-green-400 p-4 rounded-xl font-mono text-sm max-h-64 overflow-y-auto">
+            {transitionLog.map((log, i) => (
+              <div key={i}>{log}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Archive History */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">📚 Archived Academic Years</h3>
+        {archivedYears.length === 0 ? (
+          <p className="text-gray-500">No archived years yet.</p>
+        ) : (
+          <div className="flex flex-wrap gap-3">
+            {archivedYears.map(year => (
+              <div key={year} className="px-4 py-2 bg-gray-100 rounded-xl font-semibold">
+                📅 {year}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Confirm Modal */}
+      {showConfirmModal && (
+        <div className="modal-overlay" onClick={() => setShowConfirmModal(false)}>
+          <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
+            <h3 className="text-2xl font-bold mb-4 text-red-600">⚠️ Confirm Academic Year Transition</h3>
+            <div className="space-y-4">
+              <p className="font-semibold">You are about to transition from:</p>
+              <div className="text-center text-2xl font-bold">
+                {currentAY} → {newAcademicYear}
+              </div>
+              
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm">
+                <div className="font-bold text-red-700 mb-2">This action cannot be undone!</div>
+                <ul className="text-red-600 space-y-1">
+                  <li>• All current year data will be archived</li>
+                  <li>• {studentsByGrade['11']} students will be promoted to 12th</li>
+                  <li>• {studentsByGrade['12']} students will become alumni</li>
+                  <li>• Operational data will be cleared</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={startTransition}
+                  className="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold hover:bg-red-700"
+                >
+                  Yes, Start Transition
+                </button>
+                <button 
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 bg-gray-200 py-3 rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========================================
+// TEACHER HISTORY COMPONENT
+// ========================================
+function TeacherHistoryView({ teachers }) {
+  const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [teacherHistory, setTeacherHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSchool, setSelectedSchool] = useState('All');
+
+  const filteredTeachers = teachers.filter(t => {
+    if (selectedSchool !== 'All' && t.school !== selectedSchool) return false;
+    if (searchQuery && !t.name?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    return true;
+  });
+
+  const loadTeacherHistory = async (teacher) => {
+    setSelectedTeacher(teacher);
+    setLoading(true);
+    try {
+      const historySnap = await db.collection('teacherHistory')
+        .where('afid', '==', teacher.afid)
+        .orderBy('academicYear', 'desc')
+        .get();
+      
+      setTeacherHistory(historySnap.docs.map(d => d.data()));
+    } catch (e) {
+      console.error('Error loading history:', e);
+      setTeacherHistory([]);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold">📈 Teacher Performance History</h2>
+
+      {/* Filters */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">Search Teacher</label>
+            <input 
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by name..."
+              className="w-full border-2 px-4 py-3 rounded-xl"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">School</label>
+            <select 
+              value={selectedSchool}
+              onChange={e => setSelectedSchool(e.target.value)}
+              className="w-full border-2 px-4 py-3 rounded-xl"
+            >
+              <option value="All">All Schools</option>
+              {SCHOOLS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-6">
+        {/* Teacher List */}
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <h3 className="text-xl font-bold mb-4">👥 Teachers ({filteredTeachers.length})</h3>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {filteredTeachers.map(teacher => (
+              <div 
+                key={teacher.afid}
+                onClick={() => loadTeacherHistory(teacher)}
+                className={`p-3 rounded-xl cursor-pointer transition ${
+                  selectedTeacher?.afid === teacher.afid 
+                    ? 'bg-yellow-100 border-2 border-yellow-400' 
+                    : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                }`}
+              >
+                <div className="font-bold">{teacher.name}</div>
+                <div className="text-sm text-gray-600">{teacher.school} • {teacher.subject}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* History Details */}
+        <div className="md:col-span-2 bg-white p-6 rounded-2xl shadow-lg">
+          <h3 className="text-xl font-bold mb-4">
+            📊 Performance History 
+            {selectedTeacher && <span className="text-gray-500 font-normal ml-2">- {selectedTeacher.name}</span>}
+          </h3>
+          
+          {!selectedTeacher ? (
+            <div className="text-center py-12 text-gray-500">
+              <div className="text-4xl mb-4">👆</div>
+              <p>Select a teacher to view their performance history</p>
+            </div>
+          ) : loading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin text-4xl">⏳</div>
+              <p className="mt-4 text-gray-500">Loading history...</p>
+            </div>
+          ) : teacherHistory.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <div className="text-4xl mb-4">📭</div>
+              <p>No historical data available for this teacher.</p>
+              <p className="text-sm mt-2">History will be saved when an academic year transition occurs.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {teacherHistory.map(history => (
+                <div key={history.academicYear} className="border-2 border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="text-xl font-bold text-blue-600">📅 {history.academicYear}</div>
+                    <div className="text-sm text-gray-500">🏫 {history.school} • {history.subject}</div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-green-50 p-3 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-green-600">{history.metrics?.completionRate || 0}%</div>
+                      <div className="text-xs text-green-700">Curriculum Completion</div>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-blue-600">{history.metrics?.onTimeRate || 0}%</div>
+                      <div className="text-xs text-blue-700">On-Time Rate</div>
+                    </div>
+                    <div className="bg-yellow-50 p-3 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-yellow-600">{history.metrics?.avgFeedbackRating || '-'}</div>
+                      <div className="text-xs text-yellow-700">Avg Feedback ({history.metrics?.feedbackCount || 0})</div>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-purple-600">{history.metrics?.attendanceRate || 0}%</div>
+                      <div className="text-xs text-purple-700">Attendance Rate</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-500">Chapters:</span>
+                      <span className="font-semibold ml-2">{history.metrics?.completedChapters || 0}/{history.metrics?.totalChapters || 0}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">On-Time:</span>
+                      <span className="font-semibold ml-2 text-green-600">{history.metrics?.onTimeChapters || 0}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Delayed:</span>
+                      <span className="font-semibold ml-2 text-red-600">{history.metrics?.delayedChapters || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -5532,7 +6223,8 @@ function AdminView({
   setLeaveAdjustments,
   managers,
   isSuperAdmin,
-  accessibleSchools
+  accessibleSchools,
+  academicYearSettings
 }) {
   const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'managers' : 'teachers');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -5549,8 +6241,12 @@ function AdminView({
   const availableSchools = isSuperAdmin ? SCHOOLS : accessibleSchools;
 
   const adminTabs = [
-    ...(isSuperAdmin ? [{ id: 'managers', label: 'Managers', icon: '👔' }] : []),
+    ...(isSuperAdmin ? [
+      { id: 'managers', label: 'Managers', icon: '👔' },
+      { id: 'academicyear', label: 'Academic Year', icon: '📅' },
+    ] : []),
     { id: 'teachers', label: 'Teachers', icon: '👥' },
+    { id: 'teacherhistory', label: 'Teacher History', icon: '📈' },
     { id: 'students', label: 'Students', icon: '👨‍🎓' },
     { id: 'directory', label: 'Directory', icon: '📖' },
     { id: 'observations', label: 'Class Observations', icon: '📋' },
@@ -5633,7 +6329,7 @@ function AdminView({
             <img src={AVANTI_LOGO} alt="Avanti" className="w-10 h-10" />
             <div className="sidebar-label">
               <h1 className="text-lg font-bold text-white">
-                {isSuperAdmin ? 'Super Admin' : currentUser.role === MANAGER_ROLES.MANAGER ? 'Manager' : 'APM'}
+                {isSuperAdmin ? 'Super Admin' : ROLE_LABELS[currentUser.role] || 'Admin'}
               </h1>
               <p className="text-xs text-white opacity-75">{currentUser.name}</p>
             </div>
@@ -5685,14 +6381,24 @@ function AdminView({
 
         {/* Tab Content */}
         {activeTab === 'managers' && isSuperAdmin && (
-          <ManagerManagement 
-            managers={managers} 
-            currentUser={currentUser} 
-            isSuperAdmin={isSuperAdmin}
+          <ManagerManagement managers={managers} currentUser={currentUser} isSuperAdmin={isSuperAdmin} />
+        )}
+
+        {activeTab === 'academicyear' && isSuperAdmin && (
+          <AcademicYearManagement 
+            teachers={teachers} 
+            students={students} 
+            curriculum={curriculum}
+            chapterProgress={chapterProgress}
+            studentAttendance={studentAttendance}
+            teacherAttendance={teacherAttendance}
+            academicYearSettings={academicYearSettings}
           />
         )}
 
         {activeTab === 'teachers' && <TeacherManagement teachers={filteredTeachers} teacherAttendance={filteredTeacherAttendance} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} />}
+
+        {activeTab === 'teacherhistory' && <TeacherHistoryView teachers={filteredTeachers} />}
 
         {activeTab === 'students' && <StudentManagement students={filteredStudents} />}
 
@@ -13074,7 +13780,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '2.9.1'; // Change this version number with every update
+  const CURRENT_VERSION = '2.9.0'; // Change this version number with every update
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
