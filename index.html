@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -4170,6 +4169,124 @@ function verifyBackupCode(inputCode, hashedCodes) {
   return index;
 }
 
+// ========================================
+// DEVICE TRUST MANAGEMENT FOR 2FA
+// ========================================
+
+// Generate a unique device ID
+function generateDeviceId() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+// Get or create device ID for this browser
+function getDeviceId() {
+  let deviceId = localStorage.getItem('avanti_device_id');
+  if (!deviceId) {
+    deviceId = generateDeviceId();
+    localStorage.setItem('avanti_device_id', deviceId);
+  }
+  return deviceId;
+}
+
+// Check if current device is trusted for a user
+async function isDeviceTrusted(userId) {
+  try {
+    const deviceId = getDeviceId();
+    const trustedDevicesDoc = await db.collection('trustedDevices').doc(userId).get();
+    
+    if (!trustedDevicesDoc.exists) return false;
+    
+    const devices = trustedDevicesDoc.data().devices || [];
+    const trustedDevice = devices.find(d => d.deviceId === deviceId && d.active);
+    
+    if (trustedDevice) {
+      // Check if device trust has expired (30 days)
+      const trustDate = new Date(trustedDevice.trustedAt);
+      const now = new Date();
+      const daysDiff = (now - trustDate) / (1000 * 60 * 60 * 24);
+      
+      if (daysDiff > 30) {
+        // Trust expired, remove device
+        await removeDeviceTrust(userId, deviceId);
+        return false;
+      }
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.error('Error checking device trust:', e);
+    return false;
+  }
+}
+
+// Add current device as trusted for a user
+async function addDeviceTrust(userId, userEmail) {
+  try {
+    const deviceId = getDeviceId();
+    const deviceInfo = {
+      deviceId: deviceId,
+      trustedAt: new Date().toISOString(),
+      userAgent: navigator.userAgent.substring(0, 200),
+      active: true
+    };
+    
+    const docRef = db.collection('trustedDevices').doc(userId);
+    const doc = await docRef.get();
+    
+    if (doc.exists) {
+      const devices = doc.data().devices || [];
+      // Remove any existing entry for this device
+      const filteredDevices = devices.filter(d => d.deviceId !== deviceId);
+      // Add new trust (keep max 5 devices)
+      const updatedDevices = [...filteredDevices.slice(-4), deviceInfo];
+      await docRef.update({ devices: updatedDevices, userEmail: userEmail });
+    } else {
+      await docRef.set({ 
+        devices: [deviceInfo], 
+        userEmail: userEmail,
+        createdAt: new Date().toISOString()
+      });
+    }
+    
+    console.log('✅ Device trusted for user:', userId);
+    return true;
+  } catch (e) {
+    console.error('Error adding device trust:', e);
+    return false;
+  }
+}
+
+// Remove device trust
+async function removeDeviceTrust(userId, deviceId) {
+  try {
+    const docRef = db.collection('trustedDevices').doc(userId);
+    const doc = await docRef.get();
+    
+    if (doc.exists) {
+      const devices = doc.data().devices || [];
+      const updatedDevices = devices.filter(d => d.deviceId !== deviceId);
+      await docRef.update({ devices: updatedDevices });
+    }
+    return true;
+  } catch (e) {
+    console.error('Error removing device trust:', e);
+    return false;
+  }
+}
+
+// Remove all device trusts for a user (used when resetting 2FA)
+async function removeAllDeviceTrusts(userId) {
+  try {
+    await db.collection('trustedDevices').doc(userId).delete();
+    return true;
+  } catch (e) {
+    console.error('Error removing all device trusts:', e);
+    return false;
+  }
+}
+
 // 2FA Setup Modal Component
 function TwoFactorSetupModal({ user, onClose, onSetupComplete }) {
   const [step, setStep] = useState(1); // 1: Show QR, 2: Verify code, 3: Show backup codes
@@ -4618,12 +4735,15 @@ function Admin2FAManagement({ teachers, managers }) {
   });
 
   const handleReset2FA = async (user) => {
-    if (!confirm(`Reset 2FA for ${user.name}?\n\nThis will disable their 2FA and they will need to set it up again on next login.`)) return;
+    if (!confirm(`Reset 2FA for ${user.name}?\n\nThis will disable their 2FA and remove all trusted devices. They will need to set it up again on next login.`)) return;
     
     setResetting(user.docId);
     try {
       // Delete 2FA document
       await db.collection('twoFactorAuth').doc(user.docId).delete();
+      
+      // Remove all trusted devices for this user
+      await removeAllDeviceTrusts(user.docId);
       
       // Update user's 2FA status
       const collection = user.type === 'Teacher' ? 'teachers' : 'managers';
@@ -4639,7 +4759,7 @@ function Admin2FAManagement({ teachers, managers }) {
         return updated;
       });
 
-      alert(`✅ 2FA reset for ${user.name}. They will need to set up 2FA again on next login.`);
+      alert(`✅ 2FA reset for ${user.name}. They will need to set up 2FA again on next login from any device.`);
     } catch (e) {
       console.error('Error resetting 2FA:', e);
       alert('Failed to reset 2FA: ' + e.message);
@@ -4821,7 +4941,25 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
     // Check 2FA for Super Admin
     const twoFADoc = await db.collection('twoFactorAuth').doc('SUPER_ADMIN').get();
     if (twoFADoc.exists && twoFADoc.data().enabled) {
-      // 2FA is enabled, need to verify
+      // 2FA is enabled - check if device is trusted
+      const deviceTrusted = await isDeviceTrusted('SUPER_ADMIN');
+      if (deviceTrusted) {
+        // Device is trusted, skip 2FA verification
+        console.log('✅ Trusted device - skipping 2FA for Super Admin');
+        setIsSuperAdmin(true);
+        setIsAdmin(true);
+        const allManagersSnap = await db.collection('managers').where('status','==','active').get();
+        const allManagers = allManagersSnap.docs.map(d=>({...d.data(),id:d.id}));
+        setManagers(allManagers);
+        const aySnap = await db.collection('system').doc('academicYear').get();
+        if(aySnap.exists) setAcademicYearSettings(aySnap.data());
+        setAccessibleSchools([...SCHOOLS]);
+        setCurrentUser({name:'Super Administrator',email:user.email,afid:'SUPER_ADMIN',school:'Admin',role:MANAGER_ROLES.SUPER_ADMIN});
+        setActiveTab('managers');
+        setLoading(false);
+        return;
+      }
+      // Device not trusted, need to verify 2FA
       setPending2FAUser({
         name: 'Super Administrator',
         email: user.email,
@@ -4859,7 +4997,35 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
     // Check 2FA for manager
     const twoFADoc = await db.collection('twoFactorAuth').doc(managerData.id).get();
     if (twoFADoc.exists && twoFADoc.data().enabled) {
-      // 2FA is enabled, need to verify
+      // 2FA is enabled - check if device is trusted
+      const deviceTrusted = await isDeviceTrusted(managerData.id);
+      if (deviceTrusted) {
+        // Device is trusted, skip 2FA verification
+        console.log('✅ Trusted device - skipping 2FA for manager:', managerData.name);
+        setManagerProfile(managerData);
+        const allManagersSnap = await db.collection('managers').where('status','==','active').get();
+        const allManagers = allManagersSnap.docs.map(d=>({...d.data(),id:d.id}));
+        setManagers(allManagers);
+        const aySnap = await db.collection('system').doc('academicYear').get();
+        if(aySnap.exists) setAcademicYearSettings(aySnap.data());
+        const schools = getAccessibleSchools(managerData, allManagers);
+        setAccessibleSchools(schools);
+        setIsAdmin(true);
+        setIsSuperAdmin(false);
+        setCurrentUser({
+          name: managerData.name,
+          email: user.email,
+          afid: managerData.id,
+          docId: managerData.docId,
+          school: schools[0] || 'Admin',
+          role: managerData.role,
+          directSchools: managerData.directSchools || []
+        });
+        setActiveTab('analytics');
+        setLoading(false);
+        return;
+      }
+      // Device not trusted, need to verify 2FA
       setPending2FAUser({
         ...managerData,
         userType: 'manager'
@@ -4887,7 +5053,38 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
       // Check 2FA for teacher
       const twoFADoc = await db.collection('twoFactorAuth').doc(teacherData.afid).get();
       if (twoFADoc.exists && twoFADoc.data().enabled) {
-        // 2FA is enabled, need to verify
+        // 2FA is enabled - check if device is trusted
+        const deviceTrusted = await isDeviceTrusted(teacherData.afid);
+        if (deviceTrusted) {
+          // Device is trusted, skip 2FA verification
+          console.log('✅ Trusted device - skipping 2FA for teacher:', teacherData.name);
+          setCurrentUser(teacherData);
+          setIsAdmin(false);
+          setActiveTab('overview');
+          // Birthday/Anniversary celebrations
+          if(teacherData.dob){
+            const d = new Date(teacherData.dob);
+            const now = new Date();
+            if(d.getMonth() === now.getMonth() && d.getDate() === now.getDate()){
+              setShowConfetti(true);
+              setCelebrationMessage(`🎂 Happy Birthday, ${teacherData.name}!`);
+              setTimeout(() => {setShowConfetti(false);setCelebrationMessage('')}, 8000);
+            }
+          }
+          if(teacherData.joiningDate){
+            const j = new Date(teacherData.joiningDate);
+            const now = new Date();
+            if(j.getMonth() === now.getMonth() && j.getDate() === now.getDate() && j.getFullYear() < now.getFullYear()){
+              const years = now.getFullYear() - j.getFullYear();
+              setShowConfetti(true);
+              setCelebrationMessage(`🎉 Happy ${years} Year Work Anniversary, ${teacherData.name}!`);
+              setTimeout(() => {setShowConfetti(false);setCelebrationMessage('')}, 8000);
+            }
+          }
+          setLoading(false);
+          return;
+        }
+        // Device not trusted, need to verify 2FA
         setPending2FAUser({
           ...teacherData,
           userType: 'teacher'
@@ -5100,6 +5297,13 @@ const complete2FAVerification = async () => {
   
   const user = pending2FAUser;
   
+  // Add device trust after successful 2FA verification
+  const userId = user.userType === 'superadmin' ? 'SUPER_ADMIN' : 
+                 user.userType === 'manager' ? user.id : 
+                 user.afid;
+  await addDeviceTrust(userId, user.email);
+  console.log('✅ Device trusted after 2FA verification for:', user.email);
+  
   if (user.userType === 'superadmin') {
     setIsSuperAdmin(true);
     setIsAdmin(true);
@@ -5171,7 +5375,16 @@ const complete2FAVerification = async () => {
 };
 
 // Handle 2FA setup completion
-const handle2FASetupComplete = () => {
+const handle2FASetupComplete = async () => {
+  // Add device trust after successful 2FA setup
+  if (pending2FAUser) {
+    const userId = pending2FAUser.userType === 'superadmin' ? 'SUPER_ADMIN' : 
+                   pending2FAUser.userType === 'manager' ? pending2FAUser.id : 
+                   pending2FAUser.afid;
+    await addDeviceTrust(userId, pending2FAUser.email);
+    console.log('✅ Device trusted after 2FA setup for:', pending2FAUser.email);
+  }
+  
   setShow2FASetup(false);
   setNeeds2FASetup(false);
   // After setup, complete the login
@@ -15692,7 +15905,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.4.1'; // Added Monthly Feedback Trend Graph in Student Feedback page
+  const CURRENT_VERSION = '3.4.2'; // Added Monthly Feedback Trend Graph in Student Feedback page
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
