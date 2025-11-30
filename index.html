@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -4006,46 +4007,12 @@ useEffect(() => {
 
         {/* Curriculum Tab */}
         {activeTab === 'curriculum' && (
-          <div className="space-y-6">
-            <h2 className="text-3xl font-bold">📚 My Curriculum - Class {myGrade}</h2>
-            {SUBJECTS.map(subject => {
-              const docId = `${mySchool}_${subject}_${myGrade}`;
-              const chapters = curriculum[docId]?.chapters || [];
-              
-              return (
-                <div key={subject} className="bg-white p-6 rounded-2xl shadow-lg">
-                  <h3 className="text-2xl font-bold mb-4">{subject}</h3>
-                  {chapters.length === 0 ? (
-                    <p className="text-gray-500">No chapters available</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {chapters.map(chapter => {
-                        const progressId = `${mySchool}_${chapter.id}`;
-                        const prog = chapterProgress[progressId] || {};
-                        const status = getChapterStatus(chapter, prog);
-                        
-                        return (
-                          <div key={chapter.id} className="border-2 rounded-xl p-4">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h4 className="font-bold text-lg">{chapter.name}</h4>
-                                <div className="text-sm text-gray-600 mt-1">
-                                  Target: {chapter.targetDate || 'Not set'}
-                                </div>
-                              </div>
-                              <div className={`status-badge ${status.class}`}>
-                                {status.label}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <StudentCurriculumWithPriority 
+            mySchool={mySchool}
+            myGrade={myGrade}
+            curriculum={curriculum}
+            chapterProgress={chapterProgress}
+          />
         )}
 
         {/* Attendance Tab */}
@@ -8408,12 +8375,210 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
     </div>
   );
 }
+
+// ========================================
+// STUDENT CURRICULUM WITH PRIORITY FILTER
+// ========================================
+function StudentCurriculumWithPriority({mySchool, myGrade, curriculum, chapterProgress}) {
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [selectedSubject, setSelectedSubject] = useState('All');
+
+  // Get all chapters with their subjects for filtering
+  const getAllChaptersWithSubject = () => {
+    let allChapters = [];
+    SUBJECTS.forEach(subject => {
+      const docId = `${mySchool}_${subject}_${myGrade}`;
+      const chapters = curriculum[docId]?.chapters || [];
+      chapters.forEach(chapter => {
+        const progressId = `${mySchool}_${chapter.id}`;
+        const prog = chapterProgress[progressId] || {};
+        const status = getChapterStatus(chapter, prog);
+        allChapters.push({
+          ...chapter,
+          subject,
+          prog,
+          status
+        });
+      });
+    });
+    return allChapters;
+  };
+
+  const allChapters = getAllChaptersWithSubject();
+
+  // Count chapters by priority
+  const priorityCounts = {
+    all: allChapters.length,
+    high: allChapters.filter(ch => ch.priority === 'high' || !ch.priority).length,
+    medium: allChapters.filter(ch => ch.priority === 'medium').length,
+    low: allChapters.filter(ch => ch.priority === 'low').length
+  };
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold">📚 My Curriculum - Class {myGrade}</h2>
+      
+      {/* Priority Filter Section */}
+      <div className="bg-white p-4 rounded-2xl shadow-lg">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-bold text-gray-700">🎯 Filter by Priority:</span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setPriorityFilter('all')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'all' 
+                  ? 'bg-gray-800 text-white shadow-lg' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              📋 All ({priorityCounts.all})
+            </button>
+            <button
+              onClick={() => setPriorityFilter('high')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'high' 
+                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg' 
+                  : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+              }`}
+            >
+              🟢 High ({priorityCounts.high})
+            </button>
+            <button
+              onClick={() => setPriorityFilter('medium')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'medium' 
+                  ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white shadow-lg' 
+                  : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
+              }`}
+            >
+              🟡 Medium ({priorityCounts.medium})
+            </button>
+            <button
+              onClick={() => setPriorityFilter('low')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'low' 
+                  ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-lg' 
+                  : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+              }`}
+            >
+              🔴 Low ({priorityCounts.low})
+            </button>
+          </div>
+        </div>
+        
+        {/* Subject Filter */}
+        <div className="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t">
+          <span className="font-bold text-gray-700">📚 Subject:</span>
+          <select
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            className="border-2 px-4 py-2 rounded-xl font-semibold"
+          >
+            <option value="All">All Subjects</option>
+            {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Chapters Display */}
+      {SUBJECTS.filter(subject => selectedSubject === 'All' || subject === selectedSubject).map(subject => {
+        const docId = `${mySchool}_${subject}_${myGrade}`;
+        let chapters = curriculum[docId]?.chapters || [];
+        
+        // Apply priority filter
+        if (priorityFilter !== 'all') {
+          chapters = chapters.filter(chapter => {
+            const chPriority = chapter.priority || 'high'; // default to high if not set
+            return chPriority === priorityFilter;
+          });
+        }
+        
+        // Don't show subject section if no chapters match filter
+        if (chapters.length === 0 && priorityFilter !== 'all') return null;
+        
+        return (
+          <div key={subject} className="bg-white p-6 rounded-2xl shadow-lg">
+            <h3 className="text-2xl font-bold mb-4">{subject}</h3>
+            {chapters.length === 0 ? (
+              <p className="text-gray-500">
+                {priorityFilter !== 'all' 
+                  ? `No ${priorityFilter} priority chapters` 
+                  : 'No chapters available'}
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {chapters.map(chapter => {
+                  const progressId = `${mySchool}_${chapter.id}`;
+                  const prog = chapterProgress[progressId] || {};
+                  const status = getChapterStatus(chapter, prog);
+                  const chPriority = chapter.priority || 'high';
+                  
+                  return (
+                    <div key={chapter.id} className="border-2 rounded-xl p-4 hover:shadow-md transition-all">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <h4 className="font-bold text-lg">{chapter.name}</h4>
+                            {/* Priority Badge */}
+                            {chPriority === 'high' && (
+                              <span className="priority-badge priority-high text-xs">🟢 High Priority</span>
+                            )}
+                            {chPriority === 'medium' && (
+                              <span className="priority-badge priority-medium text-xs">🟡 Medium Priority</span>
+                            )}
+                            {chPriority === 'low' && (
+                              <span className="priority-badge priority-low text-xs">🔴 Low Priority</span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600 mt-2">
+                            📅 Target: {chapter.targetDate || 'Not set'}
+                          </div>
+                          {/* Show topics count if available */}
+                          {chapter.topics && chapter.topics.length > 0 && (
+                            <div className="text-sm text-gray-500 mt-1">
+                              📝 {chapter.topics.length} topic{chapter.topics.length > 1 ? 's' : ''}
+                            </div>
+                          )}
+                        </div>
+                        <div className={`status-badge ${status.class}`}>
+                          {status.label}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateChapterProgress}){
   const[expandedChapters,setExpandedChapters]=useState({});
+  const[priorityFilter,setPriorityFilter]=useState('all');
   const mySchool=currentUser.school;
   const mySubject=currentUser.subject;
   const docId=`${mySchool}_${mySubject}_${grade}`;
-  const chapters=curriculum[docId]?.chapters||[];
+  const allChapters=curriculum[docId]?.chapters||[];
+  
+  // Filter chapters by priority
+  const chapters = priorityFilter === 'all' 
+    ? allChapters 
+    : allChapters.filter(ch => {
+        const chPriority = ch.priority || 'high'; // default to high if not set
+        return chPriority === priorityFilter;
+      });
+
+  // Count chapters by priority
+  const priorityCounts = {
+    all: allChapters.length,
+    high: allChapters.filter(ch => ch.priority === 'high' || !ch.priority).length,
+    medium: allChapters.filter(ch => ch.priority === 'medium').length,
+    low: allChapters.filter(ch => ch.priority === 'low').length
+  };
 
   const handleCompletedChange=(chapterId,value)=>{
   updateChapterProgress(mySchool,chapterId,'completed',value);
@@ -8422,9 +8587,63 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
   return(
     <div className="space-y-6">
       <h2 className="text-3xl font-bold">Class {grade} - {mySubject}</h2>
+      
+      {/* Priority Filter for Teachers */}
+      <div className="bg-white p-4 rounded-2xl shadow-lg">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-bold text-gray-700">🎯 Filter by Priority:</span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setPriorityFilter('all')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'all' 
+                  ? 'bg-gray-800 text-white shadow-lg' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              📋 All ({priorityCounts.all})
+            </button>
+            <button
+              onClick={() => setPriorityFilter('high')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'high' 
+                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg' 
+                  : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+              }`}
+            >
+              🟢 High ({priorityCounts.high})
+            </button>
+            <button
+              onClick={() => setPriorityFilter('medium')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'medium' 
+                  ? 'bg-gradient-to-r from-yellow-500 to-amber-500 text-white shadow-lg' 
+                  : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200'
+              }`}
+            >
+              🟡 Medium ({priorityCounts.medium})
+            </button>
+            <button
+              onClick={() => setPriorityFilter('low')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'low' 
+                  ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-lg' 
+                  : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+              }`}
+            >
+              🔴 Low ({priorityCounts.low})
+            </button>
+          </div>
+        </div>
+      </div>
+      
       {chapters.length===0?
         <div className="bg-white p-8 rounded-2xl text-center">
-          <p className="text-gray-600">No chapters available. Contact admin.</p>
+          <p className="text-gray-600">
+            {priorityFilter !== 'all' 
+              ? `No ${priorityFilter} priority chapters available.` 
+              : 'No chapters available. Contact admin.'}
+          </p>
         </div>
       :
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -8489,7 +8708,12 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
                     <>
                       <div className="space-y-2 max-h-40 overflow-y-auto bg-white p-2 rounded-lg">
                         {allTopics.map((topic,idx)=>{
-                          const checked=completedTopics.includes(topic);
+                          // Support both old string format and new object format
+                          const topicName = typeof topic === 'string' ? topic : topic.name;
+                          const topicPriority = typeof topic === 'string' ? 'medium' : (topic.priority || 'medium');
+                          const topicKey = typeof topic === 'string' ? topic : topic.name;
+                          const checked = completedTopics.includes(topicKey) || completedTopics.includes(topic);
+                          const priorityIcon = topicPriority === 'high' ? '🟢' : topicPriority === 'medium' ? '🟡' : '🔴';
                           return(
                             <label 
   key={idx} 
@@ -8502,13 +8726,14 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
     onClick={(e)=>e.stopPropagation()}
     onChange={(e)=>{
       e.stopPropagation();
-      const updated=e.target.checked?[...completedTopics,topic]:completedTopics.filter(t=>t!==topic);
+      const updated=e.target.checked?[...completedTopics,topicKey]:completedTopics.filter(t=>t!==topicKey && t!==topic);
       updateChapterProgress(mySchool,chapter.id,'completedTopics',updated);
     }}
   />
-                              <span className={`text-sm ${checked?'line-through text-gray-500':'font-medium'}`}>
-                                {topic}
+                              <span className={`text-sm flex-1 ${checked?'line-through text-gray-500':'font-medium'}`}>
+                                {topicName}
                               </span>
+                              <span className="text-xs">{priorityIcon}</span>
                             </label>
                           );
                         })}
@@ -9026,12 +9251,17 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
   );
 }
 
-function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){const[selectedSchool,setSelectedSchool]=useState(SCHOOLS[0]);const[selectedSubject,setSelectedSubject]=useState(SUBJECTS[0]);const[selectedGrade,setSelectedGrade]=useState('11');const[showAddForm,setShowAddForm]=useState(false);const[editingChapter,setEditingChapter]=useState(null);const[chapterForm,setChapterForm]=useState({name:'',topics:[],targetDate:'',priority:'medium'});const[newTopic,setNewTopic]=useState('');const fileInputRef=useRef(null);const docId=`${selectedSchool}_${selectedSubject}_${selectedGrade}`;const chapters=curriculum[docId]?.chapters||[];const handleSaveChapter=()=>{if(!chapterForm.name){alert('Chapter name is required');return}if(editingChapter){updateChapter(selectedSchool,selectedSubject,selectedGrade,editingChapter.id,chapterForm);setEditingChapter(null)}else{addChapter(selectedSchool,selectedSubject,selectedGrade,chapterForm)}setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(false)};const handleEditChapter=chapter=>{setEditingChapter(chapter);setChapterForm({
+function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){const[selectedSchool,setSelectedSchool]=useState(SCHOOLS[0]);const[selectedSubject,setSelectedSubject]=useState(SUBJECTS[0]);const[selectedGrade,setSelectedGrade]=useState('11');const[showAddForm,setShowAddForm]=useState(false);const[editingChapter,setEditingChapter]=useState(null);const[chapterForm,setChapterForm]=useState({name:'',topics:[],targetDate:'',priority:'medium'});const[newTopic,setNewTopic]=useState('');const fileInputRef=useRef(null);const docId=`${selectedSchool}_${selectedSubject}_${selectedGrade}`;const chapters=curriculum[docId]?.chapters||[];const handleSaveChapter=()=>{if(!chapterForm.name){alert('Chapter name is required');return}if(editingChapter){updateChapter(selectedSchool,selectedSubject,selectedGrade,editingChapter.id,chapterForm);setEditingChapter(null)}else{addChapter(selectedSchool,selectedSubject,selectedGrade,chapterForm)}setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(false)};const handleEditChapter=chapter=>{setEditingChapter(chapter);
+  // Convert old string topics to new object format if needed
+  const convertedTopics = (chapter.topics||[]).map(t => 
+    typeof t === 'string' ? {name: t, priority: 'medium'} : t
+  );
+  setChapterForm({
   name:chapter.name,
-  topics:chapter.topics||[],
+  topics:convertedTopics,
   targetDate:chapter.targetDate||'',
   priority:chapter.priority||'medium'
-});setShowAddForm(true)};const handleAddTopic=()=>{if(!newTopic.trim())return;setChapterForm({...chapterForm,topics:[...chapterForm.topics,newTopic.trim()]});setNewTopic('')};const handleCSVImport=e=>{
+});setShowAddForm(true)};const handleAddTopic=()=>{if(!newTopic.trim())return;setChapterForm({...chapterForm,topics:[...chapterForm.topics,{name:newTopic.trim(),priority:'medium'}]});setNewTopic('')};const handleCSVImport=e=>{
   const file=e.target.files[0];
   if(!file)return;
 
@@ -9053,19 +9283,32 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
           const chapterName=row[0]?row[0].trim():'';
           const topicName=row[1]?row[1].trim():'';
           const targetDate=row[2]?row[2].trim():''; // Column C for target date
+          const priorityRaw=row[3]?row[3].trim().toLowerCase():''; // Column D for priority
+
+          // Parse priority - accept variations like "High", "HIGH", "high", "H", "1", etc.
+          let priority='medium'; // default
+          if(priorityRaw==='high'||priorityRaw==='h'||priorityRaw==='1'||priorityRaw==='🟢'){
+            priority='high';
+          }else if(priorityRaw==='medium'||priorityRaw==='med'||priorityRaw==='m'||priorityRaw==='2'||priorityRaw==='🟡'){
+            priority='medium';
+          }else if(priorityRaw==='low'||priorityRaw==='l'||priorityRaw==='3'||priorityRaw==='🔴'){
+            priority='low';
+          }
 
           if(chapterName){
+            // New chapter row - chapter gets its own priority
             if(currentChapter){
               chaptersToAdd.push(currentChapter);
             }
             currentChapter={
-  name:chapterName,
-  topics:topicName?[topicName]:[],
-  targetDate:targetDate||'',
-  priority:'medium'  // ADD THIS LINE
-};
+              name:chapterName,
+              topics:topicName?[{name:topicName,priority:priority}]:[],
+              targetDate:targetDate||'',
+              priority:priority // Chapter-level priority
+            };
           }else if(topicName&&currentChapter){
-            currentChapter.topics.push(topicName);
+            // Topic row - each topic gets its own priority from Column D
+            currentChapter.topics.push({name:topicName,priority:priority});
           }
         });
 
@@ -9082,7 +9325,7 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
           await addChapter(selectedSchool,selectedSubject,selectedGrade,chapter);
         }
 
-        alert(`Imported ${chaptersToAdd.length} chapters with target dates!`);
+        alert(`Imported ${chaptersToAdd.length} chapters with topic-level priorities!`);
         if(fileInputRef.current)fileInputRef.current.value='';
       }catch(e){
         alert('Import failed: '+e.message);
@@ -9090,7 +9333,44 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
     },
     error:()=>alert('Failed to parse CSV')
   });
-};return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum Management</h2><div className="bg-white p-6 rounded-2xl shadow-lg"><div className="grid md:grid-cols-3 gap-4 mb-4"><div><label className="block text-sm font-bold mb-2">School</label><select value={selectedSchool} onChange={e=>setSelectedSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Subject</label><select value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Grade</label><select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"><option value="11">Class 11</option><option value="12">Class 12</option></select></div></div><div className="flex gap-3"><button onClick={()=>{setEditingChapter(null);setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(!showAddForm)}} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">{showAddForm?'Cancel':'+ Add Chapter'}</button><label className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer">📤 Import CSV<input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVImport} className="hidden"/></label></div></div>{showAddForm&&<div className="bg-white p-6 rounded-2xl shadow-lg"><h4 className="text-xl font-bold mb-4">{editingChapter?'Edit Chapter':'Add New Chapter'}</h4><div className="space-y-4"><div><label className="block text-sm font-bold mb-2">Chapter Name *</label><input type="text" value={chapterForm.name} onChange={e=>setChapterForm({...chapterForm,name:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/></div><div><label className="block text-sm font-bold mb-2">Target Date</label><input type="date" value={chapterForm.targetDate} onChange={e=>setChapterForm({...chapterForm,targetDate:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/></div><div>
+};return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum Management</h2><div className="bg-white p-6 rounded-2xl shadow-lg"><div className="grid md:grid-cols-3 gap-4 mb-4"><div><label className="block text-sm font-bold mb-2">School</label><select value={selectedSchool} onChange={e=>setSelectedSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Subject</label><select value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Grade</label><select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"><option value="11">Class 11</option><option value="12">Class 12</option></select></div></div><div className="flex gap-3"><button onClick={()=>{setEditingChapter(null);setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(!showAddForm)}} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">{showAddForm?'Cancel':'+ Add Chapter'}</button><label className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer">📤 Import CSV<input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVImport} className="hidden"/></label></div>
+
+{/* CSV Format Guide */}
+<div className="mt-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+  <p className="font-bold text-blue-800 mb-2">📋 CSV Import Format (4 columns) - Supports Topic-Level Priorities:</p>
+  <div className="text-sm text-blue-700 space-y-1">
+    <p><strong>Column A:</strong> Chapter Name (leave blank for topics under same chapter)</p>
+    <p><strong>Column B:</strong> Topic Name</p>
+    <p><strong>Column C:</strong> Target Date (YYYY-MM-DD format, only for chapter rows)</p>
+    <p><strong>Column D:</strong> Priority (High, Medium, Low) - <span className="font-bold text-green-700">Works for BOTH chapters AND individual topics!</span></p>
+  </div>
+  <div className="mt-3 bg-white p-3 rounded-lg text-xs font-mono overflow-x-auto">
+    <table className="w-full border-collapse">
+      <thead>
+        <tr className="bg-gray-100">
+          <th className="border p-1 text-left">Chapter Name</th>
+          <th className="border p-1 text-left">Topic Name</th>
+          <th className="border p-1 text-left">Target Date</th>
+          <th className="border p-1 text-left">Priority</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr className="bg-green-50"><td className="border p-1 font-bold">Laws of Motion</td><td className="border p-1">Newton's First Law</td><td className="border p-1">2025-02-15</td><td className="border p-1 text-green-700 font-bold">High</td></tr>
+        <tr><td className="border p-1"></td><td className="border p-1">Newton's Second Law</td><td className="border p-1"></td><td className="border p-1 text-green-700">High</td></tr>
+        <tr><td className="border p-1"></td><td className="border p-1">Newton's Third Law</td><td className="border p-1"></td><td className="border p-1 text-yellow-700">Medium</td></tr>
+        <tr className="bg-yellow-50"><td className="border p-1 font-bold">Thermodynamics</td><td className="border p-1">First Law</td><td className="border p-1">2025-03-01</td><td className="border p-1 text-yellow-700 font-bold">Medium</td></tr>
+        <tr><td className="border p-1"></td><td className="border p-1">Second Law</td><td className="border p-1"></td><td className="border p-1 text-red-700">Low</td></tr>
+        <tr><td className="border p-1"></td><td className="border p-1">Carnot Engine</td><td className="border p-1"></td><td className="border p-1 text-green-700">High</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div className="mt-2 space-y-1 text-xs">
+    <p className="text-blue-600">💡 <strong>Priority accepts:</strong> High/H/1 (🟢), Medium/Med/M/2 (🟡), Low/L/3 (🔴). Default is Medium.</p>
+    <p className="text-green-700">✅ <strong>Each topic can have its own priority!</strong> Just add the priority in Column D for each topic row.</p>
+  </div>
+</div>
+
+</div>{showAddForm&&<div className="bg-white p-6 rounded-2xl shadow-lg"><h4 className="text-xl font-bold mb-4">{editingChapter?'Edit Chapter':'Add New Chapter'}</h4><div className="space-y-4"><div><label className="block text-sm font-bold mb-2">Chapter Name *</label><input type="text" value={chapterForm.name} onChange={e=>setChapterForm({...chapterForm,name:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/></div><div><label className="block text-sm font-bold mb-2">Target Date</label><input type="date" value={chapterForm.targetDate} onChange={e=>setChapterForm({...chapterForm,targetDate:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/></div><div>
   <label className="block text-sm font-bold mb-2">Priority Level</label>
   <select 
     value={chapterForm.priority||'medium'} 
@@ -9101,7 +9381,29 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
     <option value="medium">🟡 Medium Priority</option>
     <option value="low">🔴 Low Priority</option>
   </select>
-</div><div><label className="block text-sm font-bold mb-2">Topics</label><div className="flex gap-2 mb-3"><input type="text" value={newTopic} onChange={e=>setNewTopic(e.target.value)} onKeyPress={e=>e.key==='Enter'&&handleAddTopic()} className="flex-1 border-2 px-4 py-3 rounded-xl" placeholder="Enter topic"/><button onClick={handleAddTopic} className="px-6 py-3 bg-blue-600 text-white rounded-xl">Add</button></div><div className="space-y-2">{chapterForm.topics.map((topic,idx)=><div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"><span>{topic}</span><button onClick={()=>{const updated=chapterForm.topics.filter((_,i)=>i!==idx);setChapterForm({...chapterForm,topics:updated})}} className="px-3 py-1 bg-red-500 text-white rounded-lg">Remove</button></div>)}</div></div><button onClick={handleSaveChapter} className="px-6 py-3 avanti-gradient text-white rounded-xl font-semibold">{editingChapter?'Update Chapter':'Save Chapter'}</button></div></div>}<div className="bg-white p-6 rounded-2xl shadow-lg"><h4 className="text-xl font-bold mb-4">{selectedSchool} - {selectedSubject} - Class {selectedGrade} ({chapters.length} chapters)</h4>{chapters.length===0?<p className="text-gray-500 text-center py-8">No chapters yet</p>:<div className="space-y-3">{chapters.map(ch=><div key={ch.id} className="border-2 rounded-xl p-4 hover:bg-gray-50"><div className="flex justify-between items-start"><div className="flex-1"><h5 className="font-bold text-lg">{ch.name}</h5><p className="text-sm text-gray-600">Target: {ch.targetDate||'Not set'} | Topics: {ch.topics?.length||0}</p><div className="mt-2">
+</div><div><label className="block text-sm font-bold mb-2">Topics</label><div className="flex gap-2 mb-3"><input type="text" value={newTopic} onChange={e=>setNewTopic(e.target.value)} onKeyPress={e=>e.key==='Enter'&&handleAddTopic()} className="flex-1 border-2 px-4 py-3 rounded-xl" placeholder="Enter topic"/><button onClick={handleAddTopic} className="px-6 py-3 bg-blue-600 text-white rounded-xl">Add</button></div><div className="space-y-2">{chapterForm.topics.map((topic,idx)=>{
+  const topicName = typeof topic === 'string' ? topic : topic.name;
+  const topicPriority = typeof topic === 'string' ? 'medium' : (topic.priority || 'medium');
+  return (
+    <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg gap-2">
+      <span className="flex-1">{topicName}</span>
+      <select 
+        value={topicPriority}
+        onChange={(e)=>{
+          const updated = [...chapterForm.topics];
+          updated[idx] = {name: topicName, priority: e.target.value};
+          setChapterForm({...chapterForm, topics: updated});
+        }}
+        className="border px-2 py-1 rounded-lg text-sm"
+      >
+        <option value="high">🟢 High</option>
+        <option value="medium">🟡 Medium</option>
+        <option value="low">🔴 Low</option>
+      </select>
+      <button onClick={()=>{const updated=chapterForm.topics.filter((_,i)=>i!==idx);setChapterForm({...chapterForm,topics:updated})}} className="px-3 py-1 bg-red-500 text-white rounded-lg">Remove</button>
+    </div>
+  );
+})}</div></div><button onClick={handleSaveChapter} className="px-6 py-3 avanti-gradient text-white rounded-xl font-semibold">{editingChapter?'Update Chapter':'Save Chapter'}</button></div></div>}<div className="bg-white p-6 rounded-2xl shadow-lg"><h4 className="text-xl font-bold mb-4">{selectedSchool} - {selectedSubject} - Class {selectedGrade} ({chapters.length} chapters)</h4>{chapters.length===0?<p className="text-gray-500 text-center py-8">No chapters yet</p>:<div className="space-y-3">{chapters.map(ch=><div key={ch.id} className="border-2 rounded-xl p-4 hover:bg-gray-50"><div className="flex justify-between items-start"><div className="flex-1"><h5 className="font-bold text-lg">{ch.name}</h5><p className="text-sm text-gray-600">Target: {ch.targetDate||'Not set'} | Topics: {ch.topics?.length||0}</p><div className="mt-2">
     {(ch.priority==='high'||!ch.priority)&&(
       <span className="priority-badge priority-high text-xs">🟢 High Priority</span>
     )}
@@ -9111,7 +9413,12 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
     {ch.priority==='low'&&(
       <span className="priority-badge priority-low text-xs">🔴 Low Priority</span>
     )}
-  </div>{ch.topics&&ch.topics.length>0&&<ul className="text-xs text-gray-600 ml-4 mt-2">{ch.topics.map((t,i)=><li key={i}>• {t}</li>)}</ul>}</div><div className="flex gap-2"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
+  </div>{ch.topics&&ch.topics.length>0&&<ul className="text-xs text-gray-600 ml-4 mt-2">{ch.topics.map((t,i)=>{
+    const topicName = typeof t === 'string' ? t : t.name;
+    const topicPriority = typeof t === 'string' ? 'medium' : (t.priority || 'medium');
+    const priorityIcon = topicPriority === 'high' ? '🟢' : topicPriority === 'medium' ? '🟡' : '🔴';
+    return <li key={i}>• {topicName} <span className="ml-1">{priorityIcon}</span></li>;
+  })}</ul>}</div><div className="flex gap-2"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
 function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools = SCHOOLS,isSuperAdmin = false}){
   // Use accessible schools for the filter dropdown - set initial value to first accessible school if not super admin
   const initialSchool = isSuperAdmin ? 'All' : (accessibleSchools.length === 1 ? accessibleSchools[0] : 'All');
@@ -15385,7 +15692,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.4.0'; // Added Monthly Feedback Trend Graph in Student Feedback page
+  const CURRENT_VERSION = '3.4.1'; // Added Monthly Feedback Trend Graph in Student Feedback page
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
