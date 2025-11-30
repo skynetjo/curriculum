@@ -34,6 +34,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   
+  <!-- 2FA Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/otpauth/9.2.2/otpauth.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  
   <!-- Tally Form -->
   <script>
     window.TallyConfig = {
@@ -4125,6 +4129,683 @@ useEffect(() => {
     </div>
   );
 }
+
+// ========================================
+// 2FA (TWO-FACTOR AUTHENTICATION) HELPERS
+// ========================================
+
+// Generate a new TOTP secret for 2FA
+function generate2FASecret(email) {
+  const secret = new OTPAuth.Secret({ size: 20 });
+  return secret.base32;
+}
+
+// Generate TOTP URI for QR code
+function generate2FAURI(email, secret) {
+  const totp = new OTPAuth.TOTP({
+    issuer: 'Avanti Curriculum Tracker',
+    label: email,
+    algorithm: 'SHA1',
+    digits: 6,
+    period: 30,
+    secret: OTPAuth.Secret.fromBase32(secret)
+  });
+  return totp.toString();
+}
+
+// Verify a TOTP code
+function verify2FACode(secret, code) {
+  try {
+    const totp = new OTPAuth.TOTP({
+      issuer: 'Avanti Curriculum Tracker',
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      secret: OTPAuth.Secret.fromBase32(secret)
+    });
+    // Allow 1 window of time drift (30 seconds before/after)
+    const delta = totp.validate({ token: code, window: 1 });
+    return delta !== null;
+  } catch (e) {
+    console.error('2FA verification error:', e);
+    return false;
+  }
+}
+
+// Generate backup codes
+function generateBackupCodes(count = 8) {
+  const codes = [];
+  for (let i = 0; i < count; i++) {
+    const code = Math.random().toString(36).substring(2, 6).toUpperCase() + 
+                 '-' + 
+                 Math.random().toString(36).substring(2, 6).toUpperCase();
+    codes.push(code);
+  }
+  return codes;
+}
+
+// Hash a backup code for storage (simple hash for demo - in production use bcrypt)
+function hashBackupCode(code) {
+  let hash = 0;
+  const str = code.replace('-', '').toUpperCase();
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(16);
+}
+
+// Verify a backup code
+function verifyBackupCode(inputCode, hashedCodes) {
+  const inputHash = hashBackupCode(inputCode);
+  const index = hashedCodes.findIndex(h => h.hash === inputHash && !h.used);
+  return index;
+}
+
+// 2FA Setup Modal Component
+function TwoFactorSetupModal({ user, onClose, onSetupComplete }) {
+  const [step, setStep] = useState(1); // 1: Show QR, 2: Verify code, 3: Show backup codes
+  const [secret, setSecret] = useState('');
+  const [qrUri, setQrUri] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [backupCodes, setBackupCodes] = useState([]);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const qrRef = useRef(null);
+  const qrInstance = useRef(null);
+
+  useEffect(() => {
+    // Generate secret on mount
+    const newSecret = generate2FASecret(user.email);
+    const uri = generate2FAURI(user.email, newSecret);
+    setSecret(newSecret);
+    setQrUri(uri);
+  }, [user.email]);
+
+  useEffect(() => {
+    // Generate QR code
+    if (qrRef.current && qrUri && step === 1) {
+      // Clear previous QR code
+      qrRef.current.innerHTML = '';
+      qrInstance.current = new QRCode(qrRef.current, {
+        text: qrUri,
+        width: 200,
+        height: 200,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+    }
+  }, [qrUri, step]);
+
+  const handleVerifyCode = () => {
+    setError('');
+    if (!verificationCode || verificationCode.length !== 6) {
+      setError('Please enter a 6-digit code');
+      return;
+    }
+
+    if (verify2FACode(secret, verificationCode)) {
+      // Generate backup codes
+      const codes = generateBackupCodes(8);
+      setBackupCodes(codes);
+      setStep(3);
+    } else {
+      setError('Invalid code. Please try again.');
+    }
+  };
+
+  const handleComplete = async () => {
+    setSaving(true);
+    try {
+      // Hash backup codes for storage
+      const hashedBackupCodes = backupCodes.map(code => ({
+        hash: hashBackupCode(code),
+        used: false
+      }));
+
+      // Determine collection based on user type
+      let collection = 'teachers';
+      let docId = user.afid || user.docId;
+      
+      if (user.role) {
+        collection = 'managers';
+        docId = user.docId || user.uid;
+      }
+
+      // Save 2FA settings to Firestore
+      await db.collection('twoFactorAuth').doc(docId).set({
+        enabled: true,
+        secret: secret, // In production, encrypt this!
+        backupCodes: hashedBackupCodes,
+        setupAt: new Date().toISOString(),
+        userEmail: user.email,
+        userType: user.role ? 'manager' : 'teacher'
+      });
+
+      // Update user's 2FA status
+      await db.collection(collection).doc(docId).update({
+        twoFactorEnabled: true,
+        twoFactorSetupAt: new Date().toISOString()
+      });
+
+      onSetupComplete();
+    } catch (e) {
+      console.error('Error saving 2FA settings:', e);
+      setError('Failed to save 2FA settings: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-2xl font-bold">🔐 Setup Two-Factor Authentication</h3>
+          <button onClick={onClose} className="text-2xl text-gray-400 hover:text-gray-600">×</button>
+        </div>
+
+        {step === 1 && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded-xl">
+              <p className="text-blue-800 font-semibold mb-2">Step 1: Scan QR Code</p>
+              <p className="text-sm text-blue-600">
+                Open your authenticator app (Google Authenticator, Microsoft Authenticator, Authy, etc.) and scan this QR code.
+              </p>
+            </div>
+
+            <div className="flex justify-center p-4 bg-white rounded-xl border-2">
+              <div ref={qrRef}></div>
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded-xl">
+              <p className="text-sm font-semibold mb-2">Can't scan? Enter this code manually:</p>
+              <code className="block bg-white p-3 rounded-lg text-sm font-mono break-all border">
+                {secret}
+              </code>
+            </div>
+
+            <button
+              onClick={() => setStep(2)}
+              className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700"
+            >
+              Next: Verify Code →
+            </button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            <div className="bg-green-50 border-2 border-green-200 p-4 rounded-xl">
+              <p className="text-green-800 font-semibold mb-2">Step 2: Verify Setup</p>
+              <p className="text-sm text-green-600">
+                Enter the 6-digit code from your authenticator app to confirm setup.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold mb-2">Verification Code</label>
+              <input
+                type="text"
+                value={verificationCode}
+                onChange={e => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Enter 6-digit code"
+                className="w-full px-4 py-3 border-2 rounded-xl text-center text-2xl font-mono tracking-widest"
+                maxLength={6}
+                autoFocus
+              />
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border-2 border-red-200 p-3 rounded-xl text-red-700 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setStep(1)}
+                className="flex-1 py-3 bg-gray-200 rounded-xl font-semibold hover:bg-gray-300"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={handleVerifyCode}
+                className="flex-1 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700"
+              >
+                Verify Code
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-4">
+            <div className="bg-yellow-50 border-2 border-yellow-200 p-4 rounded-xl">
+              <p className="text-yellow-800 font-semibold mb-2">⚠️ Step 3: Save Backup Codes</p>
+              <p className="text-sm text-yellow-700">
+                Save these backup codes in a safe place. You can use them to login if you lose access to your authenticator app. Each code can only be used once.
+              </p>
+            </div>
+
+            <div className="bg-white border-2 p-4 rounded-xl">
+              <div className="grid grid-cols-2 gap-2">
+                {backupCodes.map((code, i) => (
+                  <div key={i} className="font-mono text-center py-2 bg-gray-100 rounded-lg">
+                    {code}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                const codesText = backupCodes.join('\n');
+                const blob = new Blob([`Avanti Curriculum Tracker - Backup Codes\n\nEmail: ${user.email}\nGenerated: ${new Date().toLocaleString()}\n\nBackup Codes:\n${codesText}\n\nKeep these codes safe! Each code can only be used once.`], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'avanti-2fa-backup-codes.txt';
+                a.click();
+              }}
+              className="w-full py-3 bg-gray-200 rounded-xl font-semibold hover:bg-gray-300"
+            >
+              📥 Download Backup Codes
+            </button>
+
+            {error && (
+              <div className="bg-red-50 border-2 border-red-200 p-3 rounded-xl text-red-700 text-sm">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleComplete}
+              disabled={saving}
+              className="w-full py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : '✓ Complete Setup'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 2FA Verification Modal (shown during login)
+function TwoFactorVerifyModal({ user, onVerified, onCancel, onUseBackupCode }) {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [showBackupInput, setShowBackupInput] = useState(false);
+  const [backupCode, setBackupCode] = useState('');
+
+  const handleVerify = async () => {
+    setError('');
+    if (!code || code.length !== 6) {
+      setError('Please enter a 6-digit code');
+      return;
+    }
+
+    setVerifying(true);
+    try {
+      // Get 2FA settings from Firestore
+      const docId = user.afid || user.docId || user.uid;
+      const twoFADoc = await db.collection('twoFactorAuth').doc(docId).get();
+      
+      if (!twoFADoc.exists) {
+        setError('2FA not configured. Please contact admin.');
+        return;
+      }
+
+      const twoFAData = twoFADoc.data();
+      
+      if (verify2FACode(twoFAData.secret, code)) {
+        onVerified();
+      } else {
+        setError('Invalid code. Please try again.');
+      }
+    } catch (e) {
+      console.error('2FA verification error:', e);
+      setError('Verification failed: ' + e.message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleBackupCodeVerify = async () => {
+    setError('');
+    if (!backupCode) {
+      setError('Please enter a backup code');
+      return;
+    }
+
+    setVerifying(true);
+    try {
+      const docId = user.afid || user.docId || user.uid;
+      const twoFADoc = await db.collection('twoFactorAuth').doc(docId).get();
+      
+      if (!twoFADoc.exists) {
+        setError('2FA not configured. Please contact admin.');
+        return;
+      }
+
+      const twoFAData = twoFADoc.data();
+      const backupCodes = twoFAData.backupCodes || [];
+      
+      const codeIndex = verifyBackupCode(backupCode, backupCodes);
+      
+      if (codeIndex >= 0) {
+        // Mark the backup code as used
+        backupCodes[codeIndex].used = true;
+        await db.collection('twoFactorAuth').doc(docId).update({
+          backupCodes: backupCodes
+        });
+        onVerified();
+      } else {
+        setError('Invalid or already used backup code.');
+      }
+    } catch (e) {
+      console.error('Backup code verification error:', e);
+      setError('Verification failed: ' + e.message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content max-w-md">
+        <div className="text-center mb-6">
+          <div className="text-5xl mb-3">🔐</div>
+          <h3 className="text-2xl font-bold">Two-Factor Authentication</h3>
+          <p className="text-gray-600 mt-2">Enter the code from your authenticator app</p>
+        </div>
+
+        {!showBackupInput ? (
+          <div className="space-y-4">
+            <input
+              type="text"
+              value={code}
+              onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              className="w-full px-4 py-4 border-2 rounded-xl text-center text-3xl font-mono tracking-widest"
+              maxLength={6}
+              autoFocus
+              onKeyPress={e => e.key === 'Enter' && handleVerify()}
+            />
+
+            {error && (
+              <div className="bg-red-50 border-2 border-red-200 p-3 rounded-xl text-red-700 text-sm text-center">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleVerify}
+              disabled={verifying || code.length !== 6}
+              className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50"
+            >
+              {verifying ? 'Verifying...' : 'Verify'}
+            </button>
+
+            <div className="text-center">
+              <button
+                onClick={() => setShowBackupInput(true)}
+                className="text-blue-600 text-sm hover:underline"
+              >
+                Lost your phone? Use a backup code
+              </button>
+            </div>
+
+            <button
+              onClick={onCancel}
+              className="w-full py-3 bg-gray-200 rounded-xl font-semibold hover:bg-gray-300"
+            >
+              Cancel Login
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-yellow-50 border-2 border-yellow-200 p-3 rounded-xl text-sm">
+              <p className="text-yellow-800 font-semibold">Using Backup Code</p>
+              <p className="text-yellow-700">Enter one of your saved backup codes. Each code can only be used once.</p>
+            </div>
+
+            <input
+              type="text"
+              value={backupCode}
+              onChange={e => setBackupCode(e.target.value.toUpperCase())}
+              placeholder="XXXX-XXXX"
+              className="w-full px-4 py-4 border-2 rounded-xl text-center text-xl font-mono tracking-wider"
+              autoFocus
+              onKeyPress={e => e.key === 'Enter' && handleBackupCodeVerify()}
+            />
+
+            {error && (
+              <div className="bg-red-50 border-2 border-red-200 p-3 rounded-xl text-red-700 text-sm text-center">
+                {error}
+              </div>
+            )}
+
+            <button
+              onClick={handleBackupCodeVerify}
+              disabled={verifying}
+              className="w-full py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 disabled:opacity-50"
+            >
+              {verifying ? 'Verifying...' : 'Use Backup Code'}
+            </button>
+
+            <button
+              onClick={() => {setShowBackupInput(false); setError('');}}
+              className="w-full py-3 bg-gray-200 rounded-xl font-semibold hover:bg-gray-300"
+            >
+              ← Back to Code Entry
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Admin 2FA Management Component (for Super Admin to reset 2FA)
+function Admin2FAManagement({ teachers, managers }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('All');
+  const [twoFAUsers, setTwoFAUsers] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [resetting, setResetting] = useState(null);
+
+  useEffect(() => {
+    const fetch2FAStatus = async () => {
+      try {
+        const twoFASnap = await db.collection('twoFactorAuth').get();
+        const status = {};
+        twoFASnap.docs.forEach(doc => {
+          status[doc.id] = doc.data();
+        });
+        setTwoFAUsers(status);
+      } catch (e) {
+        console.error('Error fetching 2FA status:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetch2FAStatus();
+  }, []);
+
+  const allUsers = [
+    ...teachers.map(t => ({ ...t, type: 'Teacher', docId: t.afid })),
+    ...managers.map(m => ({ ...m, type: ROLE_LABELS[m.role] || 'Manager', docId: m.docId }))
+  ];
+
+  const filteredUsers = allUsers.filter(user => {
+    if (filterType !== 'All' && user.type !== filterType) return false;
+    if (searchTerm && !user.name?.toLowerCase().includes(searchTerm.toLowerCase()) && 
+        !user.email?.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    return true;
+  });
+
+  const handleReset2FA = async (user) => {
+    if (!confirm(`Reset 2FA for ${user.name}?\n\nThis will disable their 2FA and they will need to set it up again on next login.`)) return;
+    
+    setResetting(user.docId);
+    try {
+      // Delete 2FA document
+      await db.collection('twoFactorAuth').doc(user.docId).delete();
+      
+      // Update user's 2FA status
+      const collection = user.type === 'Teacher' ? 'teachers' : 'managers';
+      await db.collection(collection).doc(user.docId).update({
+        twoFactorEnabled: false,
+        twoFactorResetAt: new Date().toISOString()
+      });
+
+      // Update local state
+      setTwoFAUsers(prev => {
+        const updated = { ...prev };
+        delete updated[user.docId];
+        return updated;
+      });
+
+      alert(`✅ 2FA reset for ${user.name}. They will need to set up 2FA again on next login.`);
+    } catch (e) {
+      console.error('Error resetting 2FA:', e);
+      alert('Failed to reset 2FA: ' + e.message);
+    } finally {
+      setResetting(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-4xl mb-4">⏳</div>
+        <p>Loading 2FA status...</p>
+      </div>
+    );
+  }
+
+  const enabledCount = Object.values(twoFAUsers).filter(u => u.enabled).length;
+  const pendingCount = allUsers.length - enabledCount;
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold">🔐 Two-Factor Authentication Management</h2>
+
+      {/* Stats */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-4 rounded-xl">
+          <div className="text-sm opacity-90">2FA Enabled</div>
+          <div className="text-3xl font-bold">{enabledCount}</div>
+        </div>
+        <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 rounded-xl">
+          <div className="text-sm opacity-90">2FA Pending Setup</div>
+          <div className="text-3xl font-bold">{pendingCount}</div>
+        </div>
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-xl">
+          <div className="text-sm opacity-90">Total Users</div>
+          <div className="text-3xl font-bold">{allUsers.length}</div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white p-4 rounded-xl shadow">
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">Search</label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Search by name or email..."
+              className="w-full border-2 px-4 py-2 rounded-xl"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">User Type</label>
+            <select
+              value={filterType}
+              onChange={e => setFilterType(e.target.value)}
+              className="w-full border-2 px-4 py-2 rounded-xl"
+            >
+              <option value="All">All Users</option>
+              <option value="Teacher">Teachers</option>
+              <option value="Super Admin">Super Admins</option>
+              <option value="Associate Program Head">Program Heads</option>
+              <option value="Program Manager">Program Managers</option>
+              <option value="Associate Program Manager">APMs</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Users Table */}
+      <div className="bg-white p-6 rounded-xl shadow overflow-x-auto">
+        <table className="w-full">
+          <thead className="avanti-gradient-light">
+            <tr>
+              <th className="p-3 text-left">Name</th>
+              <th className="p-3 text-left">Email</th>
+              <th className="p-3 text-left">Type</th>
+              <th className="p-3 text-center">2FA Status</th>
+              <th className="p-3 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredUsers.map(user => {
+              const twoFA = twoFAUsers[user.docId];
+              const isEnabled = twoFA?.enabled;
+              
+              return (
+                <tr key={user.docId} className="border-b hover:bg-gray-50">
+                  <td className="p-3 font-semibold">{user.name}</td>
+                  <td className="p-3 text-sm">{user.email}</td>
+                  <td className="p-3">
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                      user.type === 'Teacher' ? 'bg-blue-100 text-blue-700' :
+                      user.type === 'Super Admin' ? 'bg-purple-100 text-purple-700' :
+                      'bg-green-100 text-green-700'
+                    }`}>
+                      {user.type}
+                    </span>
+                  </td>
+                  <td className="p-3 text-center">
+                    {isEnabled ? (
+                      <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-bold">
+                        ✓ Enabled
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm font-bold">
+                        ⏳ Pending
+                      </span>
+                    )}
+                  </td>
+                  <td className="p-3">
+                    {isEnabled && (
+                      <button
+                        onClick={() => handleReset2FA(user)}
+                        disabled={resetting === user.docId}
+                        className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-semibold hover:bg-red-600 disabled:opacity-50"
+                      >
+                        {resetting === user.docId ? 'Resetting...' : '🔄 Reset 2FA'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[isSuperAdmin,setIsSuperAdmin]=useState(false);const[managerProfile,setManagerProfile]=useState(null);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:'',studentId:'',loginType:'teacher'});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);const[managers,setManagers]=useState([]);const[accessibleSchools,setAccessibleSchools]=useState([]);const[academicYearSettings,setAcademicYearSettings]=useState(null);
 const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);
@@ -4132,6 +4813,12 @@ const[leaveAdjustments,setLeaveAdjustments]=useState({});
 const[schoolInfo,setSchoolInfo]=useState([]);
 const[isSidebarOpen,setIsSidebarOpen]=useState(false);               
 const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
+
+// 2FA State
+const[pending2FAUser,setPending2FAUser]=useState(null); // User waiting for 2FA verification
+const[show2FAVerify,setShow2FAVerify]=useState(false); // Show 2FA verification modal
+const[show2FASetup,setShow2FASetup]=useState(false); // Show 2FA setup modal for new users
+const[needs2FASetup,setNeeds2FASetup]=useState(false); // Flag if user needs to set up 2FA
 
 // Helper function to get accessible schools for a manager (supports 4-level hierarchy)
 const getAccessibleSchools = useCallback((managerData, allManagers) => {
@@ -4164,53 +4851,95 @@ const getAccessibleSchools = useCallback((managerData, allManagers) => {
 useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
   // Check for Super Admin first
   if(user.email==='admin@avantifellows.org'){
-    setIsSuperAdmin(true);
-    setIsAdmin(true);
-    // Fetch all managers
-    const allManagersSnap=await db.collection('managers').where('status','==','active').get();
-    const allManagers=allManagersSnap.docs.map(d=>({...d.data(),id:d.id}));
-    setManagers(allManagers);
-    // Fetch academic year settings
-    const aySnap = await db.collection('system').doc('academicYear').get();
-    if(aySnap.exists) setAcademicYearSettings(aySnap.data());
-    // Super admin sees all schools
-    setAccessibleSchools([...SCHOOLS]);
-    setCurrentUser({name:'Super Administrator',email:user.email,afid:'SUPER_ADMIN',school:'Admin',role:MANAGER_ROLES.SUPER_ADMIN});
-    setActiveTab('managers');
+    // Check 2FA for Super Admin
+    const twoFADoc = await db.collection('twoFactorAuth').doc('SUPER_ADMIN').get();
+    if (twoFADoc.exists && twoFADoc.data().enabled) {
+      // 2FA is enabled, need to verify
+      setPending2FAUser({
+        name: 'Super Administrator',
+        email: user.email,
+        afid: 'SUPER_ADMIN',
+        docId: 'SUPER_ADMIN',
+        school: 'Admin',
+        role: MANAGER_ROLES.SUPER_ADMIN,
+        userType: 'superadmin'
+      });
+      setShow2FAVerify(true);
+      setLoading(false);
+      return;
+    } else {
+      // 2FA not set up yet - require setup
+      setPending2FAUser({
+        name: 'Super Administrator',
+        email: user.email,
+        afid: 'SUPER_ADMIN',
+        docId: 'SUPER_ADMIN',
+        school: 'Admin',
+        role: MANAGER_ROLES.SUPER_ADMIN,
+        userType: 'superadmin'
+      });
+      setShow2FASetup(true);
+      setNeeds2FASetup(true);
+      setLoading(false);
+      return;
+    }
   }else{
   // Check if user is a manager/APH/PM/APM
   const managerSnapshot=await db.collection('managers').where('email','==',user.email).where('status','==','active').limit(1).get();
   if(!managerSnapshot.empty){
-    const managerData={...managerSnapshot.docs[0].data(),id:managerSnapshot.docs[0].id};
-    setManagerProfile(managerData);
+    const managerData={...managerSnapshot.docs[0].data(),id:managerSnapshot.docs[0].id,docId:managerSnapshot.docs[0].id};
     
-    // Fetch all managers to calculate accessible schools
-    const allManagersSnap=await db.collection('managers').where('status','==','active').get();
-    const allManagers=allManagersSnap.docs.map(d=>({...d.data(),id:d.id}));
-    setManagers(allManagers);
-    
-    // Fetch academic year settings
-    const aySnap = await db.collection('system').doc('academicYear').get();
-    if(aySnap.exists) setAcademicYearSettings(aySnap.data());
-    
-    const schools=getAccessibleSchools(managerData, allManagers);
-    setAccessibleSchools(schools);
-    
-    setIsAdmin(true);
-    setIsSuperAdmin(false);
-    setCurrentUser({
-      name:managerData.name,
-      email:user.email,
-      afid:managerData.id,
-      school:schools[0] || 'Admin',
-      role:managerData.role,
-      directSchools:managerData.directSchools || []
-    });
-    setActiveTab('teachers');
+    // Check 2FA for manager
+    const twoFADoc = await db.collection('twoFactorAuth').doc(managerData.id).get();
+    if (twoFADoc.exists && twoFADoc.data().enabled) {
+      // 2FA is enabled, need to verify
+      setPending2FAUser({
+        ...managerData,
+        userType: 'manager'
+      });
+      setShow2FAVerify(true);
+      setLoading(false);
+      return;
+    } else {
+      // 2FA not set up yet - require setup for managers
+      setPending2FAUser({
+        ...managerData,
+        userType: 'manager'
+      });
+      setShow2FASetup(true);
+      setNeeds2FASetup(true);
+      setLoading(false);
+      return;
+    }
   } else {
     // Check if teacher
     const teacherSnapshot=await db.collection('teachers').where('email','==',user.email).limit(1).get();
-    if(!teacherSnapshot.empty){const teacherData=teacherSnapshot.docs[0].data();setCurrentUser(teacherData);setIsAdmin(false);setActiveTab('overview');if(teacherData.dob){const d=new Date(teacherData.dob);const now=new Date();if(d.getMonth()===now.getMonth()&&d.getDate()===now.getDate()){setShowConfetti(true);setCelebrationMessage(`🎂 Happy Birthday, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}if(teacherData.joiningDate){const j=new Date(teacherData.joiningDate);const now=new Date();if(j.getMonth()===now.getMonth()&&j.getDate()===now.getDate()&&j.getFullYear()<now.getFullYear()){const years=now.getFullYear()-j.getFullYear();setShowConfetti(true);setCelebrationMessage(`🎉 Happy ${years} Year Work Anniversary, ${teacherData.name}!`);setTimeout(()=>{setShowConfetti(false);setCelebrationMessage('')},8000)}}}else{alert('User profile not found. Please contact admin.');await auth.signOut()}
+    if(!teacherSnapshot.empty){
+      const teacherData={...teacherSnapshot.docs[0].data(),docId:teacherSnapshot.docs[0].id};
+      
+      // Check 2FA for teacher
+      const twoFADoc = await db.collection('twoFactorAuth').doc(teacherData.afid).get();
+      if (twoFADoc.exists && twoFADoc.data().enabled) {
+        // 2FA is enabled, need to verify
+        setPending2FAUser({
+          ...teacherData,
+          userType: 'teacher'
+        });
+        setShow2FAVerify(true);
+        setLoading(false);
+        return;
+      } else {
+        // 2FA not set up yet - require setup for teachers
+        setPending2FAUser({
+          ...teacherData,
+          userType: 'teacher'
+        });
+        setShow2FASetup(true);
+        setNeeds2FASetup(true);
+        setLoading(false);
+        return;
+      }
+    }else{alert('User profile not found. Please contact admin.');await auth.signOut()}
   }
 }}else{// Check for student session in localStorage
 const studentSession=localStorage.getItem('studentSession');if(studentSession){try{const studentData=JSON.parse(studentSession);console.log('✅ Restored student session:',studentData);setCurrentUser(studentData);setIsAdmin(false);setActiveTab('dashboard')}catch(e){console.error('Failed to restore student session:',e);localStorage.removeItem('studentSession')}}else{setCurrentUser(null);setIsAdmin(false)}}setLoading(false)});return()=>unsubscribe()},[getAccessibleSchools]);
@@ -4379,6 +5108,11 @@ const handleLogout=async()=>{
   try{
     // Clear student session from localStorage
     localStorage.removeItem('studentSession');
+    // Clear 2FA states
+    setPending2FAUser(null);
+    setShow2FAVerify(false);
+    setShow2FASetup(false);
+    setNeeds2FASetup(false);
     // For teachers/admins who use Firebase Auth
     if(auth.currentUser){
       await auth.signOut();
@@ -4391,6 +5125,103 @@ const handleLogout=async()=>{
   }catch(e){
     console.error('logout error',e);
   }
+};
+
+// Complete 2FA verification and finish login
+const complete2FAVerification = async () => {
+  if (!pending2FAUser) return;
+  
+  const user = pending2FAUser;
+  
+  if (user.userType === 'superadmin') {
+    setIsSuperAdmin(true);
+    setIsAdmin(true);
+    // Fetch all managers
+    const allManagersSnap = await db.collection('managers').where('status','==','active').get();
+    const allManagers = allManagersSnap.docs.map(d=>({...d.data(),id:d.id}));
+    setManagers(allManagers);
+    // Fetch academic year settings
+    const aySnap = await db.collection('system').doc('academicYear').get();
+    if(aySnap.exists) setAcademicYearSettings(aySnap.data());
+    // Super admin sees all schools
+    setAccessibleSchools([...SCHOOLS]);
+    setCurrentUser({name:'Super Administrator',email:user.email,afid:'SUPER_ADMIN',school:'Admin',role:MANAGER_ROLES.SUPER_ADMIN});
+    setActiveTab('managers');
+  } else if (user.userType === 'manager') {
+    setManagerProfile(user);
+    // Fetch all managers to calculate accessible schools
+    const allManagersSnap = await db.collection('managers').where('status','==','active').get();
+    const allManagers = allManagersSnap.docs.map(d=>({...d.data(),id:d.id}));
+    setManagers(allManagers);
+    // Fetch academic year settings
+    const aySnap = await db.collection('system').doc('academicYear').get();
+    if(aySnap.exists) setAcademicYearSettings(aySnap.data());
+    const schools = getAccessibleSchools(user, allManagers);
+    setAccessibleSchools(schools);
+    setIsAdmin(true);
+    setIsSuperAdmin(false);
+    setCurrentUser({
+      name: user.name,
+      email: user.email,
+      afid: user.id,
+      docId: user.docId,
+      school: schools[0] || 'Admin',
+      role: user.role,
+      directSchools: user.directSchools || []
+    });
+    setActiveTab('analytics');
+  } else if (user.userType === 'teacher') {
+    setCurrentUser(user);
+    setIsAdmin(false);
+    setActiveTab('overview');
+    // Birthday/Anniversary celebrations
+    if(user.dob){
+      const d = new Date(user.dob);
+      const now = new Date();
+      if(d.getMonth() === now.getMonth() && d.getDate() === now.getDate()){
+        setShowConfetti(true);
+        setCelebrationMessage(`🎂 Happy Birthday, ${user.name}!`);
+        setTimeout(() => {setShowConfetti(false);setCelebrationMessage('')}, 8000);
+      }
+    }
+    if(user.joiningDate){
+      const j = new Date(user.joiningDate);
+      const now = new Date();
+      if(j.getMonth() === now.getMonth() && j.getDate() === now.getDate() && j.getFullYear() < now.getFullYear()){
+        const years = now.getFullYear() - j.getFullYear();
+        setShowConfetti(true);
+        setCelebrationMessage(`🎉 Happy ${years} Year Work Anniversary, ${user.name}!`);
+        setTimeout(() => {setShowConfetti(false);setCelebrationMessage('')}, 8000);
+      }
+    }
+  }
+  
+  // Clear 2FA states
+  setPending2FAUser(null);
+  setShow2FAVerify(false);
+  setShow2FASetup(false);
+  setNeeds2FASetup(false);
+};
+
+// Handle 2FA setup completion
+const handle2FASetupComplete = () => {
+  setShow2FASetup(false);
+  setNeeds2FASetup(false);
+  // After setup, complete the login
+  complete2FAVerification();
+};
+
+// Cancel 2FA and logout
+const cancel2FA = async () => {
+  setPending2FAUser(null);
+  setShow2FAVerify(false);
+  setShow2FASetup(false);
+  setNeeds2FASetup(false);
+  if(auth.currentUser){
+    await auth.signOut();
+  }
+  setCurrentUser(null);
+  setIsAdmin(false);
 };
 const updateChapterProgress = useCallback(async (school, chapterId, field, value) => {
   try {
@@ -4473,6 +5304,33 @@ function Confetti() {
   );
 }
 if(loading){return(<div className="min-h-screen avanti-gradient flex items-center justify-center"><div className="text-center"><img src={AVANTI_LOGO} alt="Avanti Fellows" className="w-20 h-20 mx-auto mb-4 animate-bounce"/><div className="text-white text-2xl font-bold">Loading...</div></div></div>)}
+
+// Show 2FA Setup Modal if needed
+if(show2FASetup && pending2FAUser){
+  return(
+    <div className="min-h-screen avanti-gradient flex items-center justify-center p-4">
+      <TwoFactorSetupModal
+        user={pending2FAUser}
+        onClose={cancel2FA}
+        onSetupComplete={handle2FASetupComplete}
+      />
+    </div>
+  );
+}
+
+// Show 2FA Verification Modal if needed
+if(show2FAVerify && pending2FAUser){
+  return(
+    <div className="min-h-screen avanti-gradient flex items-center justify-center p-4">
+      <TwoFactorVerifyModal
+        user={pending2FAUser}
+        onVerified={complete2FAVerification}
+        onCancel={cancel2FA}
+      />
+    </div>
+  );
+}
+
 if(!currentUser){
   return(
     <div className="min-h-screen avanti-gradient flex items-center justify-center p-4">
@@ -6609,6 +7467,7 @@ function AdminView({
     ...(isSuperAdmin ? [
       { id: 'managers', label: 'Managers', icon: '👔' },
       { id: 'academicyear', label: 'Academic Year', icon: '📅' },
+      { id: '2fa-management', label: '2FA Management', icon: '🔐' },
     ] : []),
     { id: 'teachers', label: 'Teachers', icon: '👥' },
     { id: 'teacherhistory', label: 'Teacher History', icon: '📈' },
@@ -6771,6 +7630,10 @@ function AdminView({
             teacherAttendance={teacherAttendance}
             academicYearSettings={academicYearSettings}
           />
+        )}
+
+        {activeTab === '2fa-management' && isSuperAdmin && (
+          <Admin2FAManagement teachers={filteredTeachers} managers={managers} />
         )}
 
         {activeTab === 'teachers' && <TeacherManagement teachers={filteredTeachers} teacherAttendance={filteredTeacherAttendance} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} isSuperAdmin={isSuperAdmin} />}
