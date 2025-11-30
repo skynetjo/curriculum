@@ -6591,7 +6591,7 @@ function AdminView({
   accessibleSchools,
   academicYearSettings
 }) {
-  const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'managers' : 'teachers');
+  const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'managers' : 'analytics');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -6612,16 +6612,28 @@ function AdminView({
     ] : []),
     { id: 'teachers', label: 'Teachers', icon: '👥' },
     { id: 'teacherhistory', label: 'Teacher History', icon: '📈' },
-    { id: 'students', label: 'Students', icon: '👨‍🎓' },
+    // Students tab - only for Super Admin (contains add/edit/delete functionality)
+    ...(isSuperAdmin ? [
+      { id: 'students', label: 'Students', icon: '👨‍🎓' },
+    ] : []),
     { id: 'directory', label: 'Directory', icon: '📖' },
     { id: 'observations', label: 'Class Observations', icon: '📋' },
-    { id: 'curriculum', label: 'Curriculum', icon: '📚' },
+    // Curriculum Management - only for Super Admin (contains add/edit/delete chapters)
+    ...(isSuperAdmin ? [
+      { id: 'curriculum', label: 'Curriculum', icon: '📚' },
+    ] : []),
     { id: 'analytics', label: 'Analytics', icon: '📊' },
-    { id: 'chapter-details', label: 'Chapter Details', icon: '📋' },
+    // Chapter Details - removed for non-Super Admin as requested
+    ...(isSuperAdmin ? [
+      { id: 'chapter-details', label: 'Chapter Details', icon: '📋' },
+    ] : []),
     { id: 'attendance', label: 'Attendance Analytics', icon: '📊' },
     { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
     { id: 'birthdays', label: 'Celebrations', icon: '🎂' },
-    { id: 'studentprofiles', label: 'Student Profiles', icon: '👨‍🎓' },
+    // Student Profiles - only for Super Admin
+    ...(isSuperAdmin ? [
+      { id: 'studentprofiles', label: 'Student Profiles', icon: '👨‍🎓' },
+    ] : []),
     { id: 'examstats', label: 'Exam Statistics', icon: '📊' },
     { id: 'studentfeedback', label: 'Student Feedback', icon: '💬' }
   ];
@@ -6761,7 +6773,7 @@ function AdminView({
           />
         )}
 
-        {activeTab === 'teachers' && <TeacherManagement teachers={filteredTeachers} teacherAttendance={filteredTeacherAttendance} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} />}
+        {activeTab === 'teachers' && <TeacherManagement teachers={filteredTeachers} teacherAttendance={filteredTeacherAttendance} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} isSuperAdmin={isSuperAdmin} />}
 
         {activeTab === 'teacherhistory' && <TeacherHistoryView teachers={filteredTeachers} />}
 
@@ -6789,6 +6801,8 @@ function AdminView({
             teachers={filteredTeachers}
             curriculum={curriculum}
             chapterProgress={chapterProgress}
+            accessibleSchools={availableSchools}
+            isSuperAdmin={isSuperAdmin}
           />
         )}
 
@@ -7730,7 +7744,7 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
 
 function BirthdaysPage({teachers}){const todayBirthdays=useMemo(()=>getBirthdays(teachers,'today'),[teachers]);const weekBirthdays=useMemo(()=>getBirthdays(teachers,'week'),[teachers]);const monthBirthdays=useMemo(()=>getBirthdays(teachers,'month'),[teachers]);const todayAnniversaries=useMemo(()=>getAnniversaries(teachers,'today'),[teachers]);const weekAnniversaries=useMemo(()=>getAnniversaries(teachers,'week'),[teachers]);return(<div className="space-y-6"><h2 className="text-3xl font-bold">🎉 Celebrations</h2><div className="grid md:grid-cols-2 gap-6"><>{todayBirthdays.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎂 Today's Birthdays</h3>{todayBirthdays.map(t=><div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{t.school}</div></div>)}</div>}{todayAnniversaries.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎉 Today's Anniversaries</h3>{todayAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{years} Years at Avanti</div></div>)})}</div>}</></div><div className="grid md:grid-cols-2 gap-6"><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Week's Birthdays</h3>{weekBirthdays.length===0?<p className="text-gray-500">No birthdays this week</p>:<div className="space-y-2">{weekBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month's Birthdays</h3>{monthBirthdays.length===0?<p className="text-gray-500">No birthdays this month</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div></div></div>)}
 
-function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLeaveAdjustments}){
+function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLeaveAdjustments, isSuperAdmin = false}){
   const[showModal,setShowModal]=useState(false);
   const[editingTeacher,setEditingTeacher]=useState(null);
   const[showLeaveModal,setShowLeaveModal]=useState(false);
@@ -7818,7 +7832,9 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold">Teacher Management</h2>
-        <button onClick={openAddModal} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">+ Add Teacher</button>
+        {isSuperAdmin && (
+          <button onClick={openAddModal} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">+ Add Teacher</button>
+        )}
       </div>
       
       <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
@@ -7868,10 +7884,14 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
                     </button>
                   </td>
                   <td className="p-3">
-                    <div className="flex gap-2">
-                      <button onClick={()=>openEditModal(t)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button>
-                      <button onClick={()=>handleDelete(t)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button>
-                    </div>
+                    {isSuperAdmin ? (
+                      <div className="flex gap-2">
+                        <button onClick={()=>openEditModal(t)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button>
+                        <button onClick={()=>handleDelete(t)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-sm">View Only</span>
+                    )}
                   </td>
                 </tr>
               );
@@ -8229,10 +8249,15 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
       <span className="priority-badge priority-low text-xs">🔴 Low Priority</span>
     )}
   </div>{ch.topics&&ch.topics.length>0&&<ul className="text-xs text-gray-600 ml-4 mt-2">{ch.topics.map((t,i)=><li key={i}>• {t}</li>)}</ul>}</div><div className="flex gap-2"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
-function AdminAnalytics({teachers,curriculum,chapterProgress}){
-  const[filterSchool,setFilterSchool]=useState('All');
+function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools = SCHOOLS,isSuperAdmin = false}){
+  // Use accessible schools for the filter dropdown - set initial value to first accessible school if not super admin
+  const initialSchool = isSuperAdmin ? 'All' : (accessibleSchools.length === 1 ? accessibleSchools[0] : 'All');
+  const[filterSchool,setFilterSchool]=useState(initialSchool);
   const[filterGrade,setFilterGrade]=useState('All');
   const[filterTeacher,setFilterTeacher]=useState('All');
+
+  // Available schools for dropdown
+  const availableSchoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
 
   const chart1Ref=useRef(null);
   const chart2Ref=useRef(null);
@@ -8261,7 +8286,13 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
     testData:{completed:0,pending:0}
   };
 
-  const schoolsToProcess=filterSchool==='All'?SCHOOLS:[filterSchool];
+  // Filter schools based on selection and accessible schools
+  let schoolsToProcess;
+  if (filterSchool === 'All') {
+    schoolsToProcess = availableSchoolOptions;
+  } else {
+    schoolsToProcess = [filterSchool];
+  }
   const gradesToProcess=filterGrade==='All'?['11','12']:[filterGrade];
   const teachersFiltered=filterTeacher==='All'?teachers:teachers.filter(t=>t.afid===filterTeacher);
 
@@ -8607,10 +8638,10 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
             <select 
               value={filterSchool} 
               onChange={e=>setFilterSchool(e.target.value)}
-              disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full border-2 px-4 py-3 rounded-xl"
             >
-              <option value="All">All Schools</option>
-              {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+              {availableSchoolOptions.length > 1 && <option value="All">All Schools</option>}
+              {availableSchoolOptions.map(s=><option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
@@ -8618,7 +8649,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
             <select 
               value={filterGrade} 
               onChange={e=>setFilterGrade(e.target.value)}
-              disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full border-2 px-4 py-3 rounded-xl"
             >
               <option value="All">All Grades</option>
               <option value="11">Class 11</option>
@@ -8630,7 +8661,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress}){
             <select 
               value={filterTeacher} 
               onChange={e=>setFilterTeacher(e.target.value)}
-              disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full border-2 px-4 py-3 rounded-xl"
             >
               <option value="All">All Teachers</option>
               {teachers.map(t=><option key={t.afid} value={t.afid}>{t.name} ({t.afid})</option>)}
@@ -9381,6 +9412,25 @@ await db.collection('students').doc(docId).set({
               <option value="12">Class 12</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-xl shadow-lg">
+          <div className="text-sm opacity-90">Total Students</div>
+          <div className="text-3xl font-bold">{filteredStudents.length}</div>
+          <div className="text-xs opacity-75 mt-1">Filtered results</div>
+        </div>
+        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 rounded-xl shadow-lg">
+          <div className="text-sm opacity-90">Male</div>
+          <div className="text-3xl font-bold">{filteredStudents.filter(s => s.gender === 'Male').length}</div>
+          <div className="text-xs opacity-75 mt-1">{filteredStudents.length > 0 ? Math.round((filteredStudents.filter(s => s.gender === 'Male').length / filteredStudents.length) * 100) : 0}%</div>
+        </div>
+        <div className="bg-gradient-to-r from-pink-500 to-rose-600 text-white p-4 rounded-xl shadow-lg">
+          <div className="text-sm opacity-90">Female</div>
+          <div className="text-3xl font-bold">{filteredStudents.filter(s => s.gender === 'Female').length}</div>
+          <div className="text-xs opacity-75 mt-1">{filteredStudents.length > 0 ? Math.round((filteredStudents.filter(s => s.gender === 'Female').length / filteredStudents.length) * 100) : 0}%</div>
         </div>
       </div>
 
