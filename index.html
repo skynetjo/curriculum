@@ -3933,18 +3933,34 @@ useEffect(() => {
               ) : (
                 <div className="grid md:grid-cols-2 gap-4">
                   {SUBJECTS.map(subject => {
-                    const teacher = teachers.find(t => t.subject === subject);
+                    // Find active (non-archived) teacher for this subject
+                    const teacher = teachers.find(t => t.subject === subject && !t.isArchived);
+                    const archivedTeacher = teachers.find(t => t.subject === subject && t.isArchived);
                     const averageRating = teacher ? getTeacherAverageRating(teacher.docId) : null;
+                    
+                    // Determine display status
+                    const isVacant = !teacher;
+                    const wasArchived = !teacher && archivedTeacher;
+                    
                     return (
                       <div 
                         key={subject} 
-                        className="teacher-card border-2 rounded-xl p-4"
-                        onClick={() => teacher && handleTeacherClick(teacher)}
+                        className={`teacher-card border-2 rounded-xl p-4 ${
+                          isVacant ? 'bg-yellow-50 border-yellow-300' : ''
+                        }`}
+                        onClick={() => teacher && !teacher.isArchived && handleTeacherClick(teacher)}
                       >
                         <div className="font-bold text-lg">{subject}</div>
                         <div className="flex items-center justify-between">
-                          <div className="text-gray-600">
-                            {teacher ? teacher.name : 'Not assigned'}
+                          <div className={isVacant ? 'text-orange-600 font-medium' : 'text-gray-600'}>
+                            {teacher ? teacher.name : (
+                              <span>
+                                🔸 Vacant
+                                {wasArchived && (
+                                  <span className="text-xs text-gray-500 ml-1">(Previously: {archivedTeacher.name})</span>
+                                )}
+                              </span>
+                            )}
                           </div>
                           {averageRating && (
                             <div className="flex items-center gap-2">
@@ -3953,8 +3969,11 @@ useEffect(() => {
                             </div>
                           )}
                         </div>
-                        {teacher && (
+                        {teacher && !teacher.isArchived && (
                           <div className="text-sm text-blue-600 mt-2">Click to view profile →</div>
+                        )}
+                        {isVacant && (
+                          <div className="text-sm text-orange-500 mt-2">New teacher to be assigned</div>
                         )}
                       </div>
                     );
@@ -7979,7 +7998,7 @@ function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teache
   <h3 className="text-2xl font-bold mb-4">⏰ Today's Punch-In Times - {mySchool}</h3>
   <div className="space-y-2 max-h-96 overflow-y-auto">
     {teachers
-      .filter(t=>t.school===mySchool)
+      .filter(t=>t.school===mySchool && !t.isArchived)
       .map(teacher=>{
         const todayAttendance=teacherAttendance.find(
           a=>a.teacherId===teacher.afid&&a.date===getTodayDate()
@@ -9055,6 +9074,14 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
   const[savingLeave,setSavingLeave]=useState(false);
   const[form,setForm]=useState({name:'',afid:'',afCode:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});
   
+  // Archive functionality
+  const[showArchiveModal,setShowArchiveModal]=useState(false);
+  const[teacherToArchive,setTeacherToArchive]=useState(null);
+  const[archiveReason,setArchiveReason]=useState('');
+  const[archiveNotes,setArchiveNotes]=useState('');
+  const[archiving,setArchiving]=useState(false);
+  const[showArchivedTeachers,setShowArchivedTeachers]=useState(false);
+  
   const openAddModal=()=>{setEditingTeacher(null);setForm({name:'',afid:'',afCode:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});setShowModal(true)};
   const openEditModal=teacher=>{setEditingTeacher(teacher);setForm({...teacher,password:''});setShowModal(true)};
   
@@ -9119,9 +9146,77 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
     }
   };
   
-  const handleSave=async()=>{if(!form.afid||!form.name||!form.email||!form.subject||!form.school){alert('Please fill all required fields (AFID, Name, Email, Subject, School)');return}try{await db.collection('teachers').doc(form.afid).set({afid:form.afid,afCode:form.afCode||null,name:form.name,email:form.email.toLowerCase(),subject:form.subject,school:form.school,dob:form.dob||null,joiningDate:form.joiningDate||null,phone:form.phone||null});if(!editingTeacher&&form.password){alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`)}else{alert('Teacher updated!')}setShowModal(false)}catch(e){alert('Failed: '+e.message)}};
+  const handleSave=async()=>{if(!form.afid||!form.name||!form.email||!form.subject||!form.school){alert('Please fill all required fields (AFID, Name, Email, Subject, School)');return}try{await db.collection('teachers').doc(form.afid).set({afid:form.afid,afCode:form.afCode||null,name:form.name,email:form.email.toLowerCase(),subject:form.subject,school:form.school,dob:form.dob||null,joiningDate:form.joiningDate||null,phone:form.phone||null,isArchived:form.isArchived||false,archiveReason:form.archiveReason||null,archiveNotes:form.archiveNotes||null,archivedAt:form.archivedAt||null});if(!editingTeacher&&form.password){alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`)}else{alert('Teacher updated!')}setShowModal(false)}catch(e){alert('Failed: '+e.message)}};
   
-  const handleDelete=async teacher=>{if(!confirm(`Delete ${teacher.name}?`))return;try{await db.collection('teachers').doc(teacher.afid).delete();alert('Teacher deleted!')}catch(e){alert('Failed: '+e.message)}};
+  // Open archive modal
+  const openArchiveModal = (teacher) => {
+    setTeacherToArchive(teacher);
+    setArchiveReason('');
+    setArchiveNotes('');
+    setShowArchiveModal(true);
+  };
+  
+  // Handle archive teacher
+  const handleArchive = async () => {
+    if (!archiveReason) {
+      alert('Please select a reason for archiving');
+      return;
+    }
+    
+    setArchiving(true);
+    try {
+      await db.collection('teachers').doc(teacherToArchive.afid).update({
+        isArchived: true,
+        archiveReason: archiveReason,
+        archiveNotes: archiveNotes || '',
+        archivedAt: new Date().toISOString(),
+        archivedBy: 'admin'
+      });
+      
+      alert(`✅ ${teacherToArchive.name} has been archived.\n\nReason: ${archiveReason}\n\n• All curriculum data is preserved\n• Student feedback history is preserved\n• A new teacher can be assigned to continue`);
+      setShowArchiveModal(false);
+      setTeacherToArchive(null);
+    } catch (e) {
+      alert('Failed to archive: ' + e.message);
+    } finally {
+      setArchiving(false);
+    }
+  };
+  
+  // Restore archived teacher
+  const handleRestore = async (teacher) => {
+    if (!confirm(`Restore ${teacher.name} as an active teacher?`)) return;
+    
+    try {
+      await db.collection('teachers').doc(teacher.afid).update({
+        isArchived: false,
+        archiveReason: null,
+        archiveNotes: null,
+        archivedAt: null,
+        archivedBy: null,
+        restoredAt: new Date().toISOString()
+      });
+      alert(`✅ ${teacher.name} has been restored as an active teacher.`);
+    } catch (e) {
+      alert('Failed to restore: ' + e.message);
+    }
+  };
+  
+  // Permanently delete (only for archived teachers)
+  const handlePermanentDelete = async (teacher) => {
+    if (!confirm(`⚠️ PERMANENT DELETE\n\nAre you sure you want to permanently delete ${teacher.name}?\n\nThis action cannot be undone.\nNote: Historical data (feedback, observations) will remain but show "Deleted Teacher".`)) return;
+    
+    try {
+      await db.collection('teachers').doc(teacher.afid).delete();
+      alert('Teacher permanently deleted.');
+    } catch (e) {
+      alert('Failed to delete: ' + e.message);
+    }
+  };
+  
+  // Filter teachers based on archive status
+  const activeTeachers = teachers.filter(t => !t.isArchived);
+  const archivedTeachers = teachers.filter(t => t.isArchived);
   
   // Helper to get leave balance for display
   const getLeaveBalanceDisplay = (teacherId) => {
@@ -9131,14 +9226,30 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
   
   return(
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-4">
         <h2 className="text-3xl font-bold">Teacher Management</h2>
-        {isSuperAdmin && (
-          <button onClick={openAddModal} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">+ Add Teacher</button>
-        )}
+        <div className="flex items-center gap-4">
+          {/* Toggle for archived teachers */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={showArchivedTeachers}
+              onChange={e => setShowArchivedTeachers(e.target.checked)}
+              className="w-5 h-5"
+            />
+            <span className="text-sm font-medium">
+              Show Archived ({archivedTeachers.length})
+            </span>
+          </label>
+          {isSuperAdmin && (
+            <button onClick={openAddModal} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">+ Add Teacher</button>
+          )}
+        </div>
       </div>
       
+      {/* Active Teachers Table */}
       <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
+        <h3 className="text-lg font-bold mb-4 text-green-600">✅ Active Teachers ({activeTeachers.length})</h3>
         <table className="w-full">
           <thead className="avanti-gradient-light">
             <tr>
@@ -9153,7 +9264,7 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
             </tr>
           </thead>
           <tbody>
-            {teachers.map(t => {
+            {activeTeachers.map(t => {
               const balance = getLeaveBalanceDisplay(t.afid);
               return (
                 <tr key={t.id} className="border-b hover:bg-gray-50">
@@ -9188,7 +9299,7 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
                     {isSuperAdmin ? (
                       <div className="flex gap-2">
                         <button onClick={()=>openEditModal(t)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button>
-                        <button onClick={()=>handleDelete(t)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button>
+                        <button onClick={()=>openArchiveModal(t)} className="px-3 py-1 bg-orange-500 text-white rounded-lg" title="Archive instead of delete">Archive</button>
                       </div>
                     ) : (
                       <span className="text-gray-400 text-sm">View Only</span>
@@ -9200,6 +9311,62 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
           </tbody>
         </table>
       </div>
+      
+      {/* Archived Teachers Table (Conditional) */}
+      {showArchivedTeachers && archivedTeachers.length > 0 && (
+        <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto border-2 border-red-200">
+          <h3 className="text-lg font-bold mb-4 text-red-600">📦 Archived Teachers ({archivedTeachers.length})</h3>
+          <table className="w-full">
+            <thead className="bg-red-50">
+              <tr>
+                <th className="p-3 text-left">AFID</th>
+                <th className="p-3 text-left">Name</th>
+                <th className="p-3 text-left">Subject</th>
+                <th className="p-3 text-left">School</th>
+                <th className="p-3 text-left">Archive Reason</th>
+                <th className="p-3 text-left">Archived Date</th>
+                <th className="p-3 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {archivedTeachers.map(t => (
+                <tr key={t.id} className="border-b bg-red-50/50 hover:bg-red-100/50">
+                  <td className="p-3 font-mono text-red-700">{t.afid}</td>
+                  <td className="p-3 text-red-700 font-medium">{t.name}</td>
+                  <td className="p-3 text-red-600">{t.subject}</td>
+                  <td className="p-3 text-red-600">{t.school}</td>
+                  <td className="p-3">
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                      t.archiveReason === 'Resigned' ? 'bg-yellow-100 text-yellow-800' :
+                      t.archiveReason === 'Removed' ? 'bg-red-100 text-red-800' :
+                      t.archiveReason === 'Transferred' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {t.archiveReason || 'Unknown'}
+                    </span>
+                    {t.archiveNotes && (
+                      <div className="text-xs text-gray-500 mt-1" title={t.archiveNotes}>
+                        📝 {t.archiveNotes.length > 30 ? t.archiveNotes.slice(0, 30) + '...' : t.archiveNotes}
+                      </div>
+                    )}
+                  </td>
+                  <td className="p-3 text-sm text-gray-600">
+                    {t.archivedAt ? new Date(t.archivedAt).toLocaleDateString() : '—'}
+                  </td>
+                  <td className="p-3">
+                    {isSuperAdmin && (
+                      <div className="flex gap-2">
+                        <button onClick={() => handleRestore(t)} className="px-3 py-1 bg-green-500 text-white rounded-lg text-sm">Restore</button>
+                        <button onClick={() => handlePermanentDelete(t)} className="px-3 py-1 bg-red-600 text-white rounded-lg text-sm">Delete</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       
       {/* Leave Balance Modal */}
       {showLeaveModal && selectedTeacherLeave && (
@@ -9388,6 +9555,83 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      
+      {/* Archive Teacher Modal */}
+      {showArchiveModal && teacherToArchive && (
+        <div className="modal-overlay" onClick={() => setShowArchiveModal(false)}>
+          <div className="modal-content max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-6">
+              <div className="text-5xl mb-3">📦</div>
+              <h3 className="text-2xl font-bold text-gray-800">Archive Teacher</h3>
+              <p className="text-gray-600 mt-2">
+                You are about to archive <strong className="text-red-600">{teacherToArchive.name}</strong>
+              </p>
+            </div>
+            
+            <div className="bg-blue-50 p-4 rounded-xl mb-4 text-sm">
+              <p className="font-bold text-blue-800 mb-2">📌 What happens when you archive:</p>
+              <ul className="space-y-1 text-blue-700">
+                <li>✅ All curriculum data is <strong>preserved</strong></li>
+                <li>✅ Student feedback history is <strong>preserved</strong></li>
+                <li>✅ Teacher appears as "Archived" in directory</li>
+                <li>✅ Students see "Vacant" for this subject</li>
+                <li>✅ New teacher can continue from where they left off</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block font-bold mb-2 text-gray-700">
+                  Reason for Archiving <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={archiveReason}
+                  onChange={e => setArchiveReason(e.target.value)}
+                  className="w-full border-2 px-4 py-3 rounded-xl"
+                  required
+                >
+                  <option value="">-- Select Reason --</option>
+                  <option value="Resigned">😔 Resigned</option>
+                  <option value="Removed">❌ Removed</option>
+                  <option value="Transferred">🔄 Transferred to another program</option>
+                  <option value="On Long Leave">🏖️ On Long Leave</option>
+                  <option value="Other">📝 Other</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block font-bold mb-2 text-gray-700">Additional Notes (Optional)</label>
+                <textarea
+                  value={archiveNotes}
+                  onChange={e => setArchiveNotes(e.target.value)}
+                  placeholder="E.g., Resigned for personal reasons, effective date, etc."
+                  className="w-full border-2 px-4 py-3 rounded-xl resize-none"
+                  rows="3"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowArchiveModal(false)}
+                className="flex-1 bg-gray-300 py-3 rounded-xl font-semibold"
+                disabled={archiving}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleArchive}
+                disabled={!archiveReason || archiving}
+                className={`flex-1 py-3 rounded-xl font-semibold text-white ${
+                  !archiveReason || archiving ? 'bg-gray-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600'
+                }`}
+              >
+                {archiving ? '⏳ Archiving...' : '📦 Archive Teacher'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -13750,18 +13994,27 @@ function TeacherDirectory({ teachers, currentUser }) {
           {filteredTeachers.map((teacher) => (
             <div
               key={teacher.docId}
-              className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer transform hover:-translate-y-1"
+              className={`bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer transform hover:-translate-y-1 ${
+                teacher.isArchived ? 'ring-2 ring-red-400 opacity-75' : ''
+              }`}
               onClick={() => setSelectedTeacher(teacher)}
             >
+              {/* Archived Banner */}
+              {teacher.isArchived && (
+                <div className="bg-red-500 text-white text-center py-1 text-xs font-bold">
+                  📦 ARCHIVED - {teacher.archiveReason || 'Unknown'}
+                </div>
+              )}
+              
               {/* Header with gradient */}
-              <div className={`bg-gradient-to-r ${getSchoolColor(teacher.school)} p-4 text-white`}>
+              <div className={`bg-gradient-to-r ${teacher.isArchived ? 'from-gray-400 to-gray-500' : getSchoolColor(teacher.school)} p-4 text-white`}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="text-xs font-semibold opacity-90 mb-1">{teacher.school}</div>
                     <div className="text-sm opacity-90">{teacher.grade || 'Class 11 & 12'}</div>
                   </div>
                   <div className="text-3xl">
-                    {getSubjectIcon(teacher.subject)}
+                    {teacher.isArchived ? '📦' : getSubjectIcon(teacher.subject)}
                   </div>
                 </div>
               </div>
@@ -13772,10 +14025,16 @@ function TeacherDirectory({ teachers, currentUser }) {
                   <img
                     src={teacher.profilePhoto}
                     alt={teacher.name}
-                    className="w-20 h-20 rounded-full border-4 border-white shadow-lg object-cover"
+                    className={`w-20 h-20 rounded-full border-4 shadow-lg object-cover ${
+                      teacher.isArchived ? 'border-red-300 grayscale' : 'border-white'
+                    }`}
                   />
                 ) : (
-                  <div className="w-20 h-20 rounded-full border-4 border-white shadow-lg bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-3xl font-bold text-white">
+                  <div className={`w-20 h-20 rounded-full border-4 shadow-lg flex items-center justify-center text-3xl font-bold text-white ${
+                    teacher.isArchived 
+                      ? 'border-red-300 bg-gradient-to-br from-gray-400 to-gray-500' 
+                      : 'border-white bg-gradient-to-br from-gray-300 to-gray-400'
+                  }`}>
                     {teacher.name?.charAt(0) || '?'}
                   </div>
                 )}
@@ -13785,8 +14044,35 @@ function TeacherDirectory({ teachers, currentUser }) {
               <div className="px-4 pb-4 space-y-3">
                 {/* Name */}
                 <div className="text-center">
-                  <div className="text-xl font-bold text-gray-800">{teacher.name}</div>
+                  <div className={`text-xl font-bold ${teacher.isArchived ? 'text-red-600' : 'text-gray-800'}`}>
+                    {teacher.name}
+                    {teacher.isArchived && <span className="text-sm ml-1">(Archived)</span>}
+                  </div>
                   <div className="text-sm font-semibold text-gray-600">{teacher.subject}</div>
+                  
+                  {/* Archive Reason Badge */}
+                  {teacher.isArchived && (
+                    <div className="mt-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        teacher.archiveReason === 'Resigned' ? 'bg-yellow-100 text-yellow-800' :
+                        teacher.archiveReason === 'Removed' ? 'bg-red-100 text-red-800' :
+                        teacher.archiveReason === 'Transferred' ? 'bg-blue-100 text-blue-800' :
+                        teacher.archiveReason === 'On Long Leave' ? 'bg-purple-100 text-purple-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {teacher.archiveReason === 'Resigned' && '😔 '}
+                        {teacher.archiveReason === 'Removed' && '❌ '}
+                        {teacher.archiveReason === 'Transferred' && '🔄 '}
+                        {teacher.archiveReason === 'On Long Leave' && '🏖️ '}
+                        {teacher.archiveReason || 'Archived'}
+                      </span>
+                      {teacher.archivedAt && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          Since {new Date(teacher.archivedAt).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Contact Info */}
@@ -13849,8 +14135,27 @@ function TeacherDirectory({ teachers, currentUser }) {
       {selectedTeacher && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedTeacher(null)}>
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {/* Archived Warning Banner */}
+            {selectedTeacher.isArchived && (
+              <div className="bg-red-500 text-white p-4">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-2xl">📦</span>
+                  <div>
+                    <div className="font-bold">This teacher has been archived</div>
+                    <div className="text-sm opacity-90">
+                      Reason: {selectedTeacher.archiveReason || 'Not specified'}
+                      {selectedTeacher.archivedAt && ` • Since ${new Date(selectedTeacher.archivedAt).toLocaleDateString()}`}
+                    </div>
+                    {selectedTeacher.archiveNotes && (
+                      <div className="text-sm opacity-80 mt-1">Notes: {selectedTeacher.archiveNotes}</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            
             {/* Header */}
-            <div className={`bg-gradient-to-r ${getSchoolColor(selectedTeacher.school)} p-6 text-white relative`}>
+            <div className={`bg-gradient-to-r ${selectedTeacher.isArchived ? 'from-gray-400 to-gray-500' : getSchoolColor(selectedTeacher.school)} p-6 text-white relative`}>
               <button
                 onClick={() => setSelectedTeacher(null)}
                 className="absolute top-4 right-4 text-white text-2xl hover:text-gray-200 w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/20"
@@ -13862,7 +14167,7 @@ function TeacherDirectory({ teachers, currentUser }) {
                   <img
                     src={selectedTeacher.profilePhoto}
                     alt={selectedTeacher.name}
-                    className="w-24 h-24 rounded-full border-4 border-white shadow-lg object-cover"
+                    className={`w-24 h-24 rounded-full border-4 border-white shadow-lg object-cover ${selectedTeacher.isArchived ? 'grayscale' : ''}`}
                   />
                 ) : (
                   <div className="w-24 h-24 rounded-full border-4 border-white shadow-lg bg-white/30 flex items-center justify-center text-4xl font-bold">
@@ -13870,7 +14175,10 @@ function TeacherDirectory({ teachers, currentUser }) {
                   </div>
                 )}
                 <div className="flex-1">
-                  <div className="text-2xl font-bold">{selectedTeacher.name}</div>
+                  <div className="text-2xl font-bold">
+                    {selectedTeacher.name}
+                    {selectedTeacher.isArchived && <span className="text-sm ml-2 bg-red-600 px-2 py-1 rounded">Archived</span>}
+                  </div>
                   <div className="text-lg opacity-90">{selectedTeacher.subject}</div>
                   <div className="text-sm opacity-80 mt-1">{selectedTeacher.school}</div>
                 </div>
@@ -14460,7 +14768,13 @@ const feedbackData = feedbackSnap.docs.map(doc => {
   // Get teacher name
   const getTeacherName = (teacherId) => {
     const teacher = teachers.find(t => t.id === teacherId);
-    return teacher ? teacher.name : 'Unknown Teacher';
+    if (!teacher) return 'Unknown Teacher';
+    return teacher.isArchived ? `${teacher.name} (Archived)` : teacher.name;
+  };
+  
+  // Get teacher object for detailed info
+  const getTeacherInfo = (teacherId) => {
+    return teachers.find(t => t.id === teacherId) || null;
   };
 
   // Filter feedback - using accessibleFeedback which is already filtered by accessible schools
@@ -15905,7 +16219,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.4.2'; // Added Monthly Feedback Trend Graph in Student Feedback page
+  const CURRENT_VERSION = '3.5.0'; // Added Teacher Archive System - archive instead of delete, preserves data
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
