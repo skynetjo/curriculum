@@ -220,6 +220,8 @@
     @keyframes confetti-fall{0%{transform:translateY(-100vh) rotate(0) scale(1);opacity:1}100%{transform:translateY(100vh) rotate(720deg) scale(.5);opacity:0}}
     .confetti-piece{position:fixed;pointer-events:none;z-index:9999;animation:confetti-fall 4s cubic-bezier(.25,.46,.45,.94) forwards}
     .chapter-card{transition:all .3s ease;position:relative;overflow:hidden}
+    .chapter-card h3{word-break:break-word;overflow-wrap:break-word}
+    .break-words{word-break:break-word;overflow-wrap:break-word}
     .chapter-card:hover{transform:translateY(-4px);box-shadow:0 20px 40px -12px rgba(0,0,0,.2)}
     .chapter-card.completed{background:linear-gradient(135deg,#d1fae5,#a7f3d0);border:3px solid #10b981}
     .chapter-card.delayed{background:linear-gradient(135deg,#fed7aa,#fdba74);border:3px solid #f97316}
@@ -8165,13 +8167,13 @@ function ClassView({grade, currentUser, curriculum, chapterProgress, updateChapt
                     >
                       {/* Chapter Header */}
                       <div 
-                        className="flex justify-between items-start cursor-pointer"
+                        className="flex justify-between items-start cursor-pointer gap-3"
                         onClick={() => toggleChapter(chapter.id)}
                       >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h4 className="text-lg font-bold">{chapter.name}</h4>
-                            <span className={`status-badge status-${status}`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-3 mb-2">
+                            <h4 className="text-lg font-bold break-words">{chapter.name}</h4>
+                            <span className={`status-badge status-${status} flex-shrink-0`}>
                               {status === 'completed' ? '✓ Done' : 
                                status === 'delayed' ? '⚠ Delayed' : '⏳ Pending'}
                             </span>
@@ -8187,7 +8189,7 @@ function ClassView({grade, currentUser, curriculum, chapterProgress, updateChapt
                             )}
                           </div>
                         </div>
-                        <button className="text-2xl">
+                        <button className="text-2xl flex-shrink-0">
                           {isExpanded ? '▲' : '▼'}
                         </button>
                       </div>
@@ -8890,9 +8892,9 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
 
             return(
               <div className={`chapter-card ${status.color} rounded-2xl shadow-lg p-5`}>
-  <div className="flex justify-between items-start mb-3">
-    <div className="flex-1">
-      <h3 className="text-xl font-bold mb-2">{chapter.name}</h3>
+  <div className="flex justify-between items-start mb-3 gap-3">
+    <div className="flex-1 min-w-0">
+      <h3 className="text-xl font-bold mb-2 break-words">{chapter.name}</h3>
       <div>
         {(chapter.priority==='high'||!chapter.priority)&&(
           <span className="priority-badge priority-high text-xs">
@@ -8949,12 +8951,13 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
                           return(
                             <label 
   key={idx} 
-  className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded"
+  className="flex items-start gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded"
   onClick={(e)=>e.stopPropagation()}
 >
   <input 
     type="checkbox" 
     checked={checked}
+    className="mt-1 flex-shrink-0"
     onClick={(e)=>e.stopPropagation()}
     onChange={(e)=>{
       e.stopPropagation();
@@ -8962,10 +8965,10 @@ function TeacherCurriculum({grade,currentUser,curriculum,chapterProgress,updateC
       updateChapterProgress(mySchool,chapter.id,'completedTopics',updated);
     }}
   />
-                              <span className={`text-sm flex-1 ${checked?'line-through text-gray-500':'font-medium'}`}>
+                              <span className={`text-sm flex-1 break-words ${checked?'line-through text-gray-500':'font-medium'}`}>
                                 {topicName}
                               </span>
-                              <span className="text-xs">{priorityIcon}</span>
+                              <span className="text-xs flex-shrink-0 mt-1">{priorityIcon}</span>
                             </label>
                           );
                         })}
