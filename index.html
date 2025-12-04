@@ -12736,10 +12736,12 @@ function SchoolInfoView({currentUser,schoolInfo}){
     modules11Received:'',
     modules11Distributed:'',
     modules11Stock:'',
+    modules11Remarks:'',
     // Modules - Class 12
     modules12Received:'',
     modules12Distributed:'',
     modules12Stock:'',
+    modules12Remarks:'',
     // Reference Books
     referenceBooks:[],
     // Chromebooks - Class 11
@@ -12861,6 +12863,73 @@ function SchoolInfoView({currentUser,schoolInfo}){
   };
 
   const handleSubmit = async () => {
+  // Validation for mandatory fields
+  const requiredFields = [
+    { field: 'principalName', label: 'Principal Name' },
+    { field: 'principalPhone', label: 'Principal Phone Number' },
+    { field: 'principalEmail', label: 'Principal Email ID' },
+    { field: 'vicePrincipalName', label: 'Vice Principal Name' },
+    { field: 'vicePrincipalPhone', label: 'Vice Principal Phone Number' },
+    { field: 'vicePrincipalEmail', label: 'Vice Principal Email ID' },
+    { field: 'coordinatorName', label: 'Avanti Coordinator Name' },
+    { field: 'coordinatorPhone', label: 'Avanti Coordinator Phone Number' },
+    { field: 'coordinatorEmail', label: 'Avanti Coordinator Email ID' }
+  ];
+  
+  const missingFields = [];
+  for (const { field, label } of requiredFields) {
+    if (!formData[field] || formData[field].toString().trim() === '') {
+      missingFields.push(label);
+    }
+  }
+  
+  // Validate phone numbers (10 digits)
+  const phoneFields = [
+    { field: 'principalPhone', label: 'Principal Phone' },
+    { field: 'vicePrincipalPhone', label: 'Vice Principal Phone' },
+    { field: 'coordinatorPhone', label: 'Coordinator Phone' }
+  ];
+  
+  const invalidPhones = [];
+  for (const { field, label } of phoneFields) {
+    const phone = formData[field]?.toString().replace(/\D/g, '');
+    if (phone && phone.length !== 10) {
+      invalidPhones.push(label + ' (must be 10 digits)');
+    }
+  }
+  
+  // Validate email format
+  const emailFields = [
+    { field: 'principalEmail', label: 'Principal Email' },
+    { field: 'vicePrincipalEmail', label: 'Vice Principal Email' },
+    { field: 'coordinatorEmail', label: 'Coordinator Email' }
+  ];
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const invalidEmails = [];
+  for (const { field, label } of emailFields) {
+    if (formData[field] && !emailRegex.test(formData[field])) {
+      invalidEmails.push(label + ' (invalid format)');
+    }
+  }
+  
+  // Show all validation errors
+  let errorMessage = '';
+  if (missingFields.length > 0) {
+    errorMessage += '❌ Missing required fields:\n• ' + missingFields.join('\n• ') + '\n\n';
+  }
+  if (invalidPhones.length > 0) {
+    errorMessage += '❌ Invalid phone numbers:\n• ' + invalidPhones.join('\n• ') + '\n\n';
+  }
+  if (invalidEmails.length > 0) {
+    errorMessage += '❌ Invalid email addresses:\n• ' + invalidEmails.join('\n• ');
+  }
+  
+  if (errorMessage) {
+    alert(errorMessage);
+    return;
+  }
+  
   try {
     const docId = mySchool.replace(/\s+/g, '_');
     const now = new Date().toISOString();
@@ -12883,9 +12952,9 @@ function SchoolInfoView({currentUser,schoolInfo}){
     }, { merge: true });
 
     setIsEditing(false);
-    alert('School information saved successfully!');
+    alert('✅ School information saved successfully!');
   } catch (e) {
-    alert('Failed to save: ' + e.message);
+    alert('❌ Failed to save: ' + e.message);
   }
 };
 
@@ -13014,7 +13083,7 @@ function SchoolInfoView({currentUser,schoolInfo}){
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2">WiFi in Classroom? *</label>
-              <select value={formData.wifiInClassroom} onChange={e=>setFormData({...formData,wifiInClassroom:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+              <select value={formData.wifiInClassroom} onChange={e=>setFormData({...formData,wifiInClassroom:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                 <option value="No">No</option>
                 <option value="Yes">Yes</option>
               </select>
@@ -13023,7 +13092,7 @@ function SchoolInfoView({currentUser,schoolInfo}){
               <>
                 <div>
                   <label className="block text-sm font-bold mb-2">Installed By *</label>
-                  <select value={formData.wifiInstalledBy} onChange={e=>setFormData({...formData,wifiInstalledBy:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                  <select value={formData.wifiInstalledBy} onChange={e=>setFormData({...formData,wifiInstalledBy:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                     <option value="">Select</option>
                     <option value="Avanti">Avanti</option>
                     <option value="JNV">JNV</option>
@@ -13031,18 +13100,18 @@ function SchoolInfoView({currentUser,schoolInfo}){
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Working Condition? *</label>
-                  <select value={formData.wifiWorking} onChange={e=>setFormData({...formData,wifiWorking:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                  <select value={formData.wifiWorking} onChange={e=>setFormData({...formData,wifiWorking:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                     <option value="No">No</option>
                     <option value="Yes">Yes</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Monthly Bill Amount *</label>
-                  <input type="text" value={formData.wifiMonthlyBill} onChange={e=>setFormData({...formData,wifiMonthlyBill:e.target.value})} placeholder="₹ Amount" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="text" value={formData.wifiMonthlyBill} onChange={e=>setFormData({...formData,wifiMonthlyBill:e.target.value})} disabled={!isEditing} placeholder="₹ Amount" className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Connection Type *</label>
-                  <select value={formData.wifiConnectionType} onChange={e=>setFormData({...formData,wifiConnectionType:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                  <select value={formData.wifiConnectionType} onChange={e=>setFormData({...formData,wifiConnectionType:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                     <option value="">Select</option>
                     <option value="Postpaid">Postpaid</option>
                     <option value="Prepaid">Prepaid</option>
@@ -13050,7 +13119,7 @@ function SchoolInfoView({currentUser,schoolInfo}){
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Network Name *</label>
-                  <select value={formData.wifiNetworkName} onChange={e=>setFormData({...formData,wifiNetworkName:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                  <select value={formData.wifiNetworkName} onChange={e=>setFormData({...formData,wifiNetworkName:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                     <option value="">Select</option>
                     <option value="Airtel">Airtel</option>
                     <option value="Jio">Jio</option>
@@ -13060,7 +13129,7 @@ function SchoolInfoView({currentUser,schoolInfo}){
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Both 11th & 12th have WiFi? *</label>
-                  <select value={formData.bothClassesWifi} onChange={e=>setFormData({...formData,bothClassesWifi:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                  <select value={formData.bothClassesWifi} onChange={e=>setFormData({...formData,bothClassesWifi:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                     <option value="No">No</option>
                     <option value="Yes">Yes</option>
                   </select>
@@ -13076,16 +13145,20 @@ function SchoolInfoView({currentUser,schoolInfo}){
           <div className="grid md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2">Modules Received (AY 2025-26) *</label>
-              <input type="number" value={formData.modules11Received} onChange={e=>setFormData({...formData,modules11Received:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="number" min="0" value={formData.modules11Received} onChange={e=>setFormData({...formData,modules11Received:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">Modules Distributed to 11th *</label>
-              <input type="number" value={formData.modules11Distributed} onChange={e=>setFormData({...formData,modules11Distributed:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="number" min="0" value={formData.modules11Distributed} onChange={e=>setFormData({...formData,modules11Distributed:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">Modules in Stock (11th) *</label>
-              <input type="number" value={formData.modules11Stock} onChange={e=>setFormData({...formData,modules11Stock:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="number" min="0" value={formData.modules11Stock} onChange={e=>setFormData({...formData,modules11Stock:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
             </div>
+          </div>
+          <div className="mt-4">
+            <label className="block text-sm font-bold mb-2">📝 Remarks for Class 11th Modules</label>
+            <textarea value={formData.modules11Remarks||''} onChange={e=>setFormData({...formData,modules11Remarks:e.target.value})} disabled={!isEditing} placeholder="Add any remarks about 11th class modules here..." className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" rows="2"/>
           </div>
         </div>
 
@@ -13095,16 +13168,20 @@ function SchoolInfoView({currentUser,schoolInfo}){
           <div className="grid md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2">Modules Received (AY 2025-26) *</label>
-              <input type="number" value={formData.modules12Received} onChange={e=>setFormData({...formData,modules12Received:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="number" min="0" value={formData.modules12Received} onChange={e=>setFormData({...formData,modules12Received:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">Modules Distributed to 12th *</label>
-              <input type="number" value={formData.modules12Distributed} onChange={e=>setFormData({...formData,modules12Distributed:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="number" min="0" value={formData.modules12Distributed} onChange={e=>setFormData({...formData,modules12Distributed:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-2">Modules in Stock (12th) *</label>
-              <input type="number" value={formData.modules12Stock} onChange={e=>setFormData({...formData,modules12Stock:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+              <input type="number" min="0" value={formData.modules12Stock} onChange={e=>setFormData({...formData,modules12Stock:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
             </div>
+          </div>
+          <div className="mt-4">
+            <label className="block text-sm font-bold mb-2">📝 Remarks for Class 12th Modules</label>
+            <textarea value={formData.modules12Remarks||''} onChange={e=>setFormData({...formData,modules12Remarks:e.target.value})} disabled={!isEditing} placeholder="Add any remarks about 12th class modules here..." className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" rows="2"/>
           </div>
         </div>
 
@@ -13112,9 +13189,11 @@ function SchoolInfoView({currentUser,schoolInfo}){
         <div className="border-4 border-yellow-500 rounded-2xl p-6 bg-yellow-50">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-2xl font-bold text-yellow-800">📖 Other Reference Books (AY 2025-26)</h3>
-            <button onClick={handleAddBook} className="px-6 py-3 bg-yellow-600 text-white rounded-xl font-semibold">
-              + Add Book
-            </button>
+            {isEditing && (
+              <button onClick={handleAddBook} className="px-6 py-3 bg-yellow-600 text-white rounded-xl font-semibold">
+                + Add Book
+              </button>
+            )}
           </div>
           {formData.referenceBooks.map((book,idx)=>
             <div key={idx} className="bg-white p-4 rounded-xl mb-4 border-2 border-yellow-300">
@@ -13162,7 +13241,7 @@ function SchoolInfoView({currentUser,schoolInfo}){
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2">Distributed from Avanti? *</label>
-              <select value={formData.chromebooks11Distributed} onChange={e=>setFormData({...formData,chromebooks11Distributed:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+              <select value={formData.chromebooks11Distributed} onChange={e=>setFormData({...formData,chromebooks11Distributed:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                 <option value="No">No</option>
                 <option value="Yes">Yes</option>
               </select>
@@ -13171,19 +13250,19 @@ function SchoolInfoView({currentUser,schoolInfo}){
               <>
                 <div>
                   <label className="block text-sm font-bold mb-2">Number Distributed *</label>
-                  <input type="number" value={formData.chromebooks11Count} onChange={e=>setFormData({...formData,chromebooks11Count:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="number" min="0" value={formData.chromebooks11Count} onChange={e=>setFormData({...formData,chromebooks11Count:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Working Condition *</label>
-                  <input type="number" value={formData.chromebooks11Working} onChange={e=>setFormData({...formData,chromebooks11Working:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="number" min="0" value={formData.chromebooks11Working} onChange={e=>setFormData({...formData,chromebooks11Working:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Brand Name *</label>
-                  <input type="text" value={formData.chromebooks11Brand} onChange={e=>setFormData({...formData,chromebooks11Brand:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="text" value={formData.chromebooks11Brand} onChange={e=>setFormData({...formData,chromebooks11Brand:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-bold mb-2">When Distributed? *</label>
-                  <select value={formData.chromebooks11DistributedDate} onChange={e=>setFormData({...formData,chromebooks11DistributedDate:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                  <select value={formData.chromebooks11DistributedDate} onChange={e=>setFormData({...formData,chromebooks11DistributedDate:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                     <option value="">Select Month & Year</option>
                     {generateMonthYearOptions().map(opt=><option key={opt} value={opt}>{opt}</option>)}
                   </select>
@@ -13193,15 +13272,15 @@ function SchoolInfoView({currentUser,schoolInfo}){
               <>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-bold mb-2">How do you conduct tests? *</label>
-                  <textarea value={formData.chromebooks11TestMethod} onChange={e=>setFormData({...formData,chromebooks11TestMethod:e.target.value})} rows="3" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <textarea value={formData.chromebooks11TestMethod} onChange={e=>setFormData({...formData,chromebooks11TestMethod:e.target.value})} disabled={!isEditing} rows="3" className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">JNV Computer Lab/Tablets Accessible? *</label>
-                  <input type="text" value={formData.chromebooks11JNVLabAccess} onChange={e=>setFormData({...formData,chromebooks11JNVLabAccess:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="text" value={formData.chromebooks11JNVLabAccess} onChange={e=>setFormData({...formData,chromebooks11JNVLabAccess:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">How many tabs/computers in JNV? *</label>
-                  <input type="number" value={formData.chromebooks11JNVCount} onChange={e=>setFormData({...formData,chromebooks11JNVCount:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="number" min="0" value={formData.chromebooks11JNVCount} onChange={e=>setFormData({...formData,chromebooks11JNVCount:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
                 </div>
               </>
             )}
@@ -13214,7 +13293,7 @@ function SchoolInfoView({currentUser,schoolInfo}){
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2">Distributed from Avanti? *</label>
-              <select value={formData.chromebooks12Distributed} onChange={e=>setFormData({...formData,chromebooks12Distributed:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+              <select value={formData.chromebooks12Distributed} onChange={e=>setFormData({...formData,chromebooks12Distributed:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                 <option value="No">No</option>
                 <option value="Yes">Yes</option>
               </select>
@@ -13223,19 +13302,19 @@ function SchoolInfoView({currentUser,schoolInfo}){
               <>
                 <div>
                   <label className="block text-sm font-bold mb-2">Number Distributed *</label>
-                  <input type="number" value={formData.chromebooks12Count} onChange={e=>setFormData({...formData,chromebooks12Count:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="number" min="0" value={formData.chromebooks12Count} onChange={e=>setFormData({...formData,chromebooks12Count:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Working Condition *</label>
-                  <input type="number" value={formData.chromebooks12Working} onChange={e=>setFormData({...formData,chromebooks12Working:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="number" min="0" value={formData.chromebooks12Working} onChange={e=>setFormData({...formData,chromebooks12Working:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Brand Name *</label>
-                  <input type="text" value={formData.chromebooks12Brand} onChange={e=>setFormData({...formData,chromebooks12Brand:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="text" value={formData.chromebooks12Brand} onChange={e=>setFormData({...formData,chromebooks12Brand:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-bold mb-2">When Distributed? *</label>
-                  <select value={formData.chromebooks12DistributedDate} onChange={e=>setFormData({...formData,chromebooks12DistributedDate:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                  <select value={formData.chromebooks12DistributedDate} onChange={e=>setFormData({...formData,chromebooks12DistributedDate:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                     <option value="">Select Month & Year</option>
                     {generateMonthYearOptions().map(opt=><option key={opt} value={opt}>{opt}</option>)}
                   </select>
@@ -13245,15 +13324,15 @@ function SchoolInfoView({currentUser,schoolInfo}){
               <>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-bold mb-2">How do you conduct tests? *</label>
-                  <textarea value={formData.chromebooks12TestMethod} onChange={e=>setFormData({...formData,chromebooks12TestMethod:e.target.value})} rows="3" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <textarea value={formData.chromebooks12TestMethod} onChange={e=>setFormData({...formData,chromebooks12TestMethod:e.target.value})} disabled={!isEditing} rows="3" className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">JNV Computer Lab/Tablets Accessible? *</label>
-                  <input type="text" value={formData.chromebooks12JNVLabAccess} onChange={e=>setFormData({...formData,chromebooks12JNVLabAccess:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="text" value={formData.chromebooks12JNVLabAccess} onChange={e=>setFormData({...formData,chromebooks12JNVLabAccess:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">How many tabs/computers in JNV? *</label>
-                  <input type="number" value={formData.chromebooks12JNVCount} onChange={e=>setFormData({...formData,chromebooks12JNVCount:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="number" min="0" value={formData.chromebooks12JNVCount} onChange={e=>setFormData({...formData,chromebooks12JNVCount:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed" placeholder="Enter number only"/>
                 </div>
               </>
             )}
@@ -13266,7 +13345,7 @@ function SchoolInfoView({currentUser,schoolInfo}){
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2">Printer Available? *</label>
-              <select value={formData.printerAvailable} onChange={e=>setFormData({...formData,printerAvailable:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+              <select value={formData.printerAvailable} onChange={e=>setFormData({...formData,printerAvailable:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                 <option value="No">No</option>
                 <option value="Yes">Yes</option>
               </select>
@@ -13275,18 +13354,18 @@ function SchoolInfoView({currentUser,schoolInfo}){
               <>
                 <div>
                   <label className="block text-sm font-bold mb-2">Working Condition? *</label>
-                  <select value={formData.printerWorking} onChange={e=>setFormData({...formData,printerWorking:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                  <select value={formData.printerWorking} onChange={e=>setFormData({...formData,printerWorking:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                     <option value="No">No</option>
                     <option value="Yes">Yes</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Printer Brand *</label>
-                  <input type="text" value={formData.printerBrand} onChange={e=>setFormData({...formData,printerBrand:e.target.value})} placeholder="e.g., HP, Canon, Epson" className="w-full border-2 px-4 py-3 rounded-xl"/>
+                  <input type="text" value={formData.printerBrand} onChange={e=>setFormData({...formData,printerBrand:e.target.value})} disabled={!isEditing} placeholder="e.g., HP, Canon, Epson" className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">When Issued? *</label>
-                  <select value={formData.printerIssuedDate} onChange={e=>setFormData({...formData,printerIssuedDate:e.target.value})} className="w-full border-2 px-4 py-3 rounded-xl">
+                  <select value={formData.printerIssuedDate} onChange={e=>setFormData({...formData,printerIssuedDate:e.target.value})} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
                     <option value="">Select Month & Year</option>
                     {generateMonthYearOptions().map(opt=><option key={opt} value={opt}>{opt}</option>)}
                   </select>
@@ -13533,9 +13612,11 @@ function AdminSchoolInfo({schoolInfo}){
       'Modules 11 Received':info.modules11Received,
       'Modules 11 Distributed':info.modules11Distributed,
       'Modules 11 Stock':info.modules11Stock,
+      'Modules 11 Remarks':info.modules11Remarks||'',
       'Modules 12 Received':info.modules12Received,
       'Modules 12 Distributed':info.modules12Distributed,
       'Modules 12 Stock':info.modules12Stock,
+      'Modules 12 Remarks':info.modules12Remarks||'',
       'Chromebooks 11 Distributed':info.chromebooks11Distributed,
       'Chromebooks 11 Count':info.chromebooks11Count,
       'Chromebooks 11 Working':info.chromebooks11Working,
@@ -13658,6 +13739,7 @@ function AdminSchoolInfo({schoolInfo}){
                     <div><strong>Received:</strong> {info.modules11Received||'—'}</div>
                     <div><strong>Distributed:</strong> {info.modules11Distributed||'—'}</div>
                     <div><strong>In Stock:</strong> {info.modules11Stock||'—'}</div>
+                    {info.modules11Remarks && <div className="mt-2 p-2 bg-white rounded border border-green-200"><strong>📝 Remarks:</strong> {info.modules11Remarks}</div>}
                   </div>
                 </div>
                 <div className="border-2 border-blue-300 rounded-xl p-4 bg-blue-50">
@@ -13666,6 +13748,7 @@ function AdminSchoolInfo({schoolInfo}){
                     <div><strong>Received:</strong> {info.modules12Received||'—'}</div>
                     <div><strong>Distributed:</strong> {info.modules12Distributed||'—'}</div>
                     <div><strong>In Stock:</strong> {info.modules12Stock||'—'}</div>
+                    {info.modules12Remarks && <div className="mt-2 p-2 bg-white rounded border border-blue-200"><strong>📝 Remarks:</strong> {info.modules12Remarks}</div>}
                   </div>
                 </div>
               </div>
