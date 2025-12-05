@@ -5957,7 +5957,7 @@ function TeacherView({
         )}
 
         {activeTab === 'schoolinfo' && (
-          <SchoolInfoView currentUser={currentUser} schoolInfo={schoolInfo} />
+          <SchoolInfoView currentUser={currentUser} schoolInfo={schoolInfo} setSchoolInfo={setSchoolInfo} />
         )}
 
         {activeTab === 'examstats' && <TeacherExamStats currentUser={currentUser} />}
@@ -12783,7 +12783,7 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
 // ========================================
 // SCHOOL INFO VIEW (FOR TEACHERS)
 // ========================================
-function SchoolInfoView({currentUser,schoolInfo}){
+function SchoolInfoView({currentUser,schoolInfo,setSchoolInfo}){
   const mySchool=currentUser.school;
   const existingInfo=schoolInfo.find(info=>info.school===mySchool);
   const[isEditing,setIsEditing]=useState(false);
@@ -13017,20 +13017,42 @@ function SchoolInfoView({currentUser,schoolInfo}){
       updatedAt: now
     };
 
-    await db.collection('schoolInfo').doc(docId).set({
+    const dataToSave = {
       ...formData,
       school: mySchool,
-      // latest info
       updatedBy: currentUser.afid,
       updatedByName: currentUser.name,
-      updatedAt: now,
-      // full history
+      updatedAt: now
+    };
+
+    await db.collection('schoolInfo').doc(docId).set({
+      ...dataToSave,
       updateHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry)
     }, { merge: true });
+
+    // ✅ FIX: Update parent state with new data so form displays correctly
+    const existingHistory = existingInfo?.updateHistory || [];
+    const updatedInfo = {
+      ...dataToSave,
+      docId: docId,
+      updateHistory: [...existingHistory, historyEntry]
+    };
+    
+    setSchoolInfo(prev => {
+      const idx = prev.findIndex(s => s.school === mySchool);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = updatedInfo;
+        return updated;
+      } else {
+        return [...prev, updatedInfo];
+      }
+    });
 
     setIsEditing(false);
     alert('✅ School information saved successfully!');
   } catch (e) {
+    console.error('Save error:', e);
     alert('❌ Failed to save: ' + e.message);
   }
 };
