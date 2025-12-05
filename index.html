@@ -218,6 +218,7 @@
       }
     }
     @keyframes confetti-fall{0%{transform:translateY(-100vh) rotate(0) scale(1);opacity:1}100%{transform:translateY(100vh) rotate(720deg) scale(.5);opacity:0}}
+    @keyframes spin{to{transform:rotate(360deg)}}
     .confetti-piece{position:fixed;pointer-events:none;z-index:9999;animation:confetti-fall 4s cubic-bezier(.25,.46,.45,.94) forwards}
     .chapter-card{transition:all .3s ease;position:relative;overflow:hidden}
     .chapter-card h3{word-break:break-word;overflow-wrap:break-word}
@@ -11658,6 +11659,8 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   const[isLocked,setIsLocked]=useState(false);
   const[lockInfo,setLockInfo]=useState(null);
   const[isLoading,setIsLoading]=useState(false);
+  const[isMarkingAll,setIsMarkingAll]=useState(false);
+  const[markingProgress,setMarkingProgress]=useState({current:0,total:0});
 
   const mySchool=currentUser.school;
   const filteredStudents=students
@@ -11814,7 +11817,12 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
       return;
     }
     
+    // ✅ SHOW LOADING OVERLAY
+    setIsMarkingAll(true);
+    setMarkingProgress({current:0,total:filteredStudents.length});
+    
     try{
+      let completed=0;
       for(const student of filteredStudents){
         const docId=`${mySchool}_${selectedGrade}_${student.id}_${selectedDate}`;
         await db.collection('studentAttendance').doc(docId).set({
@@ -11827,6 +11835,8 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
           markedBy:currentUser.afid,
           markedAt:new Date().toISOString()
         });
+        completed++;
+        setMarkingProgress({current:completed,total:filteredStudents.length});
       }
       const newMap={};
       filteredStudents.forEach(s=>newMap[s.id]='Present');
@@ -11834,11 +11844,78 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
       alert('All students marked present!');
     }catch(e){
       alert('Failed: '+e.message);
+    }finally{
+      // ✅ HIDE LOADING OVERLAY
+      setIsMarkingAll(false);
+      setMarkingProgress({current:0,total:0});
     }
   };
 
   return(
     <div className="space-y-6">
+      {/* ✅ FULL-SCREEN LOADING OVERLAY FOR MARK ALL PRESENT */}
+      {isMarkingAll&&(
+        <div style={{
+          position:'fixed',
+          top:0,
+          left:0,
+          right:0,
+          bottom:0,
+          backgroundColor:'rgba(0,0,0,0.7)',
+          display:'flex',
+          flexDirection:'column',
+          alignItems:'center',
+          justifyContent:'center',
+          zIndex:99999
+        }}>
+          <div style={{
+            backgroundColor:'white',
+            padding:'2rem',
+            borderRadius:'1rem',
+            textAlign:'center',
+            maxWidth:'90%',
+            width:'320px',
+            boxShadow:'0 20px 60px rgba(0,0,0,0.3)'
+          }}>
+            {/* Spinner */}
+            <div style={{
+              width:'60px',
+              height:'60px',
+              border:'4px solid #e5e7eb',
+              borderTopColor:'#10b981',
+              borderRadius:'50%',
+              animation:'spin 1s linear infinite',
+              margin:'0 auto 1rem'
+            }}></div>
+            <div style={{fontSize:'1.25rem',fontWeight:'bold',color:'#1f2937',marginBottom:'0.5rem'}}>
+              Marking Attendance...
+            </div>
+            <div style={{fontSize:'1rem',color:'#6b7280',marginBottom:'1rem'}}>
+              Please wait, do not close this page
+            </div>
+            {/* Progress indicator */}
+            <div style={{
+              width:'100%',
+              height:'8px',
+              backgroundColor:'#e5e7eb',
+              borderRadius:'4px',
+              overflow:'hidden',
+              marginBottom:'0.5rem'
+            }}>
+              <div style={{
+                width:`${markingProgress.total>0?(markingProgress.current/markingProgress.total)*100:0}%`,
+                height:'100%',
+                backgroundColor:'#10b981',
+                transition:'width 0.3s ease'
+              }}></div>
+            </div>
+            <div style={{fontSize:'0.875rem',color:'#6b7280'}}>
+              {markingProgress.current} of {markingProgress.total} students
+            </div>
+          </div>
+        </div>
+      )}
+      
       <h2 className="text-3xl font-bold">Student Attendance - {mySchool}</h2>
 
       {/* ✅ LOCK STATUS BANNER */}
@@ -11900,9 +11977,9 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
           <div className="flex items-end">
             <button 
               onClick={handleSelectAll} 
-              disabled={isLocked}
+              disabled={isLocked||isMarkingAll}
               className="w-full px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
-              ✅ Mark All Present
+              {isMarkingAll?'⏳ Marking...':'✅ Mark All Present'}
             </button>
           </div>
         </div>
