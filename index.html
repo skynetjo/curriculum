@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2707,6 +2706,101 @@ const getMonthYear=(date)=>{
   const d=new Date(date);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 };
+
+// ========================================
+// MULTI-SELECT DROPDOWN COMPONENT
+// ========================================
+function MultiSelectDropdown({ options, selected, onChange, label, placeholder, disabled = false, getOptionLabel = (opt) => opt, getOptionValue = (opt) => opt }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleToggleOption = (optionValue) => {
+    if (selected.includes(optionValue)) {
+      onChange(selected.filter(v => v !== optionValue));
+    } else {
+      onChange([...selected, optionValue]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selected.length === options.length) {
+      onChange([]);
+    } else {
+      onChange(options.map(opt => getOptionValue(opt)));
+    }
+  };
+
+  const getDisplayText = () => {
+    if (selected.length === 0) return placeholder || 'Select...';
+    if (selected.length === options.length) return 'All Selected';
+    if (selected.length === 1) {
+      const selectedOption = options.find(opt => getOptionValue(opt) === selected[0]);
+      return selectedOption ? getOptionLabel(selectedOption) : selected[0];
+    }
+    return `${selected.length} selected`;
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+        className={`w-full border-2 px-4 py-3 rounded-xl text-left flex justify-between items-center ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white cursor-pointer hover:border-yellow-400'}`}
+      >
+        <span className={selected.length === 0 ? 'text-gray-400' : 'text-gray-800'}>
+          {getDisplayText()}
+        </span>
+        <span className={`transform transition-transform ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+      </button>
+      
+      {isOpen && !disabled && (
+        <div className="absolute z-50 w-full mt-1 bg-white border-2 rounded-xl shadow-lg max-h-64 overflow-y-auto">
+          <label className="flex items-center px-4 py-2 hover:bg-yellow-50 cursor-pointer border-b">
+            <input
+              type="checkbox"
+              checked={selected.length === options.length}
+              onChange={handleSelectAll}
+              className="mr-3"
+            />
+            <span className="font-semibold">
+              {selected.length === options.length ? 'Deselect All' : 'Select All'}
+            </span>
+          </label>
+          
+          {options.map((option, idx) => {
+            const value = getOptionValue(option);
+            const labelText = getOptionLabel(option);
+            return (
+              <label 
+                key={idx} 
+                className="flex items-center px-4 py-2 hover:bg-yellow-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(value)}
+                  onChange={() => handleToggleOption(value)}
+                  className="mr-3"
+                />
+                <span>{labelText}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const getAttendanceStats=(attendanceRecords,filterDate=null)=>{
   if(filterDate){
@@ -9883,14 +9977,30 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
     return <li key={i}>• {topicName} <span className="ml-1">{priorityIcon}</span></li>;
   })}</ul>}</div><div className="flex gap-2"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
 function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools = SCHOOLS,isSuperAdmin = false}){
-  // Use accessible schools for the filter dropdown - set initial value to first accessible school if not super admin
-  const initialSchool = isSuperAdmin ? 'All' : (accessibleSchools.length === 1 ? accessibleSchools[0] : 'All');
-  const[filterSchool,setFilterSchool]=useState(initialSchool);
-  const[filterGrade,setFilterGrade]=useState('All');
-  const[filterTeacher,setFilterTeacher]=useState('All');
-
   // Available schools for dropdown
   const availableSchoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  
+  // Multi-select: Use arrays instead of single values
+  const initialSchools = isSuperAdmin ? [...SCHOOLS] : [...accessibleSchools];
+  const[filterSchools,setFilterSchools]=useState(initialSchools);
+  const[filterGrade,setFilterGrade]=useState('All');
+  const[filterTeachers,setFilterTeachers]=useState([]);
+
+  // Filter teachers based on selected schools
+  const availableTeachers = useMemo(() => {
+    if (filterSchools.length === 0) return [];
+    return teachers.filter(t => filterSchools.includes(t.school));
+  }, [teachers, filterSchools]);
+
+  // Reset teacher selection when schools change
+  React.useEffect(() => {
+    const validTeachers = filterTeachers.filter(afid => 
+      availableTeachers.some(t => t.afid === afid)
+    );
+    if (validTeachers.length !== filterTeachers.length) {
+      setFilterTeachers(validTeachers);
+    }
+  }, [availableTeachers]);
 
   const chart1Ref=useRef(null);
   const chart2Ref=useRef(null);
@@ -9919,15 +10029,13 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
     testData:{completed:0,pending:0}
   };
 
-  // Filter schools based on selection and accessible schools
-  let schoolsToProcess;
-  if (filterSchool === 'All') {
-    schoolsToProcess = availableSchoolOptions;
-  } else {
-    schoolsToProcess = [filterSchool];
-  }
+  // Multi-select: Use selected schools array directly
+  const schoolsToProcess = filterSchools.length > 0 ? filterSchools : [];
   const gradesToProcess=filterGrade==='All'?['11','12']:[filterGrade];
-  const teachersFiltered=filterTeacher==='All'?teachers:teachers.filter(t=>t.afid===filterTeacher);
+  // Multi-select: Filter teachers based on selection
+  const teachersFiltered = filterTeachers.length === 0 
+    ? teachers.filter(t => schoolsToProcess.includes(t.school))
+    : teachers.filter(t => filterTeachers.includes(t.afid));
 
   schoolsToProcess.forEach(school=>{
     if(!data.schoolData[school]){
@@ -10010,7 +10118,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
   });
 
   return data;
-},[curriculum,chapterProgress,teachers,filterSchool,filterGrade,filterTeacher]);
+},[curriculum,chapterProgress,teachers,filterSchools,filterGrade,filterTeachers]);
 
   useEffect(()=>{
     Object.values(chartInstances.current).forEach(chart=>{
@@ -10267,15 +10375,13 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
         <h3 className="text-xl font-bold mb-4">🔍 Filters (Apply to All Charts)</h3>
         <div className="grid md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-bold mb-2">School</label>
-            <select 
-              value={filterSchool} 
-              onChange={e=>setFilterSchool(e.target.value)}
-              className="w-full border-2 px-4 py-3 rounded-xl"
-            >
-              {availableSchoolOptions.length > 1 && <option value="All">All Schools</option>}
-              {availableSchoolOptions.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
+            <label className="block text-sm font-bold mb-2">Schools ({filterSchools.length}/{availableSchoolOptions.length})</label>
+            <MultiSelectDropdown
+              options={availableSchoolOptions}
+              selected={filterSchools}
+              onChange={setFilterSchools}
+              placeholder="Select Schools..."
+            />
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
@@ -10290,17 +10396,21 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
             </select>
           </div>
           <div>
-            <label className="block text-sm font-bold mb-2">Teacher</label>
-            <select 
-              value={filterTeacher} 
-              onChange={e=>setFilterTeacher(e.target.value)}
-              className="w-full border-2 px-4 py-3 rounded-xl"
-            >
-              <option value="All">All Teachers</option>
-              {teachers.map(t=><option key={t.afid} value={t.afid}>{t.name} ({t.afid})</option>)}
-            </select>
+            <label className="block text-sm font-bold mb-2">Teachers ({filterTeachers.length === 0 ? 'All' : filterTeachers.length}/{availableTeachers.length})</label>
+            <MultiSelectDropdown
+              options={availableTeachers}
+              selected={filterTeachers}
+              onChange={setFilterTeachers}
+              placeholder="All Teachers"
+              getOptionLabel={(t) => `${t.name} (${t.school})`}
+              getOptionValue={(t) => t.afid}
+              disabled={filterSchools.length === 0}
+            />
           </div>
         </div>
+        {filterSchools.length === 0 && (
+          <p className="text-orange-600 mt-2 text-sm">⚠️ Please select at least one school to see data</p>
+        )}
       </div>
 
       <div className="bg-white p-6 rounded-2xl shadow-lg">
@@ -12405,14 +12515,15 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
 // ADMIN ATTENDANCE ANALYTICS
 // ========================================
 function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAttendance,accessibleSchools=[],isSuperAdmin=false}){
-  const[filterSchool,setFilterSchool]=useState('All');
+  // Use accessible schools for dropdown
+  const schoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  
+  // Multi-select: Initialize with all schools selected
+  const[filterSchools,setFilterSchools]=useState([...schoolOptions]);
   const[filterGrade,setFilterGrade]=useState('All');
   const[startDate,setStartDate]=useState(getTodayDate().slice(0,7)+'-01');
   const[endDate,setEndDate]=useState(getTodayDate());
   const[selectedDate,setSelectedDate]=useState(getTodayDate());
-  
-  // Use accessible schools for dropdown
-  const schoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
 
   const chart1Ref=useRef(null);
   const chart2Ref=useRef(null);
@@ -12423,31 +12534,31 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
 
   const filteredStudentAttendance=useMemo(()=>{
     return studentAttendance.filter(a=>{
-      if(filterSchool!=='All'&&a.school!==filterSchool)return false;
+      if(filterSchools.length > 0 && !filterSchools.includes(a.school))return false;
       if(filterGrade!=='All'&&a.grade!==filterGrade)return false;
       if(a.date<startDate||a.date>endDate)return false;
       return true;
     });
-  },[studentAttendance,filterSchool,filterGrade,startDate,endDate]);
+  },[studentAttendance,filterSchools,filterGrade,startDate,endDate]);
 
   const filteredTeacherAttendance=useMemo(()=>{
     return teacherAttendance.filter(a=>{
-      if(filterSchool!=='All'&&a.school!==filterSchool)return false;
+      if(filterSchools.length > 0 && !filterSchools.includes(a.school))return false;
       if(a.date<startDate||a.date>endDate)return false;
       return true;
     });
-  },[teacherAttendance,filterSchool,startDate,endDate]);
+  },[teacherAttendance,filterSchools,startDate,endDate]);
 
   const todayStats=useMemo(()=>{
   const studentRecords=studentAttendance.filter(a=>{
     if(a.date!==selectedDate)return false;
-    if(filterSchool!=='All'&&a.school!==filterSchool)return false;
+    if(filterSchools.length > 0 && !filterSchools.includes(a.school))return false;
     if(filterGrade!=='All'&&a.grade!==filterGrade)return false;
     return true;
   });
   const teacherRecords=teacherAttendance.filter(a=>{
     if(a.date!==selectedDate)return false;
-    if(filterSchool!=='All'&&a.school!==filterSchool)return false;
+    if(filterSchools.length > 0 && !filterSchools.includes(a.school))return false;
     return true;
   });
   return{
@@ -12456,7 +12567,7 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
     teacherPresent:teacherRecords.filter(r=>r.status==='Present').length,
     teacherAbsent:teacherRecords.filter(r=>r.status==='On Leave').length
   };
-},[studentAttendance,teacherAttendance,selectedDate,filterSchool,filterGrade]);
+},[studentAttendance,teacherAttendance,selectedDate,filterSchools,filterGrade]);
 
   const genderStats=useMemo(()=>{
     const stats={Male:{present:0,absent:0},Female:{present:0,absent:0},Other:{present:0,absent:0}};
@@ -12673,11 +12784,13 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
         <h3 className="text-xl font-bold mb-4">🔍 Filters</h3>
         <div className="grid md:grid-cols-5 gap-4">
           <div>
-            <label className="block text-sm font-bold mb-2">School</label>
-            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
-              <option value="All">All Schools</option>
-              {schoolOptions.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
+            <label className="block text-sm font-bold mb-2">Schools ({filterSchools.length}/{schoolOptions.length})</label>
+            <MultiSelectDropdown
+              options={schoolOptions}
+              selected={filterSchools}
+              onChange={setFilterSchools}
+              placeholder="Select Schools..."
+            />
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
