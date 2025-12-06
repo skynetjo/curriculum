@@ -10350,16 +10350,114 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
   },[filteredData]);
 
   const handleExport=()=>{
-    const exportData=Object.keys(filteredData.schoolData).map(school=>({
-      School:school,
-      'Total Chapters':filteredData.schoolData[school].total,
-      'Completed':filteredData.schoolData[school].completed,
-      'Delayed':filteredData.schoolData[school].delayed,
-      'Ahead':filteredData.schoolData[school].ahead,
-      'Tests Completed':filteredData.schoolData[school].tests,
-      'Completion %':filteredData.schoolData[school].total?Math.round((filteredData.schoolData[school].completed/filteredData.schoolData[school].total)*100):0
+    // Create workbook with multiple sheets
+    const wb = XLSX.utils.book_new();
+    
+    // Sheet 1: School-wise Summary
+    const schoolData = Object.keys(filteredData.schoolData).map(school=>({
+      School: school,
+      'Total Chapters': filteredData.schoolData[school].total,
+      'Completed': filteredData.schoolData[school].completed,
+      'Delayed': filteredData.schoolData[school].delayed,
+      'Ahead': filteredData.schoolData[school].ahead,
+      'Tests Completed': filteredData.schoolData[school].tests,
+      'Tests Pending': filteredData.schoolData[school].testsPending,
+      'Completion %': filteredData.schoolData[school].total ? Math.round((filteredData.schoolData[school].completed/filteredData.schoolData[school].total)*100) : 0
     }));
-    exportToExcel(exportData,'admin_analytics_filtered');
+    const wsSchool = XLSX.utils.json_to_sheet(schoolData);
+    XLSX.utils.book_append_sheet(wb, wsSchool, "School Summary");
+    
+    // Sheet 2: Subject-wise Summary
+    const subjectData = Object.keys(filteredData.subjectData).map(subject=>({
+      Subject: subject,
+      'Total Chapters': filteredData.subjectData[subject].total,
+      'Completed': filteredData.subjectData[subject].completed,
+      'Tests Completed': filteredData.subjectData[subject].testsCompleted,
+      'Tests Pending': filteredData.subjectData[subject].testsPending,
+      'Completion %': filteredData.subjectData[subject].total ? Math.round((filteredData.subjectData[subject].completed/filteredData.subjectData[subject].total)*100) : 0
+    }));
+    const wsSubject = XLSX.utils.json_to_sheet(subjectData);
+    XLSX.utils.book_append_sheet(wb, wsSubject, "Subject Summary");
+    
+    // Sheet 3: Grade-wise Summary
+    const gradeData = Object.keys(filteredData.gradeData).map(grade=>({
+      Grade: `Class ${grade}`,
+      'Total Chapters': filteredData.gradeData[grade].total,
+      'Completed': filteredData.gradeData[grade].completed,
+      'Tests Completed': filteredData.gradeData[grade].testsCompleted,
+      'Tests Pending': filteredData.gradeData[grade].testsPending,
+      'Completion %': filteredData.gradeData[grade].total ? Math.round((filteredData.gradeData[grade].completed/filteredData.gradeData[grade].total)*100) : 0
+    }));
+    const wsGrade = XLSX.utils.json_to_sheet(gradeData);
+    XLSX.utils.book_append_sheet(wb, wsGrade, "Grade Summary");
+    
+    // Sheet 4: Teacher-wise Detailed Data
+    const teacherDetailedData = [];
+    const teachersToExport = filterTeachers.length > 0 
+      ? teachers.filter(t => filterTeachers.includes(t.afid))
+      : teachers.filter(t => filterSchools.includes(t.school));
+    
+    teachersToExport.forEach(teacher => {
+      const gradesToProcess = filterGrade === 'All' ? ['11', '12'] : [filterGrade];
+      let teacherTotal = 0, teacherCompleted = 0, teacherTests = 0, teacherDelayed = 0;
+      
+      gradesToProcess.forEach(grade => {
+        const docId = `${teacher.school}_${teacher.subject}_${grade}`;
+        const chapters = curriculum[docId]?.chapters || [];
+        
+        chapters.forEach(ch => {
+          teacherTotal++;
+          const progressId = `${teacher.school}_${ch.id}`;
+          const prog = chapterProgress[progressId] || {};
+          const status = getChapterStatus(ch, prog);
+          
+          if (prog.completed === 'Yes') {
+            teacherCompleted++;
+            if (prog.testConducted === 'Yes') teacherTests++;
+          }
+          if (status.label.includes('Delayed')) teacherDelayed++;
+        });
+      });
+      
+      if (teacherTotal > 0) {
+        teacherDetailedData.push({
+          'Teacher Name': teacher.name,
+          'AFID': teacher.afid,
+          'School': teacher.school,
+          'Subject': teacher.subject,
+          'Total Chapters': teacherTotal,
+          'Completed': teacherCompleted,
+          'Delayed': teacherDelayed,
+          'Tests Completed': teacherTests,
+          'Tests Pending': teacherCompleted - teacherTests,
+          'Completion %': Math.round((teacherCompleted/teacherTotal)*100)
+        });
+      }
+    });
+    
+    if (teacherDetailedData.length > 0) {
+      const wsTeacher = XLSX.utils.json_to_sheet(teacherDetailedData);
+      XLSX.utils.book_append_sheet(wb, wsTeacher, "Teacher Summary");
+    }
+    
+    // Sheet 5: Overall Summary
+    const overallData = [{
+      'Total Chapters': filteredData.totalChapters,
+      'Completed': filteredData.completedChapters,
+      'Delayed': filteredData.delayedChapters,
+      'Ahead': filteredData.aheadChapters,
+      'Tests Completed': filteredData.testsCompleted,
+      'Tests Pending': filteredData.testsPending,
+      'Overall Completion %': filteredData.totalChapters ? Math.round((filteredData.completedChapters/filteredData.totalChapters)*100) : 0,
+      'Schools Selected': filterSchools.join(', '),
+      'Grade Filter': filterGrade,
+      'Teachers Selected': filterTeachers.length === 0 ? 'All' : filterTeachers.length + ' teachers'
+    }];
+    const wsOverall = XLSX.utils.json_to_sheet(overallData);
+    XLSX.utils.book_append_sheet(wb, wsOverall, "Overall Summary");
+    
+    // Save the workbook
+    XLSX.writeFile(wb, `analytics_report_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   return(
