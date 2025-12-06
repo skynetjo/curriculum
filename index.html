@@ -10056,7 +10056,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
         const chapters=curriculum[docId]?.chapters||[];
 
         const relevantTeachers=teachersFiltered.filter(t=>t.school===school&&t.subject===subject);
-        if(filterTeacher!=='All'&&relevantTeachers.length===0)return;
+        if(filterTeachers.length>0&&relevantTeachers.length===0)return;
 
         chapters.forEach(ch=>{
           data.totalChapters++;
