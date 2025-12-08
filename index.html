@@ -9808,7 +9808,23 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
   );
 }
 
-function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){const[selectedSchool,setSelectedSchool]=useState(SCHOOLS[0]);const[selectedSubject,setSelectedSubject]=useState(SUBJECTS[0]);const[selectedGrade,setSelectedGrade]=useState('11');const[showAddForm,setShowAddForm]=useState(false);const[editingChapter,setEditingChapter]=useState(null);const[chapterForm,setChapterForm]=useState({name:'',topics:[],targetDate:'',priority:'medium'});const[newTopic,setNewTopic]=useState('');const fileInputRef=useRef(null);const docId=`${selectedSchool}_${selectedSubject}_${selectedGrade}`;const chapters=curriculum[docId]?.chapters||[];const handleSaveChapter=()=>{if(!chapterForm.name){alert('Chapter name is required');return}if(editingChapter){updateChapter(selectedSchool,selectedSubject,selectedGrade,editingChapter.id,chapterForm);setEditingChapter(null)}else{addChapter(selectedSchool,selectedSubject,selectedGrade,chapterForm)}setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(false)};const handleEditChapter=chapter=>{setEditingChapter(chapter);
+function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){const[selectedSchool,setSelectedSchool]=useState(SCHOOLS[0]);const[selectedSubject,setSelectedSubject]=useState(SUBJECTS[0]);const[selectedGrade,setSelectedGrade]=useState('11');const[showAddForm,setShowAddForm]=useState(false);const[editingChapter,setEditingChapter]=useState(null);const[chapterForm,setChapterForm]=useState({name:'',topics:[],targetDate:'',priority:'medium'});const[newTopic,setNewTopic]=useState('');const fileInputRef=useRef(null);
+// NEW: Multi-school selection for bulk CSV import
+const[selectedSchoolsForImport,setSelectedSchoolsForImport]=useState([SCHOOLS[0]]);
+const[importSubject,setImportSubject]=useState(SUBJECTS[0]);
+const[importGrade,setImportGrade]=useState('11');
+const[showBulkImport,setShowBulkImport]=useState(false);
+const[isImporting,setIsImporting]=useState(false);
+
+const toggleSchoolSelection=(school)=>{
+  setSelectedSchoolsForImport(prev=>
+    prev.includes(school)?prev.filter(s=>s!==school):[...prev,school]
+  );
+};
+const selectAllSchools=()=>setSelectedSchoolsForImport([...SCHOOLS]);
+const deselectAllSchools=()=>setSelectedSchoolsForImport([]);
+
+const docId=`${selectedSchool}_${selectedSubject}_${selectedGrade}`;const chapters=curriculum[docId]?.chapters||[];const handleSaveChapter=()=>{if(!chapterForm.name){alert('Chapter name is required');return}if(editingChapter){updateChapter(selectedSchool,selectedSubject,selectedGrade,editingChapter.id,chapterForm);setEditingChapter(null)}else{addChapter(selectedSchool,selectedSubject,selectedGrade,chapterForm)}setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(false)};const handleEditChapter=chapter=>{setEditingChapter(chapter);
   // Convert old string topics to new object format if needed
   const convertedTopics = (chapter.topics||[]).map(t => 
     typeof t === 'string' ? {name: t, priority: 'medium'} : t
@@ -9818,16 +9834,28 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
   topics:convertedTopics,
   targetDate:chapter.targetDate||'',
   priority:chapter.priority||'medium'
-});setShowAddForm(true)};const handleAddTopic=()=>{if(!newTopic.trim())return;setChapterForm({...chapterForm,topics:[...chapterForm.topics,{name:newTopic.trim(),priority:'medium'}]});setNewTopic('')};const handleCSVImport=e=>{
+});setShowAddForm(true)};const handleAddTopic=()=>{if(!newTopic.trim())return;setChapterForm({...chapterForm,topics:[...chapterForm.topics,{name:newTopic.trim(),priority:'medium'}]});setNewTopic('')};
+
+// NEW: Enhanced CSV Import with multi-school support
+const handleCSVImport=e=>{
   const file=e.target.files[0];
   if(!file)return;
+
+  // Validate school selection
+  if(selectedSchoolsForImport.length===0){
+    alert('Please select at least one school');
+    if(fileInputRef.current)fileInputRef.current.value='';
+    return;
+  }
 
   Papa.parse(file,{
     complete:async results=>{
       try{
+        setIsImporting(true);
         const rows=results.data;
         if(rows.length<2){
           alert('CSV file is empty');
+          setIsImporting(false);
           return;
         }
 
@@ -9875,22 +9903,141 @@ function AdminCurriculum({curriculum,addChapter,updateChapter,deleteChapter}){co
 
         if(chaptersToAdd.length===0){
           alert('No valid chapters found in CSV');
+          setIsImporting(false);
           return;
         }
 
-        for(const chapter of chaptersToAdd){
-          await addChapter(selectedSchool,selectedSubject,selectedGrade,chapter);
+        // NEW: Import to ALL selected schools
+        let totalImported = 0;
+        const failedSchools = [];
+        
+        for(const school of selectedSchoolsForImport){
+          try{
+            for(const chapter of chaptersToAdd){
+              await addChapter(school,importSubject,importGrade,chapter);
+            }
+            totalImported++;
+          }catch(err){
+            failedSchools.push(school);
+            console.error(`Failed to import to ${school}:`,err);
+          }
         }
 
-        alert(`Imported ${chaptersToAdd.length} chapters with topic-level priorities!`);
+        setIsImporting(false);
+        
+        if(failedSchools.length > 0){
+          alert(`Imported ${chaptersToAdd.length} chapters to ${totalImported} schools.\nFailed for: ${failedSchools.join(', ')}`);
+        }else{
+          alert(`✅ Successfully imported ${chaptersToAdd.length} chapters to ${selectedSchoolsForImport.length} school(s):\n${selectedSchoolsForImport.join(', ')}`);
+        }
+        
         if(fileInputRef.current)fileInputRef.current.value='';
       }catch(e){
+        setIsImporting(false);
         alert('Import failed: '+e.message);
       }
     },
-    error:()=>alert('Failed to parse CSV')
+    error:()=>{
+      setIsImporting(false);
+      alert('Failed to parse CSV');
+    }
   });
-};return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum Management</h2><div className="bg-white p-6 rounded-2xl shadow-lg"><div className="grid md:grid-cols-3 gap-4 mb-4"><div><label className="block text-sm font-bold mb-2">School</label><select value={selectedSchool} onChange={e=>setSelectedSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Subject</label><select value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Grade</label><select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"><option value="11">Class 11</option><option value="12">Class 12</option></select></div></div><div className="flex gap-3"><button onClick={()=>{setEditingChapter(null);setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(!showAddForm)}} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">{showAddForm?'Cancel':'+ Add Chapter'}</button><label className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer">📤 Import CSV<input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVImport} className="hidden"/></label></div>
+};
+
+return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum Management</h2>
+
+{/* NEW: Bulk Import Section with Multi-School Checkboxes */}
+<div className="bg-white p-6 rounded-2xl shadow-lg border-2 border-green-200">
+  <div className="flex justify-between items-center mb-4">
+    <h3 className="text-xl font-bold text-green-700">📤 Bulk Import Curriculum</h3>
+    <button 
+      onClick={()=>setShowBulkImport(!showBulkImport)} 
+      className="px-4 py-2 bg-green-100 text-green-700 rounded-lg font-semibold hover:bg-green-200"
+    >
+      {showBulkImport ? '▲ Hide' : '▼ Expand'}
+    </button>
+  </div>
+  
+  {showBulkImport && (
+    <div className="space-y-4">
+      {/* School Checkboxes */}
+      <div>
+        <div className="flex justify-between items-center mb-2">
+          <label className="block text-sm font-bold">Select Schools (can select multiple)</label>
+          <div className="flex gap-2">
+            <button onClick={selectAllSchools} className="text-xs px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">Select All</button>
+            <button onClick={deselectAllSchools} className="text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">Clear All</button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 p-3 bg-gray-50 rounded-xl">
+          {SCHOOLS.map(school=>(
+            <label key={school} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all ${selectedSchoolsForImport.includes(school)?'bg-green-100 border-2 border-green-400':'bg-white border-2 border-gray-200 hover:border-gray-300'}`}>
+              <input 
+                type="checkbox" 
+                checked={selectedSchoolsForImport.includes(school)}
+                onChange={()=>toggleSchoolSelection(school)}
+                className="w-5 h-5"
+              />
+              <span className={`text-sm font-medium ${selectedSchoolsForImport.includes(school)?'text-green-700':'text-gray-700'}`}>{school}</span>
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-gray-500 mt-1">Selected: {selectedSchoolsForImport.length} school(s)</p>
+      </div>
+      
+      {/* Subject and Grade */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-bold mb-2">Subject</label>
+          <select value={importSubject} onChange={e=>setImportSubject(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            {SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-bold mb-2">Grade</label>
+          <select value={importGrade} onChange={e=>setImportGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+            <option value="11">Class 11</option>
+            <option value="12">Class 12</option>
+          </select>
+        </div>
+      </div>
+      
+      {/* Import Button */}
+      <div className="flex gap-3">
+        <label className={`flex-1 px-6 py-4 ${selectedSchoolsForImport.length>0&&!isImporting?'bg-green-600 hover:bg-green-700 cursor-pointer':'bg-gray-400 cursor-not-allowed'} text-white rounded-xl font-semibold text-center transition-all`}>
+          {isImporting ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              Importing...
+            </span>
+          ) : (
+            `📤 Import CSV to ${selectedSchoolsForImport.length} School(s)`
+          )}
+          <input 
+            ref={fileInputRef} 
+            type="file" 
+            accept=".csv" 
+            onChange={handleCSVImport} 
+            disabled={selectedSchoolsForImport.length===0||isImporting}
+            className="hidden"
+          />
+        </label>
+      </div>
+      
+      {selectedSchoolsForImport.length > 0 && (
+        <div className="p-3 bg-green-50 rounded-xl">
+          <p className="text-sm text-green-700"><strong>Will import to:</strong> {selectedSchoolsForImport.join(', ')}</p>
+          <p className="text-sm text-green-600"><strong>Subject:</strong> {importSubject} | <strong>Grade:</strong> Class {importGrade}</p>
+        </div>
+      )}
+    </div>
+  )}
+</div>
+
+{/* Existing View/Edit Section */}
+<div className="bg-white p-6 rounded-2xl shadow-lg">
+<h3 className="text-lg font-bold text-gray-700 mb-4">📝 View & Edit Chapters</h3>
+<div className="grid md:grid-cols-3 gap-4 mb-4"><div><label className="block text-sm font-bold mb-2">School</label><select value={selectedSchool} onChange={e=>setSelectedSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Subject</label><select value={selectedSubject} onChange={e=>setSelectedSubject(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Grade</label><select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"><option value="11">Class 11</option><option value="12">Class 12</option></select></div></div><div className="flex gap-3"><button onClick={()=>{setEditingChapter(null);setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(!showAddForm)}} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">{showAddForm?'Cancel':'+ Add Chapter'}</button></div>
 
 {/* CSV Format Guide */}
 <div className="mt-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
