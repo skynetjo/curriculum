@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9182,6 +9183,150 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
   const[archiving,setArchiving]=useState(false);
   const[showArchivedTeachers,setShowArchivedTeachers]=useState(false);
   
+  // NEW: Bulk Import functionality
+  const[showBulkImport,setShowBulkImport]=useState(false);
+  const[isImporting,setIsImporting]=useState(false);
+  const[importResults,setImportResults]=useState(null);
+  const bulkFileInputRef=useRef(null);
+  
+  // NEW: Bulk CSV Import Handler
+  const handleBulkCSVImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    Papa.parse(file, {
+      complete: async (results) => {
+        try {
+          setIsImporting(true);
+          setImportResults(null);
+          const rows = results.data;
+          
+          if (rows.length < 2) {
+            alert('CSV file is empty or has no data rows');
+            setIsImporting(false);
+            return;
+          }
+          
+          const teachersToAdd = [];
+          const errors = [];
+          const firebaseAuthList = [];
+          
+          rows.forEach((row, index) => {
+            if (index === 0) return; // Skip header
+            
+            // Expected columns: AFID, AF Code, Name, Email, Password, Subject, School, DOB, Joining Date, Phone
+            const afid = row[0] ? row[0].trim() : '';
+            const afCode = row[1] ? row[1].trim() : '';
+            const name = row[2] ? row[2].trim() : '';
+            const email = row[3] ? row[3].trim().toLowerCase() : '';
+            const password = row[4] ? row[4].trim() : '';
+            const subject = row[5] ? row[5].trim() : '';
+            const school = row[6] ? row[6].trim() : '';
+            const dob = row[7] ? row[7].trim() : '';
+            const joiningDate = row[8] ? row[8].trim() : '';
+            const phone = row[9] ? row[9].trim() : '';
+            
+            // Validate required fields
+            if (!afid || !name || !email || !subject || !school) {
+              if (afid || name || email) { // Only report error if row has some data
+                errors.push(`Row ${index + 1}: Missing required fields (AFID, Name, Email, Subject, or School)`);
+              }
+              return;
+            }
+            
+            // Validate subject
+            if (!SUBJECTS.includes(subject)) {
+              errors.push(`Row ${index + 1}: Invalid subject "${subject}". Must be one of: ${SUBJECTS.join(', ')}`);
+              return;
+            }
+            
+            // Validate school
+            if (!SCHOOLS.includes(school)) {
+              errors.push(`Row ${index + 1}: Invalid school "${school}". Must be one of: ${SCHOOLS.join(', ')}`);
+              return;
+            }
+            
+            // Check for duplicate AFID in current batch
+            if (teachersToAdd.some(t => t.afid === afid)) {
+              errors.push(`Row ${index + 1}: Duplicate AFID "${afid}" in CSV`);
+              return;
+            }
+            
+            teachersToAdd.push({
+              afid,
+              afCode: afCode || null,
+              name,
+              email,
+              subject,
+              school,
+              dob: dob || null,
+              joiningDate: joiningDate || null,
+              phone: phone || null,
+              isArchived: false
+            });
+            
+            if (password) {
+              firebaseAuthList.push({ email, password, name, afid });
+            }
+          });
+          
+          if (teachersToAdd.length === 0) {
+            alert('No valid teachers found in CSV.\n\nErrors:\n' + errors.join('\n'));
+            setIsImporting(false);
+            return;
+          }
+          
+          // Check for existing teachers
+          const existingAFIDs = teachers.map(t => t.afid);
+          const duplicates = teachersToAdd.filter(t => existingAFIDs.includes(t.afid));
+          
+          if (duplicates.length > 0) {
+            const proceed = confirm(`⚠️ Warning: ${duplicates.length} teacher(s) already exist with these AFIDs:\n${duplicates.map(d => `• ${d.afid} - ${d.name}`).join('\n')}\n\nDo you want to UPDATE these existing teachers?\n\nClick OK to update existing + add new, or Cancel to abort.`);
+            if (!proceed) {
+              setIsImporting(false);
+              if (bulkFileInputRef.current) bulkFileInputRef.current.value = '';
+              return;
+            }
+          }
+          
+          // Save to Firestore
+          let successCount = 0;
+          let failCount = 0;
+          
+          for (const teacher of teachersToAdd) {
+            try {
+              await db.collection('teachers').doc(teacher.afid).set(teacher);
+              successCount++;
+            } catch (err) {
+              failCount++;
+              errors.push(`Failed to save ${teacher.name} (${teacher.afid}): ${err.message}`);
+            }
+          }
+          
+          setIsImporting(false);
+          
+          // Show results
+          setImportResults({
+            success: successCount,
+            failed: failCount,
+            errors,
+            firebaseAuth: firebaseAuthList
+          });
+          
+          if (bulkFileInputRef.current) bulkFileInputRef.current.value = '';
+          
+        } catch (e) {
+          setIsImporting(false);
+          alert('Import failed: ' + e.message);
+        }
+      },
+      error: () => {
+        setIsImporting(false);
+        alert('Failed to parse CSV file');
+      }
+    });
+  };
+  
   const openAddModal=()=>{setEditingTeacher(null);setForm({name:'',afid:'',afCode:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});setShowModal(true)};
   const openEditModal=teacher=>{setEditingTeacher(teacher);setForm({...teacher,password:''});setShowModal(true)};
   
@@ -9346,6 +9491,168 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
           )}
         </div>
       </div>
+      
+      {/* NEW: Bulk Import Section */}
+      {isSuperAdmin && (
+        <div className="bg-white p-6 rounded-2xl shadow-lg border-2 border-purple-200">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold text-purple-700">📤 Bulk Import Teachers</h3>
+            <button 
+              onClick={() => setShowBulkImport(!showBulkImport)} 
+              className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg font-semibold hover:bg-purple-200"
+            >
+              {showBulkImport ? '▲ Hide' : '▼ Expand'}
+            </button>
+          </div>
+          
+          {showBulkImport && (
+            <div className="space-y-4">
+              {/* CSV Format Guide */}
+              <div className="p-4 bg-purple-50 border-2 border-purple-200 rounded-xl">
+                <p className="font-bold text-purple-800 mb-2">📋 CSV Format (10 columns):</p>
+                <div className="text-sm text-purple-700 space-y-1">
+                  <p><strong>Column A:</strong> AFID * (unique identifier)</p>
+                  <p><strong>Column B:</strong> AF Code (e.g., AF355)</p>
+                  <p><strong>Column C:</strong> Name *</p>
+                  <p><strong>Column D:</strong> Email *</p>
+                  <p><strong>Column E:</strong> Password (for new teachers - you'll need to create in Firebase Auth)</p>
+                  <p><strong>Column F:</strong> Subject * (Physics, Chemistry, Mathematics, Biology)</p>
+                  <p><strong>Column G:</strong> School * (must match exactly: {SCHOOLS.join(', ')})</p>
+                  <p><strong>Column H:</strong> Date of Birth (YYYY-MM-DD)</p>
+                  <p><strong>Column I:</strong> Joining Date (YYYY-MM-DD)</p>
+                  <p><strong>Column J:</strong> Phone</p>
+                </div>
+                <p className="text-xs text-purple-600 mt-2">* Required fields</p>
+              </div>
+              
+              {/* Sample CSV Table */}
+              <div className="bg-white p-3 rounded-lg text-xs font-mono overflow-x-auto border">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="border p-1 text-left">AFID</th>
+                      <th className="border p-1 text-left">AF Code</th>
+                      <th className="border p-1 text-left">Name</th>
+                      <th className="border p-1 text-left">Email</th>
+                      <th className="border p-1 text-left">Password</th>
+                      <th className="border p-1 text-left">Subject</th>
+                      <th className="border p-1 text-left">School</th>
+                      <th className="border p-1 text-left">DOB</th>
+                      <th className="border p-1 text-left">Joining</th>
+                      <th className="border p-1 text-left">Phone</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="border p-1">T001</td>
+                      <td className="border p-1">AF355</td>
+                      <td className="border p-1">Rahul Sharma</td>
+                      <td className="border p-1">rahul@avanti.org</td>
+                      <td className="border p-1">pass123</td>
+                      <td className="border p-1">Physics</td>
+                      <td className="border p-1">CoE Barwani</td>
+                      <td className="border p-1">1990-05-15</td>
+                      <td className="border p-1">2023-06-01</td>
+                      <td className="border p-1">9876543210</td>
+                    </tr>
+                    <tr className="bg-gray-50">
+                      <td className="border p-1">T002</td>
+                      <td className="border p-1">AF356</td>
+                      <td className="border p-1">Priya Patel</td>
+                      <td className="border p-1">priya@avanti.org</td>
+                      <td className="border p-1">pass456</td>
+                      <td className="border p-1">Chemistry</td>
+                      <td className="border p-1">CoE Bundi</td>
+                      <td className="border p-1">1992-08-20</td>
+                      <td className="border p-1">2024-01-15</td>
+                      <td className="border p-1">9876543211</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Import Button */}
+              <div className="flex gap-3">
+                <label className={`flex-1 px-6 py-4 ${!isImporting ? 'bg-purple-600 hover:bg-purple-700 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-xl font-semibold text-center transition-all`}>
+                  {isImporting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                      Importing Teachers...
+                    </span>
+                  ) : (
+                    '📤 Select CSV File to Import'
+                  )}
+                  <input 
+                    ref={bulkFileInputRef} 
+                    type="file" 
+                    accept=".csv" 
+                    onChange={handleBulkCSVImport} 
+                    disabled={isImporting}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              
+              {/* Import Results */}
+              {importResults && (
+                <div className={`p-4 rounded-xl ${importResults.failed > 0 ? 'bg-yellow-50 border-2 border-yellow-300' : 'bg-green-50 border-2 border-green-300'}`}>
+                  <h4 className="font-bold text-lg mb-2">
+                    {importResults.failed > 0 ? '⚠️ Import Completed with Warnings' : '✅ Import Successful!'}
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <p className="text-green-700">✓ {importResults.success} teacher(s) imported successfully</p>
+                    {importResults.failed > 0 && (
+                      <p className="text-red-700">✗ {importResults.failed} teacher(s) failed</p>
+                    )}
+                    
+                    {importResults.errors.length > 0 && (
+                      <div className="mt-3 p-3 bg-red-50 rounded-lg">
+                        <p className="font-bold text-red-700 mb-1">Errors:</p>
+                        <ul className="text-red-600 text-xs space-y-1 max-h-32 overflow-y-auto">
+                          {importResults.errors.map((err, i) => <li key={i}>• {err}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {importResults.firebaseAuth.length > 0 && (
+                      <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                        <p className="font-bold text-blue-700 mb-2">🔐 Firebase Authentication Required:</p>
+                        <p className="text-blue-600 text-xs mb-2">Create these users in Firebase Console → Authentication → Add User:</p>
+                        <div className="bg-white rounded p-2 max-h-40 overflow-y-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="bg-gray-100">
+                                <th className="p-1 text-left">Email</th>
+                                <th className="p-1 text-left">Password</th>
+                                <th className="p-1 text-left">Name</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {importResults.firebaseAuth.map((auth, i) => (
+                                <tr key={i} className="border-b">
+                                  <td className="p-1 font-mono">{auth.email}</td>
+                                  <td className="p-1 font-mono">{auth.password}</td>
+                                  <td className="p-1">{auth.name}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button 
+                    onClick={() => setImportResults(null)} 
+                    className="mt-3 px-4 py-2 bg-gray-200 rounded-lg text-sm font-medium hover:bg-gray-300"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       
       {/* Active Teachers Table */}
       <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
