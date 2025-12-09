@@ -10474,7 +10474,7 @@ return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum 
     const topicPriority = typeof t === 'string' ? 'medium' : (t.priority || 'medium');
     const priorityIcon = topicPriority === 'high' ? '🟢' : topicPriority === 'medium' ? '🟡' : '🔴';
     return <li key={i}>• {topicName} <span className="ml-1">{priorityIcon}</span></li>;
-  })}</ul>}</div></div></div><div className="flex gap-2 mt-2 md:mt-0"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
+  })}</ul>}</div></div><div className="flex gap-2 mt-2 md:mt-0 flex-shrink-0"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
 function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools = SCHOOLS,isSuperAdmin = false}){
   // Available schools for dropdown
   const availableSchoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
