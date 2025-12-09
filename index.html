@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10122,6 +10121,9 @@ const[importSubject,setImportSubject]=useState(SUBJECTS[0]);
 const[importGrade,setImportGrade]=useState('11');
 const[showBulkImport,setShowBulkImport]=useState(false);
 const[isImporting,setIsImporting]=useState(false);
+// NEW: Bulk delete selection
+const[selectedChaptersForDelete,setSelectedChaptersForDelete]=useState([]);
+const[isDeleting,setIsDeleting]=useState(false);
 
 const toggleSchoolSelection=(school)=>{
   setSelectedSchoolsForImport(prev=>
@@ -10130,6 +10132,49 @@ const toggleSchoolSelection=(school)=>{
 };
 const selectAllSchools=()=>setSelectedSchoolsForImport([...SCHOOLS]);
 const deselectAllSchools=()=>setSelectedSchoolsForImport([]);
+
+// NEW: Bulk delete handlers
+const toggleChapterSelection=(chapterId)=>{
+  setSelectedChaptersForDelete(prev=>
+    prev.includes(chapterId)?prev.filter(id=>id!==chapterId):[...prev,chapterId]
+  );
+};
+const selectAllChapters=()=>{
+  const docId=`${selectedSchool}_${selectedSubject}_${selectedGrade}`;
+  const chapters=curriculum[docId]?.chapters||[];
+  setSelectedChaptersForDelete(chapters.map(ch=>ch.id));
+};
+const deselectAllChapters=()=>setSelectedChaptersForDelete([]);
+
+const handleBulkDelete=async()=>{
+  if(selectedChaptersForDelete.length===0){
+    alert('Please select chapters to delete');
+    return;
+  }
+  const count=selectedChaptersForDelete.length;
+  if(!confirm(`Are you sure you want to delete ${count} chapter${count>1?'s':''}? This action cannot be undone.`))return;
+  
+  setIsDeleting(true);
+  try{
+    const docId=`${selectedSchool}_${selectedSubject}_${selectedGrade}`;
+    const doc=await db.collection('curriculum').doc(docId).get();
+    const existing=doc.exists?(doc.data().chapters||[]):[];
+    const updated=existing.filter(ch=>!selectedChaptersForDelete.includes(ch.id));
+    await db.collection('curriculum').doc(docId).set({chapters:updated});
+    setSelectedChaptersForDelete([]);
+    alert(`✅ Successfully deleted ${count} chapter${count>1?'s':''}`);
+  }catch(e){
+    console.error('Bulk delete error',e);
+    alert('Failed to delete chapters: '+e.message);
+  }finally{
+    setIsDeleting(false);
+  }
+};
+
+// Clear selection when school/subject/grade changes
+React.useEffect(()=>{
+  setSelectedChaptersForDelete([]);
+},[selectedSchool,selectedSubject,selectedGrade]);
 
 const docId=`${selectedSchool}_${selectedSubject}_${selectedGrade}`;const chapters=curriculum[docId]?.chapters||[];const handleSaveChapter=()=>{if(!chapterForm.name){alert('Chapter name is required');return}if(editingChapter){updateChapter(selectedSchool,selectedSubject,selectedGrade,editingChapter.id,chapterForm);setEditingChapter(null)}else{addChapter(selectedSchool,selectedSubject,selectedGrade,chapterForm)}setChapterForm({name:'',topics:[],targetDate:'',priority:'medium'});setShowAddForm(false)};const handleEditChapter=chapter=>{setEditingChapter(chapter);
   // Convert old string topics to new object format if needed
@@ -10414,7 +10459,7 @@ return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum 
       <button onClick={()=>{const updated=chapterForm.topics.filter((_,i)=>i!==idx);setChapterForm({...chapterForm,topics:updated})}} className="px-3 py-1 bg-red-500 text-white rounded-lg">Remove</button>
     </div>
   );
-})}</div></div><button onClick={handleSaveChapter} className="px-6 py-3 avanti-gradient text-white rounded-xl font-semibold">{editingChapter?'Update Chapter':'Save Chapter'}</button></div></div>}<div className="bg-white p-6 rounded-2xl shadow-lg"><h4 className="text-xl font-bold mb-4">{selectedSchool} - {selectedSubject} - Class {selectedGrade} ({chapters.length} chapters)</h4>{chapters.length===0?<p className="text-gray-500 text-center py-8">No chapters yet</p>:<div className="space-y-3">{chapters.map(ch=><div key={ch.id} className="border-2 rounded-xl p-4 hover:bg-gray-50"><div className="flex justify-between items-start"><div className="flex-1"><h5 className="font-bold text-lg">{ch.name}</h5><p className="text-sm text-gray-600">Target: {ch.targetDate||'Not set'} | Topics: {ch.topics?.length||0}</p><div className="mt-2">
+})}</div></div><button onClick={handleSaveChapter} className="px-6 py-3 avanti-gradient text-white rounded-xl font-semibold">{editingChapter?'Update Chapter':'Save Chapter'}</button></div></div>}<div className="bg-white p-6 rounded-2xl shadow-lg"><div className="flex flex-wrap justify-between items-center gap-3 mb-4"><h4 className="text-xl font-bold">{selectedSchool} - {selectedSubject} - Class {selectedGrade} ({chapters.length} chapters)</h4>{chapters.length>0&&<div className="flex flex-wrap gap-2 items-center"><span className="text-sm text-gray-600 mr-2">{selectedChaptersForDelete.length} selected</span><button onClick={selectAllChapters} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-200">Select All</button><button onClick={deselectAllChapters} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200">Deselect All</button><button onClick={handleBulkDelete} disabled={selectedChaptersForDelete.length===0||isDeleting} className={`px-4 py-1 rounded-lg text-sm font-semibold ${selectedChaptersForDelete.length===0?'bg-gray-200 text-gray-400 cursor-not-allowed':'bg-red-500 text-white hover:bg-red-600'}`}>{isDeleting?'Deleting...':'🗑️ Delete Selected ('+selectedChaptersForDelete.length+')'}</button></div>}</div>{chapters.length===0?<p className="text-gray-500 text-center py-8">No chapters yet</p>:<div className="space-y-3">{chapters.map(ch=><div key={ch.id} className={`border-2 rounded-xl p-4 hover:bg-gray-50 ${selectedChaptersForDelete.includes(ch.id)?'bg-red-50 border-red-300':''}`}><div className="flex justify-between items-start"><div className="flex items-start gap-3"><input type="checkbox" checked={selectedChaptersForDelete.includes(ch.id)} onChange={()=>toggleChapterSelection(ch.id)} className="mt-1 w-5 h-5 cursor-pointer"/><div className="flex-1"><h5 className="font-bold text-lg">{ch.name}</h5><p className="text-sm text-gray-600">Target: {ch.targetDate||'Not set'} | Topics: {ch.topics?.length||0}</p><div className="mt-2">
     {(ch.priority==='high'||!ch.priority)&&(
       <span className="priority-badge priority-high text-xs">🟢 High Priority</span>
     )}
@@ -10429,7 +10474,7 @@ return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum 
     const topicPriority = typeof t === 'string' ? 'medium' : (t.priority || 'medium');
     const priorityIcon = topicPriority === 'high' ? '🟢' : topicPriority === 'medium' ? '🟡' : '🔴';
     return <li key={i}>• {topicName} <span className="ml-1">{priorityIcon}</span></li>;
-  })}</ul>}</div><div className="flex gap-2"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
+  })}</ul>}</div></div></div><div className="flex gap-2 mt-2 md:mt-0"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
 function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools = SCHOOLS,isSuperAdmin = false}){
   // Available schools for dropdown
   const availableSchoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
