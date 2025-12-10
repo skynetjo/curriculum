@@ -37,30 +37,18 @@
   <!-- 2FA Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/otpauth/9.2.2/otpauth.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  
-  <!-- Tally Form -->
+
   <script>
-    window.TallyConfig = {
-      "formId": "wQggKA",
-      "popup": {
-        "width": 250,
-        "emoji": {
-          "text": "👋",
-          "animation": "flash"
-        },
-        "hideTitle": true,
-        "alignLeft": true,
-        "overlay": true,
-        "autoClose": 4000,
-        "open": {
-          "trigger": "scroll",
-          "scrollPercent": 10
-        },
-        "doNotShowAfterSubmit": true
-      }
-    };
-  </script>
-  <script async src="https://tally.so/widgets/embed.js"></script>
+function initFreshdesk() {
+  window.fdWidget.init({
+    token: "01KC3BR0V3E79ECS22AM03Q9P6",
+    host: "https://avantifellows.freshdesk.com",
+    widgetId: "01KC3BR2F6KQBWTY89PPAD151E"
+  });
+}
+
+function initialize(i,t){var e;i.getElementById(t)?initFreshdesk():((e=i.createElement("script")).id=t,e.async=!0,e.src="https://avantifellows.freshdesk.com/webchat/js/widget.js",e.onload=initFreshdesk,i.head.appendChild(e))}function initiateCall(){initialize(document,"Freshdesk-js-sdk")}window.addEventListener?window.addEventListener("load",initiateCall,!1):window.attachEvent("load",initiateCall,!1);
+</script>
   <style>
     /* Priority Badge Gradients */
 .priority-badge {
