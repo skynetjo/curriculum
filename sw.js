@@ -2,7 +2,7 @@
 // SERVICE WORKER - Curriculum Tracker PWA
 // ========================================
 // Version - Must match CURRENT_VERSION in index.html
-const VERSION = '3.5.0';
+const VERSION = '3.5.1';
 const STATIC_CACHE = 'static-v' + VERSION;
 
 // Install event - cache essential files
@@ -51,6 +51,20 @@ self.addEventListener('activate', event => {
 // Fetch event - network first for HTML, cache first for static assets
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+  
+  // ✅ FIX: Skip non-GET requests (POST, PUT, DELETE cannot be cached)
+  if (event.request.method !== 'GET') {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  
+  // ✅ FIX: Skip Freshdesk and other chat widgets
+  if (url.hostname.includes('freshdesk.com') || 
+      url.hostname.includes('freshchat') ||
+      url.hostname.includes('freshworks')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
   
   // Always fetch HTML from network (never cache index.html)
   if (event.request.mode === 'navigate' || 
