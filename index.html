@@ -4246,8 +4246,9 @@ function verify2FACode(secret, code) {
       period: 30,
       secret: OTPAuth.Secret.fromBase32(secret)
     });
-    // Allow 1 window of time drift (30 seconds before/after)
-    const delta = totp.validate({ token: code, window: 1 });
+    // Allow 2 windows of time drift (60 seconds before/after) for users in remote areas with poor signal
+    // This helps when phone clocks are slightly out of sync or network is slow
+    const delta = totp.validate({ token: code, window: 2 });
     return delta !== null;
   } catch (e) {
     console.error('2FA verification error:', e);
@@ -4643,10 +4644,12 @@ function TwoFactorVerifyModal({ user, onVerified, onCancel, onUseBackupCode }) {
   const [verifying, setVerifying] = useState(false);
   const [showBackupInput, setShowBackupInput] = useState(false);
   const [backupCode, setBackupCode] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
 
-  const handleVerify = async () => {
+  const handleVerify = async (inputCode) => {
+    const codeToVerify = inputCode || code;
     setError('');
-    if (!code || code.length !== 6) {
+    if (!codeToVerify || codeToVerify.length !== 6) {
       setError('Please enter a 6-digit code');
       return;
     }
@@ -4654,7 +4657,7 @@ function TwoFactorVerifyModal({ user, onVerified, onCancel, onUseBackupCode }) {
     setVerifying(true);
     try {
       // Get 2FA settings from Firestore
-      const docId = user.afid || user.docId || user.uid;
+      const docId = user.afid || user.docId || user.uid || user.id;
       const twoFADoc = await db.collection('twoFactorAuth').doc(docId).get();
       
       if (!twoFADoc.exists) {
@@ -4664,16 +4667,36 @@ function TwoFactorVerifyModal({ user, onVerified, onCancel, onUseBackupCode }) {
 
       const twoFAData = twoFADoc.data();
       
-      if (verify2FACode(twoFAData.secret, code)) {
+      if (verify2FACode(twoFAData.secret, codeToVerify)) {
         onVerified();
       } else {
-        setError('Invalid code. Please try again.');
+        setRetryCount(prev => prev + 1);
+        if (retryCount >= 2) {
+          setError('Code invalid. Tip: Wait for a new code to appear in your app, then enter it immediately.');
+        } else {
+          setError('Invalid code. Please check your authenticator app and try again.');
+        }
+        setCode(''); // Clear for retry
       }
     } catch (e) {
       console.error('2FA verification error:', e);
-      setError('Verification failed: ' + e.message);
+      if (e.message?.includes('network') || e.message?.includes('timeout')) {
+        setError('Network issue. Please check your connection and try again.');
+      } else {
+        setError('Verification failed: ' + e.message);
+      }
     } finally {
       setVerifying(false);
+    }
+  };
+
+  // Auto-submit when 6 digits are entered
+  const handleCodeChange = (e) => {
+    const newCode = e.target.value.replace(/\D/g, '').slice(0, 6);
+    setCode(newCode);
+    if (newCode.length === 6) {
+      // Small delay to show the full code before submitting
+      setTimeout(() => handleVerify(newCode), 200);
     }
   };
 
@@ -4686,7 +4709,7 @@ function TwoFactorVerifyModal({ user, onVerified, onCancel, onUseBackupCode }) {
 
     setVerifying(true);
     try {
-      const docId = user.afid || user.docId || user.uid;
+      const docId = user.afid || user.docId || user.uid || user.id;
       const twoFADoc = await db.collection('twoFactorAuth').doc(docId).get();
       
       if (!twoFADoc.exists) {
@@ -4728,15 +4751,23 @@ function TwoFactorVerifyModal({ user, onVerified, onCancel, onUseBackupCode }) {
 
         {!showBackupInput ? (
           <div className="space-y-4">
+            {/* Helpful tip for remote users */}
+            <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl text-sm text-blue-700">
+              💡 <strong>Tip:</strong> Code changes every 30 seconds. Enter it as soon as you see it.
+            </div>
+
             <input
               type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={code}
-              onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onChange={handleCodeChange}
               placeholder="000000"
               className="w-full px-4 py-4 border-2 rounded-xl text-center text-3xl font-mono tracking-widest"
               maxLength={6}
               autoFocus
-              onKeyPress={e => e.key === 'Enter' && handleVerify()}
+              autoComplete="one-time-code"
+              disabled={verifying}
             />
 
             {error && (
@@ -4745,8 +4776,15 @@ function TwoFactorVerifyModal({ user, onVerified, onCancel, onUseBackupCode }) {
               </div>
             )}
 
+            {verifying && (
+              <div className="text-center text-gray-600">
+                <div className="inline-block animate-spin mr-2">⏳</div>
+                Verifying...
+              </div>
+            )}
+
             <button
-              onClick={handleVerify}
+              onClick={() => handleVerify()}
               disabled={verifying || code.length !== 6}
               className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50"
             >
@@ -4840,8 +4878,8 @@ function Admin2FAManagement({ teachers, managers }) {
   }, []);
 
   const allUsers = [
-    ...teachers.map(t => ({ ...t, type: 'Teacher', docId: t.afid })),
-    ...managers.map(m => ({ ...m, type: ROLE_LABELS[m.role] || 'Manager', docId: m.docId }))
+    ...teachers.map(t => ({ ...t, type: 'Teacher', docId: t.afid, twoFADocId: t.afid })),
+    ...managers.map(m => ({ ...m, type: ROLE_LABELS[m.role] || 'Manager', docId: m.docId, twoFADocId: m.docId || m.uid || m.id }))
   ];
 
   const filteredUsers = allUsers.filter(user => {
@@ -4856,23 +4894,37 @@ function Admin2FAManagement({ teachers, managers }) {
     
     setResetting(user.docId);
     try {
-      // Delete 2FA document
-      await db.collection('twoFactorAuth').doc(user.docId).delete();
+      // Find the actual 2FA document ID by checking all possible IDs
+      const possibleIds = [user.twoFADocId, user.docId, user.id, user.uid, user.afid].filter(Boolean);
+      let actualTwoFADocId = null;
       
-      // Remove all trusted devices for this user
-      await removeAllDeviceTrusts(user.docId);
+      for (const id of possibleIds) {
+        const doc = await db.collection('twoFactorAuth').doc(id).get();
+        if (doc.exists) {
+          actualTwoFADocId = id;
+          break;
+        }
+      }
+      
+      if (actualTwoFADocId) {
+        // Delete 2FA document
+        await db.collection('twoFactorAuth').doc(actualTwoFADocId).delete();
+        // Remove all trusted devices for this user
+        await removeAllDeviceTrusts(actualTwoFADocId);
+      }
       
       // Update user's 2FA status
       const collection = user.type === 'Teacher' ? 'teachers' : 'managers';
-      await db.collection(collection).doc(user.docId).update({
+      const userDocId = user.docId || user.afid;
+      await db.collection(collection).doc(userDocId).update({
         twoFactorEnabled: false,
         twoFactorResetAt: new Date().toISOString()
       });
 
-      // Update local state
+      // Update local state - remove all possible IDs
       setTwoFAUsers(prev => {
         const updated = { ...prev };
-        delete updated[user.docId];
+        possibleIds.forEach(id => { delete updated[id]; });
         return updated;
       });
 
@@ -4894,7 +4946,11 @@ function Admin2FAManagement({ teachers, managers }) {
     );
   }
 
-  const enabledCount = Object.values(twoFAUsers).filter(u => u.enabled).length;
+  // Calculate enabled count by checking multiple possible IDs for each user
+  const enabledCount = allUsers.filter(user => {
+    const possibleIds = [user.twoFADocId, user.docId, user.id, user.uid, user.afid].filter(Boolean);
+    return possibleIds.some(id => twoFAUsers[id]?.enabled);
+  }).length;
   const pendingCount = allUsers.length - enabledCount;
 
   return (
@@ -4962,7 +5018,9 @@ function Admin2FAManagement({ teachers, managers }) {
           </thead>
           <tbody>
             {filteredUsers.map(user => {
-              const twoFA = twoFAUsers[user.docId];
+              // Try multiple possible IDs for 2FA status lookup
+              const possibleIds = [user.twoFADocId, user.docId, user.id, user.uid, user.afid].filter(Boolean);
+              const twoFA = possibleIds.map(id => twoFAUsers[id]).find(t => t) || null;
               const isEnabled = twoFA?.enabled;
               
               return (
