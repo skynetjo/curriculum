@@ -17505,436 +17505,1613 @@ ReactDOM.render(<App/>,document.getElementById('root'));
 })();
 </script>
 
-<script>
-// =============================================================
-// AVANTI HELP WIDGET — FINAL VERSION (With Screenshot Upload)
-// =============================================================
+<!-- 
+    AVANTI HELP WIDGET - INTERCOM STYLE
+    Version 3.0 | December 2025
+    
+    Features:
+    - Auto popup after 10 seconds with personalized greeting
+    - "Hi [Name] 👋 How can we help?" welcome screen
+    - Bottom navigation (Home, Tickets)
+    - Auto-collects user info from Curriculum Tracker
+    - Yellow button preserved
+    
+    Paste this at the end of index_Curriculum.html before </body>
+-->
 
+<style>
+/* ============================================
+   AVANTI HELP WIDGET - INTERCOM STYLE
+   ============================================ */
+.avanti-widget-container * {
+    box-sizing: border-box;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Greeting Popup - appears after 10 seconds */
+.avanti-greeting-popup {
+    position: fixed;
+    bottom: 100px;
+    right: 30px;
+    background: #1a1a24;
+    color: #fff;
+    padding: 16px 20px;
+    border-radius: 16px;
+    font-size: 15px;
+    z-index: 99998;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    border: 1px solid #2a2a3a;
+    max-width: 280px;
+    display: none;
+    animation: popupSlide 0.4s ease;
+    cursor: pointer;
+}
+
+.avanti-greeting-popup.show {
+    display: block;
+}
+
+@keyframes popupSlide {
+    from { 
+        opacity: 0; 
+        transform: translateY(20px) scale(0.9); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0) scale(1); 
+    }
+}
+
+.avanti-greeting-popup::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    right: 25px;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 10px solid #1a1a24;
+}
+
+.avanti-greeting-popup .greeting-close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0;
+    line-height: 1;
+}
+
+.avanti-greeting-popup .greeting-close:hover {
+    color: #fff;
+}
+
+.avanti-greeting-popup .greeting-text {
+    font-size: 15px;
+    line-height: 1.5;
+    padding-right: 20px;
+}
+
+.avanti-greeting-popup .greeting-text strong {
+    color: #F4B41A;
+}
+
+/* Help Button - YELLOW GRADIENT */
+.avanti-help-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(244, 180, 26, 0.4);
+    z-index: 99999;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.avanti-help-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 30px rgba(244, 180, 26, 0.5);
+}
+
+.avanti-help-btn .btn-icon {
+    width: 28px;
+    height: 28px;
+    transition: all 0.3s ease;
+}
+
+.avanti-help-btn .btn-icon svg {
+    width: 100%;
+    height: 100%;
+    fill: #0a0a0f;
+}
+
+.avanti-help-btn.open .btn-icon svg.chat-icon {
+    display: none;
+}
+
+.avanti-help-btn.open .btn-icon svg.close-icon {
+    display: block;
+}
+
+.avanti-help-btn .btn-icon svg.close-icon {
+    display: none;
+}
+
+.avanti-help-btn .notification-dot {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 14px;
+    height: 14px;
+    background: #ef4444;
+    border-radius: 50%;
+    border: 2px solid #0a0a0f;
+    display: none;
+}
+
+.avanti-help-btn .notification-dot.show {
+    display: block;
+}
+
+/* Widget Panel */
+.avanti-widget-panel {
+    position: fixed;
+    bottom: 100px;
+    right: 30px;
+    width: 380px;
+    height: 520px;
+    background: #12121a;
+    border-radius: 20px;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+    z-index: 99998;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #2a2a3a;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(20px) scale(0.95);
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.avanti-widget-panel.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+}
+
+/* Header */
+.avanti-widget-header {
+    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 70px;
+}
+
+.avanti-widget-header-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.avanti-widget-header .logo {
+    width: 42px;
+    height: 42px;
+    background: rgba(0,0,0,0.15);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+
+.avanti-widget-header h3 {
+    color: #0a0a0f;
+    font-size: 17px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.avanti-widget-header p {
+    color: rgba(0,0,0,0.6);
+    font-size: 12px;
+    margin: 2px 0 0 0;
+}
+
+.avanti-widget-header .close-btn {
+    background: rgba(0,0,0,0.1);
+    border: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: #0a0a0f;
+    transition: all 0.2s;
+}
+
+.avanti-widget-header .close-btn:hover {
+    background: rgba(0,0,0,0.2);
+}
+
+/* Body */
+.avanti-widget-body {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Home View */
+.avanti-home-view {
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.avanti-welcome {
+    margin-bottom: 24px;
+}
+
+.avanti-welcome h2 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 4px 0;
+    line-height: 1.3;
+}
+
+.avanti-welcome p {
+    color: #8a8a9a;
+    font-size: 15px;
+    margin: 0;
+}
+
+/* Search Box */
+.avanti-search-box {
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 20px;
+}
+
+.avanti-search-box:hover {
+    border-color: #F4B41A;
+}
+
+.avanti-search-box span {
+    color: #5a5a6a;
+    font-size: 15px;
+}
+
+.avanti-search-box .arrow {
+    margin-left: auto;
+    color: #F4B41A;
+    font-size: 18px;
+}
+
+/* Quick Actions */
+.avanti-quick-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.avanti-quick-action {
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.avanti-quick-action:hover {
+    border-color: #F4B41A;
+    transform: translateX(4px);
+}
+
+.avanti-quick-action .icon {
+    font-size: 18px;
+}
+
+.avanti-quick-action .arrow {
+    margin-left: auto;
+    color: #5a5a6a;
+}
+
+/* Bottom Navigation */
+.avanti-bottom-nav {
+    display: flex;
+    border-top: 1px solid #2a2a3a;
+    background: #0a0a0f;
+    padding: 8px 0;
+}
+
+.avanti-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px;
+    cursor: pointer;
+    color: #5a5a6a;
+    font-size: 11px;
+    background: none;
+    border: none;
+    transition: all 0.2s;
+    font-family: inherit;
+    position: relative;
+}
+
+.avanti-nav-item:hover,
+.avanti-nav-item.active {
+    color: #F4B41A;
+}
+
+.avanti-nav-item .nav-icon {
+    font-size: 20px;
+}
+
+.avanti-nav-item .nav-badge {
+    position: absolute;
+    top: 6px;
+    right: calc(50% - 18px);
+    width: 8px;
+    height: 8px;
+    background: #ef4444;
+    border-radius: 50%;
+    display: none;
+}
+
+.avanti-nav-item .nav-badge.show {
+    display: block;
+}
+
+/* Chat View */
+.avanti-chat-view {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+}
+
+.avanti-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.avanti-chat-input {
+    padding: 12px 16px;
+    border-top: 1px solid #2a2a3a;
+    display: flex;
+    gap: 10px;
+    background: #0a0a0f;
+}
+
+.avanti-chat-input input {
+    flex: 1;
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 24px;
+    padding: 12px 18px;
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.avanti-chat-input input:focus {
+    outline: none;
+    border-color: #F4B41A;
+}
+
+.avanti-chat-input input::placeholder {
+    color: #5a5a6a;
+}
+
+.avanti-chat-input button {
+    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    border: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #0a0a0f;
+    transition: all 0.2s;
+}
+
+.avanti-chat-input button:hover {
+    transform: scale(1.05);
+}
+
+/* Messages */
+.avanti-msg {
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 85%;
+    animation: msgSlide 0.3s ease;
+}
+
+@keyframes msgSlide {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.avanti-msg.bot {
+    background: #1a1a24;
+    color: #fff;
+    align-self: flex-start;
+    border: 1px solid #2a2a3a;
+}
+
+.avanti-msg.user {
+    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    color: #0a0a0f;
+    align-self: flex-end;
+}
+
+/* FAQ Results */
+.avanti-faq-card {
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 12px;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 8px;
+}
+
+.avanti-faq-card:hover {
+    border-color: #F4B41A;
+}
+
+.avanti-faq-card h4 {
+    color: #F4B41A;
+    font-size: 14px;
+    margin: 0 0 6px 0;
+    font-weight: 600;
+}
+
+.avanti-faq-card p {
+    color: #8a8a9a;
+    font-size: 13px;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Action Buttons */
+.avanti-action-btns {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.avanti-action-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.avanti-action-btn.primary {
+    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    color: #0a0a0f;
+}
+
+.avanti-action-btn.secondary {
+    background: #2a2a3a;
+    color: #fff;
+}
+
+.avanti-action-btn:hover {
+    transform: translateY(-2px);
+}
+
+/* Tickets View */
+.avanti-tickets-view {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+}
+
+.avanti-tickets-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #2a2a3a;
+}
+
+.avanti-tickets-header h3 {
+    color: #fff;
+    font-size: 18px;
+    margin: 0;
+}
+
+.avanti-tickets-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.avanti-ticket-card {
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.avanti-ticket-card:hover {
+    border-color: #F4B41A;
+}
+
+.avanti-ticket-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.avanti-ticket-id {
+    color: #F4B41A;
+    font-size: 12px;
+    font-family: 'Space Mono', monospace;
+}
+
+.avanti-ticket-status {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+}
+
+.avanti-ticket-status.open {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.avanti-ticket-status.in-progress {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.avanti-ticket-status.resolved {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.avanti-ticket-subject {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.avanti-ticket-date {
+    color: #5a5a6a;
+    font-size: 12px;
+}
+
+.avanti-ticket-reply {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #2a2a3a;
+}
+
+.avanti-ticket-reply-label {
+    color: #10b981;
+    font-size: 11px;
+    margin-bottom: 4px;
+}
+
+.avanti-ticket-reply-text {
+    color: #8a8a9a;
+    font-size: 13px;
+}
+
+/* Ticket Form */
+.avanti-form-view {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+}
+
+.avanti-form-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.avanti-user-card {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 16px;
+}
+
+.avanti-user-card h4 {
+    color: #10b981;
+    font-size: 12px;
+    margin: 0 0 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.avanti-user-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+.avanti-user-row:last-child {
+    margin-bottom: 0;
+}
+
+.avanti-user-row span:first-child {
+    color: #8a8a9a;
+}
+
+.avanti-user-row span:last-child {
+    color: #fff;
+    font-weight: 500;
+}
+
+.avanti-form-group {
+    margin-bottom: 14px;
+}
+
+.avanti-form-group label {
+    display: block;
+    color: #8a8a9a;
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.avanti-form-group input,
+.avanti-form-group textarea,
+.avanti-form-group select {
+    width: 100%;
+    padding: 12px 14px;
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.avanti-form-group input:focus,
+.avanti-form-group textarea:focus,
+.avanti-form-group select:focus {
+    outline: none;
+    border-color: #F4B41A;
+}
+
+.avanti-form-group textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.avanti-submit-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    color: #0a0a0f;
+    border: none;
+    padding: 14px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    margin-top: 8px;
+}
+
+.avanti-submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(244, 180, 26, 0.3);
+}
+
+.avanti-submit-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Success View */
+.avanti-success {
+    text-align: center;
+    padding: 30px 20px;
+}
+
+.avanti-success .icon {
+    font-size: 56px;
+    margin-bottom: 16px;
+}
+
+.avanti-success h3 {
+    color: #10b981;
+    font-size: 20px;
+    margin: 0 0 8px 0;
+}
+
+.avanti-success .ticket-id {
+    background: #1a1a24;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    color: #F4B41A;
+    margin: 16px 0;
+    display: inline-block;
+    border: 1px solid #2a2a3a;
+}
+
+.avanti-success p {
+    color: #8a8a9a;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* Empty State */
+.avanti-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #5a5a6a;
+}
+
+.avanti-empty .icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.avanti-empty h4 {
+    color: #8a8a9a;
+    margin: 0 0 8px 0;
+}
+
+/* Loading */
+.avanti-loading {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(0,0,0,0.2);
+    border-top-color: #0a0a0f;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .avanti-widget-panel {
+        width: calc(100% - 20px);
+        right: 10px;
+        bottom: 80px;
+        height: 70vh;
+    }
+    
+    .avanti-help-btn {
+        width: 54px;
+        height: 54px;
+        right: 16px;
+        bottom: 16px;
+    }
+    
+    .avanti-greeting-popup {
+        right: 16px;
+        bottom: 85px;
+        max-width: calc(100% - 90px);
+    }
+}
+
+
+/* Added by assistant: simple logo replacement styling */
+.replaced-logo { width: 64px; height: auto; display: inline-block; vertical-align: middle; }
+
+</style>
+
+<!-- Widget HTML -->
+<div class="avanti-widget-container">
+    <!-- Greeting Popup -->
+    <div class="avanti-greeting-popup" id="avantiGreeting" onclick="AvantiWidget.open()">
+        <button class="greeting-close" onclick="event.stopPropagation(); AvantiWidget.hideGreeting()">×</button>
+        <div class="greeting-text" id="greetingText">
+            👋 <strong>Hey!</strong> Need any help with the Curriculum Tracker?
+        </div>
+    </div>
+    
+    <!-- Help Button -->
+    <button class="avanti-help-btn" id="avantiBtn" onclick="AvantiWidget.toggle()">
+        <span class="btn-icon">
+            <svg class="chat-icon" viewBox="0 0 24 24" fill="#0a0a0f">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+            </svg>
+            <svg class="close-icon" viewBox="0 0 24 24" fill="#0a0a0f">
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+        </span>
+        <span class="notification-dot" id="notifDot"></span>
+    </button>
+    
+    <!-- Widget Panel -->
+    <div class="avanti-widget-panel" id="avantiPanel">
+        <!-- Header -->
+        <div class="avanti-widget-header">
+            <div class="avanti-widget-header-content">
+                <div class="logo"><img src="logo.png" alt="Avanti Logo" class="replaced-logo"></div>
+                <div>
+                    <h3>Avanti Help Desk</h3>
+                    <p>We're here to help!</p>
+                </div>
+            </div>
+            <button class="close-btn" onclick="AvantiWidget.close()">×</button>
+        </div>
+        
+        <!-- Body -->
+        <div class="avanti-widget-body" id="avantiBody">
+            <!-- Home View -->
+            <div class="avanti-home-view" id="homeView">
+                <div class="avanti-welcome">
+                    <h2 id="welcomeText">Hi there! 👋</h2>
+                    <p>How can we help you today?</p>
+                </div>
+                
+                <div class="avanti-search-box" onclick="AvantiWidget.showChat()">
+                    <span>🔍</span>
+                    <span>Search for help...</span>
+                    <span class="arrow">→</span>
+                </div>
+                
+                <div class="avanti-quick-actions">
+                    <button class="avanti-quick-action" onclick="AvantiWidget.searchTopic('login')">
+                        <span class="icon">🔐</span>
+                        <span>Login Issues</span>
+                        <span class="arrow">›</span>
+                    </button>
+                    <button class="avanti-quick-action" onclick="AvantiWidget.searchTopic('attendance')">
+                        <span class="icon">📅</span>
+                        <span>Attendance Help</span>
+                        <span class="arrow">›</span>
+                    </button>
+                    <button class="avanti-quick-action" onclick="AvantiWidget.searchTopic('curriculum')">
+                        <span class="icon">📚</span>
+                        <span>Curriculum & Progress</span>
+                        <span class="arrow">›</span>
+                    </button>
+                    <button class="avanti-quick-action" onclick="AvantiWidget.showForm()">
+                        <span class="icon"><img src="logo.png" alt="Avanti Logo" class="replaced-logo"></span>
+                        <span>Raise a Support Ticket</span>
+                        <span class="arrow">›</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Chat View -->
+            <div class="avanti-chat-view" id="chatView">
+                <div class="avanti-chat-messages" id="chatMessages"></div>
+                <div class="avanti-chat-input">
+                    <input type="text" id="chatInput" placeholder="Type your question..." onkeypress="if(event.key==='Enter')AvantiWidget.sendMessage()">
+                    <button onclick="AvantiWidget.sendMessage()">➤</button>
+                </div>
+            </div>
+            
+            <!-- Tickets View -->
+            <div class="avanti-tickets-view" id="ticketsView">
+                <div class="avanti-tickets-header">
+                    <h3>Your Tickets</h3>
+                </div>
+                <div class="avanti-tickets-list" id="ticketsList"></div>
+            </div>
+            
+            <!-- Form View -->
+            <div class="avanti-form-view" id="formView">
+                <div class="avanti-form-content" id="formContent"></div>
+            </div>
+        </div>
+        
+        <!-- Bottom Navigation -->
+        <div class="avanti-bottom-nav">
+            <button class="avanti-nav-item active" id="navHome" onclick="AvantiWidget.showHome()">
+                <span class="nav-icon">🏠</span>
+                <span>Home</span>
+            </button>
+            <button class="avanti-nav-item" id="navTickets" onclick="AvantiWidget.showTickets()">
+                <span class="nav-icon"><img src="logo.png" alt="Avanti Logo" class="replaced-logo"></span>
+                <span>Tickets</span>
+                <span class="nav-badge" id="ticketsBadge"></span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================
+// AVANTI WIDGET - INTERCOM STYLE
+// ============================================
 const AvantiWidget = {
     isOpen: false,
     user: null,
     faqs: [],
     tickets: [],
-    typingTimer: null,
-    screenshotFile: null,
-
-    // -----------------------------------------
-    // INIT
-    // -----------------------------------------
-    init: function () {
-        console.log("AvantiWidget Init");
-
-        this.detectUser();
+    currentView: 'home',
+    
+    // Initialize
+    init: function() {
+        console.log('[AvantiWidget] Initializing...');
+        
+        // Get user info
+        this.getUser();
+        
+        // Load FAQs
         this.loadFAQs();
-        this.loadTickets();
-        setTimeout(() => this.showGreeting(), 8000);
+        
+        // Load tickets after delay
+        setTimeout(() => this.loadTickets(), 1000);
+        
+        // Show greeting popup after 10 seconds
+        setTimeout(() => this.showGreeting(), 10000);
+        
+        console.log('[AvantiWidget] Ready!');
     },
-
-    // -----------------------------------------
-    // USER DETECTION (STUDENT / TEACHER)
-    // -----------------------------------------
-    detectUser: async function () {
-        try {
-            const s =
-                localStorage.getItem("studentSession") ||
-                localStorage.getItem("userSession") ||
-                localStorage.getItem("curriculumSession");
-
-            if (s) {
-                const d = JSON.parse(s);
+    
+    // Get user from Curriculum Tracker
+    getUser: function() {
+        // Check student session
+        const studentSession = localStorage.getItem('studentSession');
+        if (studentSession) {
+            try {
+                const data = JSON.parse(studentSession);
                 this.user = {
-                    type: "student",
-                    name: d.name || "",
-                    email: d.email || "",
-                    studentId: d.studentId || d.id || "",
-                    school: d.school || "",
-                    grade: d.grade || ""
+                    type: 'student',
+                    name: data.name || '',
+                    studentId: data.studentId || data.id || '',
+                    school: data.school || '',
+                    grade: data.grade || ''
                 };
-                console.log("Student:", this.user);
+                console.log('[AvantiWidget] Student:', this.user.name);
                 return;
-            }
-        } catch (e) {}
-
-        try {
+            } catch (e) {}
+        }
+        
+        // Check Firebase Auth
+        if (typeof firebase !== 'undefined' && firebase.auth().currentUser) {
             const u = firebase.auth().currentUser;
-            if (u) {
-                this.user = {
-                    type: "teacher",
-                    name: u.displayName || u.email.split("@")[0],
-                    email: u.email
-                };
-
-                const t = await firebase
-                    .firestore()
-                    .collection("teachers")
-                    .where("email", "==", u.email)
-                    .limit(1)
-                    .get();
-
-                if (!t.empty) {
-                    this.user.school = t.docs[0].data().school;
+            this.user = {
+                type: 'teacher',
+                name: u.displayName || u.email?.split('@')[0] || '',
+                email: u.email || '',
+                school: ''
+            };
+            
+            // Get teacher details
+            firebase.firestore().collection('teachers')
+                .where('email', '==', u.email).limit(1).get()
+                .then(snap => {
+                    if (!snap.empty) {
+                        const t = snap.docs[0].data();
+                        this.user.name = t.name || this.user.name;
+                        this.user.school = t.school || '';
+                    }
+                });
+            
+            console.log('[AvantiWidget] Teacher:', this.user.name);
+        }
+        
+        // Listen for auth changes
+        if (typeof firebase !== 'undefined') {
+            firebase.auth().onAuthStateChanged(u => {
+                if (u && !this.user) {
+                    this.user = {
+                        type: 'teacher',
+                        name: u.displayName || u.email?.split('@')[0] || '',
+                        email: u.email || '',
+                        school: ''
+                    };
                 }
-
-                console.log("Teacher:", this.user);
-                return;
-            }
-        } catch (e) {}
-
-        this.user = { type: "guest" };
+            });
+        }
     },
-
-    // -----------------------------------------
-    // FIRESTORE FAQ LOAD
-    // -----------------------------------------
-    loadFAQs: function () {
-        firebase
-            .firestore()
-            .collection("helpdesk_faqs")
-            .onSnapshot((snap) => {
-                this.faqs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-                console.log("FAQ count:", this.faqs.length);
+    
+    // Load FAQs
+    loadFAQs: function() {
+        if (typeof firebase === 'undefined') return;
+        
+        firebase.firestore().collection('helpdesk_faqs')
+            .onSnapshot(snap => {
+                this.faqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                console.log('[AvantiWidget] FAQs:', this.faqs.length);
             });
     },
-
-    // -----------------------------------------
-    // LOAD USER TICKETS
-    // -----------------------------------------
-    loadTickets: function () {
-        if (!this.user) return;
-
-        let ref = firebase
-            .firestore()
-            .collection("helpdesk_tickets");
-
-        if (this.user.studentId) {
-            ref = ref.where("studentId", "==", this.user.studentId);
+    
+    // Load tickets
+    loadTickets: function() {
+        if (typeof firebase === 'undefined' || !this.user) return;
+        
+        let query;
+        if (this.user.type === 'student' && this.user.studentId) {
+            query = firebase.firestore().collection('helpdesk_tickets')
+                .where('studentId', '==', this.user.studentId);
         } else if (this.user.email) {
-            ref = ref.where("userEmail", "==", this.user.email);
+            query = firebase.firestore().collection('helpdesk_tickets')
+                .where('userEmail', '==', this.user.email);
         }
-
-        ref.orderBy("createdAt", "desc").onSnapshot((snap) => {
-            this.tickets = snap.docs.map((x) => ({ id: x.id, ...x.data() }));
-
-            if (this.tickets.length > 0) {
-                document.getElementById("ticketsBadge")?.classList.add("show");
-            }
-        });
+        
+        if (query) {
+            query.orderBy('createdAt', 'desc').limit(20).onSnapshot(snap => {
+                this.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                console.log('[AvantiWidget] Tickets:', this.tickets.length);
+                
+                if (this.tickets.length > 0) {
+                    document.getElementById('ticketsBadge')?.classList.add('show');
+                }
+            });
+        }
     },
-
-    // -----------------------------------------
-    // WIDGET OPEN/CLOSE
-    // -----------------------------------------
-    open: function () {
-        this.isOpen = true;
-        document.getElementById("avantiPanel").classList.add("open");
-        document.getElementById("avantiBtn").classList.add("open");
-
-        const name = this.user?.name ? this.user.name : "there";
-        document.getElementById("welcomeText").textContent =
-            `Namaste ${name} 👋`;
+    
+    // Show greeting popup
+    showGreeting: function() {
+        if (this.isOpen) return;
+        if (localStorage.getItem('avantiGreetingDismissed')) return;
+        
+        const greeting = document.getElementById('avantiGreeting');
+        const text = document.getElementById('greetingText');
+        
+        const hour = new Date().getHours();
+        let timeGreeting = 'Hey';
+        if (hour < 12) timeGreeting = 'Good morning';
+        else if (hour < 17) timeGreeting = 'Good afternoon';
+        else timeGreeting = 'Good evening';
+        
+        const name = this.user?.name || '';
+        
+        text.innerHTML = `👋 <strong>${timeGreeting}${name ? ', ' + name : ''}!</strong> Need any help?`;
+        
+        greeting.classList.add('show');
     },
-
-    close: function () {
-        this.isOpen = false;
-        document.getElementById("avantiPanel").classList.remove("open");
-        document.getElementById("avantiBtn").classList.remove("open");
+    
+    // Hide greeting
+    hideGreeting: function() {
+        document.getElementById('avantiGreeting')?.classList.remove('show');
+        localStorage.setItem('avantiGreetingDismissed', 'true');
     },
-
-    toggle: function () {
+    
+    // Toggle widget
+    toggle: function() {
         this.isOpen ? this.close() : this.open();
     },
-
-    // -----------------------------------------
-    // GREETING POPUP
-    // -----------------------------------------
-    showGreeting: function () {
-        const box = document.getElementById("avantiGreeting");
-        const name = this.user?.name || "";
-        document.getElementById("greetingText").innerHTML =
-            `👋 <strong>Namaste ${name}</strong>`;
-        box.classList.add("show");
+    
+    // Open widget
+    open: function() {
+        this.isOpen = true;
+        document.getElementById('avantiBtn').classList.add('open');
+        document.getElementById('avantiPanel').classList.add('open');
+        document.getElementById('notifDot')?.classList.remove('show');
+        this.hideGreeting();
+        
+        // Update welcome text
+        const name = this.user?.name || '';
+        document.getElementById('welcomeText').textContent = 
+            name ? `Hi ${name}! 👋` : 'Hi there! 👋';
+        
+        this.showHome();
     },
-
-    hideGreeting: function () {
-        document.getElementById("avantiGreeting").classList.remove("show");
+    
+    // Close widget
+    close: function() {
+        this.isOpen = false;
+        document.getElementById('avantiBtn').classList.remove('open');
+        document.getElementById('avantiPanel').classList.remove('open');
     },
-
-    // -----------------------------------------
-    // HOME VIEW
-    // -----------------------------------------
-    showHome: function () {
-        document.getElementById("avantiBody").innerHTML = `
-            <div class="avanti-home-view">
-                <h2 id="welcomeText">Namaste 👋</h2>
-
-                <div class="avanti-search-box" onclick="AvantiWidget.showFAQSearch()">
-                    <span>🔍</span>
-                    <span>Search FAQs</span>
-                    <span class="arrow">→</span>
-                </div>
-
-                <button class="avanti-quick-action" onclick="AvantiWidget.showTicketForm()">
-                    <span class="icon">🎫</span>
-                    <span>Raise Ticket</span>
-                </button>
-
-                <button class="avanti-quick-action" onclick="AvantiWidget.showTickets()">
-                    <span class="icon">📄</span>
-                    <span>My Tickets</span>
-                </button>
+    
+    // Show home view
+    showHome: function() {
+        this.currentView = 'home';
+        document.getElementById('homeView').style.display = 'flex';
+        document.getElementById('chatView').style.display = 'none';
+        document.getElementById('ticketsView').style.display = 'none';
+        document.getElementById('formView').style.display = 'none';
+        
+        document.querySelectorAll('.avanti-nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById('navHome').classList.add('active');
+    },
+    
+    // Show chat view
+    showChat: function() {
+        this.currentView = 'chat';
+        document.getElementById('homeView').style.display = 'none';
+        document.getElementById('chatView').style.display = 'flex';
+        document.getElementById('ticketsView').style.display = 'none';
+        document.getElementById('formView').style.display = 'none';
+        
+        document.getElementById('chatMessages').innerHTML = `
+            <div class="avanti-msg bot">
+                Hi${this.user?.name ? ' ' + this.user.name : ''}! 👋 Type your question and I'll help you find an answer.
             </div>
         `;
+        
+        document.getElementById('chatInput').focus();
     },
-
-    // -----------------------------------------
-    // FAQ SEARCH VIEW
-    // -----------------------------------------
-    showFAQSearch: function () {
-        document.getElementById("avantiBody").innerHTML = `
-            <div class="avanti-home-view">
-                <input id="faqInput" class="avanti-input" placeholder="Search for help...">
-                <button class="avanti-submit-btn" onclick="AvantiWidget.searchFAQ()">Search</button>
-                <div id="faqResults"></div>
-            </div>
-        `;
+    
+    // Show tickets view
+    showTickets: function() {
+        this.currentView = 'tickets';
+        document.getElementById('homeView').style.display = 'none';
+        document.getElementById('chatView').style.display = 'none';
+        document.getElementById('ticketsView').style.display = 'flex';
+        document.getElementById('formView').style.display = 'none';
+        
+        document.querySelectorAll('.avanti-nav-item').forEach(n => n.classList.remove('active'));
+        document.getElementById('navTickets').classList.add('active');
+        
+        this.renderTickets();
     },
-
-    // -----------------------------------------
-    // TYPING ANIMATION
-    // -----------------------------------------
-    showTyping: function () {
-        const box = document.getElementById("faqResults");
-        box.innerHTML = `
-            <div class="typing-animation">
-                <span></span><span></span><span></span>
-            </div>
-        `;
-    },
-
-    // -----------------------------------------
-    // FAQ SEARCH
-    // -----------------------------------------
-    searchFAQ: function () {
-        const q = document.getElementById("faqInput").value.toLowerCase().trim();
-        if (!q) return;
-
-        this.showTyping();
-
-        setTimeout(() => {
-            let best = null, bestScore = 0;
-
-            for (const f of this.faqs) {
-                let s = 0;
-                const Q = f.question?.toLowerCase() || "";
-                const A = f.answer?.toLowerCase() || "";
-
-                if (Q.includes(q)) s += 50;
-                if (A.includes(q)) s += 30;
-
-                if (f.keywords) {
-                    f.keywords.forEach((k) => {
-                        if (q.includes(k.toLowerCase())) s += 20;
-                    });
-                }
-
-                if (s > bestScore) {
-                    bestScore = s;
-                    best = f;
-                }
-            }
-
-            const box = document.getElementById("faqResults");
-
-            if (!best || bestScore < 20) {
-                box.innerHTML = `<p style='color:#aaa;'>No related FAQ found.</p>`;
-                return;
-            }
-
-            box.innerHTML = `
-                <div class="msg bot">
-                    <strong>${best.question}</strong><br>
-                    ${best.answer}
+    
+    // Render tickets
+    renderTickets: function() {
+        const list = document.getElementById('ticketsList');
+        
+        if (this.tickets.length === 0) {
+            list.innerHTML = `
+                <div class="avanti-empty">
+                    <div class="icon"><img src="logo.png" alt="Avanti Logo" class="replaced-logo"></div>
+                    <h4>No tickets yet</h4>
+                    <p>When you raise a ticket, it will appear here.</p>
                 </div>
             `;
-        }, 700);
-    },
-
-    // -----------------------------------------
-    // TICKET FORM
-    // -----------------------------------------
-    showTicketForm: function () {
-        const u = this.user || {};
-
-        document.getElementById("avantiBody").innerHTML = `
-            <div class="avanti-home-view">
-
-                <div class="avanti-form-group">
-                    <label>Name *</label>
-                    <input id="formName" value="${u.name || ""}">
-                </div>
-
-                <div class="avanti-form-group">
-                    <label>Email</label>
-                    <input id="formEmail" value="${u.email || ""}">
-                </div>
-
-                <div class="avanti-form-group">
-                    <label>Student ID</label>
-                    <input id="formStudentId" value="${u.studentId || ""}">
-                </div>
-
-                <div class="avanti-form-group">
-                    <label>School *</label>
-                    <input id="formSchool" value="${u.school || ""}">
-                </div>
-
-                <div class="avanti-form-group">
-                    <label>Subject *</label>
-                    <input id="formSubject" placeholder="Brief subject">
-                </div>
-
-                <div class="avanti-form-group">
-                    <label>Description *</label>
-                    <textarea id="formDesc"></textarea>
-                </div>
-
-                <div class="avanti-form-group">
-                    <label>Attach Screenshot</label>
-                    <input id="formScreenshot" type="file" accept="image/*">
-                </div>
-
-                <button class="avanti-submit-btn" onclick="AvantiWidget.submitTicket()">Submit</button>
-            </div>
-        `;
-    },
-
-    // -----------------------------------------
-    // FIREBASE STORAGE UPLOAD
-    // -----------------------------------------
-    uploadScreenshot: async function (ticketId) {
-        const file = document.getElementById("formScreenshot").files[0];
-        if (!file) return null;
-
-        const ref = firebase.storage().ref(`helpdesk_ticket_files/${ticketId}/${file.name}`);
-        await ref.put(file);
-        return await ref.getDownloadURL();
-    },
-
-    // -----------------------------------------
-    // SUBMIT TICKET
-    // -----------------------------------------
-    submitTicket: async function () {
-        const name = formName.value.trim();
-        const email = formEmail.value.trim();
-        const sid = formStudentId.value.trim();
-        const school = formSchool.value.trim();
-        const subject = formSubject.value.trim();
-        const desc = formDesc.value.trim();
-
-        if (!name || !school || !subject || !desc) {
-            alert("Please fill required fields.");
             return;
         }
-
-        const ticketId =
-            "AV" + Date.now().toString(36).toUpperCase() +
-            Math.random().toString(36).substring(3, 8).toUpperCase();
-
-        let screenshotURL = null;
-
-        try {
-            screenshotURL = await this.uploadScreenshot(ticketId);
-        } catch (e) {
-            console.error("Screenshot upload error:", e);
-        }
-
-        const payload = {
-            ticketId,
-            userName: name,
-            userEmail: email,
-            studentId: sid,
-            school,
-            subject,
-            description: desc,
-            attachments: screenshotURL ? [{ url: screenshotURL }] : [],
-            status: "open",
-            userRole: sid ? "Student" : "Teacher",
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        };
-
-        try {
-            await firebase.firestore().collection("helpdesk_tickets").add(payload);
-
-            document.getElementById("avantiBody").innerHTML = `
-                <div class="avanti-success">
-                    <h3>🎉 Ticket Submitted</h3>
-                    <p>Your Ticket ID:</p>
-                    <div class="ticket-id">${ticketId}</div>
-                    <button class="avanti-submit-btn" onclick="AvantiWidget.showHome()">Back</button>
+        
+        list.innerHTML = this.tickets.map(t => {
+            const date = t.createdAt?.toDate?.() || new Date();
+            const reply = (t.replies || []).filter(r => r.isAdmin).pop();
+            
+            return `
+                <div class="avanti-ticket-card">
+                    <div class="avanti-ticket-card-header">
+                        <span class="avanti-ticket-id">#${t.ticketId || t.id.slice(0,8)}</span>
+                        <span class="avanti-ticket-status ${t.status}">${t.status.replace('-',' ')}</span>
+                    </div>
+                    <div class="avanti-ticket-subject">${t.subject}</div>
+                    <div class="avanti-ticket-date">${date.toLocaleDateString('en-IN', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+                    ${reply ? `
+                        <div class="avanti-ticket-reply">
+                            <div class="avanti-ticket-reply-label">💬 Reply from Support:</div>
+                            <div class="avanti-ticket-reply-text">${reply.message}</div>
+                        </div>
+                    ` : ''}
                 </div>
             `;
-        } catch (e) {
-            console.error(e);
-            alert("Failed to submit ticket.");
+        }).join('');
+    },
+    
+    // Search topic
+    searchTopic: function(topic) {
+        this.showChat();
+        
+        const msgs = document.getElementById('chatMessages');
+        msgs.innerHTML += `<div class="avanti-msg user">${topic}</div>`;
+        
+        this.searchFAQs(topic);
+    },
+    
+    // Send message
+    sendMessage: function() {
+        const input = document.getElementById('chatInput');
+        const msg = input.value.trim();
+        if (!msg) return;
+        
+        const msgs = document.getElementById('chatMessages');
+        msgs.innerHTML += `<div class="avanti-msg user">${msg}</div>`;
+        input.value = '';
+        
+        this.searchFAQs(msg);
+    },
+    
+    // Search FAQs
+    searchFAQs: function(query) {
+        const msgs = document.getElementById('chatMessages');
+        const q = query.toLowerCase();
+        const words = q.split(/\s+/).filter(w => w.length > 2);
+        
+        // Score FAQs
+        const scored = this.faqs.map(faq => {
+            let score = 0;
+            const question = faq.question.toLowerCase();
+            const answer = faq.answer.toLowerCase();
+            const keywords = (faq.keywords || []).map(k => k.toLowerCase());
+            
+            if (question.includes(q)) score += 100;
+            if (answer.includes(q)) score += 50;
+            
+            words.forEach(w => {
+                keywords.forEach(k => {
+                    if (k.includes(w) || w.includes(k)) score += 30;
+                });
+                if (question.includes(w)) score += 20;
+                if (answer.includes(w)) score += 10;
+            });
+            
+            return { faq, score };
+        });
+        
+        const results = scored.filter(s => s.score > 0)
+            .sort((a,b) => b.score - a.score)
+            .slice(0, 3)
+            .map(s => s.faq);
+        
+        setTimeout(() => {
+            if (results.length > 0) {
+                msgs.innerHTML += `<div class="avanti-msg bot">I found ${results.length} article${results.length > 1 ? 's' : ''} that might help:</div>`;
+                
+                results.forEach(faq => {
+                    msgs.innerHTML += `
+                        <div class="avanti-faq-card" onclick="AvantiWidget.showAnswer('${faq.id}')">
+                            <h4>❓ ${faq.question}</h4>
+                            <p>${faq.answer.substring(0, 80)}...</p>
+                        </div>
+                    `;
+                });
+            } else {
+                msgs.innerHTML += `
+                    <div class="avanti-msg bot">
+                        I couldn't find an exact answer. Would you like to raise a support ticket?
+                    </div>
+                    <div class="avanti-action-btns">
+                        <button class="avanti-action-btn secondary" onclick="AvantiWidget.showChat()">Try Again</button>
+                        <button class="avanti-action-btn primary" onclick="AvantiWidget.showForm()">Raise Ticket</button>
+                    </div>
+                `;
+            }
+            
+            msgs.scrollTop = msgs.scrollHeight;
+        }, 500);
+    },
+    
+    // Show FAQ answer
+    showAnswer: function(id) {
+        const faq = this.faqs.find(f => f.id === id);
+        if (!faq) return;
+        
+        const msgs = document.getElementById('chatMessages');
+        msgs.innerHTML += `
+            <div class="avanti-msg bot">
+                <strong>📖 ${faq.question}</strong><br><br>
+                ${faq.answer.replace(/\n/g, '<br>')}
+            </div>
+            <div class="avanti-msg bot">Did this help?</div>
+            <div class="avanti-action-btns">
+                <button class="avanti-action-btn primary" onclick="AvantiWidget.showHome()">✓ Yes!</button>
+                <button class="avanti-action-btn secondary" onclick="AvantiWidget.showForm()">Need more help</button>
+            </div>
+        `;
+        msgs.scrollTop = msgs.scrollHeight;
+    },
+    
+    // Show form
+    showForm: function() {
+        console.log('[AvantiWidget] Showing form, user:', this.user);
+        
+        this.currentView = 'form';
+        
+        // Hide all views
+        document.getElementById('homeView').style.display = 'none';
+        document.getElementById('chatView').style.display = 'none';
+        document.getElementById('ticketsView').style.display = 'none';
+        document.getElementById('formView').style.display = 'flex';
+        
+        // Update nav
+        document.querySelectorAll('.avanti-nav-item').forEach(n => n.classList.remove('active'));
+        
+        const formContent = document.getElementById('formContent');
+        
+        // Check if user is logged in
+        if (this.user && this.user.name) {
+            const isStudent = this.user.type === 'student';
+            
+            formContent.innerHTML = `
+                <div class="avanti-user-card">
+                    <h4>✅ Your Details (Auto-filled)</h4>
+                    <div class="avanti-user-row">
+                        <span>Name:</span>
+                        <span>${this.user.name}</span>
+                    </div>
+                    ${isStudent ? `
+                        <div class="avanti-user-row">
+                            <span>Student ID:</span>
+                            <span>${this.user.studentId}</span>
+                        </div>
+                        <div class="avanti-user-row">
+                            <span>Grade:</span>
+                            <span>Class ${this.user.grade}</span>
+                        </div>
+                    ` : `
+                        <div class="avanti-user-row">
+                            <span>Email:</span>
+                            <span>${this.user.email}</span>
+                        </div>
+                    `}
+                    <div class="avanti-user-row">
+                        <span>School:</span>
+                        <span>${this.user.school || 'N/A'}</span>
+                    </div>
+                </div>
+                
+                <div class="avanti-form-group">
+                    <label>Issue Category</label>
+                    <select id="formCategory">
+                        <option value="login">Login Issues</option>
+                        <option value="attendance">Attendance</option>
+                        <option value="curriculum">Curriculum & Progress</option>
+                        <option value="technical">Technical Error</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="avanti-form-group">
+                    <label>Subject *</label>
+                    <input type="text" id="formSubject" placeholder="Brief description of your issue">
+                </div>
+                
+                <div class="avanti-form-group">
+                    <label>Describe your issue *</label>
+                    <textarea id="formDesc" placeholder="Please provide details about the problem..."></textarea>
+                </div>
+                
+                <button class="avanti-submit-btn" id="formSubmitBtn" onclick="AvantiWidget.submitTicket()">
+                    <img src="logo.png" alt="Avanti Logo" class="replaced-logo"> Submit Ticket
+                </button>
+                
+                <button class="avanti-action-btn secondary" style="width:100%;margin-top:10px;" onclick="AvantiWidget.showHome()">
+                    ← Back to Home
+                </button>
+            `;
+        } else {
+            // User not logged in - show manual form
+            formContent.innerHTML = `
+                <div class="avanti-msg bot" style="background:#1a1a24;border:1px solid #f59e0b;margin-bottom:16px;border-radius:12px;padding:14px;">
+                    ⚠️ <strong>Not logged in</strong><br>
+                    <span style="color:#8a8a9a;font-size:13px;">Please fill in your details below.</span>
+                </div>
+                
+                <div class="avanti-form-group">
+                    <label>Your Name *</label>
+                    <input type="text" id="formName" placeholder="Enter your name">
+                </div>
+                
+                <div class="avanti-form-group">
+                    <label>Student ID (if student)</label>
+                    <input type="text" id="formStudentId" placeholder="e.g., JNV001">
+                </div>
+                
+                <div class="avanti-form-group">
+                    <label>Email (if teacher)</label>
+                    <input type="email" id="formEmail" placeholder="your.email@school.com">
+                </div>
+                
+                <div class="avanti-form-group">
+                    <label>School *</label>
+                    <select id="formSchool">
+                        <option value="">Select your school</option>
+                        <option value="CoE Barwani">CoE Barwani</option>
+                        <option value="CoE Cuttack">CoE Cuttack</option>
+                        <option value="JNV Dhar">JNV Dhar</option>
+                        <option value="JNV Khargone">JNV Khargone</option>
+                        <option value="JNV Narsinghpur">JNV Narsinghpur</option>
+                        <option value="EMRS Alirajpur">EMRS Alirajpur</option>
+                    </select>
+                </div>
+                
+                <div class="avanti-form-group">
+                    <label>Issue Category</label>
+                    <select id="formCategory">
+                        <option value="login">Login Issues</option>
+                        <option value="attendance">Attendance</option>
+                        <option value="curriculum">Curriculum & Progress</option>
+                        <option value="technical">Technical Error</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="avanti-form-group">
+                    <label>Subject *</label>
+                    <input type="text" id="formSubject" placeholder="Brief description of your issue">
+                </div>
+                
+                <div class="avanti-form-group">
+                    <label>Describe your issue *</label>
+                    <textarea id="formDesc" placeholder="Please provide details about the problem..."></textarea>
+                </div>
+                
+                <button class="avanti-submit-btn" id="formSubmitBtn" onclick="AvantiWidget.submitTicketManual()">
+                    <img src="logo.png" alt="Avanti Logo" class="replaced-logo"> Submit Ticket
+                </button>
+                
+                <button class="avanti-action-btn secondary" style="width:100%;margin-top:10px;" onclick="AvantiWidget.showHome()">
+                    ← Back to Home
+                </button>
+            `;
         }
     },
-
-    // -----------------------------------------
-    // SHOW TICKETS
-    // -----------------------------------------
-    showTickets: function () {
-        let html = `<div class='avanti-home-view'><h3>📄 Your Tickets</h3>`;
-
-        if (this.tickets.length === 0) {
-            html += `<p style="color:#aaa;">No tickets found.</p>`;
-        } else {
-            this.tickets.forEach((t) => {
-                html += `
-                <div class="msg bot">
-                    <b>${t.subject}</b><br>
-                    Ticket ID: ${t.ticketId}<br>
-                    Status: ${t.status}
-                </div>`;
-            });
+    
+    // Submit ticket (logged in user)
+    submitTicket: async function() {
+        const btn = document.getElementById('formSubmitBtn');
+        const subject = document.getElementById('formSubject').value.trim();
+        const desc = document.getElementById('formDesc').value.trim();
+        const category = document.getElementById('formCategory').value;
+        
+        if (!subject || !desc) {
+            alert('Please fill in all required fields');
+            return;
         }
-
-        html += `<button class="avanti-submit-btn" onclick="AvantiWidget.showHome()">← Back</button></div>`;
-        document.getElementById("avantiBody").innerHTML = html;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="avanti-loading"></span> Submitting...';
+        
+        try {
+            const ticketId = 'AV' + Date.now().toString(36).toUpperCase() + 
+                Math.random().toString(36).substring(2,5).toUpperCase();
+            
+            await firebase.firestore().collection('helpdesk_tickets').add({
+                ticketId,
+                userName: this.user.name,
+                userEmail: this.user.email || '',
+                studentId: this.user.studentId || null,
+                school: this.user.school,
+                userRole: this.user.type === 'student' ? 'Student' : 'Teacher',
+                userGrade: this.user.grade || null,
+                category,
+                subject,
+                description: desc,
+                status: 'open',
+                priority: 'medium',
+                replies: [],
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            this.showSuccess(ticketId);
+            this.loadTickets();
+            
+        } catch (err) {
+            console.error(err);
+            alert('Failed to submit. Please try again.');
+            btn.disabled = false;
+            btn.innerHTML = '<img src="logo.png" alt="Avanti Logo" class="replaced-logo"> Submit Ticket';
+        }
+    },
+    
+    // Submit ticket (manual entry - not logged in)
+    submitTicketManual: async function() {
+        const btn = document.getElementById('formSubmitBtn');
+        const name = document.getElementById('formName').value.trim();
+        const studentId = document.getElementById('formStudentId').value.trim();
+        const email = document.getElementById('formEmail').value.trim();
+        const school = document.getElementById('formSchool').value;
+        const subject = document.getElementById('formSubject').value.trim();
+        const desc = document.getElementById('formDesc').value.trim();
+        const category = document.getElementById('formCategory').value;
+        
+        if (!name || !school || !subject || !desc) {
+            alert('Please fill in all required fields (Name, School, Subject, Description)');
+            return;
+        }
+        
+        if (!studentId && !email) {
+            alert('Please provide either Student ID or Email');
+            return;
+        }
+        
+        btn.disabled = true;
+        btn.innerHTML = '<span class="avanti-loading"></span> Submitting...';
+        
+        try {
+            const ticketId = 'AV' + Date.now().toString(36).toUpperCase() + 
+                Math.random().toString(36).substring(2,5).toUpperCase();
+            
+            await firebase.firestore().collection('helpdesk_tickets').add({
+                ticketId,
+                userName: name,
+                userEmail: email || '',
+                studentId: studentId || null,
+                school: school,
+                userRole: studentId ? 'Student' : 'Teacher',
+                userGrade: null,
+                category,
+                subject,
+                description: desc,
+                status: 'open',
+                priority: 'medium',
+                replies: [],
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            this.showSuccess(ticketId);
+            
+        } catch (err) {
+            console.error(err);
+            alert('Failed to submit. Please try again.');
+            btn.disabled = false;
+            btn.innerHTML = '<img src="logo.png" alt="Avanti Logo" class="replaced-logo"> Submit Ticket';
+        }
+    },
+    
+    // Show success message
+    showSuccess: function(ticketId) {
+        document.getElementById('formContent').innerHTML = `
+            <div class="avanti-success">
+                <div class="icon">✅</div>
+                <h3>Ticket Submitted!</h3>
+                <div class="ticket-id">#${ticketId}</div>
+                <p>Our team will respond within 24 hours.<br>You can track your ticket in the Tickets tab.</p>
+            </div>
+            <div class="avanti-action-btns">
+                <button class="avanti-action-btn primary" onclick="AvantiWidget.showTickets()">View Tickets</button>
+                <button class="avanti-action-btn secondary" onclick="AvantiWidget.showHome()">Home</button>
+            </div>
+        `;
     }
 };
-.avanti-greeting-popup {
-  position: fixed;
-  bottom: 110px;
-  right: 20px;
-  background: #fff6d6;
-  color: #333;
-  padding: 12px 16px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  display: none;
-  z-index: 99999;
-}
 
-.avanti-greeting-popup.show {
-  display: block;
+// Initialize
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => AvantiWidget.init());
+} else {
+    AvantiWidget.init();
 }
-
-.avanti-greeting-close {
-  background: none;
-  border: none;
-  float: right;
-  cursor: pointer;
-  font-size: 16px;
-  margin-left: 10px;
-}
-  
-// Initialize widget
-setTimeout(() => AvantiWidget.init(), 800);
-  <!-- Avanti Greeting Popup -->
-<div id="avantiGreeting" class="avanti-greeting-popup">
-  <span id="greetingText"></span>
-  <button onclick="AvantiWidget.hideGreeting()" class="avanti-greeting-close">✕</button>
-</div>
 </script>
 </body>
 </html>
