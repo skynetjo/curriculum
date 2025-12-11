@@ -17504,6 +17504,1451 @@ ReactDOM.render(<App/>,document.getElementById('root'));
 
 })();
 </script>
+<!--
+===========================================================
+AVANTI HELP WIDGET - Conversational Support Bot
+===========================================================
+Add this entire code at the END of your index.html (before </body>)
 
+Features:
+✅ Conversational welcome flow
+✅ Smart FAQ search
+✅ "Did this help?" feedback
+✅ Ticket creation with screenshot
+✅ Auto-fills user info from login
+✅ Real-time ticket status updates
+===========================================================
+-->
+
+<style>
+/* ========================================
+   HELP WIDGET STYLES
+======================================== */
+.avanti-widget-container * {
+    box-sizing: border-box;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Floating Button */
+.avanti-help-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #F4B41A 0%, #E8A830 100%);
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(244, 180, 26, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    transition: all 0.3s ease;
+    z-index: 99999;
+}
+
+.avanti-help-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 25px rgba(244, 180, 26, 0.5);
+}
+
+.avanti-help-btn.open {
+    transform: rotate(180deg);
+}
+
+/* Notification Badge */
+.avanti-help-btn .notification-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 20px;
+    height: 20px;
+    background: #ef4444;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+}
+
+/* Widget Panel */
+.avanti-widget-panel {
+    position: fixed;
+    bottom: 100px;
+    right: 24px;
+    width: 380px;
+    max-width: calc(100vw - 48px);
+    height: 550px;
+    max-height: calc(100vh - 140px);
+    background: #1a1a24;
+    border-radius: 16px;
+    box-shadow: 0 10px 50px rgba(0,0,0,0.5);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 99998;
+    border: 1px solid #2a2a3a;
+}
+
+.avanti-widget-panel.open {
+    display: flex;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Header */
+.avanti-widget-header {
+    background: linear-gradient(90deg, #F4B41A, #E8A830);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.avanti-widget-header-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.avanti-widget-avatar {
+    width: 40px;
+    height: 40px;
+    background: rgba(0,0,0,0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.avanti-widget-header h3 {
+    color: #1a1a24;
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.avanti-widget-header p {
+    color: rgba(0,0,0,0.6);
+    font-size: 0.8rem;
+    margin: 2px 0 0 0;
+}
+
+.avanti-widget-close {
+    background: rgba(0,0,0,0.1);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    color: #1a1a24;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.avanti-widget-close:hover {
+    background: rgba(0,0,0,0.2);
+}
+
+/* Chat Area */
+.avanti-widget-chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.avanti-widget-chat::-webkit-scrollbar {
+    width: 6px;
+}
+
+.avanti-widget-chat::-webkit-scrollbar-thumb {
+    background: #F4B41A;
+    border-radius: 3px;
+}
+
+/* Messages */
+.avanti-msg {
+    max-width: 85%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.avanti-msg.bot {
+    background: #2a2a3a;
+    color: #ffffff;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+}
+
+.avanti-msg.user {
+    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    color: #1a1a24;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+}
+
+.avanti-msg.bot strong {
+    color: #F4B41A;
+}
+
+/* Quick Actions */
+.avanti-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.avanti-quick-btn {
+    padding: 8px 14px;
+    background: rgba(244, 180, 26, 0.1);
+    border: 1px solid rgba(244, 180, 26, 0.3);
+    border-radius: 20px;
+    color: #F4B41A;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.avanti-quick-btn:hover {
+    background: #F4B41A;
+    color: #1a1a24;
+}
+
+/* FAQ Results */
+.avanti-faq-results {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.avanti-faq-item {
+    background: #2a2a3a;
+    border: 1px solid #3a3a4a;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.avanti-faq-item:hover {
+    border-color: rgba(244, 180, 26, 0.3);
+}
+
+.avanti-faq-question {
+    padding: 12px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: #ffffff;
+    font-size: 0.85rem;
+    font-weight: 500;
+    background: transparent;
+    border: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+}
+
+.avanti-faq-question span:first-child {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.avanti-faq-toggle {
+    color: #F4B41A;
+    transition: transform 0.2s;
+    font-size: 0.8rem;
+}
+
+.avanti-faq-item.open .avanti-faq-toggle {
+    transform: rotate(180deg);
+}
+
+.avanti-faq-answer {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.avanti-faq-item.open .avanti-faq-answer {
+    max-height: 300px;
+}
+
+.avanti-faq-answer-content {
+    padding: 0 14px 14px;
+    color: #a0a0b0;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+/* Feedback Buttons */
+.avanti-feedback {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.avanti-feedback-btn {
+    flex: 1;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid #3a3a4a;
+    background: #2a2a3a;
+    color: #ffffff;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.avanti-feedback-btn:hover {
+    border-color: #F4B41A;
+}
+
+.avanti-feedback-btn.yes:hover {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: #10b981;
+}
+
+.avanti-feedback-btn.no:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: #ef4444;
+}
+
+/* Input Area */
+.avanti-widget-input {
+    padding: 16px;
+    background: #12121a;
+    border-top: 1px solid #2a2a3a;
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.avanti-widget-input input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 1px solid #3a3a4a;
+    border-radius: 24px;
+    background: #1a1a24;
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.avanti-widget-input input:focus {
+    outline: none;
+    border-color: #F4B41A;
+}
+
+.avanti-widget-input input::placeholder {
+    color: #5a5a6a;
+}
+
+.avanti-widget-send {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+
+.avanti-widget-send:hover {
+    transform: scale(1.1);
+}
+
+/* Ticket Form */
+.avanti-ticket-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 16px;
+    background: #2a2a3a;
+    border-radius: 12px;
+}
+
+.avanti-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.avanti-form-group label {
+    font-size: 0.8rem;
+    color: #a0a0b0;
+}
+
+.avanti-form-group input,
+.avanti-form-group textarea,
+.avanti-form-group select {
+    padding: 10px 12px;
+    border: 1px solid #3a3a4a;
+    border-radius: 8px;
+    background: #1a1a24;
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+.avanti-form-group input:focus,
+.avanti-form-group textarea:focus,
+.avanti-form-group select:focus {
+    outline: none;
+    border-color: #F4B41A;
+}
+
+.avanti-form-group textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+/* Screenshot Upload */
+.avanti-screenshot-upload {
+    border: 2px dashed #3a3a4a;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.avanti-screenshot-upload:hover {
+    border-color: #F4B41A;
+    background: rgba(244, 180, 26, 0.05);
+}
+
+.avanti-screenshot-upload input {
+    display: none;
+}
+
+.avanti-screenshot-upload p {
+    color: #a0a0b0;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.avanti-screenshot-upload span {
+    color: #F4B41A;
+}
+
+.avanti-screenshot-preview {
+    margin-top: 8px;
+}
+
+.avanti-screenshot-preview img {
+    max-width: 100%;
+    max-height: 100px;
+    border-radius: 6px;
+}
+
+/* Submit Button */
+.avanti-submit-btn {
+    padding: 12px;
+    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    border: none;
+    border-radius: 10px;
+    color: #1a1a24;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.avanti-submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(244, 180, 26, 0.3);
+}
+
+.avanti-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Ticket Status */
+.avanti-ticket-status {
+    background: #2a2a3a;
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 12px;
+}
+
+.avanti-ticket-status-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.avanti-ticket-id {
+    font-family: 'Space Mono', monospace;
+    color: #F4B41A;
+    font-size: 0.9rem;
+}
+
+.avanti-status-badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.avanti-status-badge.open {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.avanti-status-badge.in-progress {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+}
+
+.avanti-status-badge.resolved {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+}
+
+/* Loading */
+.avanti-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #a0a0b0;
+    font-size: 0.85rem;
+}
+
+.avanti-loading-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.avanti-loading-dots span {
+    width: 6px;
+    height: 6px;
+    background: #F4B41A;
+    border-radius: 50%;
+    animation: bounce 1.4s ease-in-out infinite;
+}
+
+.avanti-loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.avanti-loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+}
+
+/* Typing Indicator */
+.avanti-typing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #2a2a3a;
+    border-radius: 16px;
+    align-self: flex-start;
+    max-width: 100px;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+    .avanti-widget-panel {
+        width: calc(100vw - 24px);
+        right: 12px;
+        bottom: 90px;
+        height: 70vh;
+    }
+    
+    .avanti-help-btn {
+        right: 16px;
+        bottom: 16px;
+        width: 54px;
+        height: 54px;
+    }
+}
+</style>
+
+<!-- Widget HTML -->
+<div class="avanti-widget-container">
+    <!-- Floating Button -->
+    <button class="avanti-help-btn" id="avantiHelpBtn" title="Need Help?">
+        <span id="avantiHelpIcon">❓</span>
+    </button>
+
+    <!-- Widget Panel -->
+    <div class="avanti-widget-panel" id="avantiWidgetPanel">
+        <div class="avanti-widget-header">
+            <div class="avanti-widget-header-info">
+                <div class="avanti-widget-avatar">🎓</div>
+                <div>
+                    <h3>Avanti Help Center</h3>
+                    <p>We're here to help!</p>
+                </div>
+            </div>
+            <button class="avanti-widget-close" id="avantiWidgetClose">×</button>
+        </div>
+
+        <div class="avanti-widget-chat" id="avantiChatArea">
+            <!-- Messages rendered here -->
+        </div>
+
+        <div class="avanti-widget-input" id="avantiInputArea">
+            <input type="text" id="avantiInput" placeholder="Type your question...">
+            <button class="avanti-widget-send" id="avantiSendBtn">➤</button>
+        </div>
+    </div>
+</div>
+
+<!-- Widget JavaScript -->
+<script>
+(function() {
+    'use strict';
+
+    // ========================================
+    // CONFIGURATION
+    // ========================================
+    // The widget will use the same Firebase instance as the main app
+    // Make sure Firebase is initialized in your index.html
+
+    // ========================================
+    // STATE
+    // ========================================
+    let state = {
+        isOpen: false,
+        step: 'welcome', // welcome, search, results, feedback, ticket-form, ticket-submitted
+        searchQuery: '',
+        faqResults: [],
+        currentFAQ: null,
+        userInfo: null,
+        activeTickets: [],
+        screenshotFile: null
+    };
+
+    // ========================================
+    // DOM REFERENCES
+    // ========================================
+    const helpBtn = document.getElementById('avantiHelpBtn');
+    const helpIcon = document.getElementById('avantiHelpIcon');
+    const panel = document.getElementById('avantiWidgetPanel');
+    const closeBtn = document.getElementById('avantiWidgetClose');
+    const chatArea = document.getElementById('avantiChatArea');
+    const inputArea = document.getElementById('avantiInputArea');
+    const input = document.getElementById('avantiInput');
+    const sendBtn = document.getElementById('avantiSendBtn');
+
+    // ========================================
+    // FAQ DATABASE (Fallback if Firebase not loaded)
+    // ========================================
+    const localFAQs = [
+        {
+            id: '1',
+            question: "How do I login to the Curriculum Tracker?",
+            answer: "1. Open the Curriculum Tracker website\n2. Enter your email address\n3. Enter your password\n4. Click 'Login'\n\nIf you forgot your password, contact your Program Manager.",
+            category: "getting-started",
+            keywords: ["login", "sign in", "password", "access"]
+        },
+        {
+            id: '2',
+            question: "How do I mark a chapter as complete?",
+            answer: "1. Go to 'Chapters' section\n2. Select your subject and class\n3. Click on the chapter to expand\n4. Check completed topics\n5. Change status to 'Yes'\n6. Click 'Save'",
+            category: "chapters",
+            keywords: ["complete", "mark", "finish", "chapter", "done"]
+        },
+        {
+            id: '3',
+            question: "How do I check my school's progress?",
+            answer: "1. Go to Dashboard\n2. View your School Ranking\n3. See Completion Percentage\n4. Check Subject-wise Progress\n\nUse filters for specific classes or subjects.",
+            category: "progress",
+            keywords: ["progress", "check", "ranking", "school", "status"]
+        },
+        {
+            id: '4',
+            question: "How do I mark that a test was conducted?",
+            answer: "1. Go to 'Chapters' section\n2. Click on the completed chapter\n3. Find 'Test Conducted' option\n4. Select 'Yes'\n5. Click 'Save'",
+            category: "tests",
+            keywords: ["test", "conducted", "exam", "assessment"]
+        },
+        {
+            id: '5',
+            question: "I forgot my password. How do I reset it?",
+            answer: "Contact your Program Manager or school coordinator. They will reset your password from the admin panel and provide you with a new temporary password.",
+            category: "troubleshooting",
+            keywords: ["forgot", "password", "reset", "lost"]
+        },
+        {
+            id: '6',
+            question: "The page is not loading. What should I do?",
+            answer: "1. Refresh the page (Press F5)\n2. Clear browser cache (Ctrl+Shift+Delete)\n3. Try Chrome browser\n4. Check your internet connection\n\nIf still not working, raise a support ticket.",
+            category: "troubleshooting",
+            keywords: ["loading", "error", "not working", "blank", "slow"]
+        },
+        {
+            id: '7',
+            question: "How can I add notes to a chapter?",
+            answer: "1. Open the chapter card\n2. Find the 'Notes' text area\n3. Type your observations\n4. Click 'Save'\n\nGood for: difficult topics, resources used, student feedback.",
+            category: "chapters",
+            keywords: ["notes", "add", "write", "comment"]
+        },
+        {
+            id: '8',
+            question: "Which subjects are available?",
+            answer: "The Curriculum Tracker supports:\n• Physics\n• Chemistry\n• Maths\n• Biology\n\nEach subject has Class 11 and Class 12 chapters.",
+            category: "getting-started",
+            keywords: ["subjects", "physics", "chemistry", "maths", "biology"]
+        }
+    ];
+
+    // ========================================
+    // INITIALIZE
+    // ========================================
+    function init() {
+        // Try to get user info from main app
+        getUserInfo();
+
+        // Load any active tickets
+        loadActiveTickets();
+
+        // Event listeners
+        helpBtn.addEventListener('click', toggleWidget);
+        closeBtn.addEventListener('click', closeWidget);
+        sendBtn.addEventListener('click', handleSend);
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSend();
+        });
+
+        // Start with welcome message
+        renderWelcome();
+    }
+
+    // ========================================
+    // USER INFO
+    // ========================================
+    function getUserInfo() {
+        // Try to get from Firebase Auth if available
+        if (typeof firebase !== 'undefined' && firebase.auth) {
+            firebase.auth().onAuthStateChanged(user => {
+                if (user) {
+                    state.userInfo = {
+                        email: user.email,
+                        name: user.email.split('@')[0],
+                        uid: user.uid
+                    };
+
+                    // Try to get more info from teachers collection
+                    if (firebase.firestore) {
+                        firebase.firestore().collection('teachers')
+                            .where('email', '==', user.email)
+                            .get()
+                            .then(snapshot => {
+                                if (!snapshot.empty) {
+                                    const data = snapshot.docs[0].data();
+                                    state.userInfo.name = data.name || state.userInfo.name;
+                                    state.userInfo.school = data.school;
+                                    state.userInfo.role = 'Teacher';
+                                    state.userInfo.subject = data.subject;
+                                }
+                            });
+                    }
+                }
+            });
+        }
+    }
+
+    // ========================================
+    // TICKETS
+    // ========================================
+    function loadActiveTickets() {
+        if (typeof firebase !== 'undefined' && firebase.firestore && state.userInfo?.email) {
+            firebase.firestore().collection('helpdesk_tickets')
+                .where('userEmail', '==', state.userInfo.email)
+                .where('status', 'in', ['open', 'in-progress'])
+                .onSnapshot(snapshot => {
+                    state.activeTickets = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+
+                    // Update notification badge
+                    updateNotificationBadge();
+                });
+        }
+    }
+
+    function updateNotificationBadge() {
+        const hasReplies = state.activeTickets.some(t => 
+            t.replies && t.replies.length > 0 && 
+            t.replies[t.replies.length - 1].isAdmin
+        );
+
+        let badge = helpBtn.querySelector('.notification-badge');
+        if (hasReplies) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'notification-badge';
+                helpBtn.appendChild(badge);
+            }
+            badge.textContent = '!';
+        } else if (badge) {
+            badge.remove();
+        }
+    }
+
+    // ========================================
+    // WIDGET CONTROLS
+    // ========================================
+    function toggleWidget() {
+        state.isOpen = !state.isOpen;
+        panel.classList.toggle('open', state.isOpen);
+        helpBtn.classList.toggle('open', state.isOpen);
+        helpIcon.textContent = state.isOpen ? '✕' : '❓';
+
+        if (state.isOpen && state.step === 'welcome') {
+            renderWelcome();
+        }
+    }
+
+    function closeWidget() {
+        state.isOpen = false;
+        panel.classList.remove('open');
+        helpBtn.classList.remove('open');
+        helpIcon.textContent = '❓';
+    }
+
+    // ========================================
+    // RENDERING
+    // ========================================
+    function addMessage(content, type = 'bot', animate = true) {
+        const msg = document.createElement('div');
+        msg.className = `avanti-msg ${type}`;
+        msg.innerHTML = content;
+        if (!animate) msg.style.animation = 'none';
+        chatArea.appendChild(msg);
+        chatArea.scrollTop = chatArea.scrollHeight;
+        return msg;
+    }
+
+    function addTypingIndicator() {
+        const typing = document.createElement('div');
+        typing.className = 'avanti-typing';
+        typing.id = 'avantiTyping';
+        typing.innerHTML = `
+            <div class="avanti-loading-dots">
+                <span></span><span></span><span></span>
+            </div>
+        `;
+        chatArea.appendChild(typing);
+        chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function removeTypingIndicator() {
+        const typing = document.getElementById('avantiTyping');
+        if (typing) typing.remove();
+    }
+
+    function clearChat() {
+        chatArea.innerHTML = '';
+    }
+
+    function renderWelcome() {
+        clearChat();
+        state.step = 'welcome';
+
+        setTimeout(() => {
+            const name = state.userInfo?.name || 'there';
+            addMessage(`👋 <strong>Welcome to Avanti Fellows Help Center${name !== 'there' ? ', ' + name : ''}!</strong>`);
+
+            setTimeout(() => {
+                addMessage(`I'm here to help you with any questions about the Curriculum Tracker. What can I help you with today?`);
+
+                setTimeout(() => {
+                    const quickActions = document.createElement('div');
+                    quickActions.className = 'avanti-quick-actions';
+                    quickActions.innerHTML = `
+                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('login')">Login Issues</button>
+                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('chapter complete')">Mark Complete</button>
+                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('progress')">Check Progress</button>
+                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('not loading')">Page Not Loading</button>
+                        ${state.activeTickets.length > 0 ? `<button class="avanti-quick-btn" onclick="AvantiWidget.viewTickets()">📋 My Tickets (${state.activeTickets.length})</button>` : ''}
+                    `;
+                    chatArea.appendChild(quickActions);
+                    chatArea.scrollTop = chatArea.scrollHeight;
+                }, 500);
+            }, 500);
+        }, 300);
+
+        showInput('Type your question or select an option above...');
+    }
+
+    function showInput(placeholder = 'Type your question...') {
+        inputArea.style.display = 'flex';
+        input.placeholder = placeholder;
+        input.value = '';
+        input.focus();
+    }
+
+    function hideInput() {
+        inputArea.style.display = 'none';
+    }
+
+    // ========================================
+    // FAQ SEARCH
+    // ========================================
+    async function searchFAQ(query) {
+        state.searchQuery = query;
+        state.step = 'search';
+
+        // Show user message
+        addMessage(query, 'user');
+
+        // Show typing indicator
+        addTypingIndicator();
+
+        // Search FAQs
+        let faqs = localFAQs;
+
+        // Try to load from Firebase
+        if (typeof firebase !== 'undefined' && firebase.firestore) {
+            try {
+                const snapshot = await firebase.firestore().collection('helpdesk_faqs').get();
+                if (!snapshot.empty) {
+                    faqs = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                }
+            } catch (e) {
+                console.log('Using local FAQs');
+            }
+        }
+
+        // Filter FAQs
+        const queryLower = query.toLowerCase();
+        state.faqResults = faqs.filter(faq => {
+            const questionMatch = faq.question.toLowerCase().includes(queryLower);
+            const answerMatch = faq.answer.toLowerCase().includes(queryLower);
+            const keywordMatch = (faq.keywords || []).some(k => 
+                k.toLowerCase().includes(queryLower) || queryLower.includes(k.toLowerCase())
+            );
+            return questionMatch || answerMatch || keywordMatch;
+        }).slice(0, 3);
+
+        // Small delay for UX
+        setTimeout(() => {
+            removeTypingIndicator();
+            renderSearchResults();
+        }, 800);
+    }
+
+    function renderSearchResults() {
+        state.step = 'results';
+
+        if (state.faqResults.length === 0) {
+            addMessage(`I couldn't find any articles matching "<strong>${state.searchQuery}</strong>". Would you like to raise a support ticket?`);
+            renderNoResultsActions();
+            return;
+        }
+
+        addMessage(`I found ${state.faqResults.length} article${state.faqResults.length > 1 ? 's' : ''} that might help:`);
+
+        // Render FAQ cards
+        const faqContainer = document.createElement('div');
+        faqContainer.className = 'avanti-faq-results';
+        faqContainer.innerHTML = state.faqResults.map(faq => `
+            <div class="avanti-faq-item" data-id="${faq.id}">
+                <button class="avanti-faq-question" onclick="AvantiWidget.toggleFAQ('${faq.id}')">
+                    <span>❓ ${faq.question}</span>
+                    <span class="avanti-faq-toggle">▼</span>
+                </button>
+                <div class="avanti-faq-answer">
+                    <div class="avanti-faq-answer-content">${faq.answer}</div>
+                </div>
+            </div>
+        `).join('');
+        chatArea.appendChild(faqContainer);
+
+        // Add feedback question
+        setTimeout(() => {
+            addMessage('Did this answer your question?');
+            renderFeedbackButtons();
+        }, 500);
+
+        chatArea.scrollTop = chatArea.scrollHeight;
+        hideInput();
+    }
+
+    function toggleFAQ(faqId) {
+        const item = document.querySelector(`.avanti-faq-item[data-id="${faqId}"]`);
+        if (item) {
+            item.classList.toggle('open');
+        }
+    }
+
+    function renderFeedbackButtons() {
+        state.step = 'feedback';
+        const feedback = document.createElement('div');
+        feedback.className = 'avanti-feedback';
+        feedback.innerHTML = `
+            <button class="avanti-feedback-btn yes" onclick="AvantiWidget.handleFeedback(true)">
+                👍 Yes, thanks!
+            </button>
+            <button class="avanti-feedback-btn no" onclick="AvantiWidget.handleFeedback(false)">
+                👎 No, I need more help
+            </button>
+        `;
+        chatArea.appendChild(feedback);
+        chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    function renderNoResultsActions() {
+        const actions = document.createElement('div');
+        actions.className = 'avanti-feedback';
+        actions.innerHTML = `
+            <button class="avanti-feedback-btn" onclick="AvantiWidget.renderTicketForm()">
+                🎫 Raise a Ticket
+            </button>
+            <button class="avanti-feedback-btn" onclick="AvantiWidget.renderWelcome()">
+                🔄 Start Over
+            </button>
+        `;
+        chatArea.appendChild(actions);
+        chatArea.scrollTop = chatArea.scrollHeight;
+        hideInput();
+    }
+
+    function handleFeedback(helpful) {
+        if (helpful) {
+            addMessage('👍 Yes, this helped!', 'user');
+            setTimeout(() => {
+                addMessage('Great! I\'m glad I could help. 😊 Is there anything else you need assistance with?');
+                renderRestartActions();
+            }, 500);
+        } else {
+            addMessage('👎 No, I need more help', 'user');
+            setTimeout(() => {
+                addMessage('I\'m sorry to hear that. Let me help you raise a support ticket so our team can assist you directly.');
+                setTimeout(() => {
+                    renderTicketForm();
+                }, 500);
+            }, 500);
+        }
+    }
+
+    function renderRestartActions() {
+        const actions = document.createElement('div');
+        actions.className = 'avanti-feedback';
+        actions.innerHTML = `
+            <button class="avanti-feedback-btn" onclick="AvantiWidget.renderWelcome()">
+                🔄 Ask Another Question
+            </button>
+            <button class="avanti-feedback-btn" onclick="AvantiWidget.closeWidget()">
+                ✓ I'm Done
+            </button>
+        `;
+        chatArea.appendChild(actions);
+        chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    // ========================================
+    // TICKET FORM
+    // ========================================
+    function renderTicketForm() {
+        state.step = 'ticket-form';
+        hideInput();
+
+        const userInfo = state.userInfo || {};
+        const form = document.createElement('div');
+        form.className = 'avanti-ticket-form';
+        form.innerHTML = `
+            <div class="avanti-form-group">
+                <label>Your Name *</label>
+                <input type="text" id="ticketName" value="${userInfo.name || ''}" placeholder="Enter your name" required>
+            </div>
+            <div class="avanti-form-group">
+                <label>Email *</label>
+                <input type="email" id="ticketEmail" value="${userInfo.email || ''}" placeholder="Enter your email" required>
+            </div>
+            <div class="avanti-form-group">
+                <label>School</label>
+                <select id="ticketSchool">
+                    <option value="">Select your school</option>
+                    <option value="CoE Barwani" ${userInfo.school === 'CoE Barwani' ? 'selected' : ''}>CoE Barwani</option>
+                    <option value="CoE Cuttack" ${userInfo.school === 'CoE Cuttack' ? 'selected' : ''}>CoE Cuttack</option>
+                    <option value="JNV Dhar" ${userInfo.school === 'JNV Dhar' ? 'selected' : ''}>JNV Dhar</option>
+                    <option value="JNV Khargone" ${userInfo.school === 'JNV Khargone' ? 'selected' : ''}>JNV Khargone</option>
+                    <option value="JNV Narsinghpur" ${userInfo.school === 'JNV Narsinghpur' ? 'selected' : ''}>JNV Narsinghpur</option>
+                    <option value="EMRS Alirajpur" ${userInfo.school === 'EMRS Alirajpur' ? 'selected' : ''}>EMRS Alirajpur</option>
+                </select>
+            </div>
+            <div class="avanti-form-group">
+                <label>I am a</label>
+                <select id="ticketRole">
+                    <option value="Teacher" ${userInfo.role === 'Teacher' ? 'selected' : ''}>Teacher</option>
+                    <option value="Student">Student</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div class="avanti-form-group" id="studentIdGroup" style="display: none;">
+                <label>Student ID</label>
+                <input type="text" id="ticketStudentId" placeholder="Enter your student ID">
+            </div>
+            <div class="avanti-form-group">
+                <label>Issue Category *</label>
+                <select id="ticketCategory">
+                    <option value="login">Login / Access Issues</option>
+                    <option value="chapters">Chapters & Curriculum</option>
+                    <option value="progress">Progress Tracking</option>
+                    <option value="tests">Tests & Assessment</option>
+                    <option value="technical">Technical / Loading Issues</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="avanti-form-group">
+                <label>Subject / Title *</label>
+                <input type="text" id="ticketSubject" value="${state.searchQuery || ''}" placeholder="Brief description of your issue" required>
+            </div>
+            <div class="avanti-form-group">
+                <label>Describe your issue *</label>
+                <textarea id="ticketDescription" placeholder="Please describe your issue in detail. What were you trying to do? What happened?" required></textarea>
+            </div>
+            <div class="avanti-form-group">
+                <label>Screenshot (Optional)</label>
+                <div class="avanti-screenshot-upload" id="screenshotUpload">
+                    <input type="file" id="screenshotInput" accept="image/*">
+                    <p>📷 <span>Click to upload</span> or drag and drop</p>
+                    <div class="avanti-screenshot-preview" id="screenshotPreview"></div>
+                </div>
+            </div>
+            <button class="avanti-submit-btn" onclick="AvantiWidget.submitTicket()">
+                🎫 Submit Ticket
+            </button>
+        `;
+        chatArea.appendChild(form);
+        chatArea.scrollTop = chatArea.scrollHeight;
+
+        // Role change handler
+        document.getElementById('ticketRole').addEventListener('change', function() {
+            document.getElementById('studentIdGroup').style.display = 
+                this.value === 'Student' ? 'block' : 'none';
+        });
+
+        // Screenshot upload handler
+        const uploadArea = document.getElementById('screenshotUpload');
+        const fileInput = document.getElementById('screenshotInput');
+        const preview = document.getElementById('screenshotPreview');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#F4B41A';
+        });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#3a3a4a';
+        });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#3a3a4a';
+            if (e.dataTransfer.files.length) {
+                handleScreenshot(e.dataTransfer.files[0]);
+            }
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleScreenshot(e.target.files[0]);
+            }
+        });
+
+        function handleScreenshot(file) {
+            if (!file.type.startsWith('image/')) {
+                alert('Please upload an image file');
+                return;
+            }
+            state.screenshotFile = file;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                preview.innerHTML = `<img src="${e.target.result}" alt="Screenshot">`;
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    async function submitTicket() {
+        const name = document.getElementById('ticketName').value.trim();
+        const email = document.getElementById('ticketEmail').value.trim();
+        const school = document.getElementById('ticketSchool').value;
+        const role = document.getElementById('ticketRole').value;
+        const studentId = document.getElementById('ticketStudentId')?.value.trim();
+        const category = document.getElementById('ticketCategory').value;
+        const subject = document.getElementById('ticketSubject').value.trim();
+        const description = document.getElementById('ticketDescription').value.trim();
+
+        // Validation
+        if (!name || !email || !subject || !description) {
+            alert('Please fill in all required fields');
+            return;
+        }
+
+        // Disable button
+        const submitBtn = document.querySelector('.avanti-submit-btn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<div class="avanti-loading-dots"><span></span><span></span><span></span></div> Submitting...';
+
+        try {
+            let screenshotUrl = null;
+
+            // Upload screenshot if exists
+            if (state.screenshotFile && typeof firebase !== 'undefined' && firebase.storage) {
+                const ref = firebase.storage().ref(`helpdesk_screenshots/${Date.now()}_${state.screenshotFile.name}`);
+                await ref.put(state.screenshotFile);
+                screenshotUrl = await ref.getDownloadURL();
+            }
+
+            // Generate ticket ID
+            const ticketId = 'AV' + Date.now().toString(36).toUpperCase();
+
+            // Create ticket data
+            const ticketData = {
+                ticketId,
+                userName: name,
+                userEmail: email,
+                school,
+                userRole: role,
+                studentId: role === 'Student' ? studentId : null,
+                category,
+                subject,
+                description,
+                screenshotUrl,
+                status: 'open',
+                priority: 'medium',
+                replies: [],
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+
+            // Save to Firestore
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                await firebase.firestore().collection('helpdesk_tickets').add(ticketData);
+            }
+
+            // Show success
+            state.step = 'ticket-submitted';
+            clearChat();
+
+            addMessage(`🎉 <strong>Ticket Submitted Successfully!</strong>`);
+            setTimeout(() => {
+                addMessage(`Your ticket ID is <strong>#${ticketId}</strong>. Our team will review your issue and respond within 24 hours.`);
+
+                const statusCard = document.createElement('div');
+                statusCard.className = 'avanti-ticket-status';
+                statusCard.innerHTML = `
+                    <div class="avanti-ticket-status-header">
+                        <span class="avanti-ticket-id">#${ticketId}</span>
+                        <span class="avanti-status-badge open">Open</span>
+                    </div>
+                    <p style="color: #a0a0b0; font-size: 0.85rem; margin: 0;">${subject}</p>
+                `;
+                chatArea.appendChild(statusCard);
+
+                setTimeout(() => {
+                    addMessage('Is there anything else I can help you with?');
+                    renderRestartActions();
+                }, 500);
+            }, 500);
+
+            // Reset state
+            state.screenshotFile = null;
+            loadActiveTickets();
+
+        } catch (error) {
+            console.error('Error submitting ticket:', error);
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '🎫 Submit Ticket';
+            alert('Failed to submit ticket. Please try again.');
+        }
+    }
+
+    // ========================================
+    // VIEW TICKETS
+    // ========================================
+    function viewTickets() {
+        clearChat();
+        addMessage(`📋 <strong>Your Active Tickets</strong>`);
+
+        if (state.activeTickets.length === 0) {
+            addMessage('You don\'t have any active tickets.');
+            renderRestartActions();
+            return;
+        }
+
+        state.activeTickets.forEach(ticket => {
+            const statusClass = ticket.status.replace(' ', '-');
+            const hasNewReply = ticket.replies && ticket.replies.length > 0 && 
+                               ticket.replies[ticket.replies.length - 1].isAdmin;
+
+            const card = document.createElement('div');
+            card.className = 'avanti-ticket-status';
+            card.style.cursor = 'pointer';
+            card.innerHTML = `
+                <div class="avanti-ticket-status-header">
+                    <span class="avanti-ticket-id">#${ticket.ticketId || ticket.id.slice(0, 6)}</span>
+                    <span class="avanti-status-badge ${statusClass}">${ticket.status}</span>
+                </div>
+                <p style="color: #ffffff; font-size: 0.9rem; margin: 8px 0 4px;">${ticket.subject}</p>
+                <p style="color: #a0a0b0; font-size: 0.8rem; margin: 0;">
+                    ${hasNewReply ? '🔔 New reply from support' : `Created ${formatDate(ticket.createdAt)}`}
+                </p>
+            `;
+            card.onclick = () => viewTicketDetail(ticket);
+            chatArea.appendChild(card);
+        });
+
+        setTimeout(() => {
+            renderRestartActions();
+        }, 300);
+    }
+
+    function viewTicketDetail(ticket) {
+        clearChat();
+
+        const statusClass = ticket.status.replace(' ', '-');
+        addMessage(`<strong>#${ticket.ticketId || ticket.id.slice(0, 6)}</strong> - ${ticket.subject}`);
+
+        // Show conversation
+        const convo = document.createElement('div');
+        convo.style.display = 'flex';
+        convo.style.flexDirection = 'column';
+        convo.style.gap = '8px';
+        convo.style.marginTop = '8px';
+
+        // Original message
+        convo.innerHTML = `
+            <div class="avanti-msg bot" style="animation: none;">
+                <strong style="color: #F4B41A;">You:</strong><br>
+                ${ticket.description}
+            </div>
+        `;
+
+        // Replies
+        (ticket.replies || []).forEach(reply => {
+            convo.innerHTML += `
+                <div class="avanti-msg ${reply.isAdmin ? 'bot' : 'user'}" style="animation: none;">
+                    <strong style="color: ${reply.isAdmin ? '#10b981' : '#F4B41A'};">${reply.isAdmin ? 'Support:' : 'You:'}</strong><br>
+                    ${reply.message}
+                </div>
+            `;
+        });
+
+        chatArea.appendChild(convo);
+
+        // Status badge
+        addMessage(`Status: <span class="avanti-status-badge ${statusClass}">${ticket.status}</span>`);
+
+        setTimeout(() => {
+            const actions = document.createElement('div');
+            actions.className = 'avanti-feedback';
+            actions.innerHTML = `
+                <button class="avanti-feedback-btn" onclick="AvantiWidget.viewTickets()">
+                    ← Back to Tickets
+                </button>
+                <button class="avanti-feedback-btn" onclick="AvantiWidget.renderWelcome()">
+                    🏠 Home
+                </button>
+            `;
+            chatArea.appendChild(actions);
+        }, 300);
+    }
+
+    // ========================================
+    // INPUT HANDLER
+    // ========================================
+    function handleSend() {
+        const query = input.value.trim();
+        if (!query) return;
+
+        searchFAQ(query);
+        input.value = '';
+    }
+
+    // ========================================
+    // UTILITIES
+    // ========================================
+    function formatDate(date) {
+        const d = date?.toDate ? date.toDate() : new Date(date);
+        const now = new Date();
+        const diff = now - d;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+        if (days === 0) return 'today';
+        if (days === 1) return 'yesterday';
+        if (days < 7) return `${days} days ago`;
+
+        return d.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short'
+        });
+    }
+
+    // ========================================
+    // PUBLIC API
+    // ========================================
+    window.AvantiWidget = {
+        searchFAQ,
+        toggleFAQ,
+        handleFeedback,
+        renderTicketForm,
+        submitTicket,
+        renderWelcome,
+        viewTickets,
+        closeWidget
+    };
+
+    // Initialize
+    init();
+
+})();
+</script>
 </body>
 </html>
