@@ -17902,9 +17902,39 @@ const AvantiWidget = {
         document.getElementById("avantiBody").innerHTML = html;
     }
 };
+.avanti-greeting-popup {
+  position: fixed;
+  bottom: 110px;
+  right: 20px;
+  background: #fff6d6;
+  color: #333;
+  padding: 12px 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  display: none;
+  z-index: 99999;
+}
 
+.avanti-greeting-popup.show {
+  display: block;
+}
+
+.avanti-greeting-close {
+  background: none;
+  border: none;
+  float: right;
+  cursor: pointer;
+  font-size: 16px;
+  margin-left: 10px;
+}
+  
 // Initialize widget
 setTimeout(() => AvantiWidget.init(), 800);
+  <!-- Avanti Greeting Popup -->
+<div id="avantiGreeting" class="avanti-greeting-popup">
+  <span id="greetingText"></span>
+  <button onclick="AvantiWidget.hideGreeting()" class="avanti-greeting-close">✕</button>
+</div>
 </script>
 </body>
 </html>
