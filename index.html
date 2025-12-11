@@ -17509,14 +17509,16 @@ ReactDOM.render(<App/>,document.getElementById('root'));
 AVANTI HELP WIDGET - Conversational Support Bot
 ===========================================================
 Add this entire code at the END of your index.html (before </body>)
+IMPORTANT: Add this AFTER all your existing scripts (after Firebase is initialized)
 
 Features:
+✅ Intercom-style icon with Avanti colors
+✅ Auto-popup on first visit
 ✅ Conversational welcome flow
 ✅ Smart FAQ search
 ✅ "Did this help?" feedback
 ✅ Ticket creation with screenshot
 ✅ Auto-fills user info from login
-✅ Real-time ticket status updates
 ===========================================================
 -->
 
@@ -17529,7 +17531,7 @@ Features:
     font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-/* Floating Button */
+/* Floating Button - Intercom Style */
 .avanti-help-btn {
     position: fixed;
     bottom: 24px;
@@ -17544,9 +17546,9 @@ Features:
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
     transition: all 0.3s ease;
     z-index: 99999;
+    overflow: hidden;
 }
 
 .avanti-help-btn:hover {
@@ -17555,24 +17557,133 @@ Features:
 }
 
 .avanti-help-btn.open {
-    transform: rotate(180deg);
+    transform: rotate(0deg);
+}
+
+/* Intercom-style Icon */
+.avanti-help-btn svg {
+    width: 28px;
+    height: 28px;
+    transition: all 0.3s ease;
+}
+
+.avanti-help-btn .icon-chat {
+    display: block;
+}
+
+.avanti-help-btn .icon-close {
+    display: none;
+}
+
+.avanti-help-btn.open .icon-chat {
+    display: none;
+}
+
+.avanti-help-btn.open .icon-close {
+    display: block;
 }
 
 /* Notification Badge */
 .avanti-help-btn .notification-badge {
     position: absolute;
-    top: -5px;
-    right: -5px;
-    width: 20px;
-    height: 20px;
+    top: -2px;
+    right: -2px;
+    width: 18px;
+    height: 18px;
     background: #ef4444;
     border-radius: 50%;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
+    font-weight: 700;
+    border: 2px solid #1a1a24;
+}
+
+/* Popup Bubble */
+.avanti-popup-bubble {
+    position: fixed;
+    bottom: 95px;
+    right: 24px;
+    background: #ffffff;
+    color: #1a1a24;
+    padding: 14px 18px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    font-size: 0.9rem;
+    font-weight: 500;
+    z-index: 99998;
+    display: none;
+    max-width: 260px;
+    animation: bubbleIn 0.4s ease;
+}
+
+.avanti-popup-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    right: 24px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid #ffffff;
+}
+
+.avanti-popup-bubble.show {
+    display: block;
+}
+
+.avanti-popup-bubble-close {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 22px;
+    height: 22px;
+    background: #1a1a24;
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@keyframes bubbleIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Pulse Animation for Button */
+.avanti-help-btn.pulse::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: inherit;
+    animation: pulse 2s ease-out infinite;
+    z-index: -1;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.5;
+    }
+    100% {
+        transform: scale(1.5);
+        opacity: 0;
+    }
 }
 
 /* Widget Panel */
@@ -17889,6 +18000,9 @@ Features:
     font-size: 1.1rem;
     transition: transform 0.2s;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .avanti-widget-send:hover {
@@ -18109,14 +18223,34 @@ Features:
         width: 54px;
         height: 54px;
     }
+
+    .avanti-popup-bubble {
+        right: 16px;
+        bottom: 80px;
+        max-width: 220px;
+    }
 }
 </style>
 
 <!-- Widget HTML -->
 <div class="avanti-widget-container">
-    <!-- Floating Button -->
-    <button class="avanti-help-btn" id="avantiHelpBtn" title="Need Help?">
-        <span id="avantiHelpIcon">❓</span>
+    <!-- Popup Bubble -->
+    <div class="avanti-popup-bubble" id="avantiPopupBubble">
+        👋 Hi! Need help with the Curriculum Tracker?
+        <button class="avanti-popup-bubble-close" id="avantiPopupClose">×</button>
+    </div>
+
+    <!-- Floating Button - Intercom Style -->
+    <button class="avanti-help-btn pulse" id="avantiHelpBtn" title="Need Help?">
+        <!-- Chat Icon (Intercom style) -->
+        <svg class="icon-chat" viewBox="0 0 28 28" fill="none">
+            <path d="M14 2C7.373 2 2 6.925 2 13c0 3.187 1.482 6.053 3.833 8.014V26l4.744-2.604c1.071.297 2.212.46 3.423.46 6.627 0 12-4.925 12-11S20.627 2 14 2z" fill="#1a1a24"/>
+            <path d="M8 11.5a1.5 1.5 0 103 0 1.5 1.5 0 00-3 0zM12.5 11.5a1.5 1.5 0 103 0 1.5 1.5 0 00-3 0zM17 11.5a1.5 1.5 0 103 0 1.5 1.5 0 00-3 0z" fill="#F4B41A"/>
+        </svg>
+        <!-- Close Icon -->
+        <svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="#1a1a24" stroke-width="2.5">
+            <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
     </button>
 
     <!-- Widget Panel -->
@@ -18138,7 +18272,11 @@ Features:
 
         <div class="avanti-widget-input" id="avantiInputArea">
             <input type="text" id="avantiInput" placeholder="Type your question...">
-            <button class="avanti-widget-send" id="avantiSendBtn">➤</button>
+            <button class="avanti-widget-send" id="avantiSendBtn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="#1a1a24">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
         </div>
     </div>
 </div>
@@ -18149,39 +18287,22 @@ Features:
     'use strict';
 
     // ========================================
-    // CONFIGURATION
-    // ========================================
-    // The widget will use the same Firebase instance as the main app
-    // Make sure Firebase is initialized in your index.html
-
-    // ========================================
     // STATE
     // ========================================
     let state = {
         isOpen: false,
-        step: 'welcome', // welcome, search, results, feedback, ticket-form, ticket-submitted
+        step: 'welcome',
         searchQuery: '',
         faqResults: [],
         currentFAQ: null,
         userInfo: null,
         activeTickets: [],
-        screenshotFile: null
+        screenshotFile: null,
+        hasShownPopup: false
     };
 
     // ========================================
-    // DOM REFERENCES
-    // ========================================
-    const helpBtn = document.getElementById('avantiHelpBtn');
-    const helpIcon = document.getElementById('avantiHelpIcon');
-    const panel = document.getElementById('avantiWidgetPanel');
-    const closeBtn = document.getElementById('avantiWidgetClose');
-    const chatArea = document.getElementById('avantiChatArea');
-    const inputArea = document.getElementById('avantiInputArea');
-    const input = document.getElementById('avantiInput');
-    const sendBtn = document.getElementById('avantiSendBtn');
-
-    // ========================================
-    // FAQ DATABASE (Fallback if Firebase not loaded)
+    // FAQ DATABASE (Built-in - works without Firebase)
     // ========================================
     const localFAQs = [
         {
@@ -18189,7 +18310,7 @@ Features:
             question: "How do I login to the Curriculum Tracker?",
             answer: "1. Open the Curriculum Tracker website\n2. Enter your email address\n3. Enter your password\n4. Click 'Login'\n\nIf you forgot your password, contact your Program Manager.",
             category: "getting-started",
-            keywords: ["login", "sign in", "password", "access"]
+            keywords: ["login", "sign in", "password", "access", "enter"]
         },
         {
             id: '2',
@@ -18224,7 +18345,7 @@ Features:
             question: "The page is not loading. What should I do?",
             answer: "1. Refresh the page (Press F5)\n2. Clear browser cache (Ctrl+Shift+Delete)\n3. Try Chrome browser\n4. Check your internet connection\n\nIf still not working, raise a support ticket.",
             category: "troubleshooting",
-            keywords: ["loading", "error", "not working", "blank", "slow"]
+            keywords: ["loading", "error", "not working", "blank", "slow", "stuck"]
         },
         {
             id: '7',
@@ -18239,18 +18360,42 @@ Features:
             answer: "The Curriculum Tracker supports:\n• Physics\n• Chemistry\n• Maths\n• Biology\n\nEach subject has Class 11 and Class 12 chapters.",
             category: "getting-started",
             keywords: ["subjects", "physics", "chemistry", "maths", "biology"]
+        },
+        {
+            id: '9',
+            question: "How do I view analytics and reports?",
+            answer: "1. Click on 'Analytics' in the menu\n2. View various charts:\n   • Subject-wise completion\n   • School comparison\n   • Monthly progress\n3. Use filters to customize\n4. Click 'Export to Excel' to download",
+            category: "analytics",
+            keywords: ["analytics", "reports", "charts", "export", "excel", "download"]
+        },
+        {
+            id: '10',
+            question: "My changes are not saving. What's wrong?",
+            answer: "1. Make sure you clicked the 'Save' button\n2. Check your internet connection\n3. Wait a few seconds after clicking save\n4. Refresh the page and check\n\nLook for a success message after saving.",
+            category: "troubleshooting",
+            keywords: ["save", "saving", "not saving", "changes", "lost"]
         }
     ];
+
+    // ========================================
+    // DOM REFERENCES
+    // ========================================
+    const helpBtn = document.getElementById('avantiHelpBtn');
+    const panel = document.getElementById('avantiWidgetPanel');
+    const closeBtn = document.getElementById('avantiWidgetClose');
+    const chatArea = document.getElementById('avantiChatArea');
+    const inputArea = document.getElementById('avantiInputArea');
+    const input = document.getElementById('avantiInput');
+    const sendBtn = document.getElementById('avantiSendBtn');
+    const popupBubble = document.getElementById('avantiPopupBubble');
+    const popupClose = document.getElementById('avantiPopupClose');
 
     // ========================================
     // INITIALIZE
     // ========================================
     function init() {
-        // Try to get user info from main app
-        getUserInfo();
-
-        // Load any active tickets
-        loadActiveTickets();
+        // Try to get user info (wait for Firebase to be ready)
+        setTimeout(getUserInfo, 1000);
 
         // Event listeners
         helpBtn.addEventListener('click', toggleWidget);
@@ -18259,9 +18404,32 @@ Features:
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handleSend();
         });
+        popupClose.addEventListener('click', hidePopup);
 
-        // Start with welcome message
+        // Show popup after 2 seconds (only once per session)
+        setTimeout(showPopupOnce, 2000);
+
+        // Render welcome when panel opens
         renderWelcome();
+    }
+
+    // ========================================
+    // POPUP
+    // ========================================
+    function showPopupOnce() {
+        // Check if already shown this session
+        if (sessionStorage.getItem('avantiPopupShown')) return;
+        if (state.isOpen) return;
+
+        popupBubble.classList.add('show');
+        sessionStorage.setItem('avantiPopupShown', 'true');
+
+        // Auto-hide after 8 seconds
+        setTimeout(hidePopup, 8000);
+    }
+
+    function hidePopup() {
+        popupBubble.classList.remove('show');
     }
 
     // ========================================
@@ -18270,11 +18438,12 @@ Features:
     function getUserInfo() {
         // Try to get from Firebase Auth if available
         if (typeof firebase !== 'undefined' && firebase.auth) {
-            firebase.auth().onAuthStateChanged(user => {
+            try {
+                const user = firebase.auth().currentUser;
                 if (user) {
                     state.userInfo = {
                         email: user.email,
-                        name: user.email.split('@')[0],
+                        name: user.email ? user.email.split('@')[0] : 'User',
                         uid: user.uid
                     };
 
@@ -18291,49 +18460,13 @@ Features:
                                     state.userInfo.role = 'Teacher';
                                     state.userInfo.subject = data.subject;
                                 }
-                            });
+                            })
+                            .catch(e => console.log('Could not fetch teacher info'));
                     }
                 }
-            });
-        }
-    }
-
-    // ========================================
-    // TICKETS
-    // ========================================
-    function loadActiveTickets() {
-        if (typeof firebase !== 'undefined' && firebase.firestore && state.userInfo?.email) {
-            firebase.firestore().collection('helpdesk_tickets')
-                .where('userEmail', '==', state.userInfo.email)
-                .where('status', 'in', ['open', 'in-progress'])
-                .onSnapshot(snapshot => {
-                    state.activeTickets = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-
-                    // Update notification badge
-                    updateNotificationBadge();
-                });
-        }
-    }
-
-    function updateNotificationBadge() {
-        const hasReplies = state.activeTickets.some(t => 
-            t.replies && t.replies.length > 0 && 
-            t.replies[t.replies.length - 1].isAdmin
-        );
-
-        let badge = helpBtn.querySelector('.notification-badge');
-        if (hasReplies) {
-            if (!badge) {
-                badge = document.createElement('span');
-                badge.className = 'notification-badge';
-                helpBtn.appendChild(badge);
+            } catch (e) {
+                console.log('Firebase auth not ready');
             }
-            badge.textContent = '!';
-        } else if (badge) {
-            badge.remove();
         }
     }
 
@@ -18344,9 +18477,10 @@ Features:
         state.isOpen = !state.isOpen;
         panel.classList.toggle('open', state.isOpen);
         helpBtn.classList.toggle('open', state.isOpen);
-        helpIcon.textContent = state.isOpen ? '✕' : '❓';
+        helpBtn.classList.remove('pulse'); // Remove pulse when opened
+        hidePopup();
 
-        if (state.isOpen && state.step === 'welcome') {
+        if (state.isOpen && chatArea.children.length === 0) {
             renderWelcome();
         }
     }
@@ -18355,7 +18489,6 @@ Features:
         state.isOpen = false;
         panel.classList.remove('open');
         helpBtn.classList.remove('open');
-        helpIcon.textContent = '❓';
     }
 
     // ========================================
@@ -18408,11 +18541,11 @@ Features:
                     const quickActions = document.createElement('div');
                     quickActions.className = 'avanti-quick-actions';
                     quickActions.innerHTML = `
-                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('login')">Login Issues</button>
-                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('chapter complete')">Mark Complete</button>
-                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('progress')">Check Progress</button>
-                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('not loading')">Page Not Loading</button>
-                        ${state.activeTickets.length > 0 ? `<button class="avanti-quick-btn" onclick="AvantiWidget.viewTickets()">📋 My Tickets (${state.activeTickets.length})</button>` : ''}
+                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('login')">🔑 Login Issues</button>
+                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('chapter complete')">✅ Mark Complete</button>
+                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('progress')">📊 Check Progress</button>
+                        <button class="avanti-quick-btn" onclick="AvantiWidget.searchFAQ('not loading')">🔧 Page Not Loading</button>
+                        <button class="avanti-quick-btn" onclick="AvantiWidget.renderTicketForm()">🎫 Raise a Ticket</button>
                     `;
                     chatArea.appendChild(quickActions);
                     chatArea.scrollTop = chatArea.scrollHeight;
@@ -18447,10 +18580,10 @@ Features:
         // Show typing indicator
         addTypingIndicator();
 
-        // Search FAQs
+        // Search FAQs (use local FAQs, optionally fetch from Firebase)
         let faqs = localFAQs;
 
-        // Try to load from Firebase
+        // Try to load from Firebase if available
         if (typeof firebase !== 'undefined' && firebase.firestore) {
             try {
                 const snapshot = await firebase.firestore().collection('helpdesk_faqs').get();
@@ -18599,6 +18732,8 @@ Features:
         state.step = 'ticket-form';
         hideInput();
 
+        addMessage('Please fill out this form and our team will get back to you within 24 hours.');
+
         const userInfo = state.userInfo || {};
         const form = document.createElement('div');
         form.className = 'avanti-ticket-form';
@@ -18658,7 +18793,7 @@ Features:
                 <label>Screenshot (Optional)</label>
                 <div class="avanti-screenshot-upload" id="screenshotUpload">
                     <input type="file" id="screenshotInput" accept="image/*">
-                    <p>📷 <span>Click to upload</span> or drag and drop</p>
+                    <p>📷 <span>Click to upload</span> a screenshot</p>
                     <div class="avanti-screenshot-preview" id="screenshotPreview"></div>
                 </div>
             </div>
@@ -18681,20 +18816,6 @@ Features:
         const preview = document.getElementById('screenshotPreview');
 
         uploadArea.addEventListener('click', () => fileInput.click());
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.style.borderColor = '#F4B41A';
-        });
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.style.borderColor = '#3a3a4a';
-        });
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.style.borderColor = '#3a3a4a';
-            if (e.dataTransfer.files.length) {
-                handleScreenshot(e.dataTransfer.files[0]);
-            }
-        });
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length) {
                 handleScreenshot(e.target.files[0]);
@@ -18739,11 +18860,15 @@ Features:
         try {
             let screenshotUrl = null;
 
-            // Upload screenshot if exists
+            // Upload screenshot if exists and Firebase is available
             if (state.screenshotFile && typeof firebase !== 'undefined' && firebase.storage) {
-                const ref = firebase.storage().ref(`helpdesk_screenshots/${Date.now()}_${state.screenshotFile.name}`);
-                await ref.put(state.screenshotFile);
-                screenshotUrl = await ref.getDownloadURL();
+                try {
+                    const ref = firebase.storage().ref(`helpdesk_screenshots/${Date.now()}_${state.screenshotFile.name}`);
+                    await ref.put(state.screenshotFile);
+                    screenshotUrl = await ref.getDownloadURL();
+                } catch (e) {
+                    console.log('Could not upload screenshot');
+                }
             }
 
             // Generate ticket ID
@@ -18768,9 +18893,12 @@ Features:
                 updatedAt: new Date()
             };
 
-            // Save to Firestore
+            // Save to Firestore if available
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 await firebase.firestore().collection('helpdesk_tickets').add(ticketData);
+            } else {
+                // Fallback - store locally
+                console.log('Ticket created (local):', ticketData);
             }
 
             // Show success
@@ -18800,7 +18928,6 @@ Features:
 
             // Reset state
             state.screenshotFile = null;
-            loadActiveTickets();
 
         } catch (error) {
             console.error('Error submitting ticket:', error);
@@ -18808,97 +18935,6 @@ Features:
             submitBtn.innerHTML = '🎫 Submit Ticket';
             alert('Failed to submit ticket. Please try again.');
         }
-    }
-
-    // ========================================
-    // VIEW TICKETS
-    // ========================================
-    function viewTickets() {
-        clearChat();
-        addMessage(`📋 <strong>Your Active Tickets</strong>`);
-
-        if (state.activeTickets.length === 0) {
-            addMessage('You don\'t have any active tickets.');
-            renderRestartActions();
-            return;
-        }
-
-        state.activeTickets.forEach(ticket => {
-            const statusClass = ticket.status.replace(' ', '-');
-            const hasNewReply = ticket.replies && ticket.replies.length > 0 && 
-                               ticket.replies[ticket.replies.length - 1].isAdmin;
-
-            const card = document.createElement('div');
-            card.className = 'avanti-ticket-status';
-            card.style.cursor = 'pointer';
-            card.innerHTML = `
-                <div class="avanti-ticket-status-header">
-                    <span class="avanti-ticket-id">#${ticket.ticketId || ticket.id.slice(0, 6)}</span>
-                    <span class="avanti-status-badge ${statusClass}">${ticket.status}</span>
-                </div>
-                <p style="color: #ffffff; font-size: 0.9rem; margin: 8px 0 4px;">${ticket.subject}</p>
-                <p style="color: #a0a0b0; font-size: 0.8rem; margin: 0;">
-                    ${hasNewReply ? '🔔 New reply from support' : `Created ${formatDate(ticket.createdAt)}`}
-                </p>
-            `;
-            card.onclick = () => viewTicketDetail(ticket);
-            chatArea.appendChild(card);
-        });
-
-        setTimeout(() => {
-            renderRestartActions();
-        }, 300);
-    }
-
-    function viewTicketDetail(ticket) {
-        clearChat();
-
-        const statusClass = ticket.status.replace(' ', '-');
-        addMessage(`<strong>#${ticket.ticketId || ticket.id.slice(0, 6)}</strong> - ${ticket.subject}`);
-
-        // Show conversation
-        const convo = document.createElement('div');
-        convo.style.display = 'flex';
-        convo.style.flexDirection = 'column';
-        convo.style.gap = '8px';
-        convo.style.marginTop = '8px';
-
-        // Original message
-        convo.innerHTML = `
-            <div class="avanti-msg bot" style="animation: none;">
-                <strong style="color: #F4B41A;">You:</strong><br>
-                ${ticket.description}
-            </div>
-        `;
-
-        // Replies
-        (ticket.replies || []).forEach(reply => {
-            convo.innerHTML += `
-                <div class="avanti-msg ${reply.isAdmin ? 'bot' : 'user'}" style="animation: none;">
-                    <strong style="color: ${reply.isAdmin ? '#10b981' : '#F4B41A'};">${reply.isAdmin ? 'Support:' : 'You:'}</strong><br>
-                    ${reply.message}
-                </div>
-            `;
-        });
-
-        chatArea.appendChild(convo);
-
-        // Status badge
-        addMessage(`Status: <span class="avanti-status-badge ${statusClass}">${ticket.status}</span>`);
-
-        setTimeout(() => {
-            const actions = document.createElement('div');
-            actions.className = 'avanti-feedback';
-            actions.innerHTML = `
-                <button class="avanti-feedback-btn" onclick="AvantiWidget.viewTickets()">
-                    ← Back to Tickets
-                </button>
-                <button class="avanti-feedback-btn" onclick="AvantiWidget.renderWelcome()">
-                    🏠 Home
-                </button>
-            `;
-            chatArea.appendChild(actions);
-        }, 300);
     }
 
     // ========================================
@@ -18913,25 +18949,6 @@ Features:
     }
 
     // ========================================
-    // UTILITIES
-    // ========================================
-    function formatDate(date) {
-        const d = date?.toDate ? date.toDate() : new Date(date);
-        const now = new Date();
-        const diff = now - d;
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-        if (days === 0) return 'today';
-        if (days === 1) return 'yesterday';
-        if (days < 7) return `${days} days ago`;
-
-        return d.toLocaleDateString('en-IN', {
-            day: 'numeric',
-            month: 'short'
-        });
-    }
-
-    // ========================================
     // PUBLIC API
     // ========================================
     window.AvantiWidget = {
@@ -18941,12 +18958,15 @@ Features:
         renderTicketForm,
         submitTicket,
         renderWelcome,
-        viewTickets,
         closeWidget
     };
 
-    // Initialize
-    init();
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 
 })();
 </script>
