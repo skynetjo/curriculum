@@ -1,76 +1,45 @@
 // ========================================
 // FIREBASE MESSAGING SERVICE WORKER
-// For Push Notifications - Avanti Help Desk
+// Upload this to your website ROOT
 // ========================================
 
-// Import Firebase scripts
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 
-// Firebase config (same as your project)
-// IMPORTANT: Replace with your actual Firebase config
+// YOUR FIREBASE CONFIG - Replace with your actual config
 firebase.initializeApp({
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyCXHj5oN5KQdUMXDHg3mAcTPn_CXJjq0Jo",
+    authDomain: "jnvportal.firebaseapp.com",
+    projectId: "jnvportal",
+    storageBucket: "jnvportal.firebasestorage.app",
+    messagingSenderId: "913756177",
+    appId: "1:913756177:web:your_app_id"
 });
 
 const messaging = firebase.messaging();
 
-// Handle background messages (when browser is closed or tab not focused)
+// Handle background notifications
 messaging.onBackgroundMessage((payload) => {
-    console.log('[FCM SW] Background message received:', payload);
+    console.log('[FCM SW] Background message:', payload);
     
-    const notificationTitle = payload.notification?.title || 'Avanti Help Desk';
-    const notificationOptions = {
-        body: payload.notification?.body || 'You have an update on your ticket',
+    const title = payload.notification?.title || 'Avanti Help Desk';
+    const options = {
+        body: payload.notification?.body || 'You have a ticket update',
         icon: '/icon-192.png',
         badge: '/icon-192.png',
-        tag: payload.data?.ticketId || 'helpdesk-notification',
-        data: {
-            ticketId: payload.data?.ticketId,
-            url: payload.data?.url || '/'
-        },
-        actions: [
-            { action: 'view', title: 'View Ticket' },
-            { action: 'close', title: 'Dismiss' }
-        ],
-        vibrate: [200, 100, 200],
-        requireInteraction: true
+        tag: 'helpdesk-notification',
+        data: payload.data
     };
-
-    return self.registration.showNotification(notificationTitle, notificationOptions);
+    
+    self.registration.showNotification(title, options);
 });
 
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
-    console.log('[FCM SW] Notification clicked:', event);
-    
     event.notification.close();
-    
-    if (event.action === 'view' || !event.action) {
-        // Open the app or ticket page
-        const urlToOpen = event.notification.data?.url || '/';
-        
-        event.waitUntil(
-            clients.matchAll({ type: 'window', includeUncontrolled: true })
-                .then((clientList) => {
-                    // Check if there's already a window open
-                    for (const client of clientList) {
-                        if (client.url.includes(self.location.origin) && 'focus' in client) {
-                            return client.focus();
-                        }
-                    }
-                    // If no window is open, open a new one
-                    if (clients.openWindow) {
-                        return clients.openWindow(urlToOpen);
-                    }
-                })
-        );
-    }
+    event.waitUntil(
+        clients.openWindow('/')
+    );
 });
 
-console.log('[FCM SW] Firebase Messaging Service Worker loaded');
+console.log('[FCM SW] Service Worker loaded');
