@@ -18681,14 +18681,15 @@ const AvantiWidget = {
                 if (data) {
                     const parsed = JSON.parse(data);
                     if (parsed && (parsed.name || parsed.studentId || parsed.id)) {
+                        const studentId = parsed.studentId || parsed.id || parsed.student_id || '';
                         this.user = {
                             type: 'student',
                             name: parsed.name || parsed.studentName || parsed.student_name || '',
-                            studentId: parsed.studentId || parsed.id || parsed.student_id || '',
+                            studentId: studentId ? String(studentId) : '', // Always string
                             school: parsed.school || parsed.schoolName || parsed.center || parsed.school_name || '',
                             grade: parsed.grade || parsed.class || ''
                         };
-                        console.log('[AvantiWidget] ✓ Found student:', this.user.name);
+                        console.log('[AvantiWidget] ✓ Found student:', this.user.name, '| ID:', this.user.studentId);
                         return;
                     }
                 }
@@ -18772,31 +18773,54 @@ const AvantiWidget = {
         } catch (e) {}
     },
     
-    // Load tickets
+    // Load tickets - NO INDEX REQUIRED (sorts client-side)
     loadTickets: function() {
-        if (!this.firebaseReady || !this.user) return;
+        if (!this.firebaseReady || !this.user) {
+            console.log('[AvantiWidget] Cannot load tickets - Firebase:', this.firebaseReady, 'User:', !!this.user);
+            return;
+        }
         
         try {
             let query;
             if (this.user.type === 'student' && this.user.studentId) {
+                console.log('[AvantiWidget] Loading tickets for student:', this.user.studentId);
                 query = firebase.firestore().collection('helpdesk_tickets')
-                    .where('studentId', '==', this.user.studentId);
+                    .where('studentId', '==', String(this.user.studentId));
             } else if (this.user.email) {
+                console.log('[AvantiWidget] Loading tickets for teacher:', this.user.email);
                 query = firebase.firestore().collection('helpdesk_tickets')
                     .where('userEmail', '==', this.user.email);
             }
             
             if (query) {
-                query.orderBy('createdAt', 'desc').limit(20).onSnapshot(snap => {
+                // No orderBy to avoid needing composite index - sort client-side
+                query.onSnapshot(snap => {
                     this.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    
+                    // Sort by createdAt descending (newest first) - client-side
+                    this.tickets.sort((a, b) => {
+                        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+                        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+                        return dateB - dateA;
+                    });
+                    
                     console.log('[AvantiWidget] ✓ Loaded tickets:', this.tickets.length);
                     
                     if (this.tickets.length > 0) {
                         document.getElementById('ticketsBadge')?.classList.add('show');
                     }
-                }, err => {});
+                    
+                    // If on tickets view, refresh it
+                    if (this.currentView === 'tickets') {
+                        this.renderTickets();
+                    }
+                }, err => {
+                    console.error('[AvantiWidget] Ticket load error:', err);
+                });
             }
-        } catch (e) {}
+        } catch (e) {
+            console.error('[AvantiWidget] Ticket error:', e);
+        }
     },
     
     // Show greeting popup with NAMASTE
@@ -19354,7 +19378,7 @@ const AvantiWidget = {
                 ticketId,
                 userName: this.user.name,
                 userEmail: this.user.email || '',
-                studentId: this.user.studentId || null,
+                studentId: this.user.studentId ? String(this.user.studentId) : null,
                 school: this.user.school,
                 userRole: this.user.type === 'student' ? 'Student' : 'Teacher',
                 userGrade: this.user.grade || null,
@@ -19369,8 +19393,10 @@ const AvantiWidget = {
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             
-            this.showSuccess(ticketId);
+            // Reload tickets immediately
             this.loadTickets();
+            
+            this.showSuccess(ticketId);
         } catch (err) {
             console.error(err);
             alert('Failed to submit. Please try again.');
@@ -19468,6 +19494,6 @@ if (document.readyState === 'loading') {
 } else {
     AvantiWidget.init();
 }
-                                                     </script>
+</script>
 </body>
 </html>
