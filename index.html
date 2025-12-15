@@ -17504,18 +17504,21 @@ ReactDOM.render(<App/>,document.getElementById('root'));
 
 })();
 </script>
-
 <!-- 
     AVANTI HELP WIDGET - INTERCOM STYLE
-    Version 3.1 | December 2025 | FIXED
+    Version 3.3 | December 2025 | FINAL FIX
+    
+    IMPORTANT: This widget must be placed INSIDE your main Curriculum Tracker 
+    index.html file, AFTER the Firebase initialization code.
     
     FIXES:
+    - Shows "Namaste [Name]!" everywhere (not "Hi there!")
+    - Waits for Firebase properly
     - Autofill working for tickets
-    - Greeting popup with name
     - Screenshot upload working
     - School auto-detected (no dropdown)
     
-    Paste this at the end of index_Curriculum.html before </body>
+    PASTE THIS AT THE END OF YOUR MAIN index.html BEFORE </body>
 -->
 
 <style>
@@ -18472,8 +18475,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
     }
 }
 
-
-/* Added by assistant: simple logo replacement styling */
+/* Logo styling */
 .replaced-logo { width: 64px; height: auto; display: inline-block; vertical-align: middle; }
 
 </style>
@@ -18484,7 +18486,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
     <div class="avanti-greeting-popup" id="avantiGreeting" onclick="AvantiWidget.open()">
         <button class="greeting-close" onclick="event.stopPropagation(); AvantiWidget.hideGreeting()">×</button>
         <div class="greeting-text" id="greetingText">
-            👋 <strong>Hey!</strong> Need any help with the Curriculum Tracker?
+            🙏 <strong>Namaste!</strong> Need any help with the Curriculum Tracker?
         </div>
     </div>
     
@@ -18517,10 +18519,10 @@ ReactDOM.render(<App/>,document.getElementById('root'));
         
         <!-- Body -->
         <div class="avanti-widget-body" id="avantiBody">
-            <!-- Home View -->
+            <!-- Home View - DEFAULT TEXT IS NOW NAMASTE -->
             <div class="avanti-home-view" id="homeView">
                 <div class="avanti-welcome">
-                    <h2 id="welcomeText">Hi there! 👋</h2>
+                    <h2 id="welcomeText">🙏 Namaste! 👋</h2>
                     <p>How can we help you today?</p>
                 </div>
                 
@@ -18594,7 +18596,8 @@ ReactDOM.render(<App/>,document.getElementById('root'));
 
 <script>
 // ============================================
-// AVANTI WIDGET - INTERCOM STYLE - FIXED VERSION
+// AVANTI WIDGET - VERSION 3.3 - FINAL FIX
+// Shows NAMASTE everywhere + Firebase ready
 // ============================================
 const AvantiWidget = {
     isOpen: false,
@@ -18604,192 +18607,199 @@ const AvantiWidget = {
     currentView: 'home',
     screenshotFile: null,
     screenshotDataUrl: null,
-    userDetectionAttempts: 0,
-    maxDetectionAttempts: 10,
+    firebaseReady: false,
+    initAttempts: 0,
+    
+    // Get time-based greeting in Hindi/Sanskrit
+    getGreeting: function(name) {
+        const hour = new Date().getHours();
+        const nameStr = name ? ` ${name}` : '';
+        
+        if (hour < 12) {
+            return `🙏 Namaste${nameStr}! सुप्रभातम् 🌅`;
+        } else if (hour < 17) {
+            return `🙏 Namaste${nameStr}! शुभमध्याह्नम् 🌇`;
+        } else {
+            return `🙏 Namaste${nameStr}! शुभसायंकालम् 🌃`;
+        }
+    },
     
     // Initialize
     init: function() {
-        console.log('[AvantiWidget] Initializing...');
+        console.log('[AvantiWidget] Starting initialization...');
         
-        // Try to get user info immediately and retry
-        this.detectUserWithRetry();
+        // Get user from localStorage first (students)
+        this.getUserFromLocalStorage();
         
-        // Load FAQs
-        this.loadFAQs();
+        // Update welcome text with Namaste
+        this.updateWelcomeText();
         
-        // Load tickets after delay
-        setTimeout(() => this.loadTickets(), 2000);
+        // Wait for Firebase
+        this.waitForFirebase();
         
-        // Show greeting popup after 10 seconds
-        setTimeout(() => this.showGreeting(), 10000 + Math.random() * 5000);
+        // Show greeting popup after delay
+        setTimeout(() => this.showGreeting(), 12000 + Math.random() * 3000);
         
-        console.log('[AvantiWidget] Ready!');
+        console.log('[AvantiWidget] Init complete');
     },
     
-    // Detect user with retry logic
-    detectUserWithRetry: function() {
-        this.getUser();
+    // Wait for Firebase to be initialized
+    waitForFirebase: function() {
+        this.initAttempts++;
         
-        // If no user found and we haven't exceeded attempts, retry
-        if (!this.user && this.userDetectionAttempts < this.maxDetectionAttempts) {
-            this.userDetectionAttempts++;
-            setTimeout(() => this.detectUserWithRetry(), 500);
-        } else if (this.user) {
-            console.log('[AvantiWidget] User detected:', this.user.name, '| Type:', this.user.type);
-            // Update welcome text if widget is open
-            if (this.isOpen) {
-                document.getElementById('welcomeText').textContent = 
-                    this.user.name ? `Hi ${this.user.name}! 👋` : 'Hi there! 👋';
+        if (typeof firebase !== 'undefined') {
+            try {
+                const testRef = firebase.firestore();
+                this.firebaseReady = true;
+                console.log('[AvantiWidget] ✓ Firebase ready!');
+                
+                // Do Firebase-dependent init
+                this.getTeacherFromFirebase();
+                this.loadFAQs();
+                setTimeout(() => this.loadTickets(), 1000);
+                return;
+            } catch (e) {
+                console.log('[AvantiWidget] Waiting for Firebase... attempt:', this.initAttempts);
             }
+        }
+        
+        // Retry up to 30 times (15 seconds)
+        if (this.initAttempts < 30) {
+            setTimeout(() => this.waitForFirebase(), 500);
+        } else {
+            console.log('[AvantiWidget] Firebase not available - running in offline mode');
         }
     },
     
-    // Get user from Curriculum Tracker - IMPROVED
-    getUser: function() {
-        // 1. Check student session first (localStorage)
-        try {
-            const studentSession = localStorage.getItem('studentSession');
-            if (studentSession) {
-                const data = JSON.parse(studentSession);
-                if (data && (data.name || data.studentId || data.id)) {
-                    this.user = {
-                        type: 'student',
-                        name: data.name || data.studentName || '',
-                        studentId: data.studentId || data.id || data.student_id || '',
-                        school: data.school || data.schoolName || data.center || '',
-                        grade: data.grade || data.class || ''
-                    };
-                    console.log('[AvantiWidget] Found student:', this.user.name);
-                    return;
-                }
-            }
-        } catch (e) {
-            console.log('[AvantiWidget] Error reading studentSession:', e);
-        }
+    // Get user from localStorage (students)
+    getUserFromLocalStorage: function() {
+        const possibleKeys = ['studentSession', 'student', 'studentData', 'currentStudent', 'loggedInStudent'];
         
-        // 2. Check other possible localStorage keys
-        const possibleStudentKeys = ['student', 'studentData', 'currentStudent', 'loggedInStudent'];
-        for (const key of possibleStudentKeys) {
+        for (const key of possibleKeys) {
             try {
                 const data = localStorage.getItem(key);
                 if (data) {
                     const parsed = JSON.parse(data);
-                    if (parsed && (parsed.name || parsed.studentId)) {
+                    if (parsed && (parsed.name || parsed.studentId || parsed.id)) {
                         this.user = {
                             type: 'student',
-                            name: parsed.name || parsed.studentName || '',
-                            studentId: parsed.studentId || parsed.id || '',
-                            school: parsed.school || parsed.schoolName || parsed.center || '',
+                            name: parsed.name || parsed.studentName || parsed.student_name || '',
+                            studentId: parsed.studentId || parsed.id || parsed.student_id || '',
+                            school: parsed.school || parsed.schoolName || parsed.center || parsed.school_name || '',
                             grade: parsed.grade || parsed.class || ''
                         };
-                        console.log('[AvantiWidget] Found student from', key);
+                        console.log('[AvantiWidget] ✓ Found student:', this.user.name);
                         return;
                     }
                 }
             } catch (e) {}
         }
+        console.log('[AvantiWidget] No student in localStorage');
+    },
+    
+    // Get teacher from Firebase Auth
+    getTeacherFromFirebase: function() {
+        if (!this.firebaseReady || this.user) return;
         
-        // 3. Check Firebase Auth for teachers
-        if (typeof firebase !== 'undefined' && firebase.auth) {
-            try {
-                const u = firebase.auth().currentUser;
-                if (u) {
-                    this.user = {
-                        type: 'teacher',
-                        name: u.displayName || u.email?.split('@')[0] || '',
-                        email: u.email || '',
-                        school: ''
-                    };
-                    
-                    // Get teacher details from Firestore
-                    if (firebase.firestore) {
-                        firebase.firestore().collection('teachers')
-                            .where('email', '==', u.email).limit(1).get()
-                            .then(snap => {
-                                if (!snap.empty) {
-                                    const t = snap.docs[0].data();
-                                    this.user.name = t.name || this.user.name;
-                                    this.user.school = t.school || t.center || t.schoolName || '';
-                                }
-                            }).catch(e => {});
-                    }
-                    
-                    console.log('[AvantiWidget] Found teacher:', this.user.email);
-                    return;
-                }
-            } catch (e) {
-                console.log('[AvantiWidget] Firebase auth error:', e);
+        try {
+            const currentUser = firebase.auth().currentUser;
+            if (currentUser) {
+                this.setTeacherUser(currentUser);
             }
-        }
-        
-        // 4. Listen for future auth changes
-        if (typeof firebase !== 'undefined' && firebase.auth && !this.authListenerAttached) {
-            this.authListenerAttached = true;
+            
             firebase.auth().onAuthStateChanged(u => {
-                if (u && !this.user) {
-                    this.user = {
-                        type: 'teacher',
-                        name: u.displayName || u.email?.split('@')[0] || '',
-                        email: u.email || '',
-                        school: ''
-                    };
-                    
-                    // Get teacher details
-                    if (firebase.firestore) {
-                        firebase.firestore().collection('teachers')
-                            .where('email', '==', u.email).limit(1).get()
-                            .then(snap => {
-                                if (!snap.empty) {
-                                    const t = snap.docs[0].data();
-                                    this.user.name = t.name || this.user.name;
-                                    this.user.school = t.school || t.center || '';
-                                }
-                            }).catch(e => {});
-                    }
-                    
-                    console.log('[AvantiWidget] Auth state - Teacher:', this.user.email);
+                if (u && (!this.user || this.user.type !== 'student')) {
+                    this.setTeacherUser(u);
                 }
             });
+        } catch (e) {
+            console.log('[AvantiWidget] Firebase auth error:', e);
+        }
+    },
+    
+    // Set teacher user data
+    setTeacherUser: function(firebaseUser) {
+        this.user = {
+            type: 'teacher',
+            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '',
+            email: firebaseUser.email || '',
+            school: ''
+        };
+        
+        console.log('[AvantiWidget] ✓ Found teacher:', this.user.email);
+        
+        // Get teacher details from Firestore
+        try {
+            firebase.firestore().collection('teachers')
+                .where('email', '==', firebaseUser.email)
+                .limit(1)
+                .get()
+                .then(snap => {
+                    if (!snap.empty) {
+                        const t = snap.docs[0].data();
+                        this.user.name = t.name || this.user.name;
+                        this.user.school = t.school || t.center || t.schoolName || '';
+                        console.log('[AvantiWidget] ✓ Teacher details:', this.user.name, this.user.school);
+                        this.updateWelcomeText();
+                    }
+                })
+                .catch(e => {});
+        } catch (e) {}
+        
+        this.updateWelcomeText();
+    },
+    
+    // Update welcome text with NAMASTE
+    updateWelcomeText: function() {
+        const welcomeEl = document.getElementById('welcomeText');
+        if (welcomeEl) {
+            welcomeEl.textContent = this.getGreeting(this.user?.name);
         }
     },
     
     // Load FAQs
     loadFAQs: function() {
-        if (typeof firebase === 'undefined') return;
+        if (!this.firebaseReady) return;
         
-        firebase.firestore().collection('helpdesk_faqs')
-            .onSnapshot(snap => {
-                this.faqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                console.log('[AvantiWidget] FAQs:', this.faqs.length);
-            });
+        try {
+            firebase.firestore().collection('helpdesk_faqs')
+                .onSnapshot(snap => {
+                    this.faqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    console.log('[AvantiWidget] ✓ Loaded FAQs:', this.faqs.length);
+                }, err => {
+                    console.log('[AvantiWidget] FAQ error:', err);
+                });
+        } catch (e) {}
     },
     
     // Load tickets
     loadTickets: function() {
-        if (typeof firebase === 'undefined' || !this.user) return;
+        if (!this.firebaseReady || !this.user) return;
         
-        let query;
-        if (this.user.type === 'student' && this.user.studentId) {
-            query = firebase.firestore().collection('helpdesk_tickets')
-                .where('studentId', '==', this.user.studentId);
-        } else if (this.user.email) {
-            query = firebase.firestore().collection('helpdesk_tickets')
-                .where('userEmail', '==', this.user.email);
-        }
-        
-        if (query) {
-            query.orderBy('createdAt', 'desc').limit(20).onSnapshot(snap => {
-                this.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                console.log('[AvantiWidget] Tickets:', this.tickets.length);
-                
-                if (this.tickets.length > 0) {
-                    document.getElementById('ticketsBadge')?.classList.add('show');
-                }
-            });
-        }
+        try {
+            let query;
+            if (this.user.type === 'student' && this.user.studentId) {
+                query = firebase.firestore().collection('helpdesk_tickets')
+                    .where('studentId', '==', this.user.studentId);
+            } else if (this.user.email) {
+                query = firebase.firestore().collection('helpdesk_tickets')
+                    .where('userEmail', '==', this.user.email);
+            }
+            
+            if (query) {
+                query.orderBy('createdAt', 'desc').limit(20).onSnapshot(snap => {
+                    this.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    console.log('[AvantiWidget] ✓ Loaded tickets:', this.tickets.length);
+                    
+                    if (this.tickets.length > 0) {
+                        document.getElementById('ticketsBadge')?.classList.add('show');
+                    }
+                }, err => {});
+            }
+        } catch (e) {}
     },
     
-    // Show greeting popup - FIXED
+    // Show greeting popup with NAMASTE
     showGreeting: function() {
         if (this.isOpen) return;
         if (sessionStorage.getItem('avantiGreetingShown')) return;
@@ -18831,7 +18841,6 @@ const AvantiWidget = {
     // Hide greeting
     hideGreeting: function() {
         document.getElementById('avantiGreeting')?.classList.remove('show');
-        localStorage.setItem('avantiGreetingDismissed', 'true');
     },
     
     // Toggle widget
@@ -18846,12 +18855,7 @@ const AvantiWidget = {
         document.getElementById('avantiPanel').classList.add('open');
         document.getElementById('notifDot')?.classList.remove('show');
         this.hideGreeting();
-        
-        // Update welcome text
-        const name = this.user?.name || '';
-        document.getElementById('welcomeText').textContent = 
-            name ? `Hi ${name}! 👋` : 'Hi there! 👋';
-        
+        this.updateWelcomeText();
         this.showHome();
     },
     
@@ -18882,9 +18886,10 @@ const AvantiWidget = {
         document.getElementById('ticketsView').style.display = 'none';
         document.getElementById('formView').style.display = 'none';
         
+        const greeting = this.getGreeting(this.user?.name);
         document.getElementById('chatMessages').innerHTML = `
             <div class="avanti-msg bot">
-                Hi${this.user?.name ? ' ' + this.user.name : ''}! 👋 Type your question and I'll help you find an answer.
+                ${greeting}<br>Type your question and I'll help you find an answer.
             </div>
         `;
         
@@ -18922,7 +18927,7 @@ const AvantiWidget = {
         if (this.tickets.length === 0) {
             list.innerHTML = `
                 <div class="avanti-empty">
-                    <div class="icon"><img src="logo.png" alt="Avanti Logo" class="replaced-logo"></div>
+                    <div class="icon">🎫</div>
                     <h4>No tickets yet</h4>
                     <p>Your support tickets will appear here</p>
                 </div>
@@ -18931,10 +18936,7 @@ const AvantiWidget = {
         }
         
         list.innerHTML = this.tickets.map(t => {
-            const date = t.createdAt && t.createdAt.toDate 
-                ? t.createdAt.toDate().toLocaleDateString() 
-                : 'Recent';
-            
+            const date = t.createdAt?.toDate ? t.createdAt.toDate().toLocaleDateString() : 'Recent';
             return `
                 <div class="avanti-ticket-card" onclick="AvantiWidget.viewTicketDetail('${t.id}')">
                     <div class="ticket-header">
@@ -18954,9 +18956,7 @@ const AvantiWidget = {
         if (!t) return;
         
         const replies = (t.replies || []).map(r => {
-            const date = r.timestamp && r.timestamp.toDate 
-                ? r.timestamp.toDate().toLocaleString() 
-                : new Date(r.timestamp).toLocaleString();
+            const date = r.timestamp?.toDate ? r.timestamp.toDate().toLocaleString() : new Date(r.timestamp).toLocaleString();
             return `
                 <div style="background:${r.isAdmin ? '#1a3a2a' : '#1a1a24'};border:1px solid ${r.isAdmin ? '#10b981' : '#2a2a3a'};border-radius:10px;padding:12px;margin-bottom:8px;">
                     <div style="font-size:11px;color:${r.isAdmin ? '#10b981' : '#8a8a9a'};margin-bottom:6px;">
@@ -18975,7 +18975,7 @@ const AvantiWidget = {
         document.getElementById('formContent').innerHTML = `
             <div style="margin-bottom:20px;">
                 <h3 style="color:#fff;margin:0 0 6px 0;">Ticket #${t.ticketId || t.id.slice(0,8)}</h3>
-                <span class="status ${t.status}" style="font-size:12px;padding:4px 10px;border-radius:20px;background:${
+                <span style="font-size:12px;padding:4px 10px;border-radius:20px;background:${
                     t.status === 'resolved' ? 'rgba(16,185,129,0.2)' : 
                     t.status === 'in-progress' ? 'rgba(234,179,8,0.2)' : 'rgba(239,68,68,0.2)'
                 };color:${
@@ -19016,15 +19016,10 @@ const AvantiWidget = {
         if (!msg) return;
         
         const messages = document.getElementById('chatMessages');
-        
-        // Add user message
         messages.innerHTML += `<div class="avanti-msg user">${msg}</div>`;
         input.value = '';
         
-        // Search FAQs
         this.searchFAQs(msg);
-        
-        // Scroll to bottom
         messages.scrollTop = messages.scrollHeight;
     },
     
@@ -19037,24 +19032,17 @@ const AvantiWidget = {
         }, 300);
     },
     
-    // Search FAQs - IMPROVED
+    // Search FAQs
     searchFAQs: function(query) {
         const messages = document.getElementById('chatMessages');
         const q = query.toLowerCase();
-        
-        // Smart keyword matching
         const keywords = q.split(/\s+/).filter(w => w.length > 2);
         
         const results = this.faqs.filter(f => {
             const text = `${f.question} ${f.answer} ${(f.keywords || []).join(' ')}`.toLowerCase();
-            
-            // Check direct match
             if (text.includes(q)) return true;
-            
-            // Check keyword match (at least 2 keywords or 1 if query is short)
             const minMatches = keywords.length <= 2 ? 1 : 2;
-            const matches = keywords.filter(k => text.includes(k)).length;
-            return matches >= minMatches;
+            return keywords.filter(k => text.includes(k)).length >= minMatches;
         }).slice(0, 3);
         
         if (results.length > 0) {
@@ -19116,11 +19104,7 @@ const AvantiWidget = {
         const messages = document.getElementById('chatMessages');
         
         if (helpful) {
-            messages.innerHTML += `
-                <div class="avanti-msg bot">
-                    Great! Glad I could help! 😊 Is there anything else you need?
-                </div>
-            `;
+            messages.innerHTML += `<div class="avanti-msg bot">Great! Glad I could help! 😊</div>`;
         } else {
             messages.innerHTML += `
                 <div class="avanti-msg bot">
@@ -19136,7 +19120,7 @@ const AvantiWidget = {
         messages.scrollTop = messages.scrollHeight;
     },
     
-    // Show form view - FIXED WITH AUTOFILL AND SCREENSHOT
+    // Show form view
     showForm: function() {
         this.currentView = 'form';
         document.getElementById('homeView').style.display = 'none';
@@ -19144,14 +19128,13 @@ const AvantiWidget = {
         document.getElementById('ticketsView').style.display = 'none';
         document.getElementById('formView').style.display = 'flex';
         
-        // Reset screenshot
         this.screenshotFile = null;
         this.screenshotDataUrl = null;
         
         const formContent = document.getElementById('formContent');
         
         if (this.user) {
-            // Logged in user - show auto-filled form
+            // Logged in user - auto-filled form
             formContent.innerHTML = `
                 <div class="avanti-user-info">
                     <div class="user-header">
@@ -19200,7 +19183,7 @@ const AvantiWidget = {
                 
                 <div class="avanti-form-group">
                     <label>Describe your issue *</label>
-                    <textarea id="formDesc" placeholder="Please provide details about the problem..."></textarea>
+                    <textarea id="formDesc" placeholder="Please provide details..."></textarea>
                 </div>
                 
                 <div class="avanti-screenshot-section">
@@ -19217,7 +19200,7 @@ const AvantiWidget = {
                 </div>
                 
                 <button class="avanti-submit-btn" id="formSubmitBtn" onclick="AvantiWidget.submitTicket()">
-                    <img src="logo.png" alt="Avanti Logo" class="replaced-logo"> Submit Ticket
+                    🎫 Submit Ticket
                 </button>
                 
                 <button class="avanti-action-btn secondary" style="width:100%;margin-top:10px;" onclick="AvantiWidget.showHome()">
@@ -19225,7 +19208,7 @@ const AvantiWidget = {
                 </button>
             `;
         } else {
-            // User not logged in - show manual form (NO DROPDOWN for school)
+            // Not logged in - manual form
             formContent.innerHTML = `
                 <div class="avanti-msg bot" style="background:#1a1a24;border:1px solid #f59e0b;margin-bottom:16px;border-radius:12px;padding:14px;">
                     ⚠️ <strong>Not logged in</strong><br>
@@ -19270,7 +19253,7 @@ const AvantiWidget = {
                 
                 <div class="avanti-form-group">
                     <label>Describe your issue *</label>
-                    <textarea id="formDesc" placeholder="Please provide details about the problem..."></textarea>
+                    <textarea id="formDesc" placeholder="Please provide details..."></textarea>
                 </div>
                 
                 <div class="avanti-screenshot-section">
@@ -19287,7 +19270,7 @@ const AvantiWidget = {
                 </div>
                 
                 <button class="avanti-submit-btn" id="formSubmitBtn" onclick="AvantiWidget.submitTicketManual()">
-                    <img src="logo.png" alt="Avanti Logo" class="replaced-logo"> Submit Ticket
+                    🎫 Submit Ticket
                 </button>
                 
                 <button class="avanti-action-btn secondary" style="width:100%;margin-top:10px;" onclick="AvantiWidget.showHome()">
@@ -19301,15 +19284,11 @@ const AvantiWidget = {
     handleScreenshot: function(input) {
         if (input.files && input.files[0]) {
             const file = input.files[0];
-            
-            // Check file size (max 5MB)
             if (file.size > 5 * 1024 * 1024) {
                 alert('Screenshot too large. Maximum 5MB allowed.');
                 return;
             }
-            
             this.screenshotFile = file;
-            
             const reader = new FileReader();
             reader.onload = (e) => {
                 this.screenshotDataUrl = e.target.result;
@@ -19330,15 +19309,12 @@ const AvantiWidget = {
     
     // Upload screenshot to Firebase Storage
     uploadScreenshot: async function(ticketId) {
-        if (!this.screenshotFile) return null;
-        
+        if (!this.screenshotFile || !this.firebaseReady) return null;
         try {
             const storageRef = firebase.storage().ref();
             const fileRef = storageRef.child(`helpdesk_screenshots/${ticketId}_${Date.now()}.${this.screenshotFile.name.split('.').pop()}`);
-            
             await fileRef.put(this.screenshotFile);
-            const url = await fileRef.getDownloadURL();
-            return url;
+            return await fileRef.getDownloadURL();
         } catch (e) {
             console.error('[AvantiWidget] Screenshot upload error:', e);
             return null;
@@ -19347,6 +19323,11 @@ const AvantiWidget = {
     
     // Submit ticket (logged in user)
     submitTicket: async function() {
+        if (!this.firebaseReady) {
+            alert('Please wait, connecting to server...');
+            return;
+        }
+        
         const btn = document.getElementById('formSubmitBtn');
         const subject = document.getElementById('formSubject').value.trim();
         const desc = document.getElementById('formDesc').value.trim();
@@ -19361,10 +19342,8 @@ const AvantiWidget = {
         btn.innerHTML = '<span class="avanti-loading"></span> Submitting...';
         
         try {
-            const ticketId = 'AV' + Date.now().toString(36).toUpperCase() + 
-                Math.random().toString(36).substring(2,5).toUpperCase();
+            const ticketId = 'AV' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2,5).toUpperCase();
             
-            // Upload screenshot if present
             let screenshotUrl = null;
             if (this.screenshotFile) {
                 btn.innerHTML = '<span class="avanti-loading"></span> Uploading screenshot...';
@@ -19392,17 +19371,21 @@ const AvantiWidget = {
             
             this.showSuccess(ticketId);
             this.loadTickets();
-            
         } catch (err) {
             console.error(err);
             alert('Failed to submit. Please try again.');
             btn.disabled = false;
-            btn.innerHTML = '<img src="logo.png" alt="Avanti Logo" class="replaced-logo"> Submit Ticket';
+            btn.innerHTML = '🎫 Submit Ticket';
         }
     },
     
-    // Submit ticket (manual entry - not logged in)
+    // Submit ticket (manual - not logged in)
     submitTicketManual: async function() {
+        if (!this.firebaseReady) {
+            alert('Please wait, connecting to server...');
+            return;
+        }
+        
         const btn = document.getElementById('formSubmitBtn');
         const name = document.getElementById('formName').value.trim();
         const studentId = document.getElementById('formStudentId').value.trim();
@@ -19413,7 +19396,7 @@ const AvantiWidget = {
         const category = document.getElementById('formCategory').value;
         
         if (!name || !school || !subject || !desc) {
-            alert('Please fill in all required fields (Name, School, Subject, Description)');
+            alert('Please fill in all required fields');
             return;
         }
         
@@ -19426,10 +19409,8 @@ const AvantiWidget = {
         btn.innerHTML = '<span class="avanti-loading"></span> Submitting...';
         
         try {
-            const ticketId = 'AV' + Date.now().toString(36).toUpperCase() + 
-                Math.random().toString(36).substring(2,5).toUpperCase();
+            const ticketId = 'AV' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2,5).toUpperCase();
             
-            // Upload screenshot if present
             let screenshotUrl = null;
             if (this.screenshotFile) {
                 btn.innerHTML = '<span class="avanti-loading"></span> Uploading screenshot...';
@@ -19456,12 +19437,11 @@ const AvantiWidget = {
             });
             
             this.showSuccess(ticketId);
-            
         } catch (err) {
             console.error(err);
             alert('Failed to submit. Please try again.');
             btn.disabled = false;
-            btn.innerHTML = '<img src="logo.png" alt="Avanti Logo" class="replaced-logo"> Submit Ticket';
+            btn.innerHTML = '🎫 Submit Ticket';
         }
     },
     
@@ -19482,12 +19462,12 @@ const AvantiWidget = {
     }
 };
 
-// Initialize
+// Initialize when ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => AvantiWidget.init());
 } else {
     AvantiWidget.init();
 }
-</script>
+                                                     </script>
 </body>
 </html>
