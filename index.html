@@ -18609,14 +18609,28 @@ const AvantiWidget = {
     const text = document.getElementById('greetingText');
 
     const hour = new Date().getHours();
+    const name = this.user?.name ? ` ${this.user.name}` : '';
+
     let message = '';
 
     if (hour < 12) {
-        message = `🙏 <strong>Namaste</strong><br>🌅 <strong>सुप्रभातम्</strong><br><span style="font-size:13px;color:#9ca3af">Good morning</span>`;
+        message = `
+            🙏 <strong>Namaste${name}</strong><br>
+            🌅 <strong>सुप्रभातम्</strong><br>
+            <span style="font-size:13px;color:#9ca3af">Good morning</span>
+        `;
     } else if (hour < 17) {
-        message = `🙏 <strong>Namaste</strong><br>🌇 <strong>शुभमध्याह्नम्</strong><br><span style="font-size:13px;color:#9ca3af">Auspicious midday</span>`;
+        message = `
+            🙏 <strong>Namaste${name}</strong><br>
+            🌇 <strong>शुभमध्याह्नम्</strong><br>
+            <span style="font-size:13px;color:#9ca3af">Auspicious midday</span>
+        `;
     } else {
-        message = `🙏 <strong>Namaste</strong><br>🌃 <strong>शुभसायंकालम्</strong><br><span style="font-size:13px;color:#9ca3af">Auspicious evening</span>`;
+        message = `
+            🙏 <strong>Namaste${name}</strong><br>
+            🌃 <strong>शुभसायंकालम्</strong><br>
+            <span style="font-size:13px;color:#9ca3af">Auspicious evening</span>
+        `;
     }
 
     text.innerHTML = message + `<br><strong>How can we help you?</strong>`;
@@ -18624,6 +18638,7 @@ const AvantiWidget = {
 
     sessionStorage.setItem('avantiGreetingShown', 'true');
 },
+
     
     // Hide greeting
     hideGreeting: function() {
