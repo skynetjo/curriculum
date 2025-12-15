@@ -11419,7 +11419,7 @@ function StudentManagement({students}){
       setSelectedStudents([]);
       setSelectAll(false);
     }else{
-      setSelectedStudents(filteredStudents.map(s=>s.id));
+      setSelectedStudents(filteredStudents.map(s=>s.docId));
       setSelectAll(true);
     }
   };
@@ -11448,6 +11448,7 @@ function StudentManagement({students}){
       alert(`${selectedStudents.length} students deleted!`);
       setSelectedStudents([]);
       setSelectAll(false);
+      window.location.reload();
     }catch(e){
       alert('Failed: '+e.message);
     }
@@ -11864,12 +11865,12 @@ await db.collection('students').doc(docId).set({
               </tr>
             ):(
               filteredStudents.map(s=>
-                <tr key={s.id} className={`border-b hover:bg-gray-50 ${selectedStudents.includes(s.id)?'bg-blue-50':''}`}>
+                <tr key={s.docId} className={`border-b hover:bg-gray-50 ${selectedStudents.includes(s.docId)?'bg-blue-50':''}`}>
                   <td className="p-3">
                     <input 
                       type="checkbox" 
-                      checked={selectedStudents.includes(s.id)}
-                      onChange={()=>handleSelectStudent(s.id)}
+                      checked={selectedStudents.includes(s.docId)}
+                      onChange={()=>handleSelectStudent(s.docId)}
                       className="cursor-pointer"
                     />
                   </td>
