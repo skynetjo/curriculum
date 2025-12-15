@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   
   <!-- React -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -18399,61 +18400,6 @@ ReactDOM.render(<App/>,document.getElementById('root'));
 }
 
 .avanti-success h3 {
-    color: #fff;
-    font-size: 20px;
-    margin-bottom: 10px;
-}
-
-/* Notification Banner */
-.avanti-notify-banner {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 10px;
-    padding: 12px 14px;
-    margin-bottom: 14px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.avanti-notify-banner .notify-icon {
-    font-size: 20px;
-}
-
-.avanti-notify-banner .notify-text {
-    flex: 1;
-    font-size: 12px;
-    color: #fff;
-    line-height: 1.4;
-}
-
-.avanti-notify-banner .notify-btn {
-    background: #fff;
-    color: #667eea;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.avanti-notify-banner .notify-btn:hover {
-    background: #f0f0f0;
-}
-
-.avanti-notify-banner.enabled {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-}
-
-.avanti-notify-banner .dismiss-btn {
-    background: none;
-    border: none;
-    color: rgba(255,255,255,0.7);
-    font-size: 16px;
-    cursor: pointer;
-    padding: 0 4px;
-}
     color: #10b981;
     font-size: 20px;
     margin: 0 0 8px 0;
@@ -18583,9 +18529,6 @@ ReactDOM.render(<App/>,document.getElementById('root'));
                     <p>How can we help you today?</p>
                 </div>
                 
-                <!-- Notification Banner Container -->
-                <div id="notificationBannerContainer"></div>
-                
                 <div class="avanti-search-box" onclick="AvantiWidget.showChat()">
                     <span>🔍</span>
                     <span>Search for help...</span>
@@ -18669,10 +18612,6 @@ const AvantiWidget = {
     screenshotDataUrl: null,
     firebaseReady: false,
     initAttempts: 0,
-    // Notification properties
-    fcmToken: null,
-    notificationPermission: 'default',
-    messaging: null,
     
     // Get time-based greeting in Hindi/Sanskrit
     getGreeting: function(name) {
@@ -18700,9 +18639,6 @@ const AvantiWidget = {
         
         // Wait for Firebase
         this.waitForFirebase();
-        
-        // Initialize notifications
-        this.initMessaging();
         
         // Show greeting popup after delay
         setTimeout(() => this.showGreeting(), 12000 + Math.random() * 3000);
@@ -18840,136 +18776,6 @@ const AvantiWidget = {
         } catch (e) {}
     },
     
-    // Initialize Firebase Messaging for notifications
-    initMessaging: function() {
-        if (typeof firebase === 'undefined' || !firebase.messaging) {
-            console.log('[AvantiWidget] Firebase Messaging not available');
-            return;
-        }
-        
-        try {
-            this.messaging = firebase.messaging();
-            this.notificationPermission = Notification.permission || 'default';
-            console.log('[AvantiWidget] Messaging initialized, permission:', this.notificationPermission);
-            
-            // Handle foreground messages
-            this.messaging.onMessage((payload) => {
-                console.log('[AvantiWidget] Message received:', payload);
-                this.showInAppNotification(payload);
-            });
-        } catch (e) {
-            console.log('[AvantiWidget] Messaging init error:', e);
-        }
-    },
-    
-    // Request notification permission
-    requestNotificationPermission: async function() {
-        if (!('Notification' in window)) {
-            alert('Your browser does not support notifications');
-            return false;
-        }
-        
-        try {
-            const permission = await Notification.requestPermission();
-            this.notificationPermission = permission;
-            
-            if (permission === 'granted') {
-                await this.getFCMToken();
-                this.updateNotificationBanner();
-                return true;
-            } else {
-                alert('Notifications blocked. You can enable them in browser settings.');
-                return false;
-            }
-        } catch (e) {
-            console.error('[AvantiWidget] Notification permission error:', e);
-            return false;
-        }
-    },
-    
-    // Get FCM Token
-    getFCMToken: async function() {
-        if (!this.messaging) return null;
-        
-        try {
-            // Register service worker first
-            if ('serviceWorker' in navigator) {
-                try {
-                    await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-                } catch (e) {
-                    console.log('[AvantiWidget] SW registration skipped:', e.message);
-                }
-            }
-            
-            const token = await this.messaging.getToken({
-                vapidKey: 'YOUR_VAPID_KEY_HERE' // Replace with your key from Firebase Console
-            });
-            
-            if (token) {
-                this.fcmToken = token;
-                console.log('[AvantiWidget] FCM Token obtained');
-                await this.saveFCMToken(token);
-                return token;
-            }
-        } catch (e) {
-            console.error('[AvantiWidget] FCM Token error:', e);
-        }
-        return null;
-    },
-    
-    // Save FCM token to Firestore
-    saveFCMToken: async function(token) {
-        if (!this.firebaseReady || !this.user) return;
-        
-        try {
-            const odId = this.user.studentId || this.user.email || 'unknown_' + Date.now();
-            await firebase.firestore().collection('helpdesk_fcm_tokens').doc(odId).set({
-                token: token,
-                userName: this.user.name,
-                userEmail: this.user.email || '',
-                studentId: this.user.studentId || '',
-                userType: this.user.type,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-            console.log('[AvantiWidget] FCM token saved');
-        } catch (e) {
-            console.error('[AvantiWidget] Save FCM token error:', e);
-        }
-    },
-    
-    // Show in-app notification
-    showInAppNotification: function(payload) {
-        const title = payload.notification?.title || 'Help Desk Update';
-        const body = payload.notification?.body || 'You have an update on your ticket';
-        
-        // Show browser notification
-        if (Notification.permission === 'granted') {
-            new Notification(title, { body: body, icon: '/icon-192.png' });
-        }
-        
-        // Reload tickets to show update
-        this.loadTickets();
-    },
-    
-    // Get notification banner HTML
-    getNotificationBanner: function() {
-        if (this.notificationPermission === 'granted') {
-            return '<div class="avanti-notify-banner enabled"><span class="notify-icon">✅</span><span class="notify-text">Notifications enabled! You\'ll get updates on your tickets.</span></div>';
-        } else if (this.notificationPermission === 'denied') {
-            return '';
-        } else {
-            return '<div class="avanti-notify-banner" id="notifyBanner"><span class="notify-icon">🔔</span><span class="notify-text">Get notified when your ticket is updated</span><button class="notify-btn" onclick="AvantiWidget.requestNotificationPermission()">Enable</button><button class="dismiss-btn" onclick="document.getElementById(\'notifyBanner\').style.display=\'none\'">×</button></div>';
-        }
-    },
-    
-    // Update notification banner display
-    updateNotificationBanner: function() {
-        const banner = document.getElementById('notifyBanner');
-        if (banner && this.notificationPermission === 'granted') {
-            banner.outerHTML = '<div class="avanti-notify-banner enabled"><span class="notify-icon">✅</span><span class="notify-text">Notifications enabled!</span></div>';
-        }
-    },
-    
     // Load tickets - NO INDEX REQUIRED (sorts client-side)
     loadTickets: function() {
         if (!this.firebaseReady || !this.user) {
@@ -19094,12 +18900,6 @@ const AvantiWidget = {
         document.getElementById('chatView').style.display = 'none';
         document.getElementById('ticketsView').style.display = 'none';
         document.getElementById('formView').style.display = 'none';
-        
-        // Show notification banner
-        const bannerContainer = document.getElementById('notificationBannerContainer');
-        if (bannerContainer) {
-            bannerContainer.innerHTML = this.getNotificationBanner();
-        }
         
         document.querySelectorAll('.avanti-nav-item').forEach(n => n.classList.remove('active'));
         document.getElementById('navHome').classList.add('active');
@@ -19591,7 +19391,6 @@ const AvantiWidget = {
                 screenshotUrl: screenshotUrl,
                 status: 'open',
                 priority: 'medium',
-                fcmToken: this.fcmToken || null,
                 replies: [],
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -19661,7 +19460,6 @@ const AvantiWidget = {
                 screenshotUrl: screenshotUrl,
                 status: 'open',
                 priority: 'medium',
-                fcmToken: this.fcmToken || null,
                 replies: [],
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -19699,6 +19497,522 @@ if (document.readyState === 'loading') {
 } else {
     AvantiWidget.init();
 }
+</script>
+
+<!-- ============================================
+     GLOBAL NOTIFICATION SYSTEM
+     For entire Curriculum Tracker app
+============================================ -->
+<style>
+/* Notification Bell */
+.notification-bell {
+    position: fixed;
+    top: 20px;
+    right: 80px;
+    z-index: 9998;
+    background: #12121a;
+    border: 1px solid #2a2a3a;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.notification-bell:hover {
+    background: #1a1a24;
+    transform: scale(1.05);
+}
+
+.notification-bell .bell-icon {
+    font-size: 20px;
+}
+
+.notification-bell .badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #ef4444;
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+}
+
+.notification-bell .badge.show {
+    display: flex;
+}
+
+/* Notification Panel */
+.notification-panel {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    width: 340px;
+    max-height: 450px;
+    background: #12121a;
+    border: 1px solid #2a2a3a;
+    border-radius: 16px;
+    z-index: 9997;
+    display: none;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    overflow: hidden;
+}
+
+.notification-panel.show {
+    display: flex;
+}
+
+.notification-panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #2a2a3a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.notification-panel-header h3 {
+    color: #F4B41A;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.notification-panel-header button {
+    background: none;
+    border: none;
+    color: #8a8a9a;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.notification-panel-header button:hover {
+    color: #F4B41A;
+}
+
+.notification-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.notification-item {
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.notification-item:hover {
+    border-color: #F4B41A;
+}
+
+.notification-item.unread {
+    border-left: 3px solid #F4B41A;
+}
+
+.notification-item .title {
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 6px;
+}
+
+.notification-item .message {
+    color: #8a8a9a;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.notification-item .time {
+    color: #5a5a6a;
+    font-size: 11px;
+    margin-top: 8px;
+}
+
+.notification-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #5a5a6a;
+}
+
+.notification-empty .icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+}
+
+/* Enable notifications banner */
+.enable-notifications-banner {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 12px 16px;
+    margin: 12px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.enable-notifications-banner .text {
+    flex: 1;
+    color: #fff;
+    font-size: 12px;
+}
+
+.enable-notifications-banner .btn {
+    background: #fff;
+    color: #667eea;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+@media (max-width: 480px) {
+    .notification-bell {
+        right: 70px;
+        top: 15px;
+        width: 38px;
+        height: 38px;
+    }
+    
+    .notification-panel {
+        right: 10px;
+        left: 10px;
+        width: auto;
+    }
+}
+</style>
+
+<!-- Notification Bell -->
+<div class="notification-bell" id="notificationBell" onclick="NotificationManager.togglePanel()">
+    <span class="bell-icon">🔔</span>
+    <span class="badge" id="notificationBadge">0</span>
+</div>
+
+<!-- Notification Panel -->
+<div class="notification-panel" id="notificationPanel">
+    <div class="notification-panel-header">
+        <h3>🔔 Notifications</h3>
+        <button onclick="NotificationManager.markAllRead()">Mark all read</button>
+    </div>
+    <div class="notification-panel-body" id="notificationList">
+        <!-- Notifications loaded here -->
+    </div>
+</div>
+
+<script>
+// ============================================
+// NOTIFICATION MANAGER - Global App Notifications
+// ============================================
+const NotificationManager = {
+    notifications: [],
+    unreadCount: 0,
+    messaging: null,
+    fcmToken: null,
+    isOpen: false,
+    userId: null,
+    
+    init: function() {
+        console.log('[NotificationManager] Initializing...');
+        
+        // Get user ID
+        this.getUserId();
+        
+        // Initialize Firebase Messaging
+        this.initMessaging();
+        
+        // Load notifications from Firestore
+        setTimeout(() => this.loadNotifications(), 2000);
+        
+        // Close panel when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.notification-bell') && !e.target.closest('.notification-panel')) {
+                this.closePanel();
+            }
+        });
+        
+        console.log('[NotificationManager] Initialized');
+    },
+    
+    getUserId: function() {
+        // Try to get from localStorage (students)
+        const studentSession = localStorage.getItem('studentSession');
+        if (studentSession) {
+            try {
+                const student = JSON.parse(studentSession);
+                this.userId = student.studentId || student.id || null;
+                return;
+            } catch (e) {}
+        }
+        
+        // Try Firebase Auth (teachers)
+        if (typeof firebase !== 'undefined' && firebase.auth) {
+            firebase.auth().onAuthStateChanged(user => {
+                if (user) {
+                    this.userId = user.email;
+                    this.loadNotifications();
+                }
+            });
+        }
+    },
+    
+    initMessaging: function() {
+        if (typeof firebase === 'undefined' || !firebase.messaging) {
+            console.log('[NotificationManager] Firebase Messaging not available');
+            return;
+        }
+        
+        try {
+            this.messaging = firebase.messaging();
+            console.log('[NotificationManager] Messaging ready');
+            
+            // Handle foreground messages
+            this.messaging.onMessage((payload) => {
+                console.log('[NotificationManager] Message received:', payload);
+                
+                // Show browser notification
+                if (Notification.permission === 'granted') {
+                    new Notification(payload.notification?.title || 'Avanti Fellows', {
+                        body: payload.notification?.body,
+                        icon: '/icon-192.png'
+                    });
+                }
+                
+                // Reload notifications
+                this.loadNotifications();
+            });
+        } catch (e) {
+            console.log('[NotificationManager] Messaging init error:', e);
+        }
+    },
+    
+    requestPermission: async function() {
+        if (!('Notification' in window)) {
+            alert('Your browser does not support notifications');
+            return false;
+        }
+        
+        try {
+            const permission = await Notification.requestPermission();
+            
+            if (permission === 'granted') {
+                await this.getFCMToken();
+                this.renderNotifications();
+                return true;
+            } else {
+                alert('Notifications blocked. Enable in browser settings.');
+                return false;
+            }
+        } catch (e) {
+            console.error('[NotificationManager] Permission error:', e);
+            return false;
+        }
+    },
+    
+    getFCMToken: async function() {
+        if (!this.messaging) return null;
+        
+        try {
+            // Register service worker
+            if ('serviceWorker' in navigator) {
+                try {
+                    await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                } catch (e) {
+                    console.log('[NotificationManager] SW error:', e.message);
+                }
+            }
+            
+            const token = await this.messaging.getToken({
+                vapidKey: 'BAmI6KolDdphNCYs1yHd5UtWT80R4MQIO-5VVu5yvc2UfSBez-n5UAJ--MBQc_ZOAvzGOTJRWHQv2uyW2enLbEw' // Replace with your key
+            });
+            
+            if (token) {
+                this.fcmToken = token;
+                await this.saveFCMToken(token);
+                return token;
+            }
+        } catch (e) {
+            console.error('[NotificationManager] Token error:', e);
+        }
+        return null;
+    },
+    
+    saveFCMToken: async function(token) {
+        if (!this.userId || typeof firebase === 'undefined') return;
+        
+        try {
+            await firebase.firestore().collection('app_fcm_tokens').doc(String(this.userId)).set({
+                token: token,
+                userId: this.userId,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            console.log('[NotificationManager] Token saved');
+        } catch (e) {
+            console.error('[NotificationManager] Save token error:', e);
+        }
+    },
+    
+    loadNotifications: function() {
+        if (typeof firebase === 'undefined') return;
+        
+        try {
+            // Load global announcements
+            firebase.firestore().collection('app_notifications')
+                .orderBy('createdAt', 'desc')
+                .limit(15)
+                .onSnapshot(snap => {
+                    const globalNotifs = snap.docs.map(d => ({ id: d.id, source: 'global', ...d.data() }));
+                    this.mergeNotifications(globalNotifs, 'global');
+                }, err => {
+                    console.log('[NotificationManager] Global notifications error:', err);
+                });
+            
+            // Load user-specific ticket notifications
+            if (this.userId) {
+                firebase.firestore().collection('user_notifications')
+                    .where('userId', '==', String(this.userId))
+                    .orderBy('createdAt', 'desc')
+                    .limit(15)
+                    .onSnapshot(snap => {
+                        const ticketNotifs = snap.docs.map(d => ({ id: d.id, source: 'ticket', ...d.data() }));
+                        this.mergeNotifications(ticketNotifs, 'ticket');
+                    }, err => {
+                        // If index error, try without orderBy
+                        console.log('[NotificationManager] Ticket notifications error:', err);
+                        firebase.firestore().collection('user_notifications')
+                            .where('userId', '==', String(this.userId))
+                            .limit(15)
+                            .get()
+                            .then(snap => {
+                                const ticketNotifs = snap.docs.map(d => ({ id: d.id, source: 'ticket', ...d.data() }));
+                                this.mergeNotifications(ticketNotifs, 'ticket');
+                            });
+                    });
+            }
+        } catch (e) {
+            console.error('[NotificationManager] Error:', e);
+        }
+    },
+    
+    // Merge notifications from different sources
+    mergeNotifications: function(newNotifs, source) {
+        // Remove old notifications from same source
+        this.notifications = this.notifications.filter(n => n.source !== source);
+        
+        // Add new notifications
+        this.notifications = this.notifications.concat(newNotifs);
+        
+        // Sort by date (newest first)
+        this.notifications.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(0);
+            const dateB = b.createdAt?.toDate?.() || new Date(0);
+            return dateB - dateA;
+        });
+        
+        // Keep only latest 20
+        this.notifications = this.notifications.slice(0, 20);
+        
+        this.updateUnreadCount();
+        this.renderNotifications();
+    },
+    
+    updateUnreadCount: function() {
+        const readIds = JSON.parse(localStorage.getItem('readNotifications') || '[]');
+        this.unreadCount = this.notifications.filter(n => !readIds.includes(n.id)).length;
+        
+        const badge = document.getElementById('notificationBadge');
+        if (badge) {
+            badge.textContent = this.unreadCount;
+            badge.classList.toggle('show', this.unreadCount > 0);
+        }
+    },
+    
+    renderNotifications: function() {
+        const list = document.getElementById('notificationList');
+        if (!list) return;
+        
+        const readIds = JSON.parse(localStorage.getItem('readNotifications') || '[]');
+        const permissionBanner = Notification.permission !== 'granted' ? 
+            '<div class="enable-notifications-banner"><span class="text">🔔 Enable push notifications to get instant updates</span><button class="btn" onclick="NotificationManager.requestPermission()">Enable</button></div>' : '';
+        
+        if (this.notifications.length === 0) {
+            list.innerHTML = permissionBanner + '<div class="notification-empty"><div class="icon">📭</div><p>No notifications yet</p></div>';
+            return;
+        }
+        
+        list.innerHTML = permissionBanner + this.notifications.map(n => {
+            const isUnread = !readIds.includes(n.id);
+            const time = n.createdAt?.toDate?.() || new Date();
+            const timeAgo = this.timeAgo(time);
+            const isTicket = n.source === 'ticket' || n.type === 'ticket_update';
+            const icon = isTicket ? '🎫' : '📢';
+            const ticketLabel = isTicket && n.ticketId ? '<span style="color: #F4B41A; font-size: 11px; margin-left: 6px;">#' + n.ticketId + '</span>' : '';
+            
+            return `<div class="notification-item ${isUnread ? 'unread' : ''}" onclick="NotificationManager.markRead('${n.id}')">
+                <div class="title">${icon} ${n.title || 'Notification'}${ticketLabel}</div>
+                <div class="message">${n.message || ''}</div>
+                <div class="time">${timeAgo}</div>
+            </div>`;
+        }).join('');
+    },
+    
+    timeAgo: function(date) {
+        const seconds = Math.floor((new Date() - date) / 1000);
+        if (seconds < 60) return 'Just now';
+        if (seconds < 3600) return Math.floor(seconds / 60) + ' min ago';
+        if (seconds < 86400) return Math.floor(seconds / 3600) + ' hours ago';
+        return Math.floor(seconds / 86400) + ' days ago';
+    },
+    
+    togglePanel: function() {
+        this.isOpen ? this.closePanel() : this.openPanel();
+    },
+    
+    openPanel: function() {
+        document.getElementById('notificationPanel')?.classList.add('show');
+        this.isOpen = true;
+    },
+    
+    closePanel: function() {
+        document.getElementById('notificationPanel')?.classList.remove('show');
+        this.isOpen = false;
+    },
+    
+    markRead: function(id) {
+        const readIds = JSON.parse(localStorage.getItem('readNotifications') || '[]');
+        if (!readIds.includes(id)) {
+            readIds.push(id);
+            localStorage.setItem('readNotifications', JSON.stringify(readIds));
+            this.updateUnreadCount();
+            this.renderNotifications();
+        }
+    },
+    
+    markAllRead: function() {
+        const readIds = this.notifications.map(n => n.id);
+        localStorage.setItem('readNotifications', JSON.stringify(readIds));
+        this.updateUnreadCount();
+        this.renderNotifications();
+    }
+};
+
+// Initialize when Firebase is ready
+setTimeout(() => NotificationManager.init(), 1500);
 </script>
 </body>
 </html>
