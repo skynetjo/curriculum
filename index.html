@@ -18501,7 +18501,7 @@ const AvantiWidget = {
         setTimeout(() => this.loadTickets(), 1000);
         
         // Show greeting popup after 10 seconds
-        setTimeout(() => this.showGreeting(), 10000);
+        setTimeout(() => this.showGreeting(), 10000 + Math.random() * 5000);
         
         console.log('[AvantiWidget] Ready!');
     },
@@ -18601,25 +18601,42 @@ const AvantiWidget = {
     },
     
     // Show greeting popup
-    showGreeting: function() {
-        if (this.isOpen) return;
-        if (localStorage.getItem('avantiGreetingDismissed')) return;
-        
-        const greeting = document.getElementById('avantiGreeting');
-        const text = document.getElementById('greetingText');
-        
-        const hour = new Date().getHours();
-        let timeGreeting = 'Hey';
-        if (hour < 12) timeGreeting = 'Good morning';
-        else if (hour < 17) timeGreeting = 'Good afternoon';
-        else timeGreeting = 'Good evening';
-        
-        const name = this.user?.name || '';
-        
-        text.innerHTML = `👋 <strong>${timeGreeting}${name ? ', ' + name : ''}!</strong> Need any help?`;
-        
-        greeting.classList.add('show');
-    },
+    showGreeting: function () {
+    if (this.isOpen) return;
+    if (sessionStorage.getItem('avantiGreetingShown')) return;
+
+    const greeting = document.getElementById('avantiGreeting');
+    const text = document.getElementById('greetingText');
+
+    const hour = new Date().getHours();
+    let message = '';
+
+    if (hour < 12) {
+        message = `
+            🙏 <strong>Namaste</strong><br>
+            🌅 <strong>सुप्रभातम्</strong> <em>(Suprabhātam)</em><br>
+            <span style="color:#9ca3af;font-size:13px;">Good morning</span>
+        `;
+    } else if (hour < 17) {
+        message = `
+            🙏 <strong>Namaste</strong><br>
+            🌇 <strong>शुभमध्याह्नम्</strong><br>
+            <span style="color:#9ca3af;font-size:13px;">Auspicious midday</span>
+        `;
+    } else {
+        message = `
+            🙏 <strong>Namaste</strong><br>
+            🌃 <strong>शुभसायंकालम्</strong><br>
+            <span style="color:#9ca3af;font-size:13px;">Auspicious evening</span>
+        `;
+    }
+
+    text.innerHTML = message + `<br><strong>How can we help you?</strong>`;
+
+    greeting.classList.add('show');
+    sessionStorage.setItem('avantiGreetingShown', 'true');
+}
+
     
     // Hide greeting
     hideGreeting: function() {
