@@ -9,6 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
   
   <!-- React -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -18398,6 +18399,61 @@ ReactDOM.render(<App/>,document.getElementById('root'));
 }
 
 .avanti-success h3 {
+    color: #fff;
+    font-size: 20px;
+    margin-bottom: 10px;
+}
+
+/* Notification Banner */
+.avanti-notify-banner {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.avanti-notify-banner .notify-icon {
+    font-size: 20px;
+}
+
+.avanti-notify-banner .notify-text {
+    flex: 1;
+    font-size: 12px;
+    color: #fff;
+    line-height: 1.4;
+}
+
+.avanti-notify-banner .notify-btn {
+    background: #fff;
+    color: #667eea;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.avanti-notify-banner .notify-btn:hover {
+    background: #f0f0f0;
+}
+
+.avanti-notify-banner.enabled {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.avanti-notify-banner .dismiss-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.7);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 4px;
+}
     color: #10b981;
     font-size: 20px;
     margin: 0 0 8px 0;
@@ -18527,6 +18583,9 @@ ReactDOM.render(<App/>,document.getElementById('root'));
                     <p>How can we help you today?</p>
                 </div>
                 
+                <!-- Notification Banner Container -->
+                <div id="notificationBannerContainer"></div>
+                
                 <div class="avanti-search-box" onclick="AvantiWidget.showChat()">
                     <span>🔍</span>
                     <span>Search for help...</span>
@@ -18610,6 +18669,10 @@ const AvantiWidget = {
     screenshotDataUrl: null,
     firebaseReady: false,
     initAttempts: 0,
+    // Notification properties
+    fcmToken: null,
+    notificationPermission: 'default',
+    messaging: null,
     
     // Get time-based greeting in Hindi/Sanskrit
     getGreeting: function(name) {
@@ -18637,6 +18700,9 @@ const AvantiWidget = {
         
         // Wait for Firebase
         this.waitForFirebase();
+        
+        // Initialize notifications
+        this.initMessaging();
         
         // Show greeting popup after delay
         setTimeout(() => this.showGreeting(), 12000 + Math.random() * 3000);
@@ -18774,6 +18840,136 @@ const AvantiWidget = {
         } catch (e) {}
     },
     
+    // Initialize Firebase Messaging for notifications
+    initMessaging: function() {
+        if (typeof firebase === 'undefined' || !firebase.messaging) {
+            console.log('[AvantiWidget] Firebase Messaging not available');
+            return;
+        }
+        
+        try {
+            this.messaging = firebase.messaging();
+            this.notificationPermission = Notification.permission || 'default';
+            console.log('[AvantiWidget] Messaging initialized, permission:', this.notificationPermission);
+            
+            // Handle foreground messages
+            this.messaging.onMessage((payload) => {
+                console.log('[AvantiWidget] Message received:', payload);
+                this.showInAppNotification(payload);
+            });
+        } catch (e) {
+            console.log('[AvantiWidget] Messaging init error:', e);
+        }
+    },
+    
+    // Request notification permission
+    requestNotificationPermission: async function() {
+        if (!('Notification' in window)) {
+            alert('Your browser does not support notifications');
+            return false;
+        }
+        
+        try {
+            const permission = await Notification.requestPermission();
+            this.notificationPermission = permission;
+            
+            if (permission === 'granted') {
+                await this.getFCMToken();
+                this.updateNotificationBanner();
+                return true;
+            } else {
+                alert('Notifications blocked. You can enable them in browser settings.');
+                return false;
+            }
+        } catch (e) {
+            console.error('[AvantiWidget] Notification permission error:', e);
+            return false;
+        }
+    },
+    
+    // Get FCM Token
+    getFCMToken: async function() {
+        if (!this.messaging) return null;
+        
+        try {
+            // Register service worker first
+            if ('serviceWorker' in navigator) {
+                try {
+                    await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                } catch (e) {
+                    console.log('[AvantiWidget] SW registration skipped:', e.message);
+                }
+            }
+            
+            const token = await this.messaging.getToken({
+                vapidKey: 'YOUR_VAPID_KEY_HERE' // Replace with your key from Firebase Console
+            });
+            
+            if (token) {
+                this.fcmToken = token;
+                console.log('[AvantiWidget] FCM Token obtained');
+                await this.saveFCMToken(token);
+                return token;
+            }
+        } catch (e) {
+            console.error('[AvantiWidget] FCM Token error:', e);
+        }
+        return null;
+    },
+    
+    // Save FCM token to Firestore
+    saveFCMToken: async function(token) {
+        if (!this.firebaseReady || !this.user) return;
+        
+        try {
+            const odId = this.user.studentId || this.user.email || 'unknown_' + Date.now();
+            await firebase.firestore().collection('helpdesk_fcm_tokens').doc(odId).set({
+                token: token,
+                userName: this.user.name,
+                userEmail: this.user.email || '',
+                studentId: this.user.studentId || '',
+                userType: this.user.type,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            console.log('[AvantiWidget] FCM token saved');
+        } catch (e) {
+            console.error('[AvantiWidget] Save FCM token error:', e);
+        }
+    },
+    
+    // Show in-app notification
+    showInAppNotification: function(payload) {
+        const title = payload.notification?.title || 'Help Desk Update';
+        const body = payload.notification?.body || 'You have an update on your ticket';
+        
+        // Show browser notification
+        if (Notification.permission === 'granted') {
+            new Notification(title, { body: body, icon: '/icon-192.png' });
+        }
+        
+        // Reload tickets to show update
+        this.loadTickets();
+    },
+    
+    // Get notification banner HTML
+    getNotificationBanner: function() {
+        if (this.notificationPermission === 'granted') {
+            return '<div class="avanti-notify-banner enabled"><span class="notify-icon">✅</span><span class="notify-text">Notifications enabled! You\'ll get updates on your tickets.</span></div>';
+        } else if (this.notificationPermission === 'denied') {
+            return '';
+        } else {
+            return '<div class="avanti-notify-banner" id="notifyBanner"><span class="notify-icon">🔔</span><span class="notify-text">Get notified when your ticket is updated</span><button class="notify-btn" onclick="AvantiWidget.requestNotificationPermission()">Enable</button><button class="dismiss-btn" onclick="document.getElementById(\'notifyBanner\').style.display=\'none\'">×</button></div>';
+        }
+    },
+    
+    // Update notification banner display
+    updateNotificationBanner: function() {
+        const banner = document.getElementById('notifyBanner');
+        if (banner && this.notificationPermission === 'granted') {
+            banner.outerHTML = '<div class="avanti-notify-banner enabled"><span class="notify-icon">✅</span><span class="notify-text">Notifications enabled!</span></div>';
+        }
+    },
+    
     // Load tickets - NO INDEX REQUIRED (sorts client-side)
     loadTickets: function() {
         if (!this.firebaseReady || !this.user) {
@@ -18898,6 +19094,12 @@ const AvantiWidget = {
         document.getElementById('chatView').style.display = 'none';
         document.getElementById('ticketsView').style.display = 'none';
         document.getElementById('formView').style.display = 'none';
+        
+        // Show notification banner
+        const bannerContainer = document.getElementById('notificationBannerContainer');
+        if (bannerContainer) {
+            bannerContainer.innerHTML = this.getNotificationBanner();
+        }
         
         document.querySelectorAll('.avanti-nav-item').forEach(n => n.classList.remove('active'));
         document.getElementById('navHome').classList.add('active');
@@ -19389,6 +19591,7 @@ const AvantiWidget = {
                 screenshotUrl: screenshotUrl,
                 status: 'open',
                 priority: 'medium',
+                fcmToken: this.fcmToken || null,
                 replies: [],
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -19458,6 +19661,7 @@ const AvantiWidget = {
                 screenshotUrl: screenshotUrl,
                 status: 'open',
                 priority: 'medium',
+                fcmToken: this.fcmToken || null,
                 replies: [],
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
