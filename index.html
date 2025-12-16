@@ -12973,11 +12973,15 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   const[attendanceMap,setAttendanceMap]=useState({});
   const[showRemarksModal,setShowRemarksModal]=useState(false);
   const[selectedStudent,setSelectedStudent]=useState(null);
-  const[isLocked,setIsLocked]=useState(false);
-  const[lockInfo,setLockInfo]=useState(null);
+  const[lockStatus,setLockStatus]=useState({11: false, 12: false}); // Track lock status for each grade
+  const[lockInfo,setLockInfo]=useState({11: null, 12: null}); // Track lock info for each grade
   const[isLoading,setIsLoading]=useState(false);
   const[isMarkingAll,setIsMarkingAll]=useState(false);
   const[markingProgress,setMarkingProgress]=useState({current:0,total:0});
+  
+  // Current grade lock status
+  const isLocked = lockStatus[selectedGrade] || false;
+  const currentLockInfo = lockInfo[selectedGrade] || null;
 
   const mySchool=currentUser.school;
   const filteredStudents=students
@@ -13002,32 +13006,46 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
       });
     setAttendanceMap(map);
     
-    // ✅ Check if attendance is locked for this date
-    checkAttendanceLock();
-  }, [selectedDate, mySchool, selectedGrade, studentAttendance]);
+    // ✅ Check lock status for BOTH grades
+    checkAllLocks();
+  }, [selectedDate, mySchool, studentAttendance]);
   
-  const checkAttendanceLock=async()=>{
+  // Check when grade changes
+  useEffect(()=>{
+    const map={};
+    studentAttendance
+      .filter(a=>a.date===selectedDate&&a.school===mySchool&&a.grade===selectedGrade)
+      .forEach(a=>{
+        map[a.studentId]=a.status;
+      });
+    setAttendanceMap(map);
+  }, [selectedGrade]);
+  
+  const checkAllLocks=async()=>{
     try{
-      const lockId=`${mySchool}_${selectedGrade}_${selectedDate}`;
-      const lockDoc=await db.collection('attendanceLocks').doc(lockId).get();
+      const newLockStatus = {11: false, 12: false};
+      const newLockInfo = {11: null, 12: null};
       
-      if(lockDoc.exists){
-        const lockData=lockDoc.data();
-        setIsLocked(true);
-        setLockInfo(lockData);
-      }else{
-        setIsLocked(false);
-        setLockInfo(null);
+      // Check lock for both grades
+      for (const grade of ['11', '12']) {
+        const lockId=`${mySchool}_${grade}_${selectedDate}`;
+        const lockDoc=await db.collection('attendanceLocks').doc(lockId).get();
+        
+        if(lockDoc.exists){
+          newLockStatus[grade] = true;
+          newLockInfo[grade] = lockDoc.data();
+        }
       }
+      
+      setLockStatus(newLockStatus);
+      setLockInfo(newLockInfo);
     }catch(e){
-      console.error('Error checking lock:',e);
-      setIsLocked(false);
-      setLockInfo(null);
+      console.error('Error checking locks:',e);
     }
   };
   
   const lockAttendance=async()=>{
-    const confirmation=confirm('Are you sure you want to lock attendance for this date?\n\nOnce locked:\n- No teacher can mark or change attendance\n- Only admins can unlock it\n\nThis prevents duplicate entries.');
+    const confirmation=confirm(`Are you sure you want to lock attendance for Class ${selectedGrade} on ${selectedDate}?\n\nOnce locked:\n- No teacher can mark or change attendance for Class ${selectedGrade}\n- Only admins can unlock it\n\nThis prevents duplicate entries.`);
     
     if(!confirmation)return;
     
@@ -13044,8 +13062,8 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
         lockedByName:currentUser.name||currentUser.afid
       });
       
-      alert('✅ Attendance locked successfully!\n\nNo one can modify attendance for this date now.');
-      checkAttendanceLock();
+      alert(`✅ Attendance locked for Class ${selectedGrade}!\n\nNo one can modify attendance for Class ${selectedGrade} on this date now.`);
+      checkAllLocks();
     }catch(e){
       alert('Failed to lock: '+e.message);
     }finally{
@@ -13059,7 +13077,7 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
       return;
     }
     
-    const confirmation=confirm('Are you sure you want to unlock attendance for this date?\n\nTeachers will be able to mark/modify attendance again.');
+    const confirmation=confirm(`Are you sure you want to unlock attendance for Class ${selectedGrade}?\n\nTeachers will be able to mark/modify attendance for Class ${selectedGrade} again.`);
     
     if(!confirmation)return;
     
@@ -13068,8 +13086,8 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
       const lockId=`${mySchool}_${selectedGrade}_${selectedDate}`;
       await db.collection('attendanceLocks').doc(lockId).delete();
       
-      alert('✅ Attendance unlocked successfully!');
-      checkAttendanceLock();
+      alert(`✅ Attendance unlocked for Class ${selectedGrade}!`);
+      checkAllLocks();
     }catch(e){
       alert('Failed to unlock: '+e.message);
     }finally{
@@ -13079,13 +13097,13 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   const handleAttendanceChange=async(studentId,status,remarks='')=>{
     // ✅ CHECK IF LOCKED
         if (isLocked) {
-      const lockedBy = lockInfo?.lockedByName || 'Unknown';
-      const lockedAt = lockInfo?.lockedAt
-        ? new Date(lockInfo.lockedAt).toLocaleString()
+      const lockedBy = currentLockInfo?.lockedByName || 'Unknown';
+      const lockedAt = currentLockInfo?.lockedAt
+        ? new Date(currentLockInfo.lockedAt).toLocaleString()
         : 'Unknown time';
 
       alert(
-        '❌ Attendance is locked for this date!\n\n' +
+        `❌ Attendance is locked for Class ${selectedGrade} on this date!\n\n` +
         `Locked by: ${lockedBy}\n` +
         `Locked at: ${lockedAt}\n\n` +
         'Contact admin to unlock.'
@@ -13235,23 +13253,57 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
       
       <h2 className="text-3xl font-bold">Student Attendance - {mySchool}</h2>
 
-      {/* ✅ LOCK STATUS BANNER */}
+      {/* ✅ GRADE LOCK STATUS OVERVIEW */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className={`p-4 rounded-xl border-2 ${lockStatus['11'] ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-bold text-lg">Class 11</span>
+              <span className={`ml-2 px-2 py-1 rounded text-sm font-semibold ${lockStatus['11'] ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'}`}>
+                {lockStatus['11'] ? '🔒 Locked' : '🔓 Unlocked'}
+              </span>
+            </div>
+            {lockStatus['11'] && lockInfo['11'] && (
+              <div className="text-xs text-gray-600">
+                by {lockInfo['11'].lockedByName}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className={`p-4 rounded-xl border-2 ${lockStatus['12'] ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="font-bold text-lg">Class 12</span>
+              <span className={`ml-2 px-2 py-1 rounded text-sm font-semibold ${lockStatus['12'] ? 'bg-red-200 text-red-800' : 'bg-green-200 text-green-800'}`}>
+                {lockStatus['12'] ? '🔒 Locked' : '🔓 Unlocked'}
+              </span>
+            </div>
+            {lockStatus['12'] && lockInfo['12'] && (
+              <div className="text-xs text-gray-600">
+                by {lockInfo['12'].lockedByName}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ✅ LOCK STATUS BANNER FOR SELECTED GRADE */}
       {isLocked&&(
         <div className="bg-red-100 border-2 border-red-500 p-4 rounded-xl">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-bold text-red-800">🔒 Attendance is LOCKED for this date</div>
+              <div className="font-bold text-red-800">🔒 Attendance is LOCKED for Class {selectedGrade}</div>
               <div className="text-sm text-red-700 mt-1">
-                Locked by: <strong>{lockInfo?.lockedByName || 'Unknown'}</strong> on {lockInfo?.lockedAt ? new Date(lockInfo.lockedAt).toLocaleString() : 'Unknown date'}
+                Locked by: <strong>{currentLockInfo?.lockedByName || 'Unknown'}</strong> on {currentLockInfo?.lockedAt ? new Date(currentLockInfo.lockedAt).toLocaleString() : 'Unknown date'}
               </div>
-              <div className="text-sm text-red-700">No changes can be made to attendance for this date.</div>
+              <div className="text-sm text-red-700">No changes can be made to Class {selectedGrade} attendance for this date.</div>
             </div>
             {currentUser.role==='admin'&&(
               <button 
                 onClick={unlockAttendance} 
                 disabled={isLoading}
                 className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white rounded-xl font-semibold disabled:opacity-50">
-                {isLoading?'Unlocking...':'🔓 Unlock (Admin)'}
+                {isLoading?'Unlocking...':'🔓 Unlock Class '+selectedGrade}
               </button>
             )}
           </div>
@@ -13263,16 +13315,16 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
         <div className="bg-green-100 border-2 border-green-500 p-4 rounded-xl">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-bold text-green-800">✅ Attendance is UNLOCKED</div>
+              <div className="font-bold text-green-800">✅ Class {selectedGrade} Attendance is UNLOCKED</div>
               <div className="text-sm text-green-700 mt-1">
-                You can mark/modify attendance. Remember to lock it after completion to prevent duplicates.
+                You can mark/modify attendance for Class {selectedGrade}. Remember to lock it after completion to prevent duplicates.
               </div>
             </div>
             <button 
               onClick={lockAttendance} 
               disabled={isLoading}
               className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold disabled:opacity-50">
-              {isLoading?'Locking...':'🔒 Lock Attendance'}
+              {isLoading?'Locking...':'🔒 Lock Class '+selectedGrade}
             </button>
           </div>
         </div>
@@ -13282,9 +13334,9 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
         <div className="grid md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
-            <select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} disabled={isLocked} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
-              <option value="11">Class 11</option>
-              <option value="12">Class 12</option>
+            <select value={selectedGrade} onChange={e=>setSelectedGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <option value="11">Class 11 {lockStatus['11'] ? '🔒' : ''}</option>
+              <option value="12">Class 12 {lockStatus['12'] ? '🔒' : ''}</option>
             </select>
           </div>
           <div>
@@ -13729,6 +13781,13 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
   const[startDate,setStartDate]=useState(getTodayDate().slice(0,7)+'-01');
   const[endDate,setEndDate]=useState(getTodayDate());
   const[selectedDate,setSelectedDate]=useState(getTodayDate());
+  
+  // Lock Management State
+  const[attendanceLocks,setAttendanceLocks]=useState([]);
+  const[loadingLocks,setLoadingLocks]=useState(false);
+  const[showLockManagement,setShowLockManagement]=useState(false);
+  const[lockFilterSchool,setLockFilterSchool]=useState('All');
+  const[lockFilterDate,setLockFilterDate]=useState(getTodayDate());
 
   const chart1Ref=useRef(null);
   const chart2Ref=useRef(null);
@@ -13736,6 +13795,54 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
   const chart4Ref=useRef(null);
 
   const chartInstances=useRef({});
+  
+  // Load attendance locks
+  const loadAttendanceLocks=async()=>{
+    setLoadingLocks(true);
+    try{
+      let query = db.collection('attendanceLocks').orderBy('lockedAt', 'desc').limit(100);
+      const snapshot = await query.get();
+      const locks = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAttendanceLocks(locks);
+    }catch(e){
+      console.error('Error loading locks:', e);
+    }
+    setLoadingLocks(false);
+  };
+  
+  // Load locks when component mounts or when lock management is opened
+  useEffect(()=>{
+    if(showLockManagement){
+      loadAttendanceLocks();
+    }
+  },[showLockManagement]);
+  
+  // Unlock attendance
+  const handleUnlock=async(lockId, school, grade, date)=>{
+    const confirmation = confirm(`Are you sure you want to unlock attendance for:\n\nSchool: ${school}\nClass: ${grade}\nDate: ${date}\n\nTeachers will be able to modify attendance again.`);
+    
+    if(!confirmation)return;
+    
+    try{
+      await db.collection('attendanceLocks').doc(lockId).delete();
+      alert('✅ Attendance unlocked successfully!');
+      loadAttendanceLocks();
+    }catch(e){
+      alert('Failed to unlock: '+e.message);
+    }
+  };
+  
+  // Filter locks for display
+  const filteredLocks = attendanceLocks.filter(lock => {
+    if(lockFilterSchool !== 'All' && lock.school !== lockFilterSchool) return false;
+    if(lockFilterDate && lock.date !== lockFilterDate) return false;
+    // Also filter by accessible schools for non-super admins
+    if(!isSuperAdmin && !accessibleSchools.includes(lock.school)) return false;
+    return true;
+  });
 
   const filteredStudentAttendance=useMemo(()=>{
     return studentAttendance.filter(a=>{
@@ -13973,9 +14080,15 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
 
   return(
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-4">
         <h2 className="text-3xl font-bold">📊 Attendance Analytics</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button 
+            onClick={()=>setShowLockManagement(!showLockManagement)} 
+            className={`px-4 py-2 rounded-xl font-semibold ${showLockManagement ? 'bg-yellow-600 text-white' : 'bg-yellow-100 text-yellow-800 border-2 border-yellow-400'}`}
+          >
+            🔐 Manage Locks
+          </button>
           <button onClick={handleExportStudents} className="px-4 py-2 bg-green-600 text-white rounded-xl font-semibold">
             📥 Export Students
           </button>
@@ -13984,6 +14097,117 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
           </button>
         </div>
       </div>
+
+      {/* ✅ ATTENDANCE LOCK MANAGEMENT SECTION */}
+      {showLockManagement && (
+        <div className="bg-white p-6 rounded-2xl shadow-lg border-2 border-yellow-300">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              🔐 Attendance Lock Management
+            </h3>
+            <button 
+              onClick={loadAttendanceLocks}
+              disabled={loadingLocks}
+              className="px-4 py-2 bg-gray-200 rounded-lg font-semibold"
+            >
+              {loadingLocks ? '⏳ Loading...' : '🔄 Refresh'}
+            </button>
+          </div>
+          
+          <p className="text-sm text-gray-600 mb-4">
+            View and manage attendance locks. When attendance is locked, teachers cannot modify it. 
+            Use this section to unlock attendance when needed.
+          </p>
+          
+          {/* Lock Filters */}
+          <div className="grid md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">Filter by School</label>
+              <select 
+                value={lockFilterSchool} 
+                onChange={e=>setLockFilterSchool(e.target.value)}
+                className="w-full border-2 px-4 py-3 rounded-xl"
+              >
+                <option value="All">All Schools</option>
+                {schoolOptions.map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Filter by Date</label>
+              <input 
+                type="date" 
+                value={lockFilterDate} 
+                onChange={e=>setLockFilterDate(e.target.value)}
+                className="w-full border-2 px-4 py-3 rounded-xl"
+              />
+            </div>
+            <div className="flex items-end">
+              <button 
+                onClick={()=>setLockFilterDate('')}
+                className="w-full px-4 py-3 bg-gray-200 rounded-xl font-semibold"
+              >
+                Show All Dates
+              </button>
+            </div>
+          </div>
+          
+          {/* Locks Table */}
+          {loadingLocks ? (
+            <div className="text-center py-8">
+              <div className="animate-spin text-4xl mb-2">⏳</div>
+              <p>Loading attendance locks...</p>
+            </div>
+          ) : filteredLocks.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <div className="text-4xl mb-2">🔓</div>
+              <p>No attendance locks found for the selected filters.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-yellow-100">
+                  <tr>
+                    <th className="p-3 text-left">School</th>
+                    <th className="p-3 text-left">Grade</th>
+                    <th className="p-3 text-left">Date</th>
+                    <th className="p-3 text-left">Locked By</th>
+                    <th className="p-3 text-left">Locked At</th>
+                    <th className="p-3 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLocks.map(lock => (
+                    <tr key={lock.id} className="border-b hover:bg-gray-50">
+                      <td className="p-3">{lock.school}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded font-semibold">
+                          Class {lock.grade}
+                        </span>
+                      </td>
+                      <td className="p-3 font-mono">{lock.date}</td>
+                      <td className="p-3">{lock.lockedByName || lock.lockedBy}</td>
+                      <td className="p-3 text-sm">
+                        {lock.lockedAt ? new Date(lock.lockedAt).toLocaleString() : 'Unknown'}
+                      </td>
+                      <td className="p-3">
+                        <button 
+                          onClick={()=>handleUnlock(lock.id, lock.school, lock.grade, lock.date)}
+                          className="px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600"
+                        >
+                          🔓 Unlock
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="mt-4 text-sm text-gray-500">
+                Showing {filteredLocks.length} lock(s)
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white p-6 rounded-2xl shadow-lg">
         <h3 className="text-xl font-bold mb-4">🔍 Filters</h3>
