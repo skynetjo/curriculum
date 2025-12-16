@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -535,21 +534,24 @@ const MANAGER_ROLES = {
   SUPER_ADMIN: 'super_admin',     // Full access to everything
   APH: 'aph',                     // Program Head - sees all reportees' schools
   PM: 'pm',                       // Program Manager - sees their schools + APM schools
-  APM: 'apm'                      // Associate Program Manager - sees only assigned schools
+  APM: 'apm',                     // Associate Program Manager - sees only assigned schools
+  APC: 'apc'                      // Academic Program Coordinator - school level, view + student attendance
 };
 
 const ROLE_LABELS = {
   'super_admin': 'Super Admin',
   'aph': 'Program Head',
   'pm': 'Program Manager',
-  'apm': 'Associate Program Manager'
+  'apm': 'Associate Program Manager',
+  'apc': 'Academic Program Coordinator'
 };
 
 const ROLE_COLORS = {
   'super_admin': { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
   'aph': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
   'pm': { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' },
-  'apm': { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' }
+  'apm': { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
+  'apc': { bg: 'bg-teal-100', text: 'text-teal-700', border: 'border-teal-200' }
 };
 
 // ========================================
@@ -4837,16 +4839,22 @@ function Admin2FAManagement({ teachers, managers }) {
   const [twoFAUsers, setTwoFAUsers] = useState({});
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(null);
+  const [apcs, setApcs] = useState([]);
 
   useEffect(() => {
     const fetch2FAStatus = async () => {
       try {
+        // Fetch 2FA status
         const twoFASnap = await db.collection('twoFactorAuth').get();
         const status = {};
         twoFASnap.docs.forEach(doc => {
           status[doc.id] = doc.data();
         });
         setTwoFAUsers(status);
+        
+        // Fetch APCs
+        const apcsSnap = await db.collection('apcs').get();
+        setApcs(apcsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
       } catch (e) {
         console.error('Error fetching 2FA status:', e);
       } finally {
@@ -4858,7 +4866,8 @@ function Admin2FAManagement({ teachers, managers }) {
 
   const allUsers = [
     ...teachers.map(t => ({ ...t, type: 'Teacher', docId: t.afid, twoFADocId: t.afid })),
-    ...managers.map(m => ({ ...m, type: ROLE_LABELS[m.role] || 'Manager', docId: m.docId, twoFADocId: m.docId || m.uid || m.id }))
+    ...managers.map(m => ({ ...m, type: ROLE_LABELS[m.role] || 'Manager', docId: m.docId, twoFADocId: m.docId || m.uid || m.id })),
+    ...apcs.map(a => ({ ...a, type: 'APC', docId: a.id, twoFADocId: a.id }))
   ];
 
   const filteredUsers = allUsers.filter(user => {
@@ -4893,8 +4902,8 @@ function Admin2FAManagement({ teachers, managers }) {
       }
       
       // Update user's 2FA status
-      const collection = user.type === 'Teacher' ? 'teachers' : 'managers';
-      const userDocId = user.docId || user.afid;
+      const collection = user.type === 'Teacher' ? 'teachers' : user.type === 'APC' ? 'apcs' : 'managers';
+      const userDocId = user.docId || user.afid || user.id;
       await db.collection(collection).doc(userDocId).update({
         twoFactorEnabled: false,
         twoFactorResetAt: new Date().toISOString()
@@ -5257,8 +5266,53 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
         setLoading(false);
         return;
       }
-    }else{alert('User profile not found. Please contact admin.');await auth.signOut()}
-  }
+    }else{
+      // Check if APC (Academic Program Coordinator)
+      const apcSnapshot = await db.collection('apcs').where('email','==',user.email).where('status','==','active').limit(1).get();
+      if(!apcSnapshot.empty){
+        const apcRawData = apcSnapshot.docs[0].data();
+        const apcData = {
+          ...apcRawData, 
+          docId: apcSnapshot.docs[0].id, 
+          id: apcSnapshot.docs[0].id,
+          afid: 'APC_' + apcSnapshot.docs[0].id, // Add afid for compatibility
+          userType: 'apc', 
+          role: MANAGER_ROLES.APC
+        };
+        
+        // Check 2FA for APC
+        const twoFADoc = await db.collection('twoFactorAuth').doc(apcData.id || apcData.docId).get();
+        if (twoFADoc.exists && twoFADoc.data().enabled) {
+          // 2FA is enabled - check if device is trusted
+          const deviceTrusted = await isDeviceTrusted(apcData.id || apcData.docId);
+          if (deviceTrusted) {
+            // Device is trusted, skip 2FA verification
+            console.log('✅ Trusted device - skipping 2FA for APC:', apcData.name);
+            setCurrentUser(apcData);
+            setIsAdmin(false);
+            setActiveTab('overview');
+            setLoading(false);
+            return;
+          }
+          // Device not trusted, need to verify 2FA
+          setPending2FAUser({
+            ...apcData,
+            userType: 'apc'
+          });
+          setShow2FAVerify(true);
+          setLoading(false);
+          return;
+        } else {
+          // 2FA not set up - allow login without 2FA for APC (can be changed later)
+          console.log('✅ APC login (no 2FA):', apcData.name);
+          setCurrentUser(apcData);
+          setIsAdmin(false);
+          setActiveTab('overview');
+          setLoading(false);
+          return;
+        }
+      }else{alert('User profile not found. Please contact admin.');await auth.signOut()}
+    }
 }}else{// Check for student session in localStorage
 const studentSession=localStorage.getItem('studentSession');if(studentSession){try{const studentData=JSON.parse(studentSession);console.log('✅ Restored student session:',studentData);setCurrentUser(studentData);setIsAdmin(false);setActiveTab('dashboard')}catch(e){console.error('Failed to restore student session:',e);localStorage.removeItem('studentSession')}}else{setCurrentUser(null);setIsAdmin(false)}}setLoading(false)});return()=>unsubscribe()},[getAccessibleSchools]);
   // ✅ OPTIMIZED: Fetch data once on load, refresh only when needed
@@ -5454,6 +5508,7 @@ const complete2FAVerification = async () => {
   // Add device trust after successful 2FA verification
   const userId = user.userType === 'superadmin' ? 'SUPER_ADMIN' : 
                  user.userType === 'manager' ? user.id : 
+                 user.userType === 'apc' ? (user.id || user.docId) :
                  user.afid;
   await addDeviceTrust(userId, user.email);
   console.log('✅ Device trusted after 2FA verification for:', user.email);
@@ -5519,6 +5574,12 @@ const complete2FAVerification = async () => {
         setTimeout(() => {setShowConfetti(false);setCelebrationMessage('')}, 8000);
       }
     }
+  } else if (user.userType === 'apc') {
+    // APC login
+    setCurrentUser(user);
+    setIsAdmin(false);
+    setActiveTab('overview');
+    console.log('✅ APC login completed:', user.name);
   }
   
   // Clear 2FA states
@@ -5534,6 +5595,7 @@ const handle2FASetupComplete = async () => {
   if (pending2FAUser) {
     const userId = pending2FAUser.userType === 'superadmin' ? 'SUPER_ADMIN' : 
                    pending2FAUser.userType === 'manager' ? pending2FAUser.id : 
+                   pending2FAUser.userType === 'apc' ? (pending2FAUser.id || pending2FAUser.docId) :
                    pending2FAUser.afid;
     await addDeviceTrust(userId, pending2FAUser.email);
     console.log('✅ Device trusted after 2FA setup for:', pending2FAUser.email);
@@ -6136,6 +6198,475 @@ function AdminStudentProfiles({ accessibleSchools = SCHOOLS, isSuperAdmin = true
   );
 }
 
+// ========================================
+// APC SYLLABUS VIEW (View-Only)
+// ========================================
+function APCSyllabusView({ grade, currentUser, curriculum, chapterProgress, teachers }) {
+  const [selectedSubject, setSelectedSubject] = useState('All');
+  const [expandedChapters, setExpandedChapters] = useState({});
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  
+  const mySchool = currentUser.school;
+  const subjects = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+  
+  // Get all teachers for this school to show their subjects
+  const schoolTeachers = teachers.filter(t => t.school === mySchool);
+  const availableSubjects = [...new Set(schoolTeachers.map(t => t.subject).filter(Boolean))];
+  
+  // Get chapters for all subjects or selected subject
+  const getChaptersForSubject = (subject) => {
+    const docId = `${mySchool}_${subject}_${grade}`;
+    return (curriculum[docId]?.chapters || []).map(ch => ({
+      ...ch,
+      subject,
+      progressId: `${mySchool}_${ch.id}`
+    }));
+  };
+  
+  const allChapters = selectedSubject === 'All' 
+    ? availableSubjects.flatMap(getChaptersForSubject)
+    : getChaptersForSubject(selectedSubject);
+  
+  // Filter by priority
+  const chapters = priorityFilter === 'all' 
+    ? allChapters 
+    : allChapters.filter(ch => (ch.priority || 'high') === priorityFilter);
+  
+  // Count chapters by priority
+  const priorityCounts = {
+    all: allChapters.length,
+    high: allChapters.filter(ch => ch.priority === 'high' || !ch.priority).length,
+    medium: allChapters.filter(ch => ch.priority === 'medium').length,
+    low: allChapters.filter(ch => ch.priority === 'low').length
+  };
+  
+  // Calculate stats
+  const completedCount = chapters.filter(ch => {
+    const prog = chapterProgress[ch.progressId] || {};
+    return prog.completed === 'Yes';
+  }).length;
+  
+  const progressPercentage = chapters.length > 0 ? Math.round((completedCount / chapters.length) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold">📚 Class {grade} Syllabus</h2>
+          <p className="text-gray-600 mt-1">View-only access for {mySchool}</p>
+          <span className="inline-block mt-2 px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm font-semibold">
+            👤 APC View
+          </span>
+        </div>
+        
+        {/* Subject Filter */}
+        <div className="flex items-center gap-3">
+          <label className="font-semibold">Subject:</label>
+          <select
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            className="px-4 py-2 border-2 rounded-xl font-semibold"
+          >
+            <option value="All">All Subjects</option>
+            {availableSubjects.map(sub => (
+              <option key={sub} value={sub}>{sub}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      
+      {/* Stats Card */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center p-4 bg-blue-50 rounded-xl">
+            <div className="text-3xl font-bold text-blue-600">{chapters.length}</div>
+            <div className="text-sm text-gray-600">Total Chapters</div>
+          </div>
+          <div className="text-center p-4 bg-green-50 rounded-xl">
+            <div className="text-3xl font-bold text-green-600">{completedCount}</div>
+            <div className="text-sm text-gray-600">Completed</div>
+          </div>
+          <div className="text-center p-4 bg-orange-50 rounded-xl">
+            <div className="text-3xl font-bold text-orange-600">{chapters.length - completedCount}</div>
+            <div className="text-sm text-gray-600">Pending</div>
+          </div>
+          <div className="text-center p-4 bg-purple-50 rounded-xl">
+            <div className="text-3xl font-bold text-purple-600">{progressPercentage}%</div>
+            <div className="text-sm text-gray-600">Progress</div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Priority Filter */}
+      <div className="bg-white p-4 rounded-2xl shadow-lg">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-bold text-gray-700">🎯 Filter by Priority:</span>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setPriorityFilter('all')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}>📋 All ({priorityCounts.all})</button>
+            <button onClick={() => setPriorityFilter('high')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'high' ? 'bg-green-500 text-white' : 'bg-green-50 text-green-700 hover:bg-green-100'
+              }`}>🟢 High ({priorityCounts.high})</button>
+            <button onClick={() => setPriorityFilter('medium')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'medium' ? 'bg-yellow-500 text-white' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+              }`}>🟡 Medium ({priorityCounts.medium})</button>
+            <button onClick={() => setPriorityFilter('low')}
+              className={`px-4 py-2 rounded-xl font-semibold transition-all ${
+                priorityFilter === 'low' ? 'bg-red-500 text-white' : 'bg-red-50 text-red-700 hover:bg-red-100'
+              }`}>🔴 Low ({priorityCounts.low})</button>
+          </div>
+        </div>
+      </div>
+      
+      {/* Chapters Grid */}
+      {chapters.length === 0 ? (
+        <div className="bg-white p-8 rounded-2xl text-center">
+          <p className="text-gray-600">No chapters found for the selected filters.</p>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {chapters.map((chapter, idx) => {
+            const prog = chapterProgress[chapter.progressId] || {};
+            const completedTopics = prog.completedTopics || [];
+            const allTopics = chapter.topics || [];
+            const progress = allTopics.length ? Math.round((completedTopics.length / allTopics.length) * 100) : 0;
+            const isExpanded = expandedChapters[chapter.id + chapter.subject];
+            const isCompleted = prog.completed === 'Yes';
+            
+            return (
+              <div key={idx} className={`rounded-2xl shadow-lg p-5 transition-all ${
+                isCompleted ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300' :
+                progress > 50 ? 'bg-gradient-to-br from-yellow-50 to-amber-50 border-2 border-yellow-300' :
+                'bg-white border-2 border-gray-200'
+              }`}>
+                <div className="flex justify-between items-start mb-3 gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-1 text-xs font-bold rounded ${
+                        chapter.subject === 'Physics' ? 'bg-blue-100 text-blue-700' :
+                        chapter.subject === 'Chemistry' ? 'bg-purple-100 text-purple-700' :
+                        chapter.subject === 'Mathematics' ? 'bg-red-100 text-red-700' :
+                        'bg-green-100 text-green-700'
+                      }`}>{chapter.subject}</span>
+                      {isCompleted && <span className="text-green-600">✅</span>}
+                    </div>
+                    <h3 className="text-lg font-bold break-words">{chapter.name}</h3>
+                    <div className="mt-2">
+                      {(chapter.priority === 'high' || !chapter.priority) && (
+                        <span className="priority-badge priority-high text-xs">🟢 High Priority</span>
+                      )}
+                      {chapter.priority === 'medium' && (
+                        <span className="priority-badge priority-medium text-xs">🟡 Medium Priority</span>
+                      )}
+                      {chapter.priority === 'low' && (
+                        <span className="priority-badge priority-low text-xs">🔴 Low Priority</span>
+                      )}
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setExpandedChapters(prev => ({...prev, [chapter.id + chapter.subject]: !prev[chapter.id + chapter.subject]}))}
+                    className="text-sm px-3 py-1 bg-gray-100 rounded-lg font-semibold flex-shrink-0"
+                  >
+                    {isExpanded ? '▲' : '▼'}
+                  </button>
+                </div>
+                
+                {/* Progress Bar */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-semibold">Topics Progress</span>
+                    <span className="font-bold">{completedTopics.length}/{allTopics.length}</span>
+                  </div>
+                  <div className="h-2 bg-gray-200 rounded-full">
+                    <div className="h-2 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full transition-all" 
+                         style={{width: `${progress}%`}}/>
+                  </div>
+                </div>
+                
+                {isExpanded && (
+                  <div className="mt-4 space-y-3">
+                    {/* Topics List (View Only) */}
+                    <div className="bg-gray-50 p-3 rounded-lg max-h-40 overflow-y-auto">
+                      <p className="text-sm font-bold mb-2">Topics:</p>
+                      {allTopics.map((topic, tidx) => {
+                        const topicName = typeof topic === 'string' ? topic : topic.name;
+                        const isChecked = completedTopics.includes(topicName) || completedTopics.includes(topic);
+                        return (
+                          <div key={tidx} className={`text-sm py-1 ${isChecked ? 'text-gray-500 line-through' : ''}`}>
+                            {isChecked ? '✅' : '⬜'} {topicName}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Details */}
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-bold">Target:</span> {chapter.targetDate || '—'}
+                      </div>
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-bold">Completed:</span> {prog.completionDate || '—'}
+                      </div>
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-bold">Test:</span> {prog.testConducted || 'No'}
+                      </div>
+                      <div className="bg-gray-50 p-2 rounded">
+                        <span className="font-bold">Status:</span> {prog.completed || 'No'}
+                      </div>
+                    </div>
+                    
+                    {prog.notes && (
+                      <div className="bg-yellow-50 p-2 rounded text-sm">
+                        <span className="font-bold">Notes:</span> {prog.notes}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========================================
+// APC TEACHER ATTENDANCE VIEW
+// ========================================
+function APCTeacherAttendanceView({ currentUser, teachers, teacherAttendance, leaveAdjustments }) {
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [viewMode, setViewMode] = useState('daily'); // 'daily' or 'monthly'
+  
+  const mySchool = currentUser.school;
+  
+  // Filter teachers for this school
+  const schoolTeachers = teachers.filter(t => t.school === mySchool && t.status !== 'archived');
+  
+  // Get attendance for selected date
+  const getDailyAttendance = () => {
+    return teacherAttendance.filter(att => att.date === selectedDate && att.school === mySchool);
+  };
+  
+  // Get monthly attendance summary
+  const getMonthlyAttendance = () => {
+    const monthStart = selectedMonth + '-01';
+    const monthEnd = selectedMonth + '-31';
+    return teacherAttendance.filter(att => 
+      att.school === mySchool && 
+      att.date >= monthStart && 
+      att.date <= monthEnd
+    );
+  };
+  
+  const dailyAttendance = getDailyAttendance();
+  const monthlyAttendance = getMonthlyAttendance();
+  
+  // Calculate stats
+  const presentToday = dailyAttendance.filter(a => a.status === 'Present').length;
+  const absentToday = schoolTeachers.length - presentToday;
+  
+  // Monthly stats per teacher
+  const getTeacherMonthlyStats = (teacherAfid) => {
+    const teacherAtt = monthlyAttendance.filter(a => a.afid === teacherAfid);
+    const present = teacherAtt.filter(a => a.status === 'Present').length;
+    const leaves = teacherAtt.filter(a => a.status !== 'Present').length;
+    return { present, leaves, total: teacherAtt.length };
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold">👨‍🏫 Teacher Attendance</h2>
+          <p className="text-gray-600 mt-1">{mySchool} - View Only</p>
+          <span className="inline-block mt-2 px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm font-semibold">
+            👤 APC View
+          </span>
+        </div>
+        
+        {/* View Mode Toggle */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setViewMode('daily')}
+            className={`px-4 py-2 rounded-xl font-semibold ${
+              viewMode === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-200'
+            }`}
+          >📅 Daily View</button>
+          <button
+            onClick={() => setViewMode('monthly')}
+            className={`px-4 py-2 rounded-xl font-semibold ${
+              viewMode === 'monthly' ? 'bg-blue-600 text-white' : 'bg-gray-200'
+            }`}
+          >📊 Monthly View</button>
+        </div>
+      </div>
+      
+      {viewMode === 'daily' ? (
+        <>
+          {/* Date Selector */}
+          <div className="bg-white p-4 rounded-2xl shadow-lg">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="font-bold">Select Date:</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="px-4 py-2 border-2 rounded-xl"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() - 1);
+                  setSelectedDate(d.toISOString().split('T')[0]);
+                }} className="px-3 py-2 bg-gray-200 rounded-lg">◀ Prev</button>
+                <button onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])} 
+                  className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold">Today</button>
+                <button onClick={() => {
+                  const d = new Date(selectedDate);
+                  d.setDate(d.getDate() + 1);
+                  setSelectedDate(d.toISOString().split('T')[0]);
+                }} className="px-3 py-2 bg-gray-200 rounded-lg">Next ▶</button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Daily Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-xl shadow text-center">
+              <div className="text-3xl font-bold text-blue-600">{schoolTeachers.length}</div>
+              <div className="text-sm text-gray-600">Total Teachers</div>
+            </div>
+            <div className="bg-green-50 p-4 rounded-xl shadow text-center">
+              <div className="text-3xl font-bold text-green-600">{presentToday}</div>
+              <div className="text-sm text-gray-600">Present</div>
+            </div>
+            <div className="bg-red-50 p-4 rounded-xl shadow text-center">
+              <div className="text-3xl font-bold text-red-600">{absentToday}</div>
+              <div className="text-sm text-gray-600">Absent/Leave</div>
+            </div>
+            <div className="bg-purple-50 p-4 rounded-xl shadow text-center">
+              <div className="text-3xl font-bold text-purple-600">
+                {schoolTeachers.length > 0 ? Math.round((presentToday / schoolTeachers.length) * 100) : 0}%
+              </div>
+              <div className="text-sm text-gray-600">Attendance Rate</div>
+            </div>
+          </div>
+          
+          {/* Daily Attendance Table */}
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="p-4 text-left">Teacher</th>
+                  <th className="p-4 text-left">Subject</th>
+                  <th className="p-4 text-left">Status</th>
+                  <th className="p-4 text-left">Check-in Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schoolTeachers.map(teacher => {
+                  const att = dailyAttendance.find(a => a.afid === teacher.afid);
+                  return (
+                    <tr key={teacher.afid} className="border-b hover:bg-gray-50">
+                      <td className="p-4">
+                        <div className="font-semibold">{teacher.name}</div>
+                        <div className="text-xs text-gray-500">{teacher.afid}</div>
+                      </td>
+                      <td className="p-4">{teacher.subject}</td>
+                      <td className="p-4">
+                        {att ? (
+                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                            att.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {att.status}
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-500">
+                            Not Marked
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4 text-sm text-gray-600">
+                        {att?.checkInTime || '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Month Selector */}
+          <div className="bg-white p-4 rounded-2xl shadow-lg">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="font-bold">Select Month:</label>
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="px-4 py-2 border-2 rounded-xl"
+              />
+            </div>
+          </div>
+          
+          {/* Monthly Summary Table */}
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="p-4 text-left">Teacher</th>
+                  <th className="p-4 text-left">Subject</th>
+                  <th className="p-4 text-center">Days Present</th>
+                  <th className="p-4 text-center">Days Leave</th>
+                  <th className="p-4 text-center">Attendance %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schoolTeachers.map(teacher => {
+                  const stats = getTeacherMonthlyStats(teacher.afid);
+                  const percentage = stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
+                  return (
+                    <tr key={teacher.afid} className="border-b hover:bg-gray-50">
+                      <td className="p-4">
+                        <div className="font-semibold">{teacher.name}</div>
+                        <div className="text-xs text-gray-500">{teacher.afid}</div>
+                      </td>
+                      <td className="p-4">{teacher.subject}</td>
+                      <td className="p-4 text-center">
+                        <span className="font-bold text-green-600">{stats.present}</span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <span className="font-bold text-orange-600">{stats.leaves}</span>
+                      </td>
+                      <td className="p-4 text-center">
+                        <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                          percentage >= 90 ? 'bg-green-100 text-green-700' :
+                          percentage >= 75 ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {percentage}%
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function TeacherView({
   currentUser,
   handleLogout,
@@ -6155,7 +6686,22 @@ function TeacherView({
   setActiveTab,
   leaveAdjustments
 }) {
-  const teacherTabs = [
+  // Check if user is an APC
+  const isAPC = currentUser.userType === 'apc' || currentUser.role === MANAGER_ROLES.APC;
+  
+  // Different tabs for APC vs Teacher
+  const teacherTabs = isAPC ? [
+    { id: 'overview', label: 'Dashboard', icon: '📊' },
+    { id: 'analytics', label: 'Analytics', icon: '📈' },
+    { id: 'syllabus11', label: 'Class 11 Syllabus', icon: '📚' },
+    { id: 'syllabus12', label: 'Class 12 Syllabus', icon: '📕' },
+    { id: 'directory', label: 'Directory', icon: '📖' },
+    { id: 'attendance', label: 'Student Attendance', icon: '✅' },
+    { id: 'attendancedash', label: 'Attendance Dashboard', icon: '📊' },
+    { id: 'teacherattview', label: 'Teacher Attendance', icon: '👨‍🏫' },
+    { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
+    { id: 'examstats', label: 'Exam Stats', icon: '📊' }
+  ] : [
     { id: 'overview', label: 'Dashboard', icon: '📊' },
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'class11', label: 'Class 11', icon: '📚' },
@@ -6289,6 +6835,11 @@ function TeacherView({
             <div className="text-white text-sm mb-2">
               <p className="font-semibold">{currentUser.name}</p>
               <p className="text-xs opacity-90">{currentUser.school}</p>
+              {isAPC && (
+                <span className="inline-block mt-1 px-2 py-0.5 bg-white bg-opacity-20 rounded text-xs font-semibold">
+                  📋 APC
+                </span>
+              )}
             </div>
             <button
               onClick={handleLogout}
@@ -6351,6 +6902,37 @@ function TeacherView({
     updateChapterProgress={updateChapterProgress}
   />
 )}
+
+        {/* APC View-Only Syllabus Views */}
+        {activeTab === 'syllabus11' && (
+          <APCSyllabusView
+            grade="11"
+            currentUser={currentUser}
+            curriculum={curriculum}
+            chapterProgress={chapterProgress}
+            teachers={teachers}
+          />
+        )}
+
+        {activeTab === 'syllabus12' && (
+          <APCSyllabusView
+            grade="12"
+            currentUser={currentUser}
+            curriculum={curriculum}
+            chapterProgress={chapterProgress}
+            teachers={teachers}
+          />
+        )}
+
+        {/* APC Teacher Attendance View */}
+        {activeTab === 'teacherattview' && (
+          <APCTeacherAttendanceView
+            currentUser={currentUser}
+            teachers={teachers}
+            teacherAttendance={teacherAttendance}
+            leaveAdjustments={leaveAdjustments}
+          />
+        )}
 
         {activeTab === 'directory' && (
           <TeacherDirectory teachers={teachers} currentUser={currentUser} />
@@ -7419,6 +8001,348 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
 }
 
 // ========================================
+// APC MANAGEMENT COMPONENT
+// ========================================
+function APCManagement() {
+  const [apcs, setApcs] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editingApc, setEditingApc] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    school: ''
+  });
+
+  // Fetch APCs on mount
+  useEffect(() => {
+    const fetchApcs = async () => {
+      try {
+        const snapshot = await db.collection('apcs').get();
+        setApcs(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
+      } catch (e) {
+        console.error('Error fetching APCs:', e);
+      }
+      setLoading(false);
+    };
+    fetchApcs();
+  }, []);
+
+  const resetForm = () => {
+    setForm({ name: '', email: '', phone: '', school: '' });
+    setEditingApc(null);
+  };
+
+  const handleSubmit = async () => {
+    if (!form.name || !form.email || !form.school) {
+      alert('Please fill in all required fields (Name, Email, School)');
+      return;
+    }
+
+    // Validate email format
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      alert('Please enter a valid email address');
+      return;
+    }
+
+    try {
+      if (editingApc) {
+        // Update existing APC
+        await db.collection('apcs').doc(editingApc.id).update({
+          name: form.name,
+          email: form.email.toLowerCase().trim(),
+          phone: form.phone,
+          school: form.school,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        setApcs(apcs.map(a => a.id === editingApc.id ? { ...a, ...form, email: form.email.toLowerCase().trim() } : a));
+        alert('✅ APC updated successfully!');
+      } else {
+        // Check if email already exists
+        const existingEmail = await db.collection('apcs').where('email', '==', form.email.toLowerCase().trim()).get();
+        if (!existingEmail.empty) {
+          alert('An APC with this email already exists');
+          return;
+        }
+        
+        // Add new APC
+        const docRef = await db.collection('apcs').add({
+          name: form.name,
+          email: form.email.toLowerCase().trim(),
+          phone: form.phone,
+          school: form.school,
+          status: 'active',
+          role: 'apc',
+          userType: 'apc',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        setApcs([...apcs, { id: docRef.id, ...form, email: form.email.toLowerCase().trim(), status: 'active' }]);
+        alert(`✅ APC added successfully!\n\nName: ${form.name}\nEmail: ${form.email}\nSchool: ${form.school}\n\nNote: The APC can login using Firebase Auth. Make sure their account is created in Firebase Authentication.`);
+      }
+      setShowModal(false);
+      resetForm();
+    } catch (e) {
+      console.error('Error saving APC:', e);
+      alert('Error saving APC: ' + e.message);
+    }
+  };
+
+  const handleEdit = (apc) => {
+    setForm({
+      name: apc.name || '',
+      email: apc.email || '',
+      phone: apc.phone || '',
+      school: apc.school || ''
+    });
+    setEditingApc(apc);
+    setShowModal(true);
+  };
+
+  const handleToggleStatus = async (apc) => {
+    const newStatus = apc.status === 'active' ? 'inactive' : 'active';
+    if (!confirm(`${newStatus === 'inactive' ? 'Deactivate' : 'Activate'} ${apc.name}?`)) return;
+    
+    try {
+      await db.collection('apcs').doc(apc.id).update({
+        status: newStatus,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      setApcs(apcs.map(a => a.id === apc.id ? { ...a, status: newStatus } : a));
+      alert(`✅ APC ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully!`);
+    } catch (e) {
+      console.error('Error updating status:', e);
+      alert('Error updating status: ' + e.message);
+    }
+  };
+
+  const handleDelete = async (apc) => {
+    if (!confirm(`⚠️ Delete ${apc.name}? This action cannot be undone.`)) return;
+    
+    try {
+      await db.collection('apcs').doc(apc.id).delete();
+      setApcs(apcs.filter(a => a.id !== apc.id));
+      alert('✅ APC deleted successfully!');
+    } catch (e) {
+      console.error('Error deleting APC:', e);
+      alert('Error deleting APC: ' + e.message);
+    }
+  };
+
+  const activeApcs = apcs.filter(a => a.status === 'active');
+  const inactiveApcs = apcs.filter(a => a.status === 'inactive');
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <div className="text-xl">Loading APCs...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold">📋 APC Management</h2>
+          <p className="text-gray-600 mt-1">Manage Academic Program Coordinators</p>
+        </div>
+        <button
+          onClick={() => { resetForm(); setShowModal(true); }}
+          className="px-6 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 transition"
+        >
+          ➕ Add New APC
+        </button>
+      </div>
+
+      {/* Info Card */}
+      <div className="bg-teal-50 border-2 border-teal-200 rounded-2xl p-6">
+        <h3 className="text-lg font-bold text-teal-800 mb-2">ℹ️ About APCs</h3>
+        <p className="text-teal-700 text-sm">
+          Academic Program Coordinators (APCs) have school-level access to:
+        </p>
+        <ul className="mt-2 text-teal-700 text-sm space-y-1">
+          <li>✅ View syllabus/curriculum progress (all subjects)</li>
+          <li>✅ Mark student attendance</li>
+          <li>✅ View teacher attendance</li>
+          <li>✅ View analytics and dashboards</li>
+          <li>❌ Cannot edit curriculum or chapters</li>
+          <li>❌ Cannot add/edit teachers or students</li>
+        </ul>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-xl shadow text-center">
+          <div className="text-3xl font-bold text-teal-600">{apcs.length}</div>
+          <div className="text-sm text-gray-600">Total APCs</div>
+        </div>
+        <div className="bg-green-50 p-4 rounded-xl shadow text-center">
+          <div className="text-3xl font-bold text-green-600">{activeApcs.length}</div>
+          <div className="text-sm text-gray-600">Active</div>
+        </div>
+        <div className="bg-gray-50 p-4 rounded-xl shadow text-center">
+          <div className="text-3xl font-bold text-gray-600">{inactiveApcs.length}</div>
+          <div className="text-sm text-gray-600">Inactive</div>
+        </div>
+      </div>
+
+      {/* APCs List */}
+      <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="p-4 text-left">Name</th>
+              <th className="p-4 text-left">Email</th>
+              <th className="p-4 text-left">School</th>
+              <th className="p-4 text-left">Phone</th>
+              <th className="p-4 text-left">Status</th>
+              <th className="p-4 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {apcs.length === 0 ? (
+              <tr>
+                <td colSpan="6" className="p-8 text-center text-gray-500">
+                  No APCs added yet. Click "Add New APC" to get started.
+                </td>
+              </tr>
+            ) : (
+              apcs.map(apc => (
+                <tr key={apc.id} className={`border-b hover:bg-gray-50 ${apc.status === 'inactive' ? 'opacity-50' : ''}`}>
+                  <td className="p-4">
+                    <div className="font-semibold">{apc.name}</div>
+                  </td>
+                  <td className="p-4 text-sm">{apc.email}</td>
+                  <td className="p-4">
+                    <span className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm font-semibold">
+                      {apc.school}
+                    </span>
+                  </td>
+                  <td className="p-4 text-sm">{apc.phone || '—'}</td>
+                  <td className="p-4">
+                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                      apc.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {apc.status === 'active' ? '✅ Active' : '⏸️ Inactive'}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEdit(apc)}
+                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-200"
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button
+                        onClick={() => handleToggleStatus(apc)}
+                        className={`px-3 py-1 rounded-lg text-sm font-semibold ${
+                          apc.status === 'active' 
+                            ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' 
+                            : 'bg-green-100 text-green-700 hover:bg-green-200'
+                        }`}
+                      >
+                        {apc.status === 'active' ? '⏸️ Deactivate' : '▶️ Activate'}
+                      </button>
+                      <button
+                        onClick={() => handleDelete(apc)}
+                        className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-semibold hover:bg-red-200"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Add/Edit Modal */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3 className="text-2xl font-bold mb-4">
+              {editingApc ? '✏️ Edit APC' : '➕ Add New APC'}
+            </h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold mb-2">Name *</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  placeholder="e.g., Ramesh Kumar"
+                  className="w-full border-2 px-4 py-3 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold mb-2">Email *</label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={e => setForm({ ...form, email: e.target.value })}
+                  placeholder="e.g., ramesh@example.com"
+                  className="w-full border-2 px-4 py-3 rounded-xl"
+                />
+                <p className="text-xs text-gray-600 mt-1">
+                  This email must be registered in Firebase Authentication for login
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold mb-2">Phone</label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={e => setForm({ ...form, phone: e.target.value })}
+                  placeholder="e.g., 9876543210"
+                  className="w-full border-2 px-4 py-3 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold mb-2">School *</label>
+                <select
+                  value={form.school}
+                  onChange={e => setForm({ ...form, school: e.target.value })}
+                  className="w-full border-2 px-4 py-3 rounded-xl"
+                >
+                  <option value="">Select School</option>
+                  {SCHOOLS.map(school => (
+                    <option key={school} value={school}>{school}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleSubmit}
+                  className="flex-1 bg-teal-600 text-white py-3 rounded-xl font-bold hover:bg-teal-700"
+                >
+                  {editingApc ? '💾 Update APC' : '➕ Add APC'}
+                </button>
+                <button
+                  onClick={() => { setShowModal(false); resetForm(); }}
+                  className="px-6 py-3 bg-gray-200 rounded-xl font-bold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========================================
 // ACADEMIC YEAR MANAGEMENT COMPONENT
 // ========================================
 function AcademicYearManagement({ teachers, students, curriculum, chapterProgress, studentAttendance, teacherAttendance, academicYearSettings }) {
@@ -8098,6 +9022,7 @@ function AdminView({
   const adminTabs = [
     ...(isSuperAdmin ? [
       { id: 'managers', label: 'Managers', icon: '👔' },
+      { id: 'apcs', label: 'APCs', icon: '📋' },
       { id: 'academicyear', label: 'Academic Year', icon: '📅' },
       { id: '2fa-management', label: '2FA Management', icon: '🔐' },
       { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -8247,6 +9172,10 @@ function AdminView({
         {/* Tab Content */}
         {activeTab === 'managers' && isSuperAdmin && (
           <ManagerManagement managers={managers} currentUser={currentUser} isSuperAdmin={isSuperAdmin} />
+        )}
+
+        {activeTab === 'apcs' && isSuperAdmin && (
+          <APCManagement />
         )}
 
         {activeTab === 'academicyear' && isSuperAdmin && (
@@ -14555,9 +15484,10 @@ function SchoolInfoView({currentUser,schoolInfo,setSchoolInfo}){
   try {
     const docId = mySchool.replace(/\s+/g, '_');
     const now = new Date().toISOString();
+    const userId = currentUser.afid || currentUser.id || currentUser.docId || currentUser.email;
 
     const historyEntry = {
-      updatedBy: currentUser.afid,
+      updatedBy: userId,
       updatedByName: currentUser.name,
       updatedAt: now
     };
@@ -14565,7 +15495,7 @@ function SchoolInfoView({currentUser,schoolInfo,setSchoolInfo}){
     const dataToSave = {
       ...formData,
       school: mySchool,
-      updatedBy: currentUser.afid,
+      updatedBy: userId,
       updatedByName: currentUser.name,
       updatedAt: now
     };
