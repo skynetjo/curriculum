@@ -19952,7 +19952,7 @@ const AvantiWidget = {
         messages.innerHTML += `<div class="avanti-msg user">${msg}</div>`;
         input.value = '';
         
-        this.searchFAQs(msg);
+        AvantiWidget.searchFAQs(msg);
         messages.scrollTop = messages.scrollHeight;
     },
     
