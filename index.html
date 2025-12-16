@@ -19965,107 +19965,6 @@ const AvantiWidget = {
         }, 300);
     },
     
-    // ENTERPRISE CHAT LOGIC
-searchFAQs: function(query) {
-    const messages = document.getElementById('chatMessages');
-    const q = query.toLowerCase().trim();
-
-    this.botState = this.botState || { unclearCount: 0 };
-
-    messages.innerHTML += `
-        <div class="avanti-msg bot">
-            Avanti is typing<span>.</span><span>.</span><span>.</span>
-        </div>`;
-    messages.scrollTop = messages.scrollHeight;
-
-    setTimeout(() => {
-
-        // Greeting
-        if (/^(hi|hello|hey|namaste)$/.test(q)) {
-            this.botState.unclearCount = 0;
-            messages.innerHTML += `
-                <div class="avanti-msg bot">Hello 👋 How can I help you today?</div>
-                <div class="avanti-msg bot">
-                    🔐 Login<br>
-                    📅 Attendance<br>
-                    📚 Curriculum
-                </div>`;
-            return;
-        }
-
-        // Small talk
-        if (q.includes('how are you')) {
-            messages.innerHTML += `<div class="avanti-msg bot">
-                I’m doing well 😊 Please tell me your issue.
-            </div>`;
-            return;
-        }
-
-        if (q.includes('thank')) {
-            messages.innerHTML += `<div class="avanti-msg bot">
-                You’re welcome. Happy to help.
-            </div>`;
-            return;
-        }
-
-        // Intent routing
-        const intents = [
-            { k:'login', w:['login','password','otp'] },
-            { k:'attendance', w:['attendance','present','absent'] },
-            { k:'curriculum', w:['curriculum','chapter','syllabus'] }
-        ];
-
-        for (const i of intents) {
-            if (i.w.some(w => q.includes(w))) {
-                this.botState.unclearCount = 0;
-                this.searchTopic(i.k);
-                return;
-            }
-        }
-
-        // FAQ match
-        const words = q.split(/\s+/).filter(w => w.length > 2);
-        const results = this.faqs.filter(f => {
-            const t = `${f.question} ${f.answer}`.toLowerCase();
-            return words.filter(w => t.includes(w)).length >= 2;
-        }).slice(0,3);
-
-        if (results.length) {
-            this.botState.unclearCount = 0;
-            messages.innerHTML += `<div class="avanti-msg bot">Here’s what I found:</div>`;
-            results.forEach(f => {
-                messages.innerHTML += `
-                    <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${f.id}')">
-                        <h4>${f.question}</h4>
-                        <div class="category">${f.category || 'General'}</div>
-                    </div>`;
-            });
-            return;
-        }
-
-        // Controlled fallback
-        this.botState.unclearCount++;
-
-        if (this.botState.unclearCount === 1) {
-            messages.innerHTML += `<div class="avanti-msg bot">
-                Can you clarify a bit more?
-                Login, attendance, or curriculum?
-            </div>`;
-            return;
-        }
-
-        if (this.botState.unclearCount === 2) {
-            messages.innerHTML += `
-                <div class="avanti-msg bot">
-                    Please raise a ticket for detailed support.
-                </div>
-                <button class="avanti-action-btn primary" onclick="AvantiWidget.showForm()">
-                    🎫 Raise Ticket
-                </button>`;
-        }
-
-    }, 500);
-},
     // Show FAQ answer
     showFAQAnswer: function(id) {
         const faq = this.faqs.find(f => f.id === id);
@@ -21097,6 +20996,7 @@ const NotificationManager = {
 
 // Initialize when Firebase is ready
 setTimeout(() => NotificationManager.init(), 1500);
+<script src="./avanti-chatbot.js"></script>
 </script>
 </body>
   </html>
