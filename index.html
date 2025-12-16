@@ -19965,7 +19965,7 @@ const AvantiWidget = {
         }, 300);
     },
     
-// ENTERPRISE CHAT LOGIC (FINAL)
+    // ENTERPRISE CHAT LOGIC
 searchFAQs: function(query) {
     const messages = document.getElementById('chatMessages');
     const q = query.toLowerCase().trim();
@@ -19973,13 +19973,12 @@ searchFAQs: function(query) {
     this.botState = this.botState || { unclearCount: 0 };
 
     messages.innerHTML += `
-        <div class="avanti-msg bot typing" id="typing">
+        <div class="avanti-msg bot">
             Avanti is typing<span>.</span><span>.</span><span>.</span>
         </div>`;
     messages.scrollTop = messages.scrollHeight;
 
     setTimeout(() => {
-        document.getElementById('typing')?.remove();
 
         // Greeting
         if (/^(hi|hello|hey|namaste)$/.test(q)) {
@@ -19987,10 +19986,9 @@ searchFAQs: function(query) {
             messages.innerHTML += `
                 <div class="avanti-msg bot">Hello 👋 How can I help you today?</div>
                 <div class="avanti-msg bot">
-                    You can ask about:
-                    <br>🔐 Login
-                    <br>📅 Attendance
-                    <br>📚 Curriculum
+                    🔐 Login<br>
+                    📅 Attendance<br>
+                    📚 Curriculum
                 </div>`;
             return;
         }
@@ -20010,7 +20008,7 @@ searchFAQs: function(query) {
             return;
         }
 
-        // Intent detection
+        // Intent routing
         const intents = [
             { k:'login', w:['login','password','otp'] },
             { k:'attendance', w:['attendance','present','absent'] },
@@ -20045,13 +20043,13 @@ searchFAQs: function(query) {
             return;
         }
 
-        // Controlled fallback (NO instant ticket)
+        // Controlled fallback
         this.botState.unclearCount++;
 
         if (this.botState.unclearCount === 1) {
             messages.innerHTML += `<div class="avanti-msg bot">
                 Can you clarify a bit more?
-                Is this about login, attendance, or curriculum?
+                Login, attendance, or curriculum?
             </div>`;
             return;
         }
@@ -20059,18 +20057,58 @@ searchFAQs: function(query) {
         if (this.botState.unclearCount === 2) {
             messages.innerHTML += `
                 <div class="avanti-msg bot">
-                    Thanks for your patience.
                     Please raise a ticket for detailed support.
                 </div>
-                <div class="avanti-action-btns" style="margin:10px 0;">
-                    <button class="avanti-action-btn primary" onclick="AvantiWidget.showForm()">
-                        🎫 Raise Ticket
-                    </button>
-                </div>`;
+                <button class="avanti-action-btn primary" onclick="AvantiWidget.showForm()">
+                    🎫 Raise Ticket
+                </button>`;
         }
-    }, 600);
-},
 
+    }, 500);
+},
+    // Show FAQ answer
+    showFAQAnswer: function(id) {
+        const faq = this.faqs.find(f => f.id === id);
+        if (!faq) return;
+        
+        const messages = document.getElementById('chatMessages');
+        
+        messages.innerHTML += `
+            <div class="avanti-faq-answer">
+                <h4>${faq.question}</h4>
+                <p>${faq.answer}</p>
+            </div>
+            <div class="avanti-msg bot">
+                Did this answer your question?
+            </div>
+            <div class="avanti-feedback-btns">
+                <button class="avanti-feedback-btn yes" onclick="AvantiWidget.faqHelpful(true)">✓ Yes, thanks!</button>
+                <button class="avanti-feedback-btn no" onclick="AvantiWidget.faqHelpful(false)">✗ No, need more help</button>
+            </div>
+        `;
+        
+        messages.scrollTop = messages.scrollHeight;
+    },
+    
+    // FAQ helpful feedback
+    faqHelpful: function(helpful) {
+        const messages = document.getElementById('chatMessages');
+        
+        if (helpful) {
+            messages.innerHTML += `<div class="avanti-msg bot">Great! Glad I could help! 😊</div>`;
+        } else {
+            messages.innerHTML += `
+                <div class="avanti-msg bot">
+                    I'm sorry that didn't help. Would you like to raise a support ticket?
+                </div>
+                <div class="avanti-action-btns" style="margin:10px 0;">
+                    <button class="avanti-action-btn primary" onclick="AvantiWidget.showForm()">Raise Ticket</button>
+                    <button class="avanti-action-btn secondary" onclick="AvantiWidget.showChat()">Try Again</button>
+                </div>
+            `;
+        }
+        
+        messages.scrollTop = messages.scrollHeight;
     },
     
     // Show form view
@@ -21061,4 +21099,4 @@ const NotificationManager = {
 setTimeout(() => NotificationManager.init(), 1500);
 </script>
 </body>
-</html>
+  </html>
