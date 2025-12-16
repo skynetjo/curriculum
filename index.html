@@ -5210,24 +5210,27 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
       return;
     }
   } else {
-    // Check if teacher
+    // Check if teacher (includes APCs since they're in the teachers collection with role='apc')
     const teacherSnapshot=await db.collection('teachers').where('email','==',user.email).limit(1).get();
     if(!teacherSnapshot.empty){
-      const teacherData={...teacherSnapshot.docs[0].data(),docId:teacherSnapshot.docs[0].id};
+      const rawTeacherData=teacherSnapshot.docs[0].data();
+      // Set userType based on role field
+      const userType = rawTeacherData.role === 'apc' ? 'apc' : 'teacher';
+      const teacherData={...rawTeacherData, docId:teacherSnapshot.docs[0].id, userType: userType};
       
-      // Check 2FA for teacher
+      // Check 2FA for teacher/APC
       const twoFADoc = await db.collection('twoFactorAuth').doc(teacherData.afid).get();
       if (twoFADoc.exists && twoFADoc.data().enabled) {
         // 2FA is enabled - check if device is trusted
         const deviceTrusted = await isDeviceTrusted(teacherData.afid);
         if (deviceTrusted) {
           // Device is trusted, skip 2FA verification
-          console.log('✅ Trusted device - skipping 2FA for teacher:', teacherData.name);
+          console.log('✅ Trusted device - skipping 2FA for ' + userType + ':', teacherData.name);
           setCurrentUser(teacherData);
           setIsAdmin(false);
           setActiveTab('overview');
-          // Birthday/Anniversary celebrations
-          if(teacherData.dob){
+          // Birthday/Anniversary celebrations (only for teachers, not APCs)
+          if(userType === 'teacher' && teacherData.dob){
             const d = new Date(teacherData.dob);
             const now = new Date();
             if(d.getMonth() === now.getMonth() && d.getDate() === now.getDate()){
@@ -5236,7 +5239,7 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
               setTimeout(() => {setShowConfetti(false);setCelebrationMessage('')}, 8000);
             }
           }
-          if(teacherData.joiningDate){
+          if(userType === 'teacher' && teacherData.joiningDate){
             const j = new Date(teacherData.joiningDate);
             const now = new Date();
             if(j.getMonth() === now.getMonth() && j.getDate() === now.getDate() && j.getFullYear() < now.getFullYear()){
@@ -5252,69 +5255,23 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
         // Device not trusted, need to verify 2FA
         setPending2FAUser({
           ...teacherData,
-          userType: 'teacher'
+          userType: userType
         });
         setShow2FAVerify(true);
         setLoading(false);
         return;
       } else {
-        // 2FA not set up yet - require setup for teachers
+        // 2FA not set up yet - require setup for teachers/APCs
         setPending2FAUser({
           ...teacherData,
-          userType: 'teacher'
+          userType: userType
         });
         setShow2FASetup(true);
         setNeeds2FASetup(true);
         setLoading(false);
         return;
       }
-    }else{
-      // Check if APC (Academic Program Coordinator)
-      const apcSnapshot = await db.collection('apcs').where('email','==',user.email).where('status','==','active').limit(1).get();
-      if(!apcSnapshot.empty){
-        const apcRawData = apcSnapshot.docs[0].data();
-        const apcData = {
-          ...apcRawData, 
-          docId: apcSnapshot.docs[0].id, 
-          id: apcSnapshot.docs[0].id,
-          afid: 'APC_' + apcSnapshot.docs[0].id, // Add afid for compatibility
-          userType: 'apc', 
-          role: MANAGER_ROLES.APC
-        };
-        
-        // Check 2FA for APC
-        const twoFADoc = await db.collection('twoFactorAuth').doc(apcData.id || apcData.docId).get();
-        if (twoFADoc.exists && twoFADoc.data().enabled) {
-          // 2FA is enabled - check if device is trusted
-          const deviceTrusted = await isDeviceTrusted(apcData.id || apcData.docId);
-          if (deviceTrusted) {
-            // Device is trusted, skip 2FA verification
-            console.log('✅ Trusted device - skipping 2FA for APC:', apcData.name);
-            setCurrentUser(apcData);
-            setIsAdmin(false);
-            setActiveTab('overview');
-            setLoading(false);
-            return;
-          }
-          // Device not trusted, need to verify 2FA
-          setPending2FAUser({
-            ...apcData,
-            userType: 'apc'
-          });
-          setShow2FAVerify(true);
-          setLoading(false);
-          return;
-        } else {
-          // 2FA not set up - allow login without 2FA for APC (can be changed later)
-          console.log('✅ APC login (no 2FA):', apcData.name);
-          setCurrentUser(apcData);
-          setIsAdmin(false);
-          setActiveTab('overview');
-          setLoading(false);
-          return;
-        }
-      }else{alert('User profile not found. Please contact admin.');await auth.signOut()}
-    }
+    }else{alert('User profile not found. Please contact admin.');await auth.signOut()}
   }
 }}else{// Check for student session in localStorage
 const studentSession=localStorage.getItem('studentSession');if(studentSession){try{const studentData=JSON.parse(studentSession);console.log('✅ Restored student session:',studentData);setCurrentUser(studentData);setIsAdmin(false);setActiveTab('dashboard')}catch(e){console.error('Failed to restore student session:',e);localStorage.removeItem('studentSession')}}else{setCurrentUser(null);setIsAdmin(false)}}setLoading(false)});return()=>unsubscribe()},[getAccessibleSchools]);
@@ -6690,7 +6647,7 @@ function TeacherView({
   leaveAdjustments
 }) {
   // Check if user is an APC
-  const isAPC = currentUser.userType === 'apc' || currentUser.role === MANAGER_ROLES.APC;
+  const isAPC = currentUser.userType === 'apc' || currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC;
   
   // Different tabs for APC vs Teacher
   const teacherTabs = isAPC ? [
@@ -9025,7 +8982,6 @@ function AdminView({
   const adminTabs = [
     ...(isSuperAdmin ? [
       { id: 'managers', label: 'Managers', icon: '👔' },
-      { id: 'apcs', label: 'APCs', icon: '📋' },
       { id: 'academicyear', label: 'Academic Year', icon: '📅' },
       { id: '2fa-management', label: '2FA Management', icon: '🔐' },
       { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -9175,10 +9131,6 @@ function AdminView({
         {/* Tab Content */}
         {activeTab === 'managers' && isSuperAdmin && (
           <ManagerManagement managers={managers} currentUser={currentUser} isSuperAdmin={isSuperAdmin} />
-        )}
-
-        {activeTab === 'apcs' && isSuperAdmin && (
-          <APCManagement />
         )}
 
         {activeTab === 'academicyear' && isSuperAdmin && (
@@ -10437,7 +10389,7 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
   const[isEditingLeave,setIsEditingLeave]=useState(false);
   const[leaveForm,setLeaveForm]=useState({entitled: 0, maternity: 0, paternity: 0});
   const[savingLeave,setSavingLeave]=useState(false);
-  const[form,setForm]=useState({name:'',afid:'',afCode:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});
+  const[form,setForm]=useState({name:'',afid:'',afCode:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:'',role:'teacher'});
   
   // Archive functionality
   const[showArchiveModal,setShowArchiveModal]=useState(false);
@@ -10591,8 +10543,8 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
     });
   };
   
-  const openAddModal=()=>{setEditingTeacher(null);setForm({name:'',afid:'',afCode:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:''});setShowModal(true)};
-  const openEditModal=teacher=>{setEditingTeacher(teacher);setForm({...teacher,password:''});setShowModal(true)};
+  const openAddModal=()=>{setEditingTeacher(null);setForm({name:'',afid:'',afCode:'',email:'',password:'',dob:'',joiningDate:'',subject:'',school:'',phone:'',role:'teacher'});setShowModal(true)};
+  const openEditModal=teacher=>{setEditingTeacher(teacher);setForm({...teacher,password:'',role:teacher.role||'teacher'});setShowModal(true)};
   
   const openLeaveModal=(teacher)=>{
     const balance = calculateLeaveBalance(teacherAttendance || [], teacher.afid, leaveAdjustments || {});
@@ -10655,7 +10607,7 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
     }
   };
   
-  const handleSave=async()=>{if(!form.afid||!form.name||!form.email||!form.subject||!form.school){alert('Please fill all required fields (AFID, Name, Email, Subject, School)');return}try{await db.collection('teachers').doc(form.afid).set({afid:form.afid,afCode:form.afCode||null,name:form.name,email:form.email.toLowerCase(),subject:form.subject,school:form.school,dob:form.dob||null,joiningDate:form.joiningDate||null,phone:form.phone||null,isArchived:form.isArchived||false,archiveReason:form.archiveReason||null,archiveNotes:form.archiveNotes||null,archivedAt:form.archivedAt||null});if(!editingTeacher&&form.password){alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`)}else{alert('Teacher updated!')}setShowModal(false)}catch(e){alert('Failed: '+e.message)}};
+  const handleSave=async()=>{if(!form.afid||!form.name||!form.email||!form.subject||!form.school){alert('Please fill all required fields (AFID, Name, Email, Subject, School)');return}try{await db.collection('teachers').doc(form.afid).set({afid:form.afid,afCode:form.afCode||null,name:form.name,email:form.email.toLowerCase(),subject:form.subject,school:form.school,dob:form.dob||null,joiningDate:form.joiningDate||null,phone:form.phone||null,role:form.role||'teacher',isArchived:form.isArchived||false,archiveReason:form.archiveReason||null,archiveNotes:form.archiveNotes||null,archivedAt:form.archivedAt||null});if(!editingTeacher&&form.password){alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`)}else{alert(form.role==='apc'?'APC updated!':'Teacher updated!')}setShowModal(false)}catch(e){alert('Failed: '+e.message)}};
   
   // Open archive modal
   const openArchiveModal = (teacher) => {
@@ -10920,13 +10872,14 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
       
       {/* Active Teachers Table */}
       <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
-        <h3 className="text-lg font-bold mb-4 text-green-600">✅ Active Teachers ({activeTeachers.length})</h3>
+        <h3 className="text-lg font-bold mb-4 text-green-600">✅ Active Teachers & APCs ({activeTeachers.length})</h3>
         <table className="w-full">
           <thead className="avanti-gradient-light">
             <tr>
               <th className="p-3 text-left">AFID</th>
               <th className="p-3 text-left">AF Code</th>
               <th className="p-3 text-left">Name</th>
+              <th className="p-3 text-left">Role</th>
               <th className="p-3 text-left">Email</th>
               <th className="p-3 text-left">Subject</th>
               <th className="p-3 text-left">School</th>
@@ -10942,6 +10895,15 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
                   <td className="p-3 font-mono">{t.afid}</td>
                   <td className="p-3 font-mono text-blue-600">{t.afCode || '—'}</td>
                   <td className="p-3">{t.name}</td>
+                  <td className="p-3">
+                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      t.role === 'apc' 
+                        ? 'bg-teal-100 text-teal-700' 
+                        : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {t.role === 'apc' ? '📋 APC' : '👨‍🏫 Teacher'}
+                    </span>
+                  </td>
                   <td className="p-3 text-sm">{t.email}</td>
                   <td className="p-3">{t.subject}</td>
                   <td className="p-3">{t.school}</td>
@@ -11366,6 +11328,18 @@ function TeacherManagement({teachers, teacherAttendance, leaveAdjustments, setLe
               <div>
                 <label className="block text-sm font-bold mb-1">Phone</label>
                 <input type="text" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg"/>
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1">Role *</label>
+                <select value={form.role || 'teacher'} onChange={e => setForm({...form, role: e.target.value})} className="w-full border-2 px-3 py-2 rounded-lg">
+                  <option value="teacher">👨‍🏫 Teacher</option>
+                  <option value="apc">📋 APC (Academic Program Coordinator)</option>
+                </select>
+                {form.role === 'apc' && (
+                  <p className="text-xs text-teal-600 mt-1">
+                    ℹ️ APC can view all subjects, mark student attendance, view teacher attendance, but cannot edit curriculum.
+                  </p>
+                )}
               </div>
               <div className="flex gap-3">
                 <button onClick={handleSave} className="flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold">Save</button>
