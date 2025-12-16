@@ -5715,24 +5715,223 @@ if(!currentUser){
 // ========================================
 // ADMIN STUDENT PROFILES VIEW
 // ========================================
-function AdminStudentProfiles(){
+function AdminStudentProfiles({ accessibleSchools = SCHOOLS, isSuperAdmin = true }){
   const[studentProfiles,setStudentProfiles]=useState([]);
   const[filterSchool,setFilterSchool]=useState('All');
   const[filterGrade,setFilterGrade]=useState('All');
+  const categoryChartRef = useRef(null);
+  const genderChartRef = useRef(null);
+  const streamChartRef = useRef(null);
+  const schoolDistChartRef = useRef(null);
+  const chartInstances = useRef({});
+  
+  // Filter schools based on access
+  const availableSchools = isSuperAdmin ? SCHOOLS : accessibleSchools;
 
   useEffect(()=>{
     const fetchData=async()=>{
       const profilesSnap=await db.collection('studentProfiles').get();
-      setStudentProfiles(profilesSnap.docs.map(d=>({...d.data(),id:d.id})));
+      let profiles = profilesSnap.docs.map(d=>({...d.data(),id:d.id}));
+      // Filter by accessible schools for managers
+      if (!isSuperAdmin) {
+        profiles = profiles.filter(p => accessibleSchools.includes(p.school));
+      }
+      setStudentProfiles(profiles);
     };
     fetchData();
-  },[]);
+  },[isSuperAdmin, accessibleSchools]);
 
   const filteredProfiles=studentProfiles.filter(p=>{
     if(filterSchool!=='All'&&p.school!==filterSchool)return false;
     if(filterGrade!=='All'&&p.grade!==filterGrade)return false;
     return true;
   });
+
+  // Calculate statistics for graphs
+  const stats = useMemo(() => {
+    const categoryCount = {};
+    const genderCount = { Male: 0, Female: 0, Other: 0 };
+    const streamCount = { JEE: 0, NEET: 0, Other: 0 };
+    const categoryByGender = {};
+    const schoolCount = {};
+    
+    filteredProfiles.forEach(p => {
+      // Category count
+      const cat = p.category || 'Not Specified';
+      categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+      
+      // Gender count
+      let gender = p.gender || 'Other';
+      if (gender === 'Male' || gender === 'Female') {
+        genderCount[gender]++;
+      } else {
+        genderCount.Other++;
+      }
+      
+      // Stream count
+      const stream = p.stream || 'Other';
+      if (stream === 'JEE' || stream === 'NEET') {
+        streamCount[stream]++;
+      } else {
+        streamCount.Other++;
+      }
+      
+      // Category by gender breakdown
+      if (!categoryByGender[cat]) {
+        categoryByGender[cat] = { Male: 0, Female: 0, Other: 0 };
+      }
+      if (gender === 'Male' || gender === 'Female') {
+        categoryByGender[cat][gender]++;
+      } else {
+        categoryByGender[cat].Other++;
+      }
+      
+      // School count
+      const school = p.school || 'Unknown';
+      schoolCount[school] = (schoolCount[school] || 0) + 1;
+    });
+    
+    return { categoryCount, genderCount, streamCount, categoryByGender, schoolCount };
+  }, [filteredProfiles]);
+
+  // Draw charts
+  useEffect(() => {
+    // Destroy existing charts
+    Object.values(chartInstances.current).forEach(chart => {
+      if (chart) chart.destroy();
+    });
+    chartInstances.current = {};
+
+    // Category Distribution Pie Chart
+    if (categoryChartRef.current && Object.keys(stats.categoryCount).length > 0) {
+      const ctx = categoryChartRef.current.getContext('2d');
+      const labels = Object.keys(stats.categoryCount);
+      const data = Object.values(stats.categoryCount);
+      const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6'];
+      
+      chartInstances.current.category = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: colors.slice(0, labels.length),
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: true, text: 'Category Distribution', font: { size: 16, weight: 'bold' } },
+            legend: { position: 'bottom', labels: { padding: 15 } }
+          }
+        }
+      });
+    }
+
+    // Gender Distribution Pie Chart
+    if (genderChartRef.current) {
+      const ctx = genderChartRef.current.getContext('2d');
+      chartInstances.current.gender = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Male', 'Female', 'Other'],
+          datasets: [{
+            data: [stats.genderCount.Male, stats.genderCount.Female, stats.genderCount.Other],
+            backgroundColor: ['#6366F1', '#EC4899', '#9CA3AF'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: true, text: 'Gender Distribution', font: { size: 16, weight: 'bold' } },
+            legend: { position: 'bottom', labels: { padding: 15 } }
+          }
+        }
+      });
+    }
+
+    // Category by Gender Bar Chart
+    if (streamChartRef.current && Object.keys(stats.categoryByGender).length > 0) {
+      const ctx = streamChartRef.current.getContext('2d');
+      const categories = Object.keys(stats.categoryByGender);
+      
+      chartInstances.current.stream = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: categories,
+          datasets: [
+            {
+              label: 'Male',
+              data: categories.map(cat => stats.categoryByGender[cat].Male),
+              backgroundColor: '#6366F1',
+              borderRadius: 4
+            },
+            {
+              label: 'Female',
+              data: categories.map(cat => stats.categoryByGender[cat].Female),
+              backgroundColor: '#EC4899',
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: true, text: 'Category-wise Gender Distribution', font: { size: 16, weight: 'bold' } },
+            legend: { position: 'bottom' }
+          },
+          scales: {
+            x: { stacked: false },
+            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+          }
+        }
+      });
+    }
+
+    // School Distribution Bar Chart
+    if (schoolDistChartRef.current && Object.keys(stats.schoolCount).length > 0) {
+      const ctx = schoolDistChartRef.current.getContext('2d');
+      const schools = Object.keys(stats.schoolCount);
+      const counts = Object.values(stats.schoolCount);
+      
+      chartInstances.current.schoolDist = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: schools.map(s => s.replace('CoE ', '').replace('JNV ', '')),
+          datasets: [{
+            label: 'Students',
+            data: counts,
+            backgroundColor: '#F4B41A',
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: true, text: 'School-wise Distribution', font: { size: 16, weight: 'bold' } },
+            legend: { display: false }
+          },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+          }
+        }
+      });
+    }
+
+    return () => {
+      Object.values(chartInstances.current).forEach(chart => {
+        if (chart) chart.destroy();
+      });
+    };
+  }, [stats]);
 
   const handleExport=()=>{
     const exportData=filteredProfiles.map(p=>({
@@ -5766,8 +5965,13 @@ function AdminStudentProfiles(){
 
   return(
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold">👨‍🎓 Student Profiles ({filteredProfiles.length})</h2>
+      <div className="flex justify-between items-center flex-wrap gap-4">
+        <div>
+          <h2 className="text-3xl font-bold">👨‍🎓 Student Profiles ({filteredProfiles.length})</h2>
+          {!isSuperAdmin && (
+            <p className="text-sm text-gray-500 mt-1">Showing profiles for your assigned schools</p>
+          )}
+        </div>
         <button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
           📥 Export to Excel
         </button>
@@ -5778,14 +5982,14 @@ function AdminStudentProfiles(){
         <div className="grid md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold mb-2">School</label>
-            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
+            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
               <option value="All">All Schools</option>
-              {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+              {availableSchools.map(s=><option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-bold mb-2">Grade</label>
-            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
+            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
               <option value="All">All Grades</option>
               <option value="11">Class 11</option>
               <option value="12">Class 12</option>
@@ -5794,7 +5998,89 @@ function AdminStudentProfiles(){
         </div>
       </div>
 
+      {/* Summary Statistics Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-xl shadow-lg">
+          <div className="text-sm opacity-90">Total Profiles</div>
+          <div className="text-3xl font-bold">{filteredProfiles.length}</div>
+        </div>
+        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-4 rounded-xl shadow-lg">
+          <div className="text-sm opacity-90">Male Students</div>
+          <div className="text-3xl font-bold">{stats.genderCount.Male}</div>
+          <div className="text-xs opacity-75">{filteredProfiles.length > 0 ? Math.round((stats.genderCount.Male / filteredProfiles.length) * 100) : 0}%</div>
+        </div>
+        <div className="bg-gradient-to-r from-pink-500 to-rose-600 text-white p-4 rounded-xl shadow-lg">
+          <div className="text-sm opacity-90">Female Students</div>
+          <div className="text-3xl font-bold">{stats.genderCount.Female}</div>
+          <div className="text-xs opacity-75">{filteredProfiles.length > 0 ? Math.round((stats.genderCount.Female / filteredProfiles.length) * 100) : 0}%</div>
+        </div>
+        <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 rounded-xl shadow-lg">
+          <div className="text-sm opacity-90">Categories</div>
+          <div className="text-3xl font-bold">{Object.keys(stats.categoryCount).length}</div>
+        </div>
+      </div>
+
+      {/* Charts Section */}
+      {filteredProfiles.length > 0 && (
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <div style={{ height: '300px' }}>
+              <canvas ref={categoryChartRef}></canvas>
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <div style={{ height: '300px' }}>
+              <canvas ref={genderChartRef}></canvas>
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <div style={{ height: '300px' }}>
+              <canvas ref={streamChartRef}></canvas>
+            </div>
+          </div>
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <div style={{ height: '300px' }}>
+              <canvas ref={schoolDistChartRef}></canvas>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category Breakdown Table */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4">📊 Category-wise Breakdown</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="avanti-gradient-light">
+              <tr>
+                <th className="p-3 text-left">Category</th>
+                <th className="p-3 text-center">Male</th>
+                <th className="p-3 text-center">Female</th>
+                <th className="p-3 text-center">Total</th>
+                <th className="p-3 text-center">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(stats.categoryByGender).map(([cat, counts]) => (
+                <tr key={cat} className="border-b hover:bg-gray-50">
+                  <td className="p-3 font-semibold">{cat}</td>
+                  <td className="p-3 text-center text-indigo-600 font-bold">{counts.Male}</td>
+                  <td className="p-3 text-center text-pink-600 font-bold">{counts.Female}</td>
+                  <td className="p-3 text-center font-bold">{counts.Male + counts.Female + counts.Other}</td>
+                  <td className="p-3 text-center">
+                    {filteredProfiles.length > 0 
+                      ? Math.round(((counts.Male + counts.Female + counts.Other) / filteredProfiles.length) * 100) 
+                      : 0}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
+        <h3 className="text-xl font-bold mb-4">📋 Student Profiles List</h3>
         <table className="w-full">
           <thead className="avanti-gradient-light">
             <tr>
@@ -5818,7 +6104,18 @@ function AdminStudentProfiles(){
                 <td className="p-3">{profile.grade}th</td>
                 <td className="p-3">{profile.school}</td>
                 <td className="p-3">{profile.stream}</td>
-                <td className="p-3">{profile.category}</td>
+                <td className="p-3">
+                  <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                    profile.category === 'General' ? 'bg-blue-100 text-blue-700' :
+                    profile.category === 'OBC' ? 'bg-green-100 text-green-700' :
+                    profile.category === 'SC' ? 'bg-yellow-100 text-yellow-700' :
+                    profile.category === 'ST' ? 'bg-orange-100 text-orange-700' :
+                    profile.category === 'General EWS' ? 'bg-purple-100 text-purple-700' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {profile.category || 'N/A'}
+                  </span>
+                </td>
                 <td className="p-3">{profile.percentage10th}%</td>
                 <td className="p-3 text-sm">{profile.phone}</td>
               </tr>
@@ -7802,13 +8099,12 @@ function AdminView({
       { id: 'managers', label: 'Managers', icon: '👔' },
       { id: 'academicyear', label: 'Academic Year', icon: '📅' },
       { id: '2fa-management', label: '2FA Management', icon: '🔐' },
+      { id: 'settings', label: 'Settings', icon: '⚙️' },
     ] : []),
     { id: 'teachers', label: 'Teachers', icon: '👥' },
     { id: 'teacherhistory', label: 'Teacher History', icon: '📈' },
-    // Students tab - only for Super Admin (contains add/edit/delete functionality)
-    ...(isSuperAdmin ? [
-      { id: 'students', label: 'Students', icon: '👨‍🎓' },
-    ] : []),
+    // Students tab - Super Admin has full access, Managers have view-only access
+    { id: 'students', label: 'Students', icon: '👨‍🎓' },
     { id: 'directory', label: 'Directory', icon: '📖' },
     { id: 'observations', label: 'Class Observations', icon: '📋' },
     // Curriculum Management - only for Super Admin (contains add/edit/delete chapters)
@@ -7823,10 +8119,8 @@ function AdminView({
     { id: 'attendance', label: 'Attendance Analytics', icon: '📊' },
     { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
     { id: 'birthdays', label: 'Celebrations', icon: '🎂' },
-    // Student Profiles - only for Super Admin
-    ...(isSuperAdmin ? [
-      { id: 'studentprofiles', label: 'Student Profiles', icon: '👨‍🎓' },
-    ] : []),
+    // Student Profiles - for viewing student demographics with graphs
+    { id: 'studentprofiles', label: 'Student Profiles', icon: '👨‍🎓' },
     { id: 'examstats', label: 'Exam Statistics', icon: '📊' },
     { id: 'studentfeedback', label: 'Student Feedback', icon: '💬' }
   ];
@@ -7974,7 +8268,7 @@ function AdminView({
 
         {activeTab === 'teacherhistory' && <TeacherHistoryView teachers={filteredTeachers} />}
 
-        {activeTab === 'students' && <StudentManagement students={filteredStudents} />}
+        {activeTab === 'students' && <StudentManagement students={filteredStudents} isSuperAdmin={isSuperAdmin} accessibleSchools={availableSchools} />}
 
         {activeTab === 'directory' && (
           <TeacherDirectory teachers={filteredTeachers} currentUser={currentUser} />
@@ -8028,7 +8322,9 @@ function AdminView({
 
         {activeTab === 'birthdays' && <AdminBirthdays teachers={filteredTeachers} />}
 
-        {activeTab === 'studentprofiles' && <AdminStudentProfiles />}
+        {activeTab === 'studentprofiles' && <AdminStudentProfiles accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} />}
+
+        {activeTab === 'settings' && isSuperAdmin && <AdminSettings />}
 
         {activeTab === 'examstats' && <AdminExamStats accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} />}
         
@@ -11171,128 +11467,367 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
 
 function AdminChapterDetails({curriculum,chapterProgress}){const[filterSchool,setFilterSchool]=useState('All');const[filterSubject,setFilterSubject]=useState('All');const[filterGrade,setFilterGrade]=useState('All');const chapterDetails=useMemo(()=>{const details=[];const schoolsToProcess=filterSchool==='All'?SCHOOLS:[filterSchool];const subjectsToProcess=filterSubject==='All'?SUBJECTS:[filterSubject];const gradesToProcess=filterGrade==='All'?['11','12']:[filterGrade];schoolsToProcess.forEach(school=>{subjectsToProcess.forEach(subject=>{gradesToProcess.forEach(grade=>{const docId=`${school}_${subject}_${grade}`;const chapters=curriculum[docId]?.chapters||[];chapters.forEach(ch=>{const progressId=`${school}_${ch.id}`;const prog=chapterProgress[progressId]||{};details.push({school,subject,grade:`Class ${grade}`,chapterName:ch.name,targetDate:ch.targetDate||'—',completed:prog.completed||'No',completionDate:prog.completionDate||'—',testConducted:prog.testConducted||'No',notes:prog.notes||'—'})})})})});return details},[curriculum,chapterProgress,filterSchool,filterSubject,filterGrade]);const handleExport=()=>{exportToExcel(chapterDetails,'chapter_details')};return(<div className="space-y-6"><div className="flex justify-between items-center"><h2 className="text-3xl font-bold">Chapter Details</h2><button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">📊 Export to Excel</button></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="font-bold mb-4">Filters</h3><div className="grid md:grid-cols-3 gap-4"><div><label className="block text-sm font-bold mb-2">School</label><select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"><option value="All">All Schools</option>{SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Subject</label><select value={filterSubject} onChange={e=>setFilterSubject(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"><option value="All">All Subjects</option>{SUBJECTS.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="block text-sm font-bold mb-2">Grade</label><select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"><option value="All">All Grades</option><option value="11">Class 11</option><option value="12">Class 12</option></select></div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto"><h3 className="font-bold mb-4">All Chapters ({chapterDetails.length})</h3><table className="w-full"><thead className="avanti-gradient-light"><tr><th className="p-3 text-left">School</th><th className="p-3 text-left">Subject</th><th className="p-3 text-left">Grade</th><th className="p-3 text-left">Chapter Name</th><th className="p-3 text-left">Target Date</th><th className="p-3 text-left">Completed</th><th className="p-3 text-left">Completion Date</th><th className="p-3 text-left">Test Conducted</th><th className="p-3 text-left">Notes</th></tr></thead><tbody>{chapterDetails.length===0?<tr><td colSpan="9" className="p-8 text-center text-gray-500">No chapters found</td></tr>:chapterDetails.map((ch,idx)=><tr key={idx} className="border-b hover:bg-gray-50"><td className="p-3">{ch.school}</td><td className="p-3">{ch.subject}</td><td className="p-3">{ch.grade}</td><td className="p-3 font-semibold">{ch.chapterName}</td><td className="p-3 text-sm">{ch.targetDate}</td><td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${ch.completed==='Yes'?'bg-green-100 text-green-700':'bg-gray-100'}`}>{ch.completed}</span></td><td className="p-3 text-sm">{ch.completionDate}</td><td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${ch.testConducted==='Yes'?'bg-blue-100 text-blue-700':'bg-orange-100 text-orange-700'}`}>{ch.testConducted}</span></td><td className="p-3 text-sm">{ch.notes}</td></tr>)}</tbody></table></div></div>)}
 // ========================================
-// ADMIN STUDENT PROFILES VIEW
 // ========================================
-function AdminStudentProfiles(){
-  const[studentProfiles,setStudentProfiles]=useState([]);
-  const[filterSchool,setFilterSchool]=useState('All');
-  const[filterGrade,setFilterGrade]=useState('All');
-
-  useEffect(()=>{
-    const fetchData=async()=>{
-      const profilesSnap=await db.collection('studentProfiles').get();
-      setStudentProfiles(profilesSnap.docs.map(d=>({...d.data(),id:d.id})));
-    };
-    fetchData();
-  },[]);
-
-  const filteredProfiles=studentProfiles.filter(p=>{
-    if(filterSchool!=='All'&&p.school!==filterSchool)return false;
-    if(filterGrade!=='All'&&p.grade!==filterGrade)return false;
-    return true;
+// ADMIN SETTINGS COMPONENT
+// ========================================
+function AdminSettings() {
+  const [settings, setSettings] = useState({
+    // Feature Access Settings
+    managerCanViewStudents: true,
+    managerCanViewStudentProfiles: true,
+    managerCanViewAnalytics: true,
+    managerCanViewAttendance: true,
+    managerCanViewObservations: true,
+    managerCanExportData: true,
+    teacherCanEditOwnAttendance: false,
+    studentCanViewFeedback: true,
+    
+    // Notification Settings
+    enableEmailNotifications: true,
+    enablePushNotifications: true,
+    notifyOnNewTeacher: true,
+    notifyOnNewStudent: true,
+    notifyOnAttendanceAlert: true,
+    
+    // Data Settings
+    autoArchiveAfterDays: 365,
+    dataRetentionMonths: 24,
+    
+    // App Settings
+    appName: 'Curriculum Tracker',
+    primaryColor: '#F4B41A',
+    enableDarkMode: false,
+    showWelcomeMessage: true,
+    maintenanceMode: false
   });
-
-  const handleExport=()=>{
-    const exportData=filteredProfiles.map(p=>({
-      'Student ID':p.studentId,
-      'First Name':p.firstName,
-      'Last Name':p.lastName,
-      'Email':p.email,
-      'Phone':p.phone,
-      'DOB':p.dob,
-      'Grade':p.grade,
-      'Category':p.category,
-      'Stream':p.stream,
-      'School':p.school,
-      'Father Name':p.fatherName,
-      'Father Occupation':p.fatherOccupation,
-      'Father Education':p.fatherEducation,
-      'Mother Name':p.motherName,
-      'Mother Occupation':p.motherOccupation,
-      'Mother Education':p.motherEducation,
-      'Family Income':p.familyIncome,
-      'Address':p.address,
-      'State':p.state,
-      'District':p.district,
-      'Pincode':p.pincode,
-      'WhatsApp':p.whatsappNumber,
-      '10th %':p.percentage10th,
-      '11th %':p.percentage11th||'N/A'
-    }));
-    exportToExcel(exportData,'student_profiles');
+  
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  
+  // Load settings from Firestore
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const doc = await db.collection('app_settings').doc('global').get();
+        if (doc.exists) {
+          setSettings(prev => ({ ...prev, ...doc.data() }));
+        }
+        setLoading(false);
+      } catch (e) {
+        console.error('Error loading settings:', e);
+        setLoading(false);
+      }
+    };
+    loadSettings();
+  }, []);
+  
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await db.collection('app_settings').doc('global').set({
+        ...settings,
+        updatedAt: new Date().toISOString()
+      });
+      setSuccessMessage('✅ Settings saved successfully!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (e) {
+      console.error('Error saving settings:', e);
+      alert('❌ Error saving settings: ' + e.message);
+    }
+    setSaving(false);
   };
-
-  return(
+  
+  const ToggleSwitch = ({ checked, onChange, label, description }) => (
+    <div className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+      <div>
+        <div className="font-medium text-gray-800">{label}</div>
+        {description && <div className="text-sm text-gray-500">{description}</div>}
+      </div>
+      <button
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+          checked ? 'bg-green-500' : 'bg-gray-300'
+        }`}
+      >
+        <span
+          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+            checked ? 'translate-x-6' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </div>
+  );
+  
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin text-4xl mb-4">⏳</div>
+        <p>Loading settings...</p>
+      </div>
+    );
+  }
+  
+  return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold">👨‍🎓 Student Profiles ({filteredProfiles.length})</h2>
-        <button onClick={handleExport} className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold">
-          📥 Export to Excel
+        <div>
+          <h2 className="text-3xl font-bold">⚙️ Admin Settings</h2>
+          <p className="text-gray-500 mt-1">Configure application settings and access controls</p>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50"
+        >
+          {saving ? '💾 Saving...' : '💾 Save Settings'}
         </button>
       </div>
-
+      
+      {successMessage && (
+        <div className="bg-green-50 border-2 border-green-300 p-4 rounded-xl text-green-800 font-semibold">
+          {successMessage}
+        </div>
+      )}
+      
+      {/* Manager Access Controls */}
       <div className="bg-white p-6 rounded-2xl shadow-lg">
-        <h3 className="text-xl font-bold mb-4">🔍 Filters</h3>
+        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+          👔 Manager Access Controls
+        </h3>
+        <p className="text-sm text-gray-500 mb-4">Configure what managers (PM, APM, APH) can access</p>
+        
+        <ToggleSwitch
+          checked={settings.managerCanViewStudents}
+          onChange={(val) => setSettings({ ...settings, managerCanViewStudents: val })}
+          label="View Student Management"
+          description="Allow managers to view student list (read-only)"
+        />
+        <ToggleSwitch
+          checked={settings.managerCanViewStudentProfiles}
+          onChange={(val) => setSettings({ ...settings, managerCanViewStudentProfiles: val })}
+          label="View Student Profiles"
+          description="Allow managers to view detailed student profiles with demographics"
+        />
+        <ToggleSwitch
+          checked={settings.managerCanViewAnalytics}
+          onChange={(val) => setSettings({ ...settings, managerCanViewAnalytics: val })}
+          label="View Analytics"
+          description="Allow managers to access analytics dashboards"
+        />
+        <ToggleSwitch
+          checked={settings.managerCanViewAttendance}
+          onChange={(val) => setSettings({ ...settings, managerCanViewAttendance: val })}
+          label="View Attendance"
+          description="Allow managers to view attendance records"
+        />
+        <ToggleSwitch
+          checked={settings.managerCanViewObservations}
+          onChange={(val) => setSettings({ ...settings, managerCanViewObservations: val })}
+          label="View Classroom Observations"
+          description="Allow managers to view and create classroom observations"
+        />
+        <ToggleSwitch
+          checked={settings.managerCanExportData}
+          onChange={(val) => setSettings({ ...settings, managerCanExportData: val })}
+          label="Export Data"
+          description="Allow managers to export data to Excel/CSV"
+        />
+      </div>
+      
+      {/* Teacher Settings */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+          👥 Teacher Settings
+        </h3>
+        
+        <ToggleSwitch
+          checked={settings.teacherCanEditOwnAttendance}
+          onChange={(val) => setSettings({ ...settings, teacherCanEditOwnAttendance: val })}
+          label="Edit Own Attendance"
+          description="Allow teachers to modify their own attendance records"
+        />
+      </div>
+      
+      {/* Student Settings */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+          🎓 Student Settings
+        </h3>
+        
+        <ToggleSwitch
+          checked={settings.studentCanViewFeedback}
+          onChange={(val) => setSettings({ ...settings, studentCanViewFeedback: val })}
+          label="View Feedback Results"
+          description="Allow students to view feedback summary for their teachers"
+        />
+      </div>
+      
+      {/* Notification Settings */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+          🔔 Notification Settings
+        </h3>
+        
+        <ToggleSwitch
+          checked={settings.enableEmailNotifications}
+          onChange={(val) => setSettings({ ...settings, enableEmailNotifications: val })}
+          label="Email Notifications"
+          description="Enable email notifications for important events"
+        />
+        <ToggleSwitch
+          checked={settings.enablePushNotifications}
+          onChange={(val) => setSettings({ ...settings, enablePushNotifications: val })}
+          label="Push Notifications"
+          description="Enable browser push notifications"
+        />
+        <ToggleSwitch
+          checked={settings.notifyOnNewTeacher}
+          onChange={(val) => setSettings({ ...settings, notifyOnNewTeacher: val })}
+          label="New Teacher Alert"
+          description="Notify when a new teacher is added"
+        />
+        <ToggleSwitch
+          checked={settings.notifyOnNewStudent}
+          onChange={(val) => setSettings({ ...settings, notifyOnNewStudent: val })}
+          label="New Student Alert"
+          description="Notify when new students are added"
+        />
+        <ToggleSwitch
+          checked={settings.notifyOnAttendanceAlert}
+          onChange={(val) => setSettings({ ...settings, notifyOnAttendanceAlert: val })}
+          label="Attendance Alerts"
+          description="Notify when attendance drops below threshold"
+        />
+      </div>
+      
+      {/* Data Management */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+          🗄️ Data Management
+        </h3>
+        
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-bold mb-2">School</label>
-            <select value={filterSchool} onChange={e=>setFilterSchool(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
-              <option value="All">All Schools</option>
-              {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
+            <label className="block text-sm font-bold mb-2">Auto-archive after (days)</label>
+            <input
+              type="number"
+              value={settings.autoArchiveAfterDays}
+              onChange={(e) => setSettings({ ...settings, autoArchiveAfterDays: parseInt(e.target.value) || 365 })}
+              className="w-full border-2 px-4 py-3 rounded-xl"
+              min="30"
+              max="730"
+            />
+            <p className="text-xs text-gray-500 mt-1">Old data will be archived after this many days</p>
           </div>
           <div>
-            <label className="block text-sm font-bold mb-2">Grade</label>
-            <select value={filterGrade} onChange={e=>setFilterGrade(e.target.value)} disabled={!isEditing} className="w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed">
-              <option value="All">All Grades</option>
-              <option value="11">Class 11</option>
-              <option value="12">Class 12</option>
-            </select>
+            <label className="block text-sm font-bold mb-2">Data retention (months)</label>
+            <input
+              type="number"
+              value={settings.dataRetentionMonths}
+              onChange={(e) => setSettings({ ...settings, dataRetentionMonths: parseInt(e.target.value) || 24 })}
+              className="w-full border-2 px-4 py-3 rounded-xl"
+              min="6"
+              max="60"
+            />
+            <p className="text-xs text-gray-500 mt-1">Archived data will be retained for this duration</p>
           </div>
         </div>
       </div>
-
-      <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
-        <table className="w-full">
-          <thead className="avanti-gradient-light">
-            <tr>
-              <th className="p-3 text-left">Student ID</th>
-              <th className="p-3 text-left">Name</th>
-              <th className="p-3 text-left">Grade</th>
-              <th className="p-3 text-left">School</th>
-              <th className="p-3 text-left">Stream</th>
-              <th className="p-3 text-left">Category</th>
-              <th className="p-3 text-left">10th %</th>
-              <th className="p-3 text-left">Contact</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredProfiles.length===0?(
-              <tr><td colSpan="8" className="p-8 text-center text-gray-500">No student profiles found</td></tr>
-            ):filteredProfiles.map(profile=>
-              <tr key={profile.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 font-mono">{profile.studentId}</td>
-                <td className="p-3 font-semibold">{profile.firstName} {profile.lastName}</td>
-                <td className="p-3">{profile.grade}th</td>
-                <td className="p-3">{profile.school}</td>
-                <td className="p-3">{profile.stream}</td>
-                <td className="p-3">{profile.category}</td>
-                <td className="p-3">{profile.percentage10th}%</td>
-                <td className="p-3 text-sm">{profile.phone}</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      
+      {/* App Customization */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg">
+        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+          🎨 App Customization
+        </h3>
+        
+        <div className="grid md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">App Name</label>
+            <input
+              type="text"
+              value={settings.appName}
+              onChange={(e) => setSettings({ ...settings, appName: e.target.value })}
+              className="w-full border-2 px-4 py-3 rounded-xl"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold mb-2">Primary Color</label>
+            <div className="flex gap-2">
+              <input
+                type="color"
+                value={settings.primaryColor}
+                onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
+                className="w-16 h-12 border-2 rounded-xl cursor-pointer"
+              />
+              <input
+                type="text"
+                value={settings.primaryColor}
+                onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
+                className="flex-1 border-2 px-4 py-3 rounded-xl font-mono"
+              />
+            </div>
+          </div>
+        </div>
+        
+        <ToggleSwitch
+          checked={settings.showWelcomeMessage}
+          onChange={(val) => setSettings({ ...settings, showWelcomeMessage: val })}
+          label="Show Welcome Message"
+          description="Display welcome message on dashboard"
+        />
+        <ToggleSwitch
+          checked={settings.enableDarkMode}
+          onChange={(val) => setSettings({ ...settings, enableDarkMode: val })}
+          label="Enable Dark Mode Option"
+          description="Allow users to switch to dark mode (coming soon)"
+        />
+      </div>
+      
+      {/* Maintenance Mode */}
+      <div className="bg-white p-6 rounded-2xl shadow-lg border-2 border-red-200">
+        <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-red-600">
+          🚧 Maintenance Mode
+        </h3>
+        
+        <ToggleSwitch
+          checked={settings.maintenanceMode}
+          onChange={(val) => setSettings({ ...settings, maintenanceMode: val })}
+          label="Enable Maintenance Mode"
+          description="⚠️ When enabled, only Super Admins can access the application"
+        />
+        
+        {settings.maintenanceMode && (
+          <div className="mt-4 p-4 bg-red-50 rounded-xl text-red-800">
+            <strong>⚠️ Warning:</strong> Maintenance mode is enabled. All users except Super Admins will see a maintenance message.
+          </div>
+        )}
+      </div>
+      
+      {/* System Information */}
+      <div className="bg-gray-50 p-6 rounded-2xl">
+        <h3 className="text-xl font-bold mb-4">📊 System Information</h3>
+        <div className="grid md:grid-cols-3 gap-4 text-sm">
+          <div className="bg-white p-4 rounded-xl">
+            <div className="text-gray-500">Version</div>
+            <div className="font-bold text-lg">2.0.0</div>
+          </div>
+          <div className="bg-white p-4 rounded-xl">
+            <div className="text-gray-500">Last Updated</div>
+            <div className="font-bold text-lg">{new Date().toLocaleDateString()}</div>
+          </div>
+          <div className="bg-white p-4 rounded-xl">
+            <div className="text-gray-500">Database</div>
+            <div className="font-bold text-lg">Firebase Firestore</div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-function AdminBirthdays({teachers}){const todayBirthdays=useMemo(()=>getBirthdays(teachers,'today'),[teachers]);const weekBirthdays=useMemo(()=>getBirthdays(teachers,'week'),[teachers]);const monthBirthdays=useMemo(()=>getBirthdays(teachers,'month'),[teachers]);const todayAnniversaries=useMemo(()=>getAnniversaries(teachers,'today'),[teachers]);const weekAnniversaries=useMemo(()=>getAnniversaries(teachers,'week'),[teachers]);const monthAnniversaries=useMemo(()=>getAnniversaries(teachers,'month'),[teachers]);return(<div className="space-y-6"><h2 className="text-3xl font-bold">🎉 Celebrations</h2><div className="grid md:grid-cols-2 gap-6"><>{todayBirthdays.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎂 Today's Birthdays</h3>{todayBirthdays.map(t=><div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{t.school} - {t.subject}</div></div>)}</div>}{todayAnniversaries.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎉 Today's Work Anniversaries</h3>{todayAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{years} Years - {t.school}</div></div>)})}</div>}</></div><div className="grid md:grid-cols-3 gap-6"><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Week</h3>{weekBirthdays.length===0&&weekAnniversaries.length===0?<p className="text-gray-500">No celebrations</p>:<div className="space-y-2"><>{weekBirthdays.map(t=><div key={t.id} className="p-3 bg-blue-50 rounded-lg"><div className="font-semibold">🎂 {t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}{weekAnniversaries.map(t=><div key={t.id} className="p-3 bg-green-50 rounded-lg"><div className="font-semibold">🎉 {t.name}</div><div className="text-sm text-gray-600">Work Anniversary</div></div>)}</></div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month - Birthdays</h3>{monthBirthdays.length===0?<p className="text-gray-500">No birthdays</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month - Anniversaries</h3>{monthAnniversaries.length===0?<p className="text-gray-500">No anniversaries</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{years} Years</div></div>)})}</div>}</div></div></div>)}
 
-// ========================================
-// STUDENT MANAGEMENT COMPONENT
-// ========================================
-function StudentManagement({students}){
+function AdminBirthdays({teachers}){const todayBirthdays=useMemo(()=>getBirthdays(teachers,'today'),[teachers]);const weekBirthdays=useMemo(()=>getBirthdays(teachers,'week'),[teachers]);const monthBirthdays=useMemo(()=>getBirthdays(teachers,'month'),[teachers]);const todayAnniversaries=useMemo(()=>getAnniversaries(teachers,'today'),[teachers]);const weekAnniversaries=useMemo(()=>getAnniversaries(teachers,'week'),[teachers]);const monthAnniversaries=useMemo(()=>getAnniversaries(teachers,'month'),[teachers]);return(<div className="space-y-6"><h2 className="text-3xl font-bold">🎉 Celebrations</h2><div className="grid md:grid-cols-2 gap-6"><>{todayBirthdays.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎂 Today's Birthdays</h3>{todayBirthdays.map(t=><div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{t.school} - {t.subject}</div></div>)}</div>}{todayAnniversaries.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎉 Today's Work Anniversaries</h3>{todayAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{years} Years - {t.school}</div></div>)})}</div>}</></div><div className="grid md:grid-cols-3 gap-6"><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Week</h3>{weekBirthdays.length===0&&weekAnniversaries.length===0?<p className="text-gray-500">No celebrations</p>:<div className="space-y-2"><>{weekBirthdays.map(t=><div key={t.id} className="p-3 bg-blue-50 rounded-lg"><div className="font-semibold">🎂 {t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}{weekAnniversaries.map(t=><div key={t.id} className="p-3 bg-green-50 rounded-lg"><div className="font-semibold">🎉 {t.name}</div><div className="text-sm text-gray-600">Work Anniversary</div></div>)}</></div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month - Birthdays</h3>{monthBirthdays.length===0?<p className="text-gray-500">No birthdays</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month - Anniversaries</h3>{monthAnniversaries.length===0?<p className="text-gray-500">No anniversaries</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{years} Years</div></div>)})}</div>}</div></div></div>)}
+function StudentManagement({students, isSuperAdmin = true, accessibleSchools = SCHOOLS}){
   const[showModal,setShowModal]=useState(false);
   const[editingStudent,setEditingStudent]=useState(null);
   const[form,setForm]=useState({school:'',grade:'',name:'',gender:'',id:''});
@@ -11300,13 +11835,20 @@ function StudentManagement({students}){
   const[filterSchool,setFilterSchool]=useState('All');
   const[filterGrade,setFilterGrade]=useState('All');
   const[selectAll,setSelectAll]=useState(false);
+  const[searchQuery,setSearchQuery]=useState('');
   const fileInputRef=useRef(null);
   const updateIdFileRef=useRef(null);
+  
+  // Filter schools based on access
+  const availableSchools = isSuperAdmin ? SCHOOLS : accessibleSchools;
 
   const filteredStudents=students
   .filter(s=>{
+    // First filter by accessible schools for managers
+    if(!isSuperAdmin && !accessibleSchools.includes(s.school)) return false;
     if(filterSchool!=='All'&&s.school!==filterSchool)return false;
     if(filterGrade!=='All'&&s.grade!==filterGrade)return false;
+    if(searchQuery && !s.name?.toLowerCase().includes(searchQuery.toLowerCase()) && !s.id?.toLowerCase().includes(searchQuery.toLowerCase()))return false;
     return true;
   })
   .sort((a,b)=>a.name.localeCompare(b.name));
@@ -11727,27 +12269,36 @@ await db.collection('students').doc(docId).set({
 
   return(
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold">Student Management</h2>
-        <div className="flex gap-3">
-          <button onClick={openAddModal} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">
-            + Add Student
-          </button>
-          <label className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer">
-            📤 Import CSV
-            <input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVImport} className="hidden"/>
-          </label>
-          <label className="px-6 py-3 bg-orange-600 text-white rounded-xl font-semibold cursor-pointer">
-            🔄 Update Student IDs
-            <input ref={updateIdFileRef} type="file" accept=".csv" onChange={handleBulkUpdateIDs} className="hidden"/>
-          </label>
+      <div className="flex justify-between items-center flex-wrap gap-4">
+        <div>
+          <h2 className="text-3xl font-bold">Student Management</h2>
+          {!isSuperAdmin && (
+            <p className="text-sm text-gray-500 mt-1">👁️ View Only Mode - Contact Super Admin for modifications</p>
+          )}
+        </div>
+        <div className="flex gap-3 flex-wrap">
+          {isSuperAdmin && (
+            <>
+              <button onClick={openAddModal} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold">
+                + Add Student
+              </button>
+              <label className="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer">
+                📤 Import CSV
+                <input ref={fileInputRef} type="file" accept=".csv" onChange={handleCSVImport} className="hidden"/>
+              </label>
+              <label className="px-6 py-3 bg-orange-600 text-white rounded-xl font-semibold cursor-pointer">
+                🔄 Update Student IDs
+                <input ref={updateIdFileRef} type="file" accept=".csv" onChange={handleBulkUpdateIDs} className="hidden"/>
+              </label>
+            </>
+          )}
           <button onClick={handleExport} className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold">
             📥 Export
           </button>
         </div>
       </div>
 
-      {selectedStudents.length>0&&(
+      {isSuperAdmin && selectedStudents.length>0&&(
         <div className="bg-blue-50 border-2 border-blue-300 p-4 rounded-xl">
           <div className="flex justify-between items-center">
             <div className="font-bold text-blue-800">
@@ -11772,13 +12323,23 @@ await db.collection('students').doc(docId).set({
       )}
 
       <div className="bg-white p-6 rounded-2xl shadow-lg">
-        <h3 className="text-xl font-bold mb-4">🔍 Filters</h3>
-        <div className="grid md:grid-cols-2 gap-4">
+        <h3 className="text-xl font-bold mb-4">🔍 Filters & Search</h3>
+        <div className="grid md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">Search</label>
+            <input 
+              type="text" 
+              value={searchQuery} 
+              onChange={e=>setSearchQuery(e.target.value)} 
+              placeholder="Search by name or ID..." 
+              className="w-full border-2 px-4 py-3 rounded-xl"
+            />
+          </div>
           <div>
             <label className="block text-sm font-bold mb-2">School</label>
             <select value={filterSchool} onChange={e=>{setFilterSchool(e.target.value);setSelectedStudents([]);setSelectAll(false)}} className="w-full border-2 px-4 py-3 rounded-xl">
               <option value="All">All Schools</option>
-              {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+              {availableSchools.map(s=><option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
@@ -11811,29 +12372,33 @@ await db.collection('students').doc(docId).set({
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-xl border-2 border-gray-200">
-        <p className="text-sm text-gray-600">
-          <strong>📋 Import New Students CSV Format (5 columns):</strong>
-          <br/>School Name, Student ID, Grade, Student Name, Gender
-          <br/><br/>
-          <strong>✅ Example Row:</strong>
-          <br/>CoE Barwani, STU001, 11, Raj Kumar, Male
-          <br/><br/>
-          <strong>🔐 Login Info:</strong> Students use their Student ID + Password: <span className="font-mono bg-yellow-100 px-2 py-1 rounded">pass123</span>
-        </p>
-      </div>
+      {isSuperAdmin && (
+        <>
+          <div className="bg-white p-4 rounded-xl border-2 border-gray-200">
+            <p className="text-sm text-gray-600">
+              <strong>📋 Import New Students CSV Format (5 columns):</strong>
+              <br/>School Name, Student ID, Grade, Student Name, Gender
+              <br/><br/>
+              <strong>✅ Example Row:</strong>
+              <br/>CoE Barwani, STU001, 11, Raj Kumar, Male
+              <br/><br/>
+              <strong>🔐 Login Info:</strong> Students use their Student ID + Password: <span className="font-mono bg-yellow-100 px-2 py-1 rounded">pass123</span>
+            </p>
+          </div>
 
-      <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-300">
-        <p className="text-sm text-gray-600">
-          <strong>🔄 Update Student IDs CSV Format (4 columns):</strong>
-          <br/>School Name, Student Name, Grade, Student ID
-          <br/><br/>
-          <strong>✅ Example Row:</strong>
-          <br/>CoE Bundi, Aaditya Raj Dhawan, Class 12, 2754059028
-          <br/><br/>
-          <strong>⚡ How it works:</strong> System finds existing student by matching School + Name + Grade, then updates only the Student ID field.
-        </p>
-      </div>
+          <div className="bg-orange-50 p-4 rounded-xl border-2 border-orange-300">
+            <p className="text-sm text-gray-600">
+              <strong>🔄 Update Student IDs CSV Format (4 columns):</strong>
+              <br/>School Name, Student Name, Grade, Student ID
+              <br/><br/>
+              <strong>✅ Example Row:</strong>
+              <br/>CoE Bundi, Aaditya Raj Dhawan, Class 12, 2754059028
+              <br/><br/>
+              <strong>⚡ How it works:</strong> System finds existing student by matching School + Name + Grade, then updates only the Student ID field.
+            </p>
+          </div>
+        </>
+      )}
 
       <div className="bg-white p-6 rounded-2xl shadow-lg overflow-x-auto">
         <h3 className="font-bold mb-4">
@@ -11842,40 +12407,44 @@ await db.collection('students').doc(docId).set({
         <table className="w-full">
           <thead className="avanti-gradient-light">
             <tr>
-              <th className="p-3">
-                <input 
-                  type="checkbox" 
-                  checked={selectAll&&filteredStudents.length>0} 
-                  onChange={handleSelectAll}
-                  className="cursor-pointer"
-                />
-              </th>
+              {isSuperAdmin && (
+                <th className="p-3">
+                  <input 
+                    type="checkbox" 
+                    checked={selectAll&&filteredStudents.length>0} 
+                    onChange={handleSelectAll}
+                    className="cursor-pointer"
+                  />
+                </th>
+              )}
               <th className="p-3 text-left">School</th>
               <th className="p-3 text-left">Student ID</th>
               <th className="p-3 text-left">Grade</th>
               <th className="p-3 text-left">Name</th>
               <th className="p-3 text-left">Gender</th>
-              <th className="p-3 text-left">Actions</th>
+              {isSuperAdmin && <th className="p-3 text-left">Actions</th>}
             </tr>
           </thead>
           <tbody>
             {filteredStudents.length===0?(
               <tr>
-                <td colSpan="7" className="p-8 text-center text-gray-500">
+                <td colSpan={isSuperAdmin ? "7" : "5"} className="p-8 text-center text-gray-500">
                   No students found
                 </td>
               </tr>
             ):(
               filteredStudents.map(s=>
                 <tr key={s.docId} className={`border-b hover:bg-gray-50 ${selectedStudents.includes(s.docId)?'bg-blue-50':''}`}>
-                  <td className="p-3">
-                    <input 
-                      type="checkbox" 
-                      checked={selectedStudents.includes(s.docId)}
-                      onChange={()=>handleSelectStudent(s.docId)}
-                      className="cursor-pointer"
-                    />
-                  </td>
+                  {isSuperAdmin && (
+                    <td className="p-3">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedStudents.includes(s.docId)}
+                        onChange={()=>handleSelectStudent(s.docId)}
+                        className="cursor-pointer"
+                      />
+                    </td>
+                  )}
                   <td className="p-3">{s.school}</td>
                   <td className="p-3">
                     <span className="font-mono bg-blue-100 px-2 py-1 rounded font-bold">
@@ -11885,16 +12454,18 @@ await db.collection('students').doc(docId).set({
                   <td className="p-3">Class {s.grade}</td>
                   <td className="p-3 font-semibold">{s.name}</td>
                   <td className="p-3">{s.gender}</td>
-                  <td className="p-3">
-                    <div className="flex gap-2">
-                      <button onClick={()=>openEditModal(s)} className="px-3 py-1 bg-yellow-400 rounded-lg font-semibold">
-                        Edit
-                      </button>
-                      <button onClick={()=>handleDelete(s)} className="px-3 py-1 bg-red-500 text-white rounded-lg font-semibold">
-                        Delete
-                      </button>
-                    </div>
-                  </td>
+                  {isSuperAdmin && (
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <button onClick={()=>openEditModal(s)} className="px-3 py-1 bg-yellow-400 rounded-lg font-semibold">
+                          Edit
+                        </button>
+                        <button onClick={()=>handleDelete(s)} className="px-3 py-1 bg-red-500 text-white rounded-lg font-semibold">
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               )
             )}
@@ -11902,7 +12473,7 @@ await db.collection('students').doc(docId).set({
         </table>
       </div>
 
-      {showModal&&(
+      {isSuperAdmin && showModal&&(
         <div className="modal-overlay" onClick={()=>{setShowModal(false);setEditingStudent(null)}}>
           <div className="modal-content" onClick={e=>e.stopPropagation()}>
             <h3 className="text-2xl font-bold mb-4">{editingStudent?'Edit Student':'Add New Student'}</h3>
@@ -19963,9 +20534,17 @@ const NotificationManager = {
             const icon = isTicket ? '🎫' : '📢';
             const ticketLabel = isTicket && n.ticketId ? '<span style="color: #F4B41A; font-size: 11px; margin-left: 6px;">#' + n.ticketId + '</span>' : '';
             
-            return `<div class="notification-item ${isUnread ? 'unread' : ''}" onclick="NotificationManager.markRead('${n.id}')">
+            // Priority indicator
+            const priorityColors = { 'urgent': '#ef4444', 'important': '#f59e0b', 'normal': '#3b82f6' };
+            const priorityStyle = n.priority && n.priority !== 'normal' ? 'border-left: 3px solid ' + (priorityColors[n.priority] || '#3b82f6') + ';' : '';
+            
+            // Link button
+            const linkBtn = n.link ? '<a href="' + n.link + '" target="_blank" style="display: inline-block; margin-top: 8px; background: #2a2a3a; color: #3b82f6; padding: 4px 10px; border-radius: 6px; font-size: 11px; text-decoration: none;">🔗 Open Link</a>' : '';
+            
+            return `<div class="notification-item ${isUnread ? 'unread' : ''}" style="${priorityStyle}" onclick="NotificationManager.markRead('${n.id}')">
                 <div class="title">${icon} ${n.title || 'Notification'}${ticketLabel}</div>
                 <div class="message">${n.message || ''}</div>
+                ${linkBtn}
                 <div class="time">${timeAgo}</div>
             </div>`;
         }).join('');
@@ -20000,6 +20579,29 @@ const NotificationManager = {
             localStorage.setItem('readNotifications', JSON.stringify(readIds));
             this.updateUnreadCount();
             this.renderNotifications();
+            
+            // Track view in Firestore for analytics
+            this.trackNotificationView(id);
+        }
+    },
+    
+    // Track notification view for analytics
+    trackNotificationView: async function(notificationId) {
+        if (!this.userId || typeof firebase === 'undefined') return;
+        
+        try {
+            const notifRef = firebase.firestore().collection('app_notifications').doc(notificationId);
+            
+            // Increment view count and add user to viewedBy array
+            await notifRef.update({
+                viewCount: firebase.firestore.FieldValue.increment(1),
+                viewedBy: firebase.firestore.FieldValue.arrayUnion(String(this.userId))
+            });
+            
+            console.log('[NotificationManager] View tracked for:', notificationId);
+        } catch (e) {
+            // Notification might not exist or be a ticket notification
+            console.log('[NotificationManager] Could not track view:', e.message);
         }
     },
     
