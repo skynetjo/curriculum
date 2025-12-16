@@ -19965,92 +19965,112 @@ const AvantiWidget = {
         }, 300);
     },
     
-    // Search FAQs
-    searchFAQs: function(query) {
-        const messages = document.getElementById('chatMessages');
-        const q = query.toLowerCase();
-        const keywords = q.split(/\s+/).filter(w => w.length > 2);
-        
-        const results = this.faqs.filter(f => {
-            const text = `${f.question} ${f.answer} ${(f.keywords || []).join(' ')}`.toLowerCase();
-            if (text.includes(q)) return true;
-            const minMatches = keywords.length <= 2 ? 1 : 2;
-            return keywords.filter(k => text.includes(k)).length >= minMatches;
-        }).slice(0, 3);
-        
-        if (results.length > 0) {
+// ENTERPRISE CHAT LOGIC (FINAL)
+searchFAQs: function(query) {
+    const messages = document.getElementById('chatMessages');
+    const q = query.toLowerCase().trim();
+
+    this.botState = this.botState || { unclearCount: 0 };
+
+    messages.innerHTML += `
+        <div class="avanti-msg bot typing" id="typing">
+            Avanti is typing<span>.</span><span>.</span><span>.</span>
+        </div>`;
+    messages.scrollTop = messages.scrollHeight;
+
+    setTimeout(() => {
+        document.getElementById('typing')?.remove();
+
+        // Greeting
+        if (/^(hi|hello|hey|namaste)$/.test(q)) {
+            this.botState.unclearCount = 0;
             messages.innerHTML += `
+                <div class="avanti-msg bot">Hello 👋 How can I help you today?</div>
                 <div class="avanti-msg bot">
-                    I found ${results.length} article${results.length > 1 ? 's' : ''} that might help:
-                </div>
-            `;
-            
+                    You can ask about:
+                    <br>🔐 Login
+                    <br>📅 Attendance
+                    <br>📚 Curriculum
+                </div>`;
+            return;
+        }
+
+        // Small talk
+        if (q.includes('how are you')) {
+            messages.innerHTML += `<div class="avanti-msg bot">
+                I’m doing well 😊 Please tell me your issue.
+            </div>`;
+            return;
+        }
+
+        if (q.includes('thank')) {
+            messages.innerHTML += `<div class="avanti-msg bot">
+                You’re welcome. Happy to help.
+            </div>`;
+            return;
+        }
+
+        // Intent detection
+        const intents = [
+            { k:'login', w:['login','password','otp'] },
+            { k:'attendance', w:['attendance','present','absent'] },
+            { k:'curriculum', w:['curriculum','chapter','syllabus'] }
+        ];
+
+        for (const i of intents) {
+            if (i.w.some(w => q.includes(w))) {
+                this.botState.unclearCount = 0;
+                this.searchTopic(i.k);
+                return;
+            }
+        }
+
+        // FAQ match
+        const words = q.split(/\s+/).filter(w => w.length > 2);
+        const results = this.faqs.filter(f => {
+            const t = `${f.question} ${f.answer}`.toLowerCase();
+            return words.filter(w => t.includes(w)).length >= 2;
+        }).slice(0,3);
+
+        if (results.length) {
+            this.botState.unclearCount = 0;
+            messages.innerHTML += `<div class="avanti-msg bot">Here’s what I found:</div>`;
             results.forEach(f => {
                 messages.innerHTML += `
                     <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${f.id}')">
                         <h4>${f.question}</h4>
                         <div class="category">${f.category || 'General'}</div>
-                    </div>
-                `;
+                    </div>`;
             });
-        } else {
+            return;
+        }
+
+        // Controlled fallback (NO instant ticket)
+        this.botState.unclearCount++;
+
+        if (this.botState.unclearCount === 1) {
+            messages.innerHTML += `<div class="avanti-msg bot">
+                Can you clarify a bit more?
+                Is this about login, attendance, or curriculum?
+            </div>`;
+            return;
+        }
+
+        if (this.botState.unclearCount === 2) {
             messages.innerHTML += `
                 <div class="avanti-msg bot">
-                    I couldn't find a specific answer. Would you like to raise a support ticket?
+                    Thanks for your patience.
+                    Please raise a ticket for detailed support.
                 </div>
                 <div class="avanti-action-btns" style="margin:10px 0;">
-                    <button class="avanti-action-btn primary" onclick="AvantiWidget.showForm()">Raise Ticket</button>
-                    <button class="avanti-action-btn secondary" onclick="AvantiWidget.showHome()">Go Home</button>
-                </div>
-            `;
+                    <button class="avanti-action-btn primary" onclick="AvantiWidget.showForm()">
+                        🎫 Raise Ticket
+                    </button>
+                </div>`;
         }
-        
-        messages.scrollTop = messages.scrollHeight;
-    },
-    
-    // Show FAQ answer
-    showFAQAnswer: function(id) {
-        const faq = this.faqs.find(f => f.id === id);
-        if (!faq) return;
-        
-        const messages = document.getElementById('chatMessages');
-        
-        messages.innerHTML += `
-            <div class="avanti-faq-answer">
-                <h4>${faq.question}</h4>
-                <p>${faq.answer}</p>
-            </div>
-            <div class="avanti-msg bot">
-                Did this answer your question?
-            </div>
-            <div class="avanti-feedback-btns">
-                <button class="avanti-feedback-btn yes" onclick="AvantiWidget.faqHelpful(true)">✓ Yes, thanks!</button>
-                <button class="avanti-feedback-btn no" onclick="AvantiWidget.faqHelpful(false)">✗ No, need more help</button>
-            </div>
-        `;
-        
-        messages.scrollTop = messages.scrollHeight;
-    },
-    
-    // FAQ helpful feedback
-    faqHelpful: function(helpful) {
-        const messages = document.getElementById('chatMessages');
-        
-        if (helpful) {
-            messages.innerHTML += `<div class="avanti-msg bot">Great! Glad I could help! 😊</div>`;
-        } else {
-            messages.innerHTML += `
-                <div class="avanti-msg bot">
-                    I'm sorry that didn't help. Would you like to raise a support ticket?
-                </div>
-                <div class="avanti-action-btns" style="margin:10px 0;">
-                    <button class="avanti-action-btn primary" onclick="AvantiWidget.showForm()">Raise Ticket</button>
-                    <button class="avanti-action-btn secondary" onclick="AvantiWidget.showChat()">Try Again</button>
-                </div>
-            `;
-        }
-        
-        messages.scrollTop = messages.scrollHeight;
+    }, 600);
+},
+
     },
     
     // Show form view
