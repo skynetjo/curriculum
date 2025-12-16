@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19987,13 +19986,52 @@ const AvantiWidget = {
         messages.scrollTop = messages.scrollHeight;
     },
     
-    // Search topic
+    // Search topic - directly shows chat with FAQ results
     searchTopic: function(topic) {
         this.showChat();
+        
+        const messages = document.getElementById('chatMessages');
+        
+        // Show user's query
+        messages.innerHTML += `<div class="avanti-msg user">${topic}</div>`;
+        
+        // Show typing indicator
+        messages.innerHTML += `
+            <div class="avanti-msg bot typing" id="typingTopic">
+                Avanti is typing<span>.</span><span>.</span><span>.</span>
+            </div>`;
+        messages.scrollTop = messages.scrollHeight;
+        
         setTimeout(() => {
-            document.getElementById('chatInput').value = topic;
-            this.sendMessage();
-        }, 300);
+            document.getElementById('typingTopic')?.remove();
+            
+            // Search FAQs directly
+            const topicResults = this.faqs.filter(f => {
+                const t = `${f.question} ${f.answer} ${f.category || ''}`.toLowerCase();
+                return t.includes(topic.toLowerCase());
+            }).slice(0, 5);
+            
+            if (topicResults.length) {
+                messages.innerHTML += `<div class="avanti-msg bot">Here's help for ${topic}:</div>`;
+                topicResults.forEach(f => {
+                    messages.innerHTML += `
+                        <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${f.id}')">
+                            <h4>${f.question}</h4>
+                            <div class="category">${f.category || 'General'}</div>
+                        </div>`;
+                });
+            } else {
+                messages.innerHTML += `<div class="avanti-msg bot">
+                    I couldn't find specific articles for ${topic}. Would you like to raise a ticket?
+                </div>
+                <div class="avanti-action-btns" style="margin:10px 0;">
+                    <button class="avanti-action-btn primary" onclick="AvantiWidget.showForm()">
+                        🎫 Raise Ticket
+                    </button>
+                </div>`;
+            }
+            messages.scrollTop = messages.scrollHeight;
+        }, 600);
     },
     
 // ENTERPRISE CHAT LOGIC (FINAL)
@@ -20003,14 +20041,17 @@ searchFAQs: function(query) {
 
     this.botState = this.botState || { unclearCount: 0 };
 
+    // Create unique ID for typing indicator
+    const typingId = 'typing_' + Date.now();
+    
     messages.innerHTML += `
-        <div class="avanti-msg bot typing" id="typing">
+        <div class="avanti-msg bot typing" id="${typingId}">
             Avanti is typing<span>.</span><span>.</span><span>.</span>
         </div>`;
     messages.scrollTop = messages.scrollHeight;
 
     setTimeout(() => {
-        document.getElementById('typing')?.remove();
+        document.getElementById(typingId)?.remove();
 
         // Greeting
         if (/^(hi|hello|hey|namaste)$/.test(q)) {
@@ -20041,7 +20082,7 @@ searchFAQs: function(query) {
             return;
         }
 
-        // Intent detection
+        // Intent detection - directly search FAQs for these topics (NO recursion)
         const intents = [
             { k:'login', w:['login','password','otp'] },
             { k:'attendance', w:['attendance','present','absent'] },
@@ -20051,7 +20092,31 @@ searchFAQs: function(query) {
         for (const i of intents) {
             if (i.w.some(w => q.includes(w))) {
                 this.botState.unclearCount = 0;
-                this.searchTopic(i.k);
+                // Direct FAQ search for this topic (no recursion)
+                const topicResults = this.faqs.filter(f => {
+                    const t = `${f.question} ${f.answer} ${f.category || ''}`.toLowerCase();
+                    return t.includes(i.k);
+                }).slice(0,5);
+                
+                if (topicResults.length) {
+                    messages.innerHTML += `<div class="avanti-msg bot">Here's help for ${i.k}:</div>`;
+                    topicResults.forEach(f => {
+                        messages.innerHTML += `
+                            <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${f.id}')">
+                                <h4>${f.question}</h4>
+                                <div class="category">${f.category || 'General'}</div>
+                            </div>`;
+                    });
+                } else {
+                    messages.innerHTML += `<div class="avanti-msg bot">
+                        I couldn't find specific articles for ${i.k}. Would you like to raise a ticket?
+                    </div>
+                    <div class="avanti-action-btns" style="margin:10px 0;">
+                        <button class="avanti-action-btn primary" onclick="AvantiWidget.showForm()">
+                            🎫 Raise Ticket
+                        </button>
+                    </div>`;
+                }
                 return;
             }
         }
