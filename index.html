@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -3905,11 +3906,58 @@ function StudentExamRegistration({currentUser}) {
 function BarcodeScanner({ onScanSuccess, onClose }) {
   const [error, setError] = useState('');
   const [scanning, setScanning] = useState(true);
+  const [scannedCode, setScannedCode] = useState(null);
   const html5QrCodeRef = useRef(null);
+  const hasScannedRef = useRef(false);
+
+  // Stop scanner helper function - now with explicit video track cleanup
+  const stopScanner = useCallback(async () => {
+    try {
+      if (html5QrCodeRef.current) {
+        try {
+          const state = html5QrCodeRef.current.getState();
+          // State 2 = scanning, State 1 = paused
+          if (state === 2 || state === 1) {
+            await html5QrCodeRef.current.stop();
+            console.log('Scanner stopped successfully');
+          }
+        } catch (err) {
+          console.log('Scanner stop error:', err);
+        }
+        html5QrCodeRef.current = null;
+      }
+
+      // Also manually stop any video tracks (belt and suspenders approach)
+      const videoElement = document.querySelector('#barcode-reader video');
+      if (videoElement && videoElement.srcObject) {
+        const tracks = videoElement.srcObject.getTracks();
+        tracks.forEach(track => {
+          track.stop();
+          console.log('Video track stopped:', track.label);
+        });
+        videoElement.srcObject = null;
+      }
+
+      // Clear the container
+      const container = document.getElementById('barcode-reader');
+      if (container) {
+        container.innerHTML = '';
+      }
+    } catch (err) {
+      console.log('Cleanup error (can be ignored):', err);
+    }
+  }, []);
 
   useEffect(() => {
+    let mounted = true;
+
     const startScanner = async () => {
       try {
+        // Wait a bit for DOM to be ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        if (!mounted || hasScannedRef.current) return;
+
         html5QrCodeRef.current = new Html5Qrcode("barcode-reader");
         
         const config = {
@@ -3929,29 +3977,43 @@ function BarcodeScanner({ onScanSuccess, onClose }) {
         await html5QrCodeRef.current.start(
           { facingMode: "environment" },
           config,
-          (decodedText) => {
+          async (decodedText) => {
+            // Prevent multiple scans
+            if (hasScannedRef.current) return;
+            hasScannedRef.current = true;
+            
             console.log('Barcode scanned:', decodedText);
-            html5QrCodeRef.current.stop().then(() => {
-              setScanning(false);
-              onScanSuccess(decodedText);
-            });
+            setScanning(false);
+            setScannedCode(decodedText);
+            
+            // Stop the scanner first
+            await stopScanner();
+            
+            // Then call success callback
+            onScanSuccess(decodedText);
           },
           (errorMessage) => {}
         );
       } catch (err) {
         console.error('Scanner error:', err);
-        setError('Camera access denied. Please allow camera access and try again.');
+        if (mounted) {
+          setError('Camera access denied. Please allow camera access and try again.');
+        }
       }
     };
 
     startScanner();
 
     return () => {
-      if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-        html5QrCodeRef.current.stop().catch(console.error);
-      }
+      mounted = false;
+      stopScanner();
     };
-  }, [onScanSuccess]);
+  }, []);
+
+  const handleClose = async () => {
+    await stopScanner();
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[10000] p-4">
@@ -3959,12 +4021,7 @@ function BarcodeScanner({ onScanSuccess, onClose }) {
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold">📷 Scan Barcode</h3>
           <button
-            onClick={() => {
-              if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-                html5QrCodeRef.current.stop().catch(console.error);
-              }
-              onClose();
-            }}
+            onClick={handleClose}
             className="text-2xl text-gray-500 hover:text-gray-700"
           >
             ✕
@@ -4049,6 +4106,10 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
   const [category, setCategory] = useState('Other');
   const [serialNumber, setSerialNumber] = useState('');
   const [model, setModel] = useState('');
+  const [manualBarcode, setManualBarcode] = useState('');
+  
+  // Check if this is a manual add (barcode starts with MANUAL-)
+  const isManualAdd = barcode && barcode.startsWith('MANUAL-');
 
   useEffect(() => {
     if (lookupResult && lookupResult.found) {
@@ -4062,9 +4123,14 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim()) { alert('Please enter a title'); return; }
+    
+    // For manual add, use manualBarcode or generate one
+    const finalBarcode = isManualAdd 
+      ? (manualBarcode.trim() || `ASSET-${Date.now()}`)
+      : barcode;
 
     onSave({
-      barcode, assetType, title: title.trim(),
+      barcode: finalBarcode, assetType, title: title.trim(),
       author: assetType === 'book' ? author.trim() : '',
       publisher: assetType === 'book' ? publisher.trim() : '',
       category: assetType === 'book' ? category : '',
@@ -4078,7 +4144,7 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">➕ Add New Asset</h3>
+          <h3 className="text-xl font-bold">{isManualAdd ? '✏️ Add Asset Manually' : '➕ Add New Asset'}</h3>
           <button onClick={onClose} className="text-2xl text-gray-500">✕</button>
         </div>
 
@@ -4089,11 +4155,13 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="bg-gray-100 p-3 rounded-lg">
-              <p className="text-sm text-gray-600">Barcode: <strong>{barcode}</strong></p>
-              {lookupResult?.found && <p className="text-sm text-green-600 mt-1">✓ Book details found!</p>}
-              {lookupResult && !lookupResult.found && <p className="text-sm text-orange-600 mt-1">Book not found. Please enter manually.</p>}
-            </div>
+            {!isManualAdd && (
+              <div className="bg-gray-100 p-3 rounded-lg">
+                <p className="text-sm text-gray-600">Barcode: <strong>{barcode}</strong></p>
+                {lookupResult?.found && <p className="text-sm text-green-600 mt-1">✓ Book details found!</p>}
+                {lookupResult && !lookupResult.found && <p className="text-sm text-orange-600 mt-1">Book not found in database. Please enter manually.</p>}
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-bold mb-2">Asset Type *</label>
@@ -4102,6 +4170,22 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
                 <option value="chromebook">💻 Chromebook</option>
               </select>
             </div>
+
+            {isManualAdd && (
+              <div>
+                <label className="block text-sm font-bold mb-2">
+                  {assetType === 'book' ? 'ISBN / Barcode (Optional)' : 'Asset ID / Serial (Optional)'}
+                </label>
+                <input 
+                  type="text" 
+                  value={manualBarcode} 
+                  onChange={(e) => setManualBarcode(e.target.value)} 
+                  placeholder={assetType === 'book' ? 'e.g., 9781234567890 or leave empty' : 'e.g., CB-001 or leave empty'} 
+                  className="w-full border-2 px-4 py-3 rounded-xl" 
+                />
+                <p className="text-xs text-gray-500 mt-1">If left empty, a unique ID will be generated automatically</p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-bold mb-2">Title *</label>
@@ -4131,11 +4215,11 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
               <>
                 <div>
                   <label className="block text-sm font-bold mb-2">Model</label>
-                  <input type="text" value={model} onChange={(e) => setModel(e.target.value)} placeholder="e.g., HP Chromebook 11" className="w-full border-2 px-4 py-3 rounded-xl" />
+                  <input type="text" value={model} onChange={(e) => setModel(e.target.value)} placeholder="e.g., HP Chromebook 11 G8" className="w-full border-2 px-4 py-3 rounded-xl" />
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Serial Number</label>
-                  <input type="text" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="Enter serial number" className="w-full border-2 px-4 py-3 rounded-xl" />
+                  <input type="text" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="Enter serial number (usually on bottom of device)" className="w-full border-2 px-4 py-3 rounded-xl" />
                 </div>
               </>
             )}
@@ -4412,12 +4496,13 @@ function AssetManagement({ currentUser, students }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center flex-wrap gap-4">
+      <div className="flex flex-col gap-4">
         <h2 className="text-3xl font-bold">📚 Asset Management</h2>
         <div className="flex gap-2 flex-wrap">
-          <button onClick={() => { setScanMode('add'); setShowScanner(true); }} className="px-4 py-2 bg-blue-500 text-white rounded-xl font-semibold">📷 Add</button>
-          <button onClick={() => { setScanMode('assign'); setShowScanner(true); }} className="px-4 py-2 bg-green-500 text-white rounded-xl font-semibold">📤 Assign</button>
-          <button onClick={() => { setScanMode('return'); setShowScanner(true); }} className="px-4 py-2 bg-orange-500 text-white rounded-xl font-semibold">📥 Return</button>
+          <button onClick={() => { setScanMode('add'); setShowScanner(true); }} className="px-4 py-2 bg-blue-500 text-white rounded-xl font-semibold hover:bg-blue-600">📷 Scan & Add</button>
+          <button onClick={() => { setScannedBarcode('MANUAL-' + Date.now()); setBookLookupResult({ found: false }); setShowAddModal(true); }} className="px-4 py-2 bg-purple-500 text-white rounded-xl font-semibold hover:bg-purple-600">✏️ Manual Add</button>
+          <button onClick={() => { setScanMode('assign'); setShowScanner(true); }} className="px-4 py-2 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600">📤 Assign</button>
+          <button onClick={() => { setScanMode('return'); setShowScanner(true); }} className="px-4 py-2 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600">📥 Return</button>
         </div>
       </div>
 
@@ -4597,7 +4682,7 @@ function AssetManagement({ currentUser, students }) {
         </div>
       )}
 
-      {showScanner && <BarcodeScanner onScanSuccess={handleScanSuccess} onClose={() => setShowScanner(false)} />}
+      {showScanner && <BarcodeScanner key={`scanner-${Date.now()}`} onScanSuccess={handleScanSuccess} onClose={() => setShowScanner(false)} />}
       {showAddModal && <AddAssetModal barcode={scannedBarcode} lookupResult={bookLookupResult} lookingUp={lookingUp} onSave={handleAddAsset} onClose={() => { setShowAddModal(false); setScannedBarcode(''); setBookLookupResult(null); }} />}
       {showAssignModal && selectedAsset && <AssignAssetModal asset={selectedAsset} students={students} onAssign={handleAssignAsset} onClose={() => { setShowAssignModal(false); setSelectedAsset(null); }} />}
     </div>
