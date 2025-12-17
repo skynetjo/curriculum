@@ -68,6 +68,18 @@
     :root{--avanti-yellow:#F4B41A;--avanti-orange:#E8B039;--avanti-red:#C8342E}
     *{box-sizing:border-box}
     
+    /* Smooth scrolling for the entire app */
+    html {
+      scroll-behavior: smooth;
+    }
+    
+    /* Better font rendering */
+    body {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+    }
+    
     /* Enhanced Mobile Sidebar Styles */
     .mobile-sidebar-overlay {
       position: fixed;
@@ -159,6 +171,52 @@
     button, .button {
       min-height: 44px;
       touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    /* Mobile Performance Optimizations */
+    @media (max-width: 768px) {
+      /* Hardware acceleration for smooth scrolling */
+      .mobile-sidebar, .chapter-card, .stat-card {
+        will-change: transform;
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+      }
+      
+      /* Reduce animations on mobile for smoother experience */
+      .chapter-card {
+        transition: box-shadow 0.2s ease !important;
+      }
+      
+      .chapter-card:hover {
+        transform: none !important;
+      }
+      
+      /* Optimize scroll performance */
+      body {
+        -webkit-overflow-scrolling: touch;
+        overflow-scrolling: touch;
+      }
+      
+      /* Prevent layout shifts */
+      img, svg {
+        max-width: 100%;
+        height: auto;
+      }
+      
+      /* Faster tap response */
+      a, button, input, select, textarea {
+        touch-action: manipulation;
+      }
+    }
+    
+    /* Reduce motion for users who prefer it */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
     }
     
     /* Better spacing for mobile */
@@ -5052,6 +5110,90 @@ function Admin2FAManagement({ teachers, managers }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// Network Status Indicator for low-connectivity areas
+function NetworkStatus() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [connectionType, setConnectionType] = useState('');
+  const [showBanner, setShowBanner] = useState(false);
+  
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setShowBanner(true);
+      setTimeout(() => setShowBanner(false), 3000);
+    };
+    
+    const handleOffline = () => {
+      setIsOnline(false);
+      setShowBanner(true);
+    };
+    
+    // Check connection type if available
+    const updateConnectionType = () => {
+      if ('connection' in navigator) {
+        const conn = navigator.connection;
+        setConnectionType(conn?.effectiveType || '');
+      }
+    };
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    if ('connection' in navigator) {
+      navigator.connection.addEventListener('change', updateConnectionType);
+      updateConnectionType();
+    }
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      if ('connection' in navigator) {
+        navigator.connection.removeEventListener('change', updateConnectionType);
+      }
+    };
+  }, []);
+  
+  // Show slow connection warning for 2g or slow-2g
+  const isSlowConnection = connectionType === '2g' || connectionType === 'slow-2g';
+  
+  if (!showBanner && isOnline && !isSlowConnection) return null;
+  
+  return (
+    <div className={`fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-auto z-50 px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm font-medium transition-all ${
+      !isOnline 
+        ? 'bg-red-500 text-white' 
+        : isSlowConnection 
+          ? 'bg-yellow-500 text-black' 
+          : 'bg-green-500 text-white'
+    }`}>
+      <span className="text-lg">
+        {!isOnline ? '📡' : isSlowConnection ? '🐌' : '✓'}
+      </span>
+      <div>
+        <div className="font-bold">
+          {!isOnline ? 'No Internet Connection' : isSlowConnection ? 'Slow Connection' : 'Back Online!'}
+        </div>
+        <div className="text-xs opacity-90">
+          {!isOnline 
+            ? 'Changes will sync when connected' 
+            : isSlowConnection 
+              ? 'Data may take longer to load' 
+              : 'All data synced successfully'
+          }
+        </div>
+      </div>
+      {(isOnline && !isSlowConnection) && (
+        <button 
+          onClick={() => setShowBanner(false)} 
+          className="ml-2 text-white/80 hover:text-white"
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }
@@ -11463,32 +11605,43 @@ const handleCSVImport=e=>{
           const chapterName=row[0]?row[0].trim():'';
           const topicName=row[1]?row[1].trim():'';
           const targetDate=row[2]?row[2].trim():''; // Column C for target date
-          const priorityRaw=row[3]?row[3].trim().toLowerCase():''; // Column D for priority
+          const chapterPriorityRaw=row[3]?row[3].trim().toLowerCase():''; // Column D for Chapter Priority
+          const topicPriorityRaw=row[4]?row[4].trim().toLowerCase():''; // Column E for Topic Priority
 
-          // Parse priority - accept variations like "High", "HIGH", "high", "H", "1", etc.
-          let priority='medium'; // default
-          if(priorityRaw==='high'||priorityRaw==='h'||priorityRaw==='1'||priorityRaw==='🟢'){
-            priority='high';
-          }else if(priorityRaw==='medium'||priorityRaw==='med'||priorityRaw==='m'||priorityRaw==='2'||priorityRaw==='🟡'){
-            priority='medium';
-          }else if(priorityRaw==='low'||priorityRaw==='l'||priorityRaw==='3'||priorityRaw==='🔴'){
-            priority='low';
+          // Parse chapter priority - accept variations like "High", "HIGH", "high", "H", "1", etc.
+          let chapterPriority='medium'; // default
+          if(chapterPriorityRaw==='high'||chapterPriorityRaw==='h'||chapterPriorityRaw==='1'||chapterPriorityRaw==='🟢'){
+            chapterPriority='high';
+          }else if(chapterPriorityRaw==='medium'||chapterPriorityRaw==='med'||chapterPriorityRaw==='m'||chapterPriorityRaw==='2'||chapterPriorityRaw==='🟡'){
+            chapterPriority='medium';
+          }else if(chapterPriorityRaw==='low'||chapterPriorityRaw==='l'||chapterPriorityRaw==='3'||chapterPriorityRaw==='🔴'){
+            chapterPriority='low';
+          }
+          
+          // Parse topic priority separately
+          let topicPriority='medium'; // default
+          if(topicPriorityRaw==='high'||topicPriorityRaw==='h'||topicPriorityRaw==='1'||topicPriorityRaw==='🟢'){
+            topicPriority='high';
+          }else if(topicPriorityRaw==='medium'||topicPriorityRaw==='med'||topicPriorityRaw==='m'||topicPriorityRaw==='2'||topicPriorityRaw==='🟡'){
+            topicPriority='medium';
+          }else if(topicPriorityRaw==='low'||topicPriorityRaw==='l'||topicPriorityRaw==='3'||topicPriorityRaw==='🔴'){
+            topicPriority='low';
           }
 
           if(chapterName){
-            // New chapter row - chapter gets its own priority
+            // New chapter row - chapter gets its own priority from Column D
             if(currentChapter){
               chaptersToAdd.push(currentChapter);
             }
             currentChapter={
               name:chapterName,
-              topics:topicName?[{name:topicName,priority:priority}]:[],
+              topics:topicName?[{name:topicName,priority:topicPriority}]:[], // Topic gets Column E priority
               targetDate:targetDate||'',
-              priority:priority // Chapter-level priority
+              priority:chapterPriority // Chapter-level priority from Column D
             };
           }else if(topicName&&currentChapter){
-            // Topic row - each topic gets its own priority from Column D
-            currentChapter.topics.push({name:topicName,priority:priority});
+            // Topic row - each topic gets its own priority from Column E
+            currentChapter.topics.push({name:topicName,priority:topicPriority});
           }
         });
 
@@ -11636,12 +11789,13 @@ return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum 
 
 {/* CSV Format Guide */}
 <div className="mt-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
-  <p className="font-bold text-blue-800 mb-2">📋 CSV Import Format (4 columns) - Supports Topic-Level Priorities:</p>
+  <p className="font-bold text-blue-800 mb-2">📋 CSV Import Format (5 columns) - Separate Chapter & Topic Priorities:</p>
   <div className="text-sm text-blue-700 space-y-1">
     <p><strong>Column A:</strong> Chapter Name (leave blank for topics under same chapter)</p>
     <p><strong>Column B:</strong> Topic Name</p>
     <p><strong>Column C:</strong> Target Date (YYYY-MM-DD format, only for chapter rows)</p>
-    <p><strong>Column D:</strong> Priority (High, Medium, Low) - <span className="font-bold text-green-700">Works for BOTH chapters AND individual topics!</span></p>
+    <p><strong>Column D:</strong> <span className="text-purple-700 font-bold">Chapter Priority</span> (High, Medium, Low) - <span className="font-bold text-purple-600">Only for chapter rows!</span></p>
+    <p><strong>Column E:</strong> <span className="text-green-700 font-bold">Topic Priority</span> (High, Medium, Low) - <span className="font-bold text-green-600">For each topic!</span></p>
   </div>
   <div className="mt-3 bg-white p-3 rounded-lg text-xs font-mono overflow-x-auto">
     <table className="w-full border-collapse">
@@ -11650,22 +11804,24 @@ return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum 
           <th className="border p-1 text-left">Chapter Name</th>
           <th className="border p-1 text-left">Topic Name</th>
           <th className="border p-1 text-left">Target Date</th>
-          <th className="border p-1 text-left">Priority</th>
+          <th className="border p-1 text-left text-purple-700">Chapter Priority</th>
+          <th className="border p-1 text-left text-green-700">Topic Priority</th>
         </tr>
       </thead>
       <tbody>
-        <tr className="bg-green-50"><td className="border p-1 font-bold">Laws of Motion</td><td className="border p-1">Newton's First Law</td><td className="border p-1">2025-02-15</td><td className="border p-1 text-green-700 font-bold">High</td></tr>
-        <tr><td className="border p-1"></td><td className="border p-1">Newton's Second Law</td><td className="border p-1"></td><td className="border p-1 text-green-700">High</td></tr>
-        <tr><td className="border p-1"></td><td className="border p-1">Newton's Third Law</td><td className="border p-1"></td><td className="border p-1 text-yellow-700">Medium</td></tr>
-        <tr className="bg-yellow-50"><td className="border p-1 font-bold">Thermodynamics</td><td className="border p-1">First Law</td><td className="border p-1">2025-03-01</td><td className="border p-1 text-yellow-700 font-bold">Medium</td></tr>
-        <tr><td className="border p-1"></td><td className="border p-1">Second Law</td><td className="border p-1"></td><td className="border p-1 text-red-700">Low</td></tr>
-        <tr><td className="border p-1"></td><td className="border p-1">Carnot Engine</td><td className="border p-1"></td><td className="border p-1 text-green-700">High</td></tr>
+        <tr className="bg-green-50"><td className="border p-1 font-bold">Laws of Motion</td><td className="border p-1">Newton's First Law</td><td className="border p-1">2025-02-15</td><td className="border p-1 text-purple-700 font-bold">High</td><td className="border p-1 text-green-700">High</td></tr>
+        <tr><td className="border p-1"></td><td className="border p-1">Newton's Second Law</td><td className="border p-1"></td><td className="border p-1 text-gray-400">-</td><td className="border p-1 text-green-700">High</td></tr>
+        <tr><td className="border p-1"></td><td className="border p-1">Newton's Third Law</td><td className="border p-1"></td><td className="border p-1 text-gray-400">-</td><td className="border p-1 text-yellow-700">Medium</td></tr>
+        <tr className="bg-yellow-50"><td className="border p-1 font-bold">Thermodynamics</td><td className="border p-1">First Law</td><td className="border p-1">2025-03-01</td><td className="border p-1 text-purple-700 font-bold">Medium</td><td className="border p-1 text-yellow-700">Medium</td></tr>
+        <tr><td className="border p-1"></td><td className="border p-1">Second Law</td><td className="border p-1"></td><td className="border p-1 text-gray-400">-</td><td className="border p-1 text-red-700">Low</td></tr>
+        <tr><td className="border p-1"></td><td className="border p-1">Carnot Engine</td><td className="border p-1"></td><td className="border p-1 text-gray-400">-</td><td className="border p-1 text-green-700">High</td></tr>
       </tbody>
     </table>
   </div>
   <div className="mt-2 space-y-1 text-xs">
     <p className="text-blue-600">💡 <strong>Priority accepts:</strong> High/H/1 (🟢), Medium/Med/M/2 (🟡), Low/L/3 (🔴). Default is Medium.</p>
-    <p className="text-green-700">✅ <strong>Each topic can have its own priority!</strong> Just add the priority in Column D for each topic row.</p>
+    <p className="text-purple-700">📂 <strong>Column D (Chapter Priority):</strong> Set priority for the entire chapter. Only needed on chapter rows (where Column A has a value).</p>
+    <p className="text-green-700">📝 <strong>Column E (Topic Priority):</strong> Set priority for each individual topic. Can be different from chapter priority!</p>
   </div>
 </div>
 
@@ -18849,6 +19005,9 @@ function AdminClassroomObservations({ teachers, currentUser }) {
           }}
         />
       )}
+      
+      {/* Network Status Indicator for low-connectivity areas */}
+      <NetworkStatus />
     </div>
   );
 }
@@ -18860,7 +19019,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.5.1'; // Added Teacher Archive System - archive instead of delete, preserves data
+  const CURRENT_VERSION = '3.6.0'; // Added separate Chapter & Topic Priority columns + Mobile performance optimizations
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
