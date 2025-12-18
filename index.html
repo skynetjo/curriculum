@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10446,6 +10445,7 @@ function AdminView({
       { id: 'chapter-details', label: 'Chapter Details', icon: '📋' },
     ] : []),
     { id: 'attendance', label: 'Attendance Analytics', icon: '📊' },
+    { id: 'assets', label: 'Asset Management', icon: '📦' },
     { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
     { id: 'birthdays', label: 'Celebrations', icon: '🎂' },
     // Student Profiles - for viewing student demographics with graphs
@@ -10647,6 +10647,10 @@ function AdminView({
 
         {activeTab === 'schoolinfo' && (
           <AdminSchoolInfo schoolInfo={filteredSchoolInfo} />
+        )}
+
+        {activeTab === 'assets' && (
+          <AdminAssetManagement accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} />
         )}
 
         {activeTab === 'birthdays' && <AdminBirthdays teachers={filteredTeachers} />}
@@ -14187,6 +14191,308 @@ function AdminSettings() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ========================================
+// ADMIN ASSET MANAGEMENT - VIEW ACROSS SCHOOLS
+// ========================================
+function AdminAssetManagement({ accessibleSchools = [], isSuperAdmin = false }) {
+  const [assets, setAssets] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterSchool, setFilterSchool] = useState('All');
+  const [filterType, setFilterType] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeSubTab, setActiveSubTab] = useState('overview');
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch assets from all accessible schools
+        let allAssets = [];
+        let allAssignments = [];
+        
+        const schoolsToFetch = isSuperAdmin ? SCHOOLS : accessibleSchools;
+        
+        for (const school of schoolsToFetch) {
+          const assetsSnap = await db.collection('assets').where('school', '==', school).get();
+          allAssets = [...allAssets, ...assetsSnap.docs.map(d => ({ ...d.data(), docId: d.id }))];
+          
+          const assignmentsSnap = await db.collection('assetAssignments').where('school', '==', school).get();
+          allAssignments = [...allAssignments, ...assignmentsSnap.docs.map(d => ({ ...d.data(), docId: d.id }))];
+        }
+        
+        setAssets(allAssets);
+        setAssignments(allAssignments);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching assets:', error);
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [accessibleSchools, isSuperAdmin]);
+
+  const filteredAssets = useMemo(() => {
+    return assets.filter(asset => {
+      if (filterSchool !== 'All' && asset.school !== filterSchool) return false;
+      if (filterType !== 'all' && asset.assetType !== filterType) return false;
+      if (filterStatus !== 'all' && asset.status !== filterStatus) return false;
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        return asset.title?.toLowerCase().includes(search) || 
+          asset.author?.toLowerCase().includes(search) ||
+          asset.barcode?.includes(search) ||
+          asset.currentAssignee?.studentName?.toLowerCase().includes(search);
+      }
+      return true;
+    });
+  }, [assets, filterSchool, filterType, filterStatus, searchTerm]);
+
+  const overdueAssets = useMemo(() => {
+    const now = new Date();
+    return assignments.filter(a => {
+      if (a.status === 'returned' || a.assetType !== 'book') return false;
+      if (filterSchool !== 'All' && a.school !== filterSchool) return false;
+      return a.dueDate && now > new Date(a.dueDate);
+    });
+  }, [assignments, filterSchool]);
+
+  const stats = useMemo(() => {
+    const filtered = filterSchool === 'All' ? assets : assets.filter(a => a.school === filterSchool);
+    return {
+      total: filtered.length,
+      available: filtered.filter(a => a.status === 'available').length,
+      assigned: filtered.filter(a => a.status === 'assigned').length,
+      books: filtered.filter(a => a.assetType === 'book').length,
+      chromebooks: filtered.filter(a => a.assetType === 'chromebook').length,
+      overdue: overdueAssets.length
+    };
+  }, [assets, filterSchool, overdueAssets]);
+
+  const schoolStats = useMemo(() => {
+    const schoolsToShow = isSuperAdmin ? SCHOOLS : accessibleSchools;
+    return schoolsToShow.map(school => {
+      const schoolAssets = assets.filter(a => a.school === school);
+      const schoolOverdue = assignments.filter(a => {
+        if (a.school !== school || a.status === 'returned' || a.assetType !== 'book') return false;
+        return a.dueDate && new Date() > new Date(a.dueDate);
+      });
+      return {
+        school,
+        total: schoolAssets.length,
+        available: schoolAssets.filter(a => a.status === 'available').length,
+        assigned: schoolAssets.filter(a => a.status === 'assigned').length,
+        books: schoolAssets.filter(a => a.assetType === 'book').length,
+        chromebooks: schoolAssets.filter(a => a.assetType === 'chromebook').length,
+        overdue: schoolOverdue.length
+      };
+    });
+  }, [assets, assignments, accessibleSchools, isSuperAdmin]);
+
+  if (loading) return <div className="text-center py-8">Loading assets...</div>;
+
+  const schoolsToShow = isSuperAdmin ? SCHOOLS : accessibleSchools;
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-3xl font-bold">📦 Asset Management (All Schools)</h2>
+
+      {/* School Filter */}
+      <div className="bg-white p-4 rounded-xl shadow-lg">
+        <div className="grid md:grid-cols-5 gap-4">
+          <select value={filterSchool} onChange={(e) => setFilterSchool(e.target.value)} className="border-2 px-4 py-2 rounded-xl">
+            <option value="All">All Schools</option>
+            {schoolsToShow.map(school => <option key={school} value={school}>{school}</option>)}
+          </select>
+          <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search assets..." className="border-2 px-4 py-2 rounded-xl" />
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="border-2 px-4 py-2 rounded-xl">
+            <option value="all">All Types</option>
+            <option value="book">Books</option>
+            <option value="chromebook">Chromebooks</option>
+          </select>
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="border-2 px-4 py-2 rounded-xl">
+            <option value="all">All Status</option>
+            <option value="available">Available</option>
+            <option value="assigned">Assigned</option>
+          </select>
+          <button onClick={() => { setFilterSchool('All'); setSearchTerm(''); setFilterType('all'); setFilterStatus('all'); }} className="px-4 py-2 bg-gray-200 rounded-xl">Clear</button>
+        </div>
+      </div>
+
+      {/* Overall Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="stat-card bg-gradient-to-br from-blue-500 to-blue-600 text-white"><div className="text-sm opacity-90">Total</div><div className="text-3xl font-bold">{stats.total}</div></div>
+        <div className="stat-card bg-gradient-to-br from-green-500 to-green-600 text-white"><div className="text-sm opacity-90">Available</div><div className="text-3xl font-bold">{stats.available}</div></div>
+        <div className="stat-card bg-gradient-to-br from-yellow-500 to-yellow-600 text-white"><div className="text-sm opacity-90">Assigned</div><div className="text-3xl font-bold">{stats.assigned}</div></div>
+        <div className="stat-card bg-gradient-to-br from-purple-500 to-purple-600 text-white"><div className="text-sm opacity-90">Books</div><div className="text-3xl font-bold">{stats.books}</div></div>
+        <div className="stat-card bg-gradient-to-br from-teal-500 to-teal-600 text-white"><div className="text-sm opacity-90">Chromebooks</div><div className="text-3xl font-bold">{stats.chromebooks}</div></div>
+        <div className="stat-card bg-gradient-to-br from-red-500 to-red-600 text-white"><div className="text-sm opacity-90">Overdue</div><div className="text-3xl font-bold">{stats.overdue}</div></div>
+      </div>
+
+      {/* Sub Tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {['overview', 'inventory', 'overdue', 'byschool'].map(tab => (
+          <button key={tab} onClick={() => setActiveSubTab(tab)} className={`px-4 py-2 rounded-xl font-semibold whitespace-nowrap ${activeSubTab === tab ? 'avanti-gradient text-white' : 'bg-white'}`}>
+            {tab === 'overview' && '📊 Overview'}
+            {tab === 'inventory' && '📦 All Assets'}
+            {tab === 'overdue' && `⚠️ Overdue (${stats.overdue})`}
+            {tab === 'byschool' && '🏫 By School'}
+          </button>
+        ))}
+      </div>
+
+      {/* Overview Tab */}
+      {activeSubTab === 'overview' && (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {schoolStats.map(ss => (
+            <div key={ss.school} className="bg-white p-6 rounded-xl shadow-lg">
+              <h3 className="font-bold text-lg mb-4">{ss.school}</h3>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-2 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">{ss.total}</div>
+                  <div className="text-xs text-gray-600">Total</div>
+                </div>
+                <div className="p-2 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{ss.available}</div>
+                  <div className="text-xs text-gray-600">Available</div>
+                </div>
+                <div className="p-2 bg-yellow-50 rounded-lg">
+                  <div className="text-2xl font-bold text-yellow-600">{ss.assigned}</div>
+                  <div className="text-xs text-gray-600">Assigned</div>
+                </div>
+              </div>
+              {ss.overdue > 0 && (
+                <div className="mt-3 p-2 bg-red-50 rounded-lg text-center">
+                  <span className="text-red-600 font-semibold">⚠️ {ss.overdue} Overdue</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Inventory Tab */}
+      {activeSubTab === 'inventory' && (
+        <div className="bg-white p-6 rounded-xl shadow-lg overflow-x-auto">
+          <table className="w-full">
+            <thead className="avanti-gradient-light">
+              <tr>
+                <th className="p-3 text-left">Title</th>
+                <th className="p-3 text-left">Type</th>
+                <th className="p-3 text-left">School</th>
+                <th className="p-3 text-left">Status</th>
+                <th className="p-3 text-left">Assigned To</th>
+                <th className="p-3 text-left">Copy #</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAssets.length === 0 ? (
+                <tr><td colSpan="6" className="p-8 text-center text-gray-500">No assets found</td></tr>
+              ) : filteredAssets.slice(0, 100).map(asset => (
+                <tr key={asset.docId} className="border-b hover:bg-gray-50">
+                  <td className="p-3">
+                    <div className="font-semibold">{asset.title}</div>
+                    {asset.author && <div className="text-xs text-gray-500">by {asset.author}</div>}
+                  </td>
+                  <td className="p-3">{asset.assetType === 'book' ? '📚 Book' : '💻 Chromebook'}</td>
+                  <td className="p-3 text-sm">{asset.school}</td>
+                  <td className="p-3">
+                    <span className={`asset-badge badge-${asset.status}`}>{asset.status}</span>
+                  </td>
+                  <td className="p-3 text-sm">{asset.currentAssignee?.studentName || '-'}</td>
+                  <td className="p-3 text-sm">{asset.copyNumber || 1}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filteredAssets.length > 100 && <p className="text-center text-gray-500 mt-4">Showing first 100 of {filteredAssets.length} assets</p>}
+        </div>
+      )}
+
+      {/* Overdue Tab */}
+      {activeSubTab === 'overdue' && (
+        <div className="bg-white p-6 rounded-xl shadow-lg">
+          <h3 className="font-bold text-xl mb-4 text-red-600">⚠️ Overdue Assets</h3>
+          {overdueAssets.length === 0 ? (
+            <p className="text-center py-8 text-gray-500">No overdue assets! 🎉</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-red-50">
+                  <tr>
+                    <th className="p-3 text-left">Book</th>
+                    <th className="p-3 text-left">School</th>
+                    <th className="p-3 text-left">Student</th>
+                    <th className="p-3 text-left">Due Date</th>
+                    <th className="p-3 text-left">Days Overdue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overdueAssets.map(a => {
+                    const daysOverdue = Math.floor((new Date() - new Date(a.dueDate)) / (1000 * 60 * 60 * 24));
+                    return (
+                      <tr key={a.docId} className="border-b bg-red-50">
+                        <td className="p-3 font-semibold">{a.assetTitle}</td>
+                        <td className="p-3 text-sm">{a.school}</td>
+                        <td className="p-3">{a.studentName} (Class {a.studentClass})</td>
+                        <td className="p-3 text-sm">{new Date(a.dueDate).toLocaleDateString()}</td>
+                        <td className="p-3"><span className="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-bold">{daysOverdue} days</span></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* By School Tab */}
+      {activeSubTab === 'byschool' && (
+        <div className="bg-white p-6 rounded-xl shadow-lg overflow-x-auto">
+          <table className="w-full">
+            <thead className="avanti-gradient-light">
+              <tr>
+                <th className="p-3 text-left">School</th>
+                <th className="p-3 text-center">Total</th>
+                <th className="p-3 text-center">Books</th>
+                <th className="p-3 text-center">Chromebooks</th>
+                <th className="p-3 text-center">Available</th>
+                <th className="p-3 text-center">Assigned</th>
+                <th className="p-3 text-center">Overdue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schoolStats.map(ss => (
+                <tr key={ss.school} className="border-b hover:bg-gray-50">
+                  <td className="p-3 font-semibold">{ss.school}</td>
+                  <td className="p-3 text-center font-bold">{ss.total}</td>
+                  <td className="p-3 text-center">{ss.books}</td>
+                  <td className="p-3 text-center">{ss.chromebooks}</td>
+                  <td className="p-3 text-center text-green-600 font-semibold">{ss.available}</td>
+                  <td className="p-3 text-center text-yellow-600 font-semibold">{ss.assigned}</td>
+                  <td className="p-3 text-center">
+                    {ss.overdue > 0 ? <span className="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-bold">{ss.overdue}</span> : <span className="text-green-500">✓</span>}
+                  </td>
+                </tr>
+              ))}
+              <tr className="bg-gray-100 font-bold">
+                <td className="p-3">TOTAL</td>
+                <td className="p-3 text-center">{schoolStats.reduce((s, ss) => s + ss.total, 0)}</td>
+                <td className="p-3 text-center">{schoolStats.reduce((s, ss) => s + ss.books, 0)}</td>
+                <td className="p-3 text-center">{schoolStats.reduce((s, ss) => s + ss.chromebooks, 0)}</td>
+                <td className="p-3 text-center text-green-600">{schoolStats.reduce((s, ss) => s + ss.available, 0)}</td>
+                <td className="p-3 text-center text-yellow-600">{schoolStats.reduce((s, ss) => s + ss.assigned, 0)}</td>
+                <td className="p-3 text-center text-red-600">{schoolStats.reduce((s, ss) => s + ss.overdue, 0)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
