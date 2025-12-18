@@ -4107,9 +4107,11 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
   const [serialNumber, setSerialNumber] = useState('');
   const [model, setModel] = useState('');
   const [manualBarcode, setManualBarcode] = useState('');
+  const [copyNumber, setCopyNumber] = useState(1);
   
   // Check if this is a manual add (barcode starts with MANUAL-)
   const isManualAdd = barcode && barcode.startsWith('MANUAL-');
+  const isAdditionalCopy = lookupResult?.isAdditionalCopy;
 
   useEffect(() => {
     if (lookupResult && lookupResult.found) {
@@ -4117,6 +4119,9 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
       setAuthor(lookupResult.author || '');
       setPublisher(lookupResult.publisher || '');
       setAssetType('book');
+      if (lookupResult.copyNumber) {
+        setCopyNumber(lookupResult.copyNumber);
+      }
     }
   }, [lookupResult]);
 
@@ -4124,19 +4129,31 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
     e.preventDefault();
     if (!title.trim()) { alert('Please enter a title'); return; }
     
-    // For manual add, use manualBarcode or generate one
-    const finalBarcode = isManualAdd 
-      ? (manualBarcode.trim() || `ASSET-${Date.now()}`)
-      : barcode;
+    // Generate barcode with copy number for books
+    let finalBarcode;
+    if (isManualAdd) {
+      finalBarcode = manualBarcode.trim() || `ASSET-${Date.now()}`;
+    } else if (assetType === 'book' && copyNumber > 1) {
+      // For additional copies, append copy number to barcode
+      finalBarcode = `${barcode}-copy-${copyNumber}`;
+    } else if (assetType === 'book' && copyNumber === 1) {
+      // First copy keeps original barcode
+      finalBarcode = barcode;
+    } else {
+      finalBarcode = barcode;
+    }
 
     onSave({
-      barcode: finalBarcode, assetType, title: title.trim(),
+      barcode: finalBarcode, 
+      assetType, 
+      title: title.trim(),
       author: assetType === 'book' ? author.trim() : '',
       publisher: assetType === 'book' ? publisher.trim() : '',
       category: assetType === 'book' ? category : '',
       serialNumber: assetType === 'chromebook' ? serialNumber.trim() : '',
       model: assetType === 'chromebook' ? model.trim() : '',
-      isbn: lookupResult?.isbn || ''
+      isbn: lookupResult?.isbn || barcode || '',
+      copyNumber: assetType === 'book' ? copyNumber : null
     });
   };
 
@@ -4144,7 +4161,9 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">{isManualAdd ? '✏️ Add Asset Manually' : '➕ Add New Asset'}</h3>
+          <h3 className="text-xl font-bold">
+            {isAdditionalCopy ? `📚 Add Copy #${copyNumber}` : isManualAdd ? '✏️ Add Asset Manually' : '➕ Add New Asset'}
+          </h3>
           <button onClick={onClose} className="text-2xl text-gray-500">✕</button>
         </div>
 
@@ -4156,16 +4175,19 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isManualAdd && (
-              <div className="bg-gray-100 p-3 rounded-lg">
-                <p className="text-sm text-gray-600">Barcode: <strong>{barcode}</strong></p>
-                {lookupResult?.found && <p className="text-sm text-green-600 mt-1">✓ Book details found!</p>}
-                {lookupResult && !lookupResult.found && <p className="text-sm text-orange-600 mt-1">Book not found in database. Please enter manually.</p>}
+              <div className={`p-3 rounded-lg ${isAdditionalCopy ? 'bg-blue-50 border-2 border-blue-200' : 'bg-gray-100'}`}>
+                <p className="text-sm text-gray-600">ISBN/Barcode: <strong>{barcode}</strong></p>
+                {isAdditionalCopy && (
+                  <p className="text-sm text-blue-600 mt-1 font-semibold">📚 Adding Copy #{copyNumber} of this book</p>
+                )}
+                {lookupResult?.found && !isAdditionalCopy && <p className="text-sm text-green-600 mt-1">✓ Book details found!</p>}
+                {lookupResult && !lookupResult.found && !isAdditionalCopy && <p className="text-sm text-orange-600 mt-1">Book not found in database. Please enter manually.</p>}
               </div>
             )}
 
             <div>
               <label className="block text-sm font-bold mb-2">Asset Type *</label>
-              <select value={assetType} onChange={(e) => setAssetType(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl">
+              <select value={assetType} onChange={(e) => setAssetType(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl" disabled={isAdditionalCopy}>
                 <option value="book">📚 Book</option>
                 <option value="chromebook">💻 Chromebook</option>
               </select>
@@ -4238,9 +4260,10 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
 // ========================================
 // ASSIGN ASSET MODAL
 // ========================================
-function AssignAssetModal({ asset, students, onAssign, onClose }) {
+function AssignAssetModal({ asset, students, onAssign, onClose, onSelectCopy }) {
   const [selectedStudent, setSelectedStudent] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCopy, setSelectedCopy] = useState(asset?.docId || '');
 
   const filteredStudents = useMemo(() => {
     if (!searchTerm) return students;
@@ -4252,11 +4275,21 @@ function AssignAssetModal({ asset, students, onAssign, onClose }) {
     );
   }, [students, searchTerm]);
 
+  // Check if we need to show copy selection
+  const hasMultipleCopies = asset?.showCopySelection && asset?.availableCopies?.length > 1;
+  const currentAsset = hasMultipleCopies 
+    ? (asset.availableCopies.find(c => c.docId === selectedCopy) || asset.availableCopies[0])
+    : asset;
+
   const handleAssign = () => {
     if (!selectedStudent) { alert('Please select a student'); return; }
     const student = students.find(s => (s.studentId || s.id) === selectedStudent);
     if (student) {
-      onAssign(student.studentId || student.id, student.name, student.grade || student.class || '');
+      // Pass the selected copy's docId if multiple copies
+      if (hasMultipleCopies && onSelectCopy) {
+        onSelectCopy(selectedCopy);
+      }
+      onAssign(student.studentId || student.id, student.name, student.grade || student.class || '', selectedCopy);
     }
   };
 
@@ -4269,10 +4302,31 @@ function AssignAssetModal({ asset, students, onAssign, onClose }) {
         </div>
 
         <div className="bg-blue-50 p-4 rounded-xl mb-4">
-          <p className="font-bold">{asset.title}</p>
-          <p className="text-sm text-gray-600">{asset.assetType === 'book' ? '📚 Book' : '💻 Chromebook'} • {asset.barcode}</p>
-          {asset.assetType === 'book' && <p className="text-sm text-orange-600 mt-2">⏰ Due: 7 days from today</p>}
+          <p className="font-bold">{currentAsset.title}</p>
+          <p className="text-sm text-gray-600">
+            {currentAsset.assetType === 'book' ? '📚 Book' : '💻 Chromebook'} 
+            {currentAsset.copyNumber && ` • Copy #${currentAsset.copyNumber}`}
+          </p>
+          {currentAsset.assetType === 'book' && <p className="text-sm text-orange-600 mt-2">⏰ Due: 7 days from today</p>}
         </div>
+
+        {/* Copy Selection if multiple available */}
+        {hasMultipleCopies && (
+          <div className="mb-4">
+            <label className="block text-sm font-bold mb-2">Select Copy ({asset.availableCopies.length} available)</label>
+            <select 
+              value={selectedCopy} 
+              onChange={(e) => setSelectedCopy(e.target.value)} 
+              className="w-full border-2 px-4 py-3 rounded-xl bg-green-50"
+            >
+              {asset.availableCopies.map(copy => (
+                <option key={copy.docId} value={copy.docId}>
+                  Copy #{copy.copyNumber || '1'} - {copy.barcode}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="space-y-4">
           <div>
@@ -4351,29 +4405,120 @@ function AssetManagement({ currentUser, students }) {
     setShowScanner(false);
 
     if (scanMode === 'add') {
-      const existing = assets.find(a => a.barcode === barcode);
-      if (existing) { alert(`Already registered: ${existing.title}`); return; }
+      // Find all existing copies with this ISBN/barcode (base barcode without copy number)
+      const baseBarcode = barcode.split('-copy-')[0];
+      const existingCopies = assets.filter(a => a.barcode === barcode || a.barcode.startsWith(baseBarcode + '-copy-') || a.isbn === barcode);
+      
+      if (existingCopies.length > 0) {
+        // Book exists - ask if they want to add another copy
+        const firstCopy = existingCopies[0];
+        const addMore = confirm(
+          `"${firstCopy.title}" already exists (${existingCopies.length} copies).\n\n` +
+          `Do you want to add another copy?\n\n` +
+          `Click OK to add copy #${existingCopies.length + 1}, or Cancel to skip.`
+        );
+        
+        if (addMore) {
+          // Auto-fill details from existing book and set copy number
+          const nextCopyNum = existingCopies.length + 1;
+          setBookLookupResult({
+            found: true,
+            title: firstCopy.title,
+            author: firstCopy.author || '',
+            publisher: firstCopy.publisher || '',
+            isbn: barcode,
+            copyNumber: nextCopyNum,
+            isAdditionalCopy: true
+          });
+          setShowAddModal(true);
+        }
+        return;
+      }
 
+      // New book - lookup ISBN if applicable
       if (barcode.startsWith('978') || barcode.startsWith('979')) {
         setLookingUp(true);
         const result = await lookupISBN(barcode);
-        setBookLookupResult(result);
+        setBookLookupResult({ ...result, copyNumber: 1 });
         setLookingUp(false);
       } else {
-        setBookLookupResult({ found: false, isbn: barcode });
+        setBookLookupResult({ found: false, isbn: barcode, copyNumber: 1 });
       }
       setShowAddModal(true);
     } else if (scanMode === 'assign') {
-      const asset = assets.find(a => a.barcode === barcode);
-      if (!asset) { alert('Asset not found! Add it first.'); return; }
-      if (asset.status === 'assigned') { alert(`Already assigned to ${asset.currentAssignee?.studentName}`); return; }
-      setSelectedAsset(asset);
-      setShowAssignModal(true);
+      // Find all copies with this barcode (exact match or base ISBN match)
+      const baseBarcode = barcode.split('-copy-')[0];
+      const matchingAssets = assets.filter(a => 
+        a.barcode === barcode || 
+        a.barcode.startsWith(baseBarcode + '-copy-') || 
+        a.isbn === barcode
+      );
+      
+      if (matchingAssets.length === 0) { 
+        alert('Asset not found! Add it first.'); 
+        return; 
+      }
+      
+      // Filter to only available copies
+      const availableCopies = matchingAssets.filter(a => a.status === 'available');
+      
+      if (availableCopies.length === 0) {
+        alert(`All copies of "${matchingAssets[0].title}" are currently assigned.\n\nTotal copies: ${matchingAssets.length}\nAssigned: ${matchingAssets.length}`);
+        return;
+      }
+      
+      if (availableCopies.length === 1) {
+        // Only one available, auto-select it
+        setSelectedAsset(availableCopies[0]);
+        setShowAssignModal(true);
+      } else {
+        // Multiple available - show selection modal
+        setSelectedAsset({ 
+          ...availableCopies[0], 
+          availableCopies: availableCopies,
+          showCopySelection: true 
+        });
+        setShowAssignModal(true);
+      }
     } else if (scanMode === 'return') {
-      const asset = assets.find(a => a.barcode === barcode);
-      if (!asset) { alert('Asset not found!'); return; }
-      if (asset.status !== 'assigned') { alert('Not currently assigned.'); return; }
-      handleReturnAsset(asset);
+      // Find all assigned copies with this barcode
+      const baseBarcode = barcode.split('-copy-')[0];
+      const matchingAssets = assets.filter(a => 
+        (a.barcode === barcode || a.barcode.startsWith(baseBarcode + '-copy-') || a.isbn === barcode) &&
+        a.status === 'assigned'
+      );
+      
+      if (matchingAssets.length === 0) { 
+        // Check if asset exists but not assigned
+        const anyMatch = assets.find(a => a.barcode === barcode || a.isbn === barcode);
+        if (anyMatch) {
+          alert('This asset is not currently assigned to anyone.');
+        } else {
+          alert('Asset not found!'); 
+        }
+        return; 
+      }
+      
+      if (matchingAssets.length === 1) {
+        handleReturnAsset(matchingAssets[0]);
+      } else {
+        // Multiple assigned copies - show who has them
+        const copyList = matchingAssets.map((a, i) => 
+          `${i + 1}. Copy #${a.copyNumber || '?'} - ${a.currentAssignee?.studentName || 'Unknown'}`
+        ).join('\n');
+        
+        const choice = prompt(
+          `Multiple copies are assigned:\n\n${copyList}\n\n` +
+          `Enter the number (1-${matchingAssets.length}) of the copy being returned:`
+        );
+        
+        if (choice && !isNaN(choice)) {
+          const index = parseInt(choice) - 1;
+          if (index >= 0 && index < matchingAssets.length) {
+            handleReturnAsset(matchingAssets[index]);
+          }
+        }
+      }
     }
   };
 
@@ -4396,14 +4541,23 @@ function AssetManagement({ currentUser, students }) {
     }
   };
 
-  const handleAssignAsset = async (studentId, studentName, studentClass) => {
+  const handleAssignAsset = async (studentId, studentName, studentClass, selectedCopyId = null) => {
     try {
+      // If a specific copy was selected, use that; otherwise use selectedAsset
+      const assetToAssign = selectedCopyId 
+        ? (selectedAsset.availableCopies?.find(c => c.docId === selectedCopyId) || selectedAsset)
+        : selectedAsset;
+      
       const now = new Date();
-      const dueDate = selectedAsset.assetType === 'book' ? new Date(now.getTime() + BOOK_DUE_DAYS * 24 * 60 * 60 * 1000).toISOString() : null;
+      const dueDate = assetToAssign.assetType === 'book' ? new Date(now.getTime() + BOOK_DUE_DAYS * 24 * 60 * 60 * 1000).toISOString() : null;
 
       const assignment = {
-        assetId: selectedAsset.docId, assetType: selectedAsset.assetType, assetTitle: selectedAsset.title,
-        barcode: selectedAsset.barcode, studentId, studentName, studentClass, school: mySchool,
+        assetId: assetToAssign.docId, 
+        assetType: assetToAssign.assetType, 
+        assetTitle: assetToAssign.title,
+        barcode: assetToAssign.barcode, 
+        copyNumber: assetToAssign.copyNumber || 1,
+        studentId, studentName, studentClass, school: mySchool,
         assignedBy: currentUser.id || currentUser.name, assignedByName: currentUser.name,
         assignedDate: now.toISOString(), dueDate, returnedDate: null, status: 'active',
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -4411,16 +4565,18 @@ function AssetManagement({ currentUser, students }) {
 
       const assignmentRef = await db.collection('assetAssignments').add(assignment);
 
-      await db.collection('assets').doc(selectedAsset.docId).update({
+      await db.collection('assets').doc(assetToAssign.docId).update({
         status: 'assigned',
         currentAssignee: { studentId, studentName, assignedDate: now.toISOString(), assignmentId: assignmentRef.id }
       });
 
-      setAssets(assets.map(a => a.docId === selectedAsset.docId ? { ...a, status: 'assigned', currentAssignee: { studentId, studentName, assignedDate: now.toISOString() } } : a));
+      setAssets(assets.map(a => a.docId === assetToAssign.docId ? { ...a, status: 'assigned', currentAssignee: { studentId, studentName, assignedDate: now.toISOString() } } : a));
       setAssignments([...assignments, { ...assignment, docId: assignmentRef.id }]);
       setShowAssignModal(false);
       setSelectedAsset(null);
-      alert(`Assigned to ${studentName}!`);
+      
+      const copyInfo = assetToAssign.copyNumber ? ` (Copy #${assetToAssign.copyNumber})` : '';
+      alert(`"${assetToAssign.title}"${copyInfo} assigned to ${studentName}!`);
     } catch (error) {
       console.error('Error assigning:', error);
       alert('Error assigning asset.');
@@ -4544,16 +4700,22 @@ function AssetManagement({ currentUser, students }) {
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredAssets.length === 0 ? (
-              <div className="col-span-full text-center py-8 text-gray-500">No assets found. Click "Add" to start.</div>
+              <div className="col-span-full text-center py-8 text-gray-500">No assets found. Click "Scan & Add" or "Manual Add" to start.</div>
             ) : filteredAssets.map(asset => (
               <div key={asset.docId} className={`asset-card ${asset.assetType}`}>
                 <div className="flex justify-between items-start mb-2">
-                  <span className={`asset-badge badge-${asset.status === 'available' ? 'available' : 'assigned'}`}>{asset.assetType === 'book' ? '📚' : '💻'} {asset.assetType}</span>
+                  <span className={`asset-badge badge-${asset.status === 'available' ? 'available' : 'assigned'}`}>
+                    {asset.assetType === 'book' ? '📚' : '💻'} {asset.assetType}
+                    {asset.copyNumber && asset.copyNumber > 1 && ` #${asset.copyNumber}`}
+                  </span>
                   <span className={`asset-badge badge-${asset.status}`}>{asset.status}</span>
                 </div>
                 <h4 className="font-bold text-lg mb-1">{asset.title}</h4>
                 {asset.author && <p className="text-sm text-gray-600">by {asset.author}</p>}
-                <p className="text-xs text-gray-500 mt-2">Barcode: {asset.barcode}</p>
+                <p className="text-xs text-gray-500 mt-2">
+                  {asset.copyNumber ? `Copy #${asset.copyNumber} • ` : ''}
+                  {asset.isbn || asset.barcode}
+                </p>
                 {asset.status === 'assigned' && asset.currentAssignee && (
                   <div className="mt-3 p-2 bg-yellow-50 rounded-lg">
                     <p className="text-sm font-semibold">Assigned to: {asset.currentAssignee.studentName}</p>
