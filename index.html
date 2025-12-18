@@ -2069,11 +2069,29 @@ function TeacherProfileModal({ teacher, onClose, onGiveFeedback, averageRating }
               <div className="font-semibold">{teacher.experience || 'Not specified'}</div>
             </div>
 
+            {teacher.phone && (
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <div className="text-sm text-gray-500">Phone</div>
+                <a href={`tel:${teacher.phone}`} className="font-semibold text-blue-600 hover:underline">
+                  📱 {teacher.phone}
+                </a>
+              </div>
+            )}
+
             {teacher.whatsapp && (
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="text-sm text-gray-500">WhatsApp</div>
                 <a href={`https://wa.me/${teacher.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-green-600 hover:underline">
                   💬 {teacher.whatsapp}
+                </a>
+              </div>
+            )}
+
+            {teacher.driveLink && (
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <div className="text-sm text-gray-500">📁 Google Drive Folder</div>
+                <a href={teacher.driveLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 hover:underline">
+                  📂 Open Teaching Resources →
                 </a>
               </div>
             )}
@@ -8091,27 +8109,31 @@ function TeacherView({
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'syllabus11', label: 'Class 11 Syllabus', icon: '📚' },
     { id: 'syllabus12', label: 'Class 12 Syllabus', icon: '📕' },
-    { id: 'directory', label: 'Directory', icon: '📖' },
+    { id: 'hierarchy', label: 'Hierarchy', icon: '🏛️' },
+    { id: 'socialwall', label: 'Social Wall', icon: '🎉' },
     { id: 'attendance', label: 'Student Attendance', icon: '✅' },
     { id: 'attendancedash', label: 'Attendance Dashboard', icon: '📊' },
     { id: 'myattendance', label: 'My Attendance', icon: '🕒' },
     { id: 'teacherattview', label: 'Teacher Attendance', icon: '👨‍🏫' },
     { id: 'assets', label: 'Asset Management', icon: '📦' },
     { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
-    { id: 'examstats', label: 'Exam Stats', icon: '📊' }
+    { id: 'examstats', label: 'Exam Stats', icon: '📊' },
+    { id: 'roadmap', label: 'Roadmap', icon: '🗺️' }
   ] : [
     { id: 'overview', label: 'Dashboard', icon: '📊' },
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'class11', label: 'Class 11', icon: '📚' },
     { id: 'class12', label: 'Class 12', icon: '📕' },
-    { id: 'directory', label: 'Directory', icon: '📖' },
+    { id: 'hierarchy', label: 'Hierarchy', icon: '🏛️' },
+    { id: 'socialwall', label: 'Social Wall', icon: '🎉' },
     { id: 'attendance', label: 'Student Attendance', icon: '✅' },
     { id: 'attendancedash', label: 'Attendance Dashboard', icon: '📊' },
     { id: 'myattendance', label: 'My Attendance', icon: '🕒' },
     { id: 'assets', label: 'Asset Management', icon: '📦' },
     { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
     { id: 'examstats', label: 'Exam Stats', icon: '📊' },
-    { id: 'myprofile', label: 'My Profile', icon: '👤' }
+    { id: 'myprofile', label: 'My Profile', icon: '👤' },
+    { id: 'roadmap', label: 'Roadmap', icon: '🗺️' }
   ];
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -8333,8 +8355,8 @@ function TeacherView({
           />
         )}
 
-        {activeTab === 'directory' && (
-          <TeacherDirectory teachers={teachers} currentUser={currentUser} />
+        {activeTab === 'hierarchy' && (
+          <TeamHierarchy teachers={teachers} currentUser={currentUser} />
         )}
 
         {activeTab === 'myprofile' && (
@@ -8375,6 +8397,14 @@ function TeacherView({
 
         {activeTab === 'assets' && (
           <AssetManagement currentUser={currentUser} students={students} />
+        )}
+
+        {activeTab === 'socialwall' && (
+          <SocialWall teachers={teachers} currentUser={currentUser} />
+        )}
+
+        {activeTab === 'roadmap' && (
+          <RoadmapPage currentUser={currentUser} />
         )}
         </div>
       </div>
@@ -10433,7 +10463,8 @@ function AdminView({
     { id: 'teacherhistory', label: 'Teacher History', icon: '📈' },
     // Students tab - Super Admin has full access, Managers have view-only access
     { id: 'students', label: 'Students', icon: '👨‍🎓' },
-    { id: 'directory', label: 'Directory', icon: '📖' },
+    { id: 'hierarchy', label: 'Hierarchy', icon: '🏛️' },
+    { id: 'socialwall', label: 'Social Wall', icon: '🎉' },
     { id: 'observations', label: 'Class Observations', icon: '📋' },
     // Curriculum Management - only for Super Admin (contains add/edit/delete chapters)
     ...(isSuperAdmin ? [
@@ -10451,7 +10482,8 @@ function AdminView({
     // Student Profiles - for viewing student demographics with graphs
     { id: 'studentprofiles', label: 'Student Profiles', icon: '👨‍🎓' },
     { id: 'examstats', label: 'Exam Statistics', icon: '📊' },
-    { id: 'studentfeedback', label: 'Student Feedback', icon: '💬' }
+    { id: 'studentfeedback', label: 'Student Feedback', icon: '💬' },
+    { id: 'roadmap', label: 'Roadmap', icon: '🗺️' }
   ];
   
   // Handle navigation and auto-close on mobile
@@ -10599,8 +10631,16 @@ function AdminView({
 
         {activeTab === 'students' && <StudentManagement students={filteredStudents} isSuperAdmin={isSuperAdmin} accessibleSchools={availableSchools} />}
 
-        {activeTab === 'directory' && (
-          <TeacherDirectory teachers={filteredTeachers} currentUser={currentUser} />
+        {activeTab === 'hierarchy' && (
+          <TeamHierarchy teachers={filteredTeachers} currentUser={currentUser} />
+        )}
+
+        {activeTab === 'socialwall' && (
+          <SocialWall teachers={filteredTeachers} currentUser={currentUser} />
+        )}
+
+        {activeTab === 'roadmap' && (
+          <RoadmapPage currentUser={currentUser} />
         )}
 
         {activeTab === 'observations' && (
@@ -15571,6 +15611,7 @@ function RemarksModal({student,onSave,onClose}){
     'Family Emergency',
     'Medical Appointment',
     'Personal Reason',
+    'Staff Ward',
     'Others'
   ];
 
@@ -18618,6 +18659,14 @@ function TeacherDirectory({ teachers, currentUser }) {
                       </a>
                     </div>
                   )}
+                  {selectedTeacher.driveLink && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 font-medium">📁 Drive Folder:</span>
+                      <a href={selectedTeacher.driveLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-semibold hover:underline">
+                        Open Folder →
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -18721,6 +18770,1173 @@ function TeacherDirectory({ teachers, currentUser }) {
     </div>
   );
 }
+// ========================================
+// TEAM HIERARCHY - ORGANIZATION VIEW
+// ========================================
+function TeamHierarchy({ teachers, currentUser }) {
+  const [allMembers, setAllMembers] = useState([]);
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('hierarchy'); // 'hierarchy' or 'cards' or 'search'
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterSchool, setFilterSchool] = useState('All');
+  const [filterRole, setFilterRole] = useState('All');
+
+  // Fetch all team members (managers, heads, APCs, teachers)
+  useEffect(() => {
+    const fetchAllMembers = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch managers
+        const managersSnap = await db.collection('managers').get();
+        const managers = managersSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          role: doc.data().position || 'Manager',
+          level: doc.data().position?.includes('Program Head') ? 1 : 
+                 doc.data().position?.includes('Program Manager') ? 2 : 
+                 doc.data().position?.includes('Associate') ? 3 : 2
+        }));
+
+        // Fetch APCs
+        const apcsSnap = await db.collection('apcs').get();
+        const apcs = apcsSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          role: 'Associate Program Coordinator',
+          level: 4
+        }));
+
+        // Convert teachers array to include level
+        const teachersList = teachers.map(t => ({
+          ...t,
+          role: 'Teacher',
+          level: 5
+        }));
+
+        // Combine all
+        const combined = [...managers, ...apcs, ...teachersList];
+        setAllMembers(combined);
+      } catch (error) {
+        console.error('Error fetching team members:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAllMembers();
+  }, [teachers]);
+
+  // Group members by level/role
+  const hierarchy = useMemo(() => {
+    const levels = {
+      1: { title: '👑 Program Heads', members: [] },
+      2: { title: '📊 Program Managers', members: [] },
+      3: { title: '📋 Associate Program Managers', members: [] },
+      4: { title: '🎯 Associate Program Coordinators', members: [] },
+      5: { title: '👨‍🏫 Teachers', members: [] }
+    };
+
+    allMembers.forEach(member => {
+      if (levels[member.level]) {
+        levels[member.level].members.push(member);
+      }
+    });
+
+    return levels;
+  }, [allMembers]);
+
+  // Get unique schools from all members
+  const allSchools = useMemo(() => {
+    const schools = new Set();
+    allMembers.forEach(m => {
+      if (m.school) schools.add(m.school);
+      if (m.schools) m.schools.forEach(s => schools.add(s));
+    });
+    return ['All', ...Array.from(schools).sort()];
+  }, [allMembers]);
+
+  // Filtered members for search view
+  const filteredMembers = useMemo(() => {
+    return allMembers.filter(member => {
+      const matchesSearch = !searchTerm || 
+        member.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.phone?.includes(searchTerm);
+      
+      const memberSchools = member.school ? [member.school] : (member.schools || []);
+      const matchesSchool = filterSchool === 'All' || memberSchools.includes(filterSchool);
+      
+      const matchesRole = filterRole === 'All' || 
+        (filterRole === 'Teacher' && member.level === 5) ||
+        (filterRole === 'APC' && member.level === 4) ||
+        (filterRole === 'Manager' && member.level <= 3);
+      
+      return matchesSearch && matchesSchool && matchesRole;
+    });
+  }, [allMembers, searchTerm, filterSchool, filterRole]);
+
+  // Get role color
+  const getRoleColor = (level) => {
+    const colors = {
+      1: 'from-purple-500 to-purple-600',
+      2: 'from-blue-500 to-blue-600',
+      3: 'from-green-500 to-green-600',
+      4: 'from-yellow-500 to-orange-500',
+      5: 'from-gray-500 to-gray-600'
+    };
+    return colors[level] || 'from-gray-500 to-gray-600';
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-yellow-500 border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading team...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-3xl font-bold">🏛️ Hierarchy</h2>
+          <p className="text-gray-600">{allMembers.length} team members across all centers</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setViewMode('hierarchy')}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+              viewMode === 'hierarchy' ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-700'
+            }`}
+          >
+            🏛️ By Role
+          </button>
+          <button
+            onClick={() => setViewMode('cards')}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+              viewMode === 'cards' ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-700'
+            }`}
+          >
+            🃏 All Cards
+          </button>
+          <button
+            onClick={() => setViewMode('search')}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+              viewMode === 'search' ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-700'
+            }`}
+          >
+            🔍 Search
+          </button>
+        </div>
+      </div>
+
+      {/* Search and Filters - Only show in search mode */}
+      {viewMode === 'search' && (
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <div className="grid md:grid-cols-4 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold mb-2">🔍 Search</label>
+              <input
+                type="text"
+                placeholder="Name, email, or phone..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-yellow-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold mb-2">🏫 School</label>
+              <select
+                value={filterSchool}
+                onChange={(e) => setFilterSchool(e.target.value)}
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-yellow-500"
+              >
+                {allSchools.map(school => (
+                  <option key={school} value={school}>{school}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold mb-2">👤 Role</label>
+              <select
+                value={filterRole}
+                onChange={(e) => setFilterRole(e.target.value)}
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-yellow-500"
+              >
+                <option value="All">All Roles</option>
+                <option value="Manager">Managers & Heads</option>
+                <option value="APC">APCs</option>
+                <option value="Teacher">Teachers</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-3 text-sm text-gray-500">
+            Showing {filteredMembers.length} of {allMembers.length} members
+          </div>
+        </div>
+      )}
+
+      {viewMode === 'hierarchy' ? (
+        // Hierarchy View
+        <div className="space-y-8">
+          {Object.entries(hierarchy).map(([level, { title, members }]) => (
+            members.length > 0 && (
+              <div key={level} className="bg-white rounded-2xl shadow-lg overflow-hidden">
+                <div className={`bg-gradient-to-r ${getRoleColor(parseInt(level))} text-white p-4`}>
+                  <h3 className="text-xl font-bold">{title}</h3>
+                  <p className="text-sm opacity-90">{members.length} {members.length === 1 ? 'member' : 'members'}</p>
+                </div>
+                <div className="p-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {members.map((member, idx) => (
+                      <div
+                        key={member.id || idx}
+                        onClick={() => setSelectedMember(member)}
+                        className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 cursor-pointer transition-all hover:shadow-md text-center"
+                      >
+                        {member.profilePhoto ? (
+                          <img
+                            src={member.profilePhoto}
+                            alt={member.name}
+                            className="w-16 h-16 rounded-full mx-auto mb-3 object-cover border-2 border-yellow-400"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-full mx-auto mb-3 bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-2xl font-bold text-white">
+                            {member.name?.charAt(0) || '?'}
+                          </div>
+                        )}
+                        <div className="font-semibold text-gray-800 text-sm">{member.name}</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {member.school || member.schools?.join(', ') || member.position || member.subject}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          ))}
+        </div>
+      ) : (
+        // Cards View
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {allMembers.map((member, idx) => (
+            <div
+              key={member.id || idx}
+              onClick={() => setSelectedMember(member)}
+              className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1"
+            >
+              <div className={`bg-gradient-to-r ${getRoleColor(member.level)} h-16`}></div>
+              <div className="p-4 -mt-8 text-center">
+                {member.profilePhoto ? (
+                  <img
+                    src={member.profilePhoto}
+                    alt={member.name}
+                    className="w-16 h-16 rounded-full mx-auto mb-3 object-cover border-4 border-white shadow"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full mx-auto mb-3 bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-2xl font-bold text-white border-4 border-white shadow">
+                    {member.name?.charAt(0) || '?'}
+                  </div>
+                )}
+                <div className="font-bold text-gray-800">{member.name}</div>
+                <div className="text-xs text-gray-500">{member.role}</div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {member.school || member.schools?.join(', ') || member.subject}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Search View */}
+      {viewMode === 'search' && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {filteredMembers.length === 0 ? (
+            <div className="col-span-full bg-white rounded-2xl p-12 text-center">
+              <div className="text-6xl mb-4">🔍</div>
+              <div className="text-xl font-semibold text-gray-600">No members found</div>
+              <div className="text-gray-500 mt-2">Try adjusting your search filters</div>
+            </div>
+          ) : (
+            filteredMembers.map((member, idx) => (
+              <div
+                key={member.id || idx}
+                onClick={() => setSelectedMember(member)}
+                className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1"
+              >
+                <div className={`bg-gradient-to-r ${getRoleColor(member.level)} h-16`}></div>
+                <div className="p-4 -mt-8 text-center">
+                  {member.profilePhoto ? (
+                    <img
+                      src={member.profilePhoto}
+                      alt={member.name}
+                      className="w-16 h-16 rounded-full mx-auto mb-3 object-cover border-4 border-white shadow"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full mx-auto mb-3 bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-2xl font-bold text-white border-4 border-white shadow">
+                      {member.name?.charAt(0) || '?'}
+                    </div>
+                  )}
+                  <div className="font-bold text-gray-800">{member.name}</div>
+                  <div className="text-xs text-gray-500">{member.role}</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {member.school || member.schools?.join(', ') || member.subject}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Member Detail Modal */}
+      {selectedMember && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedMember(null)}>
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className={`bg-gradient-to-r ${getRoleColor(selectedMember.level)} p-6 text-white`}>
+              <div className="flex items-center gap-4">
+                {selectedMember.profilePhoto ? (
+                  <img
+                    src={selectedMember.profilePhoto}
+                    alt={selectedMember.name}
+                    className="w-20 h-20 rounded-full object-cover border-4 border-white/30"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-3xl font-bold">
+                    {selectedMember.name?.charAt(0) || '?'}
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-2xl font-bold">{selectedMember.name}</h3>
+                  <p className="opacity-90">{selectedMember.role || selectedMember.position}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedMember(null)}
+                className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {selectedMember.school && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🏫</span>
+                  <span>{selectedMember.school}</span>
+                </div>
+              )}
+              {selectedMember.schools && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🏫</span>
+                  <span>{selectedMember.schools.join(', ')}</span>
+                </div>
+              )}
+              {selectedMember.subject && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">📚</span>
+                  <span>{selectedMember.subject}</span>
+                </div>
+              )}
+              {selectedMember.email && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">📧</span>
+                  <a href={`mailto:${selectedMember.email}`} className="text-blue-600 hover:underline">{selectedMember.email}</a>
+                </div>
+              )}
+              {selectedMember.phone && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">📱</span>
+                  <a href={`tel:${selectedMember.phone}`} className="text-blue-600 hover:underline">{selectedMember.phone}</a>
+                </div>
+              )}
+              {selectedMember.whatsapp && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">💬</span>
+                  <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">{selectedMember.whatsapp}</a>
+                </div>
+              )}
+              {selectedMember.dateOfBirth && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🎂</span>
+                  <span>{new Date(selectedMember.dateOfBirth).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}</span>
+                </div>
+              )}
+              {selectedMember.driveLink && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">📁</span>
+                  <a href={selectedMember.driveLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Open Google Drive Folder →</a>
+                </div>
+              )}
+              {selectedMember.qualification && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🎓</span>
+                  <span>{selectedMember.qualification}</span>
+                </div>
+              )}
+              {selectedMember.experience && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">💼</span>
+                  <span>{selectedMember.experience}</span>
+                </div>
+              )}
+              {selectedMember.bio && (
+                <div className="bg-gray-50 p-4 rounded-xl mt-4">
+                  <div className="text-sm text-gray-500 mb-1">About</div>
+                  <p className="text-gray-700">{selectedMember.bio}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========================================
+// SOCIAL WALL - BIRTHDAYS & POSTS
+// ========================================
+function SocialWall({ teachers, currentUser }) {
+  const [posts, setPosts] = useState([]);
+  const [birthdays, setBirthdays] = useState([]);
+  const [anniversaries, setAnniversaries] = useState([]);
+  const [showNewPost, setShowNewPost] = useState(false);
+  const [newPostContent, setNewPostContent] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showBirthdayPopup, setShowBirthdayPopup] = useState(null);
+  const [allMembers, setAllMembers] = useState([]);
+
+  // Fetch all members and posts
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch managers
+        const managersSnap = await db.collection('managers').get();
+        const managers = managersSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'Manager' }));
+        
+        // Fetch APCs
+        const apcsSnap = await db.collection('apcs').get();
+        const apcs = apcsSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'APC' }));
+        
+        // Combine all
+        const combined = [...managers, ...apcs, ...teachers];
+        setAllMembers(combined);
+
+        // Check today's birthdays and anniversaries
+        const today = new Date();
+        const todayMonth = today.getMonth() + 1;
+        const todayDate = today.getDate();
+
+        const todayBirthdays = combined.filter(m => {
+          if (!m.dateOfBirth) return false;
+          const dob = new Date(m.dateOfBirth);
+          return dob.getMonth() + 1 === todayMonth && dob.getDate() === todayDate;
+        });
+        setBirthdays(todayBirthdays);
+
+        const todayAnniversaries = combined.filter(m => {
+          if (!m.anniversary) return false;
+          const ann = new Date(m.anniversary);
+          return ann.getMonth() + 1 === todayMonth && ann.getDate() === todayDate;
+        });
+        setAnniversaries(todayAnniversaries);
+
+        // Show birthday popup if there are birthdays
+        if (todayBirthdays.length > 0) {
+          const dismissedToday = localStorage.getItem('birthdayDismissed_' + today.toDateString());
+          if (!dismissedToday) {
+            setShowBirthdayPopup(todayBirthdays[0]);
+          }
+        }
+
+        // Fetch posts
+        const postsSnap = await db.collection('socialPosts')
+          .orderBy('createdAt', 'desc')
+          .limit(50)
+          .get();
+        
+        const postsData = postsSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setPosts(postsData);
+
+      } catch (error) {
+        console.error('Error fetching social data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [teachers]);
+
+  // Create new post
+  const handleCreatePost = async () => {
+    if (!newPostContent.trim()) return;
+    
+    setPosting(true);
+    try {
+      const postData = {
+        content: newPostContent.trim(),
+        authorId: currentUser.afid || currentUser.uid,
+        authorName: currentUser.name,
+        authorPhoto: currentUser.profilePhoto || '',
+        authorSchool: currentUser.school,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        reactions: {},
+        comments: []
+      };
+      
+      const docRef = await db.collection('socialPosts').add(postData);
+      setPosts([{ id: docRef.id, ...postData, createdAt: new Date() }, ...posts]);
+      setNewPostContent('');
+      setShowNewPost(false);
+    } catch (error) {
+      console.error('Error creating post:', error);
+      alert('Failed to create post');
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  // Add reaction to post
+  const handleReaction = async (postId, emoji) => {
+    const userId = currentUser.afid || currentUser.uid;
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    const currentReaction = post.reactions?.[userId];
+    let newReactions = { ...(post.reactions || {}) };
+
+    if (currentReaction === emoji) {
+      delete newReactions[userId];
+    } else {
+      newReactions[userId] = emoji;
+    }
+
+    try {
+      await db.collection('socialPosts').doc(postId).update({
+        reactions: newReactions
+      });
+      
+      setPosts(posts.map(p => 
+        p.id === postId ? { ...p, reactions: newReactions } : p
+      ));
+    } catch (error) {
+      console.error('Error updating reaction:', error);
+    }
+  };
+
+  // Add comment to post
+  const handleAddComment = async (postId, comment) => {
+    if (!comment.trim()) return;
+    
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    const newComment = {
+      id: Date.now(),
+      authorId: currentUser.afid || currentUser.uid,
+      authorName: currentUser.name,
+      content: comment.trim(),
+      createdAt: new Date().toISOString()
+    };
+
+    const newComments = [...(post.comments || []), newComment];
+
+    try {
+      await db.collection('socialPosts').doc(postId).update({
+        comments: newComments
+      });
+      
+      setPosts(posts.map(p => 
+        p.id === postId ? { ...p, comments: newComments } : p
+      ));
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
+  };
+
+  // Dismiss birthday popup
+  const dismissBirthdayPopup = () => {
+    localStorage.setItem('birthdayDismissed_' + new Date().toDateString(), 'true');
+    setShowBirthdayPopup(null);
+  };
+
+  // Post reaction emojis
+  const REACTION_EMOJIS = ['👍', '❤️', '😊', '🎉', '👏', '🙌'];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-yellow-500 border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading social wall...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Birthday Popup */}
+      {showBirthdayPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-yellow-400 via-pink-500 to-purple-600 rounded-3xl p-1 max-w-md w-full animate-pulse">
+            <div className="bg-white rounded-3xl p-8 text-center">
+              <div className="text-6xl mb-4">🎂</div>
+              <h2 className="text-3xl font-bold text-gray-800 mb-2">Happy Birthday!</h2>
+              <div className="text-5xl mb-4">🎉🎈🎁</div>
+              {showBirthdayPopup.profilePhoto ? (
+                <img 
+                  src={showBirthdayPopup.profilePhoto} 
+                  alt={showBirthdayPopup.name}
+                  className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-yellow-400 object-cover"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-full mx-auto mb-4 bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-4xl font-bold text-white">
+                  {showBirthdayPopup.name?.charAt(0)}
+                </div>
+              )}
+              <p className="text-2xl font-bold text-gray-800">{showBirthdayPopup.name}</p>
+              <p className="text-gray-600">{showBirthdayPopup.school || showBirthdayPopup.position}</p>
+              <p className="text-lg mt-4 text-gray-600">Wishing you a wonderful day! 🌟</p>
+              <button
+                onClick={dismissBirthdayPopup}
+                className="mt-6 px-8 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-full font-bold hover:shadow-lg transition-all"
+              >
+                Send Wishes 💝
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-3xl font-bold">🎉 Social Wall</h2>
+          <p className="text-gray-600">Connect with your team</p>
+        </div>
+        <button
+          onClick={() => setShowNewPost(true)}
+          className="px-6 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-xl font-bold hover:shadow-lg transition-all"
+        >
+          ✏️ New Post
+        </button>
+      </div>
+
+      {/* Today's Celebrations */}
+      {(birthdays.length > 0 || anniversaries.length > 0) && (
+        <div className="bg-gradient-to-r from-pink-100 to-yellow-100 rounded-2xl p-6">
+          <h3 className="text-xl font-bold mb-4">🎊 Today's Celebrations</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            {birthdays.map(person => (
+              <div key={person.id || person.afid} className="bg-white rounded-xl p-4 flex items-center gap-4 shadow">
+                <div className="text-4xl">🎂</div>
+                <div>
+                  <div className="font-bold">{person.name}</div>
+                  <div className="text-sm text-gray-500">Happy Birthday! 🎈</div>
+                </div>
+              </div>
+            ))}
+            {anniversaries.map(person => (
+              <div key={person.id || person.afid} className="bg-white rounded-xl p-4 flex items-center gap-4 shadow">
+                <div className="text-4xl">💍</div>
+                <div>
+                  <div className="font-bold">{person.name}</div>
+                  <div className="text-sm text-gray-500">Happy Anniversary! 💕</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Posts */}
+      <div className="space-y-4">
+        {posts.length === 0 ? (
+          <div className="bg-white rounded-2xl p-12 text-center">
+            <div className="text-6xl mb-4">📝</div>
+            <p className="text-xl text-gray-600">No posts yet</p>
+            <p className="text-gray-500">Be the first to share something!</p>
+          </div>
+        ) : (
+          posts.map(post => (
+            <PostCard 
+              key={post.id} 
+              post={post} 
+              currentUser={currentUser}
+              onReaction={handleReaction}
+              onAddComment={handleAddComment}
+              reactionEmojis={REACTION_EMOJIS}
+            />
+          ))
+        )}
+      </div>
+
+      {/* New Post Modal */}
+      {showNewPost && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6">
+            <h3 className="text-xl font-bold mb-4">✏️ Create Post</h3>
+            <textarea
+              value={newPostContent}
+              onChange={e => setNewPostContent(e.target.value)}
+              placeholder="What's on your mind?"
+              className="w-full border-2 rounded-xl p-4 h-32 resize-none"
+              autoFocus
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={handleCreatePost}
+                disabled={posting || !newPostContent.trim()}
+                className="flex-1 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-xl font-bold disabled:opacity-50"
+              >
+                {posting ? '⏳ Posting...' : '📤 Post'}
+              </button>
+              <button
+                onClick={() => setShowNewPost(false)}
+                className="px-6 py-3 bg-gray-200 rounded-xl font-bold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Post Card Component
+function PostCard({ post, currentUser, onReaction, onAddComment, reactionEmojis }) {
+  const [showComments, setShowComments] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [showReactions, setShowReactions] = useState(false);
+
+  const userId = currentUser.afid || currentUser.uid;
+  const myReaction = post.reactions?.[userId];
+
+  // Count reactions
+  const reactionCounts = {};
+  Object.values(post.reactions || {}).forEach(emoji => {
+    reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
+  });
+
+  const timeAgo = (date) => {
+    if (!date) return '';
+    const d = date.toDate ? date.toDate() : new Date(date);
+    const seconds = Math.floor((new Date() - d) / 1000);
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+    return Math.floor(seconds / 86400) + 'd ago';
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+      {/* Post Header */}
+      <div className="p-4 flex items-center gap-3">
+        {post.authorPhoto ? (
+          <img src={post.authorPhoto} alt={post.authorName} className="w-12 h-12 rounded-full object-cover" />
+        ) : (
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-xl font-bold text-white">
+            {post.authorName?.charAt(0)}
+          </div>
+        )}
+        <div className="flex-1">
+          <div className="font-bold">{post.authorName}</div>
+          <div className="text-sm text-gray-500">{post.authorSchool} • {timeAgo(post.createdAt)}</div>
+        </div>
+      </div>
+
+      {/* Post Content */}
+      <div className="px-4 pb-4">
+        <p className="text-gray-800 whitespace-pre-wrap">{post.content}</p>
+      </div>
+
+      {/* Reaction Summary */}
+      {Object.keys(reactionCounts).length > 0 && (
+        <div className="px-4 pb-2 flex gap-2">
+          {Object.entries(reactionCounts).map(([emoji, count]) => (
+            <span key={emoji} className="bg-gray-100 px-2 py-1 rounded-full text-sm">
+              {emoji} {count}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="px-4 pb-4 flex items-center gap-4 border-t pt-3">
+        <div className="relative">
+          <button
+            onClick={() => setShowReactions(!showReactions)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 ${myReaction ? 'bg-yellow-50' : ''}`}
+          >
+            {myReaction || '👍'} React
+          </button>
+          {showReactions && (
+            <div className="absolute bottom-full left-0 mb-2 bg-white rounded-full shadow-lg p-2 flex gap-1">
+              {reactionEmojis.map(emoji => (
+                <button
+                  key={emoji}
+                  onClick={() => { onReaction(post.id, emoji); setShowReactions(false); }}
+                  className={`text-2xl hover:scale-125 transition-transform p-1 ${myReaction === emoji ? 'bg-yellow-100 rounded-full' : ''}`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => setShowComments(!showComments)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100"
+        >
+          💬 {post.comments?.length || 0} Comments
+        </button>
+      </div>
+
+      {/* Comments Section */}
+      {showComments && (
+        <div className="border-t bg-gray-50 p-4">
+          {/* Existing Comments */}
+          {post.comments?.map(comment => (
+            <div key={comment.id} className="mb-3 bg-white rounded-lg p-3">
+              <div className="font-semibold text-sm">{comment.authorName}</div>
+              <div className="text-gray-700">{comment.content}</div>
+            </div>
+          ))}
+          
+          {/* Add Comment */}
+          <div className="flex gap-2 mt-3">
+            <input
+              type="text"
+              value={newComment}
+              onChange={e => setNewComment(e.target.value)}
+              placeholder="Write a comment..."
+              className="flex-1 border-2 rounded-lg px-4 py-2"
+              onKeyPress={e => {
+                if (e.key === 'Enter' && newComment.trim()) {
+                  onAddComment(post.id, newComment);
+                  setNewComment('');
+                }
+              }}
+            />
+            <button
+              onClick={() => { onAddComment(post.id, newComment); setNewComment(''); }}
+              disabled={!newComment.trim()}
+              className="px-4 py-2 bg-yellow-500 text-white rounded-lg font-bold disabled:opacity-50"
+            >
+              Post
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========================================
+// ROADMAP & FEATURE REQUESTS
+// ========================================
+function RoadmapPage({ currentUser }) {
+  const [features, setFeatures] = useState([]);
+  const [showNewRequest, setShowNewRequest] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDetails, setNewDetails] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState('votes'); // 'votes' or 'recent'
+
+  // Fetch feature requests
+  useEffect(() => {
+    const unsubscribe = db.collection('featureRequests')
+      .orderBy('votes', 'desc')
+      .onSnapshot(snap => {
+        const data = snap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setFeatures(data);
+        setLoading(false);
+      }, error => {
+        console.error('Error fetching features:', error);
+        setLoading(false);
+      });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Submit new feature request
+  const handleSubmit = async () => {
+    if (!newTitle.trim()) return;
+    
+    setSubmitting(true);
+    try {
+      await db.collection('featureRequests').add({
+        title: newTitle.trim(),
+        details: newDetails.trim(),
+        authorId: currentUser.afid || currentUser.uid,
+        authorName: currentUser.name,
+        authorSchool: currentUser.school,
+        status: 'pending',
+        votes: 0,
+        voters: [],
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      setNewTitle('');
+      setNewDetails('');
+      setShowNewRequest(false);
+      alert('✅ Feature request submitted!');
+    } catch (error) {
+      console.error('Error submitting feature:', error);
+      alert('Failed to submit request');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Upvote feature
+  const handleVote = async (featureId) => {
+    const userId = currentUser.afid || currentUser.uid;
+    const feature = features.find(f => f.id === featureId);
+    if (!feature) return;
+
+    const hasVoted = feature.voters?.includes(userId);
+    
+    try {
+      if (hasVoted) {
+        await db.collection('featureRequests').doc(featureId).update({
+          votes: firebase.firestore.FieldValue.increment(-1),
+          voters: firebase.firestore.FieldValue.arrayRemove(userId)
+        });
+      } else {
+        await db.collection('featureRequests').doc(featureId).update({
+          votes: firebase.firestore.FieldValue.increment(1),
+          voters: firebase.firestore.FieldValue.arrayUnion(userId)
+        });
+      }
+    } catch (error) {
+      console.error('Error voting:', error);
+    }
+  };
+
+  // Get status badge
+  const getStatusBadge = (status) => {
+    const badges = {
+      'pending': { bg: 'bg-gray-200', text: 'text-gray-700', label: 'Pending' },
+      'planned': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Planned' },
+      'in-progress': { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'In Progress' },
+      'done': { bg: 'bg-green-100', text: 'text-green-700', label: 'Done' },
+      'rejected': { bg: 'bg-red-100', text: 'text-red-700', label: 'Not Planned' }
+    };
+    return badges[status] || badges.pending;
+  };
+
+  // Sort features
+  const sortedFeatures = useMemo(() => {
+    if (sortBy === 'votes') {
+      return [...features].sort((a, b) => (b.votes || 0) - (a.votes || 0));
+    }
+    return [...features].sort((a, b) => {
+      const dateA = a.createdAt?.toDate?.() || new Date(0);
+      const dateB = b.createdAt?.toDate?.() || new Date(0);
+      return dateB - dateA;
+    });
+  }, [features, sortBy]);
+
+  // Planned features (roadmap)
+  const roadmapFeatures = features.filter(f => f.status === 'planned' || f.status === 'in-progress');
+  const doneFeatures = features.filter(f => f.status === 'done');
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-yellow-500 border-t-transparent mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading roadmap...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-3xl font-bold">🗺️ Roadmap & Feature Requests</h2>
+          <p className="text-gray-600">Help shape the future of Curriculum Tracker</p>
+        </div>
+        <button
+          onClick={() => setShowNewRequest(true)}
+          className="px-6 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-xl font-bold hover:shadow-lg transition-all"
+        >
+          ✨ Request Feature
+        </button>
+      </div>
+
+      {/* Roadmap Section */}
+      {roadmapFeatures.length > 0 && (
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-6">
+          <h3 className="text-xl font-bold mb-4">📍 Coming Soon</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            {roadmapFeatures.map(feature => (
+              <div key={feature.id} className="bg-white rounded-xl p-4 shadow">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <div className="font-bold">{feature.title}</div>
+                    {feature.details && <p className="text-sm text-gray-600 mt-1">{feature.details}</p>}
+                  </div>
+                  <span className={`${getStatusBadge(feature.status).bg} ${getStatusBadge(feature.status).text} px-3 py-1 rounded-full text-xs font-bold`}>
+                    {getStatusBadge(feature.status).label}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Completed Features */}
+      {doneFeatures.length > 0 && (
+        <div className="bg-green-50 rounded-2xl p-6">
+          <h3 className="text-xl font-bold mb-4">✅ Recently Completed</h3>
+          <div className="flex flex-wrap gap-2">
+            {doneFeatures.slice(0, 10).map(feature => (
+              <span key={feature.id} className="bg-white px-4 py-2 rounded-lg shadow text-sm">
+                ✓ {feature.title}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Feature Requests */}
+      <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold">💡 Feature Requests</h3>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            className="border-2 px-4 py-2 rounded-lg"
+          >
+            <option value="votes">Most Voted</option>
+            <option value="recent">Most Recent</option>
+          </select>
+        </div>
+
+        {sortedFeatures.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            <div className="text-6xl mb-4">💡</div>
+            <p>No feature requests yet</p>
+            <p className="text-sm">Be the first to suggest an improvement!</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sortedFeatures.map(feature => {
+              const userId = currentUser.afid || currentUser.uid;
+              const hasVoted = feature.voters?.includes(userId);
+              const badge = getStatusBadge(feature.status);
+              
+              return (
+                <div key={feature.id} className="border-2 rounded-xl p-4 hover:border-yellow-400 transition-all">
+                  <div className="flex items-start gap-4">
+                    <button
+                      onClick={() => handleVote(feature.id)}
+                      className={`flex flex-col items-center px-3 py-2 rounded-lg min-w-[60px] transition-all ${
+                        hasVoted ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 hover:bg-gray-200'
+                      }`}
+                    >
+                      <span className="text-xl">▲</span>
+                      <span className="font-bold">{feature.votes || 0}</span>
+                    </button>
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="font-bold text-lg">{feature.title}</div>
+                        <span className={`${badge.bg} ${badge.text} px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap`}>
+                          {badge.label}
+                        </span>
+                      </div>
+                      {feature.details && <p className="text-gray-600 mt-1">{feature.details}</p>}
+                      <div className="text-sm text-gray-400 mt-2">
+                        Requested by {feature.authorName} from {feature.authorSchool}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* New Request Modal */}
+      {showNewRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6">
+            <h3 className="text-xl font-bold mb-4">✨ Request a Feature</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold mb-2">Feature Title *</label>
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
+                  placeholder="e.g., Dark mode support"
+                  className="w-full border-2 rounded-xl px-4 py-3"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold mb-2">Details (Optional)</label>
+                <textarea
+                  value={newDetails}
+                  onChange={e => setNewDetails(e.target.value)}
+                  placeholder="Describe the feature in more detail..."
+                  className="w-full border-2 rounded-xl px-4 py-3 h-24 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || !newTitle.trim()}
+                className="flex-1 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-xl font-bold disabled:opacity-50"
+              >
+                {submitting ? '⏳ Submitting...' : '📤 Submit Request'}
+              </button>
+              <button
+                onClick={() => setShowNewRequest(false)}
+                className="px-6 py-3 bg-gray-200 rounded-xl font-bold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ========================================
 // TEACHER EXAM STATISTICS
 // ========================================
@@ -19613,8 +20829,10 @@ function TeacherSelfProfile({ currentUser, teachers }) {
   const [editForm, setEditForm] = useState({
     qualification: '',
     experience: '',
+    phone: '',
     whatsapp: '',
     profilePhoto: '',
+    driveLink: '',
     bio: ''
   });
   const chartRef = useRef(null);
@@ -19633,8 +20851,10 @@ function TeacherSelfProfile({ currentUser, teachers }) {
     setEditForm({
       qualification: teacher.qualification || '',
       experience: teacher.experience || '',
+      phone: teacher.phone || '',
       whatsapp: teacher.whatsapp || '',
       profilePhoto: teacher.profilePhoto || '',
+      driveLink: teacher.driveLink || '',
       bio: teacher.bio || ''
     });
   }, [teachers, currentUser]);
@@ -19718,8 +20938,10 @@ function TeacherSelfProfile({ currentUser, teachers }) {
       await db.collection('teachers').doc(teacherData.docId).update({
         qualification: editForm.qualification,
         experience: editForm.experience,
+        phone: editForm.phone,
         whatsapp: editForm.whatsapp,
         profilePhoto: editForm.profilePhoto,
+        driveLink: editForm.driveLink,
         bio: editForm.bio,
         updatedAt: new Date().toISOString()
       });
@@ -19950,6 +21172,19 @@ function TeacherSelfProfile({ currentUser, teachers }) {
             <div className="font-semibold text-yellow-600">{overallRating || 'N/A'}/5</div>
           </div>
         </div>
+        {teacherData.driveLink && (
+          <div className="mt-4 bg-blue-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">📁 Google Drive Folder</div>
+            <a 
+              href={teacherData.driveLink} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="font-semibold text-blue-600 hover:underline flex items-center gap-2"
+            >
+              📂 Open Teaching Resources
+            </a>
+          </div>
+        )}
         {teacherData.bio && (
           <div className="mt-4 bg-gray-50 p-4 rounded-lg">
             <div className="text-sm text-gray-500">Bio</div>
@@ -20116,6 +21351,17 @@ function TeacherSelfProfile({ currentUser, teachers }) {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-bold mb-2">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={editForm.phone}
+                    onChange={e => setEditForm({...editForm, phone: e.target.value})}
+                    placeholder="e.g., 9876543210"
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                </div>
+
+                <div>
                   <label className="block text-sm font-bold mb-2">WhatsApp Number</label>
                   <input
                     type="tel"
@@ -20124,6 +21370,18 @@ function TeacherSelfProfile({ currentUser, teachers }) {
                     placeholder="e.g., 9876543210"
                     className="w-full border-2 px-4 py-3 rounded-xl"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">📁 Google Drive Folder Link</label>
+                  <input
+                    type="url"
+                    value={editForm.driveLink}
+                    onChange={e => setEditForm({...editForm, driveLink: e.target.value})}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Link to your teaching resources folder</p>
                 </div>
 
                 <div>
