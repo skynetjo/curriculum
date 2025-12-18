@@ -18887,16 +18887,11 @@ function OrgChartDirectory({ teachers, currentUser }) {
       try {
         setLoading(true);
         const managersSnap = await db.collection('managers').where('status', '==', 'active').get();
-        const managersData = managersSnap.docs.map(doc => ({
-          id: doc.id, ...doc.data()
-        }));
+        const managersData = managersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setManagers(managersData);
 
         const apcsSnap = await db.collection('apcs').get();
-        const apcsData = apcsSnap.docs.map(doc => ({
-          id: doc.id, ...doc.data(),
-          memberRole: 'APC'
-        }));
+        const apcsData = apcsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setApcs(apcsData);
       } catch (error) {
         console.error('Error:', error);
@@ -18907,332 +18902,138 @@ function OrgChartDirectory({ teachers, currentUser }) {
     fetchData();
   }, []);
 
-  // Build proper hierarchy: PH > PM > APM > Schools > Teachers
+  // Build hierarchy matching the reference image
   const hierarchy = useMemo(() => {
-    // Get Program Heads (top level)
-    const programHeads = managers.filter(m => m.role === 'aph');
+    // Get PM (Program Manager)
+    const pm = managers.find(m => m.role === 'pm');
     
-    // Get Program Managers
-    const programManagers = managers.filter(m => m.role === 'pm');
+    // Get APMs under this PM
+    const apms = managers.filter(m => m.role === 'apm' && m.reportsTo === pm?.id);
     
-    // Get APMs
-    const apms = managers.filter(m => m.role === 'apm');
-
-    // Build hierarchy tree
-    const tree = programHeads.map(ph => {
-      // Find PMs who report to this PH
-      const pmsUnderPH = programManagers.filter(pm => pm.reportsTo === ph.id);
-      
-      return {
-        ...ph,
-        type: 'ph',
-        children: pmsUnderPH.map(pm => {
-          // Find APMs who report to this PM
-          const apmsUnderPM = apms.filter(apm => apm.reportsTo === pm.id);
-          
-          // Get schools directly under this PM (not under any APM)
-          const pmSchools = (pm.directSchools || []).filter(school => {
-            // Check if this school is under any APM
-            const isUnderAPM = apmsUnderPM.some(apm => apm.directSchools?.includes(school));
-            return !isUnderAPM;
-          });
-          
-          return {
-            ...pm,
-            type: 'pm',
-            directSchools: pmSchools,
-            children: apmsUnderPM.map(apm => ({
-              ...apm,
-              type: 'apm',
-              schoolsData: (apm.directSchools || []).map(school => ({
-                name: school,
-                teachers: teachers.filter(t => 
-                  t.school === school && 
-                  !t.isArchived && 
-                  t.role !== 'apc'
-                ),
-                apc: apcs.find(a => a.school === school || a.schools?.includes(school))
-              }))
-            })),
-            schoolsData: pmSchools.map(school => ({
-              name: school,
-              teachers: teachers.filter(t => 
-                t.school === school && 
-                !t.isArchived && 
-                t.role !== 'apc'
-              ),
-              apc: apcs.find(a => a.school === school || a.schools?.includes(school))
-            }))
-          };
-        })
-      };
+    // Get all schools managed by APMs
+    const apmSchools = new Set();
+    apms.forEach(apm => {
+      (apm.directSchools || []).forEach(s => apmSchools.add(s));
     });
-
-    // Also handle PMs without a PH (orphan PMs)
-    const orphanPMs = programManagers.filter(pm => !pm.reportsTo || !programHeads.find(ph => ph.id === pm.reportsTo));
     
-    // Handle APMs without a PM
-    const orphanAPMs = apms.filter(apm => !apm.reportsTo || !programManagers.find(pm => pm.id === apm.reportsTo));
+    // Schools directly under PM (not under any APM)
+    const pmDirectSchools = (pm?.directSchools || []).filter(s => !apmSchools.has(s));
+    
+    // Build school data with teachers and APCs
+    const getSchoolData = (schoolName) => {
+      const schoolTeachers = teachers.filter(t => 
+        t.school === schoolName && 
+        !t.isArchived && 
+        t.role !== 'apc' && 
+        !t.isAPC
+      );
+      const schoolApc = apcs.find(a => a.school === schoolName || a.schools?.includes(schoolName));
+      return { name: schoolName, teachers: schoolTeachers, apc: schoolApc };
+    };
 
-    return { tree, orphanPMs, orphanAPMs };
+    return { 
+      pm, 
+      pmDirectSchools: pmDirectSchools.map(getSchoolData),
+      apms: apms.map(apm => ({
+        ...apm,
+        schools: (apm.directSchools || []).map(getSchoolData)
+      }))
+    };
   }, [managers, apcs, teachers]);
 
   const getSubjectColor = (subject) => ({
-    'Physics': '#3b82f6', 'Chemistry': '#8b5cf6', 
-    'Mathematics': '#ef4444', 'Maths': '#ef4444', 'Biology': '#10b981'
-  }[subject] || '#6b7280');
-
-  const getRoleLabel = (role) => ({
-    'aph': 'Program Head',
-    'ph': 'Program Head',
-    'pm': 'Program Manager',
-    'apm': 'Associate PM'
-  }[role] || role);
-
-  const getRoleColor = (type) => ({
-    'ph': { bg: 'linear-gradient(135deg, #7c3aed, #6d28d9)', border: '#7c3aed' },
-    'pm': { bg: 'linear-gradient(135deg, #ec4899, #be185d)', border: '#ec4899' },
-    'apm': { bg: 'linear-gradient(135deg, #f97316, #ea580c)', border: '#f97316' }
-  }[type] || { bg: 'linear-gradient(135deg, #6b7280, #4b5563)', border: '#6b7280' });
+    'Physics': '#6b9bd1',
+    'Chemistry': '#b8a9c9', 
+    'Mathematics': '#e07b7b',
+    'Maths': '#e07b7b',
+    'Biology': '#7bc8a8',
+    'Bio': '#7bc8a8'
+  }[subject] || '#d4a88e');
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-pink-500 border-t-transparent mx-auto"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-pink-500 border-t-transparent"></div>
       </div>
     );
   }
 
-  // Render a school with its teachers
-  const renderSchool = (school, depth = 0) => (
-    <div key={school.name} className="school-section">
-      <div className="connector-down" style={{ height: '25px' }}></div>
-      <div className="node-card school-card">
-        🏫 {school.name}
-      </div>
-      
-      {/* Teachers under school */}
-      {school.teachers.length > 0 && (
-        <div className="teachers-wrapper">
-          <div className="connector-down" style={{ height: '20px' }}></div>
-          <div className="teachers-row">
-            {school.teachers.map((teacher, tidx) => (
-              <div key={teacher.afid || tidx} className="teacher-box">
-                <div 
-                  className={`node-card teacher-card ${teacher.name?.toLowerCase() === 'vacant' ? 'vacant-card' : ''}`}
-                  onClick={() => setSelectedMember({...teacher, type: 'teacher'})}
-                >
-                  {teacher.name}
-                </div>
-                <div className="subject-tag" style={{ background: getSubjectColor(teacher.subject) }}>
-                  {teacher.subject}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  // Render APM with their schools
-  const renderAPM = (apm) => (
-    <div key={apm.id} className="apm-branch">
-      <div className="connector-down" style={{ height: '30px' }}></div>
-      <div 
-        className="node-card apm-card"
-        onClick={() => setSelectedMember({...apm, type: 'apm'})}
-        style={{ background: getRoleColor('apm').bg }}
-      >
-        {apm.name}
-      </div>
-      <div className="role-tag" style={{ background: '#f97316' }}>APM</div>
-      
-      {/* Schools under APM */}
-      {apm.schoolsData?.length > 0 && (
-        <div className="schools-container">
-          {apm.schoolsData.map(school => renderSchool(school))}
-        </div>
-      )}
-    </div>
-  );
-
-  // Render PM with APMs and direct schools
-  const renderPM = (pm) => (
-    <div key={pm.id} className="pm-branch">
-      <div className="connector-down" style={{ height: '35px' }}></div>
-      <div 
-        className="node-card pm-card"
-        onClick={() => setSelectedMember({...pm, type: 'pm'})}
-        style={{ background: getRoleColor('pm').bg }}
-      >
-        {pm.name}
-      </div>
-      <div className="role-tag" style={{ background: '#ec4899' }}>Program Manager</div>
-      
-      {/* APMs under PM */}
-      {pm.children?.length > 0 && (
-        <div className="apms-row">
-          {pm.children.map(apm => renderAPM(apm))}
-        </div>
-      )}
-      
-      {/* Direct schools under PM (no APM) */}
-      {pm.schoolsData?.length > 0 && (
-        <div className="schools-container direct-schools">
-          {pm.schoolsData.map(school => renderSchool(school))}
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <div className="space-y-6">
       <style>{`
-        .org-chart-container {
-          background: linear-gradient(180deg, #fef7f7 0%, #fdf4ff 50%, #f0fdf4 100%);
-          border-radius: 24px;
+        .org-container {
+          background: linear-gradient(180deg, #f8f5f5 0%, #f5f0f5 100%);
+          border-radius: 20px;
           padding: 40px 20px;
           overflow-x: auto;
-          min-height: 400px;
         }
         
-        .hierarchy-tree {
+        .tree-wrapper {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 10px;
+          min-width: fit-content;
         }
         
-        .node-card {
-          padding: 12px 20px;
-          border-radius: 12px;
-          text-align: center;
-          font-weight: 600;
-          font-size: 14px;
-          cursor: pointer;
-          transition: all 0.2s;
-          min-width: 120px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .node-card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-        
-        .ph-card {
-          color: white;
+        .pm-box {
+          background: #d4c4e0;
+          border: 3px solid #b8a0c8;
+          border-radius: 8px;
+          padding: 12px 40px;
+          font-weight: 700;
           font-size: 16px;
-          padding: 14px 24px;
+          text-align: center;
+          margin-bottom: 10px;
+          cursor: pointer;
         }
         
-        .pm-card {
-          color: white;
-        }
+        .pm-box:hover { transform: scale(1.02); }
         
-        .apm-card {
-          color: white;
-        }
-        
-        .school-card {
-          background: linear-gradient(135deg, #fef08a, #fde047);
-          color: #713f12;
-          border: 2px solid #eab308;
-        }
-        
-        .teacher-card {
-          background: linear-gradient(135deg, #bfdbfe, #93c5fd);
-          color: #1e40af;
-          border: 2px solid #60a5fa;
-          font-size: 12px;
-          padding: 8px 12px;
-          min-width: 100px;
-        }
-        
-        .vacant-card {
-          background: linear-gradient(135deg, #fca5a5, #f87171) !important;
-          color: white !important;
-          border-color: #ef4444 !important;
-        }
-        
-        .role-tag {
-          margin-top: 6px;
-          padding: 4px 12px;
-          border-radius: 20px;
-          color: white;
-          font-size: 11px;
-          font-weight: 600;
-          display: inline-block;
-        }
-        
-        .subject-tag {
-          margin-top: 4px;
-          padding: 3px 10px;
-          border-radius: 6px;
-          color: white;
-          font-size: 10px;
-          font-weight: 600;
-        }
-        
-        .connector-down {
-          width: 2px;
-          background: #e879a0;
+        .vertical-line {
+          width: 3px;
+          height: 30px;
+          background: #c8a0b0;
           margin: 0 auto;
         }
         
-        .pms-row {
-          display: flex;
-          justify-content: center;
-          gap: 60px;
-          flex-wrap: wrap;
-          margin-top: 10px;
+        .horizontal-connector {
+          height: 3px;
+          background: #c8a0b0;
+          position: relative;
         }
         
-        .pm-branch {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-        
-        .apms-row {
-          display: flex;
-          justify-content: center;
-          gap: 40px;
-          flex-wrap: wrap;
-          margin-top: 10px;
-        }
-        
-        .apm-branch {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-        
-        .schools-container {
+        .schools-row {
           display: flex;
           justify-content: center;
           gap: 30px;
-          flex-wrap: wrap;
-          margin-top: 10px;
+          position: relative;
         }
         
-        .school-section {
+        .school-branch {
           display: flex;
           flex-direction: column;
           align-items: center;
         }
         
-        .teachers-wrapper {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
+        .school-box {
+          background: #d4c4e0;
+          border: 3px solid #b8a0c8;
+          border-radius: 8px;
+          padding: 10px 20px;
+          font-weight: 600;
+          font-size: 14px;
+          text-align: center;
+          min-width: 120px;
+          cursor: pointer;
         }
+        
+        .school-box:hover { transform: scale(1.02); }
         
         .teachers-row {
           display: flex;
           justify-content: center;
-          gap: 10px;
+          gap: 8px;
+          margin-top: 10px;
           flex-wrap: wrap;
           max-width: 350px;
         }
@@ -19243,17 +19044,129 @@ function OrgChartDirectory({ teachers, currentUser }) {
           align-items: center;
         }
         
-        .ph-section {
+        .teacher-name {
+          background: #d4c8b8;
+          border: 2px solid #c4b8a8;
+          border-radius: 6px;
+          padding: 8px 12px;
+          font-weight: 600;
+          font-size: 12px;
+          text-align: center;
+          min-width: 80px;
+          cursor: pointer;
+        }
+        
+        .teacher-name:hover { transform: scale(1.05); }
+        
+        .teacher-name.vacant {
+          background: linear-gradient(135deg, #e74c3c, #c0392b);
+          color: white;
+          border-color: #a93226;
+        }
+        
+        .subject-tag {
+          margin-top: 4px;
+          padding: 4px 10px;
+          border-radius: 4px;
+          color: white;
+          font-size: 11px;
+          font-weight: 600;
+          text-align: center;
+        }
+        
+        .apc-box {
+          background: #ddc8b8;
+          border: 2px solid #c8b8a8;
+          border-radius: 6px;
+          padding: 8px 12px;
+          font-weight: 600;
+          font-size: 12px;
+          text-align: center;
+          cursor: pointer;
+        }
+        
+        .apc-tag {
+          background: #d4a88e;
+          color: white;
+          padding: 3px 10px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: 600;
+          margin-top: 4px;
+        }
+        
+        .apm-box {
+          background: #ddc8c0;
+          border: 3px solid #c8b0a8;
+          border-radius: 8px;
+          padding: 10px 20px;
+          font-weight: 600;
+          font-size: 13px;
+          text-align: center;
+          cursor: pointer;
+        }
+        
+        .apm-box:hover { transform: scale(1.02); }
+        
+        .apm-section {
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin-bottom: 30px;
+          margin-top: 20px;
+        }
+        
+        .apm-schools-row {
+          display: flex;
+          justify-content: center;
+          gap: 30px;
+          margin-top: 15px;
+        }
+        
+        .connector-down {
+          width: 3px;
+          height: 25px;
+          background: #c8a0b0;
+          margin: 0 auto;
+        }
+        
+        .connector-t {
+          position: relative;
+          height: 25px;
+          display: flex;
+          justify-content: center;
+        }
+        
+        .connector-t::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 50%;
+          width: 3px;
+          height: 15px;
+          background: #c8a0b0;
+          transform: translateX(-50%);
+        }
+        
+        .connector-t::after {
+          content: '';
+          position: absolute;
+          top: 15px;
+          left: 0;
+          right: 0;
+          height: 3px;
+          background: #c8a0b0;
+        }
+        
+        .branch-down {
+          width: 3px;
+          height: 10px;
+          background: #c8a0b0;
+          margin: 0 auto;
         }
         
         @media (max-width: 768px) {
-          .pms-row, .apms-row, .schools-container { gap: 20px; }
-          .node-card { padding: 8px 12px; font-size: 11px; min-width: 80px; }
-          .teachers-row { max-width: 280px; }
+          .schools-row { flex-direction: column; gap: 20px; }
+          .apm-schools-row { flex-direction: column; gap: 20px; }
         }
       `}</style>
 
@@ -19270,173 +19183,140 @@ function OrgChartDirectory({ teachers, currentUser }) {
       </div>
 
       {/* Org Chart */}
-      <div className="org-chart-container">
-        <div className="hierarchy-tree">
-          {/* Program Heads */}
-          {hierarchy.tree.map(ph => (
-            <div key={ph.id} className="ph-section" style={{ width: '100%' }}>
-              {/* PH Card */}
-              <div 
-                className="node-card ph-card"
-                onClick={() => setSelectedMember({...ph, type: 'ph'})}
-                style={{ background: getRoleColor('ph').bg }}
-              >
-                {ph.name}
+      <div className="org-container">
+        <div className="tree-wrapper">
+          
+          {/* PM at top */}
+          {hierarchy.pm && (
+            <>
+              <div className="pm-box" onClick={() => setSelectedMember({...hierarchy.pm, memberType: 'pm'})}>
+                {hierarchy.pm.name}
               </div>
-              <div className="role-tag" style={{ background: '#7c3aed' }}>Program Head</div>
+              <div className="vertical-line"></div>
+            </>
+          )}
+
+          {/* Horizontal connector for direct schools */}
+          {hierarchy.pmDirectSchools.length > 0 && (
+            <>
+              <div className="connector-t" style={{ width: `${Math.min(hierarchy.pmDirectSchools.length * 180, 800)}px` }}></div>
               
-              {/* PMs under this PH */}
-              {ph.children?.length > 0 && (
-                <div className="pms-row">
-                  {ph.children.map(pm => renderPM(pm))}
-                </div>
+              {/* Direct Schools Row */}
+              <div className="schools-row">
+                {hierarchy.pmDirectSchools.map((school, idx) => (
+                  <div key={idx} className="school-branch">
+                    <div className="branch-down"></div>
+                    <div className="school-box" onClick={() => setSelectedMember({name: school.name, memberType: 'school'})}>
+                      {school.name}
+                    </div>
+                    
+                    {/* APC if exists */}
+                    {school.apc && (
+                      <div className="flex flex-col items-center mt-2">
+                        <div className="apc-box" onClick={() => setSelectedMember({...school.apc, memberType: 'apc'})}>
+                          {school.apc.name}
+                        </div>
+                        <div className="apc-tag">APC</div>
+                      </div>
+                    )}
+                    
+                    {/* Teachers */}
+                    {school.teachers.length > 0 && (
+                      <>
+                        <div className="connector-down"></div>
+                        <div className="teachers-row">
+                          {school.teachers.map((teacher, tidx) => (
+                            <div key={tidx} className="teacher-box">
+                              <div 
+                                className={`teacher-name ${teacher.name?.toLowerCase() === 'vacant' ? 'vacant' : ''}`}
+                                onClick={() => setSelectedMember({...teacher, memberType: 'teacher'})}
+                              >
+                                {teacher.name}
+                              </div>
+                              <div className="subject-tag" style={{ background: getSubjectColor(teacher.subject) }}>
+                                {teacher.subject}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* APM Sections */}
+          {hierarchy.apms.map((apm, apmIdx) => (
+            <div key={apmIdx} className="apm-section">
+              <div className="vertical-line"></div>
+              <div className="apm-box" onClick={() => setSelectedMember({...apm, memberType: 'apm'})}>
+                {apm.name}
+                <div className="text-xs text-gray-600 mt-1">(APM)</div>
+              </div>
+              
+              {/* APM's Schools */}
+              {apm.schools.length > 0 && (
+                <>
+                  <div className="connector-t" style={{ width: `${Math.min(apm.schools.length * 200, 500)}px` }}></div>
+                  <div className="apm-schools-row">
+                    {apm.schools.map((school, sidx) => (
+                      <div key={sidx} className="school-branch">
+                        <div className="branch-down"></div>
+                        <div className="school-box" onClick={() => setSelectedMember({name: school.name, memberType: 'school'})}>
+                          {school.name}
+                        </div>
+                        
+                        {/* Teachers */}
+                        {school.teachers.length > 0 && (
+                          <>
+                            <div className="connector-down"></div>
+                            <div className="teachers-row">
+                              {school.teachers.map((teacher, tidx) => (
+                                <div key={tidx} className="teacher-box">
+                                  <div 
+                                    className={`teacher-name ${teacher.name?.toLowerCase() === 'vacant' ? 'vacant' : ''}`}
+                                    onClick={() => setSelectedMember({...teacher, memberType: 'teacher'})}
+                                  >
+                                    {teacher.name}
+                                  </div>
+                                  <div className="subject-tag" style={{ background: getSubjectColor(teacher.subject) }}>
+                                    {teacher.subject}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           ))}
 
-          {/* Orphan PMs (no PH assigned) */}
-          {hierarchy.orphanPMs.length > 0 && (
-            <div className="mt-8 pt-8 border-t-2 border-dashed border-gray-300 w-full">
-              <p className="text-center text-gray-500 mb-4 text-sm">⚠️ Managers without Program Head assignment:</p>
-              <div className="pms-row">
-                {hierarchy.orphanPMs.map(pm => {
-                  const apmsUnderPM = managers.filter(m => m.role === 'apm' && m.reportsTo === pm.id);
-                  return (
-                    <div key={pm.id} className="pm-branch">
-                      <div 
-                        className="node-card pm-card"
-                        onClick={() => setSelectedMember({...pm, type: 'pm'})}
-                        style={{ background: getRoleColor('pm').bg }}
-                      >
-                        {pm.name}
-                      </div>
-                      <div className="role-tag" style={{ background: '#ec4899' }}>Program Manager</div>
-                      
-                      {/* APMs */}
-                      {apmsUnderPM.length > 0 && (
-                        <div className="apms-row">
-                          {apmsUnderPM.map(apm => {
-                            const apmSchools = (apm.directSchools || []).map(school => ({
-                              name: school,
-                              teachers: teachers.filter(t => t.school === school && !t.isArchived && t.role !== 'apc')
-                            }));
-                            return (
-                              <div key={apm.id} className="apm-branch">
-                                <div className="connector-down" style={{ height: '30px' }}></div>
-                                <div 
-                                  className="node-card apm-card"
-                                  onClick={() => setSelectedMember({...apm, type: 'apm'})}
-                                  style={{ background: getRoleColor('apm').bg }}
-                                >
-                                  {apm.name}
-                                </div>
-                                <div className="role-tag" style={{ background: '#f97316' }}>APM</div>
-                                
-                                {apmSchools.length > 0 && (
-                                  <div className="schools-container">
-                                    {apmSchools.map(school => renderSchool(school))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                      
-                      {/* Direct schools */}
-                      {(pm.directSchools || []).length > 0 && (
-                        <div className="schools-container">
-                          {(pm.directSchools || []).map(schoolName => {
-                            const school = {
-                              name: schoolName,
-                              teachers: teachers.filter(t => t.school === schoolName && !t.isArchived && t.role !== 'apc')
-                            };
-                            return renderSchool(school);
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* If no hierarchy at all */}
-          {hierarchy.tree.length === 0 && hierarchy.orphanPMs.length === 0 && (
+          {/* No data message */}
+          {!hierarchy.pm && hierarchy.apms.length === 0 && (
             <div className="text-center py-12 text-gray-500">
               <div className="text-6xl mb-4">🏗️</div>
               <p className="text-lg font-semibold">No organization structure found</p>
-              <p className="text-sm mt-2">Add Program Heads and Managers in the Admin section to see the hierarchy</p>
+              <p className="text-sm mt-2">Add managers in the Admin section to see the hierarchy</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="bg-white/90 backdrop-blur rounded-2xl p-5 shadow-xl border border-pink-100">
-        <h3 className="font-bold mb-4 text-gray-700 flex items-center gap-2">
-          <span>🎨</span> Color Guide
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div className="flex items-center gap-2 bg-purple-50 p-2 rounded-lg">
-            <div className="w-6 h-6 rounded-lg" style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}></div>
-            <span className="text-xs font-medium">Program Head</span>
-          </div>
-          <div className="flex items-center gap-2 bg-pink-50 p-2 rounded-lg">
-            <div className="w-6 h-6 rounded-lg" style={{ background: 'linear-gradient(135deg, #ec4899, #be185d)' }}></div>
-            <span className="text-xs font-medium">Program Manager</span>
-          </div>
-          <div className="flex items-center gap-2 bg-orange-50 p-2 rounded-lg">
-            <div className="w-6 h-6 rounded-lg" style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}></div>
-            <span className="text-xs font-medium">APM</span>
-          </div>
-          <div className="flex items-center gap-2 bg-yellow-50 p-2 rounded-lg">
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-r from-yellow-200 to-yellow-300 border-2 border-yellow-500"></div>
-            <span className="text-xs font-medium">School</span>
-          </div>
-          <div className="flex items-center gap-2 bg-blue-50 p-2 rounded-lg">
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-r from-blue-200 to-blue-300 border-2 border-blue-400"></div>
-            <span className="text-xs font-medium">Teacher</span>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-gray-100">
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded" style={{ background: '#3b82f6' }}></div>
-            <span className="text-xs">Physics</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded" style={{ background: '#8b5cf6' }}></div>
-            <span className="text-xs">Chemistry</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded" style={{ background: '#ef4444' }}></div>
-            <span className="text-xs">Maths</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded" style={{ background: '#10b981' }}></div>
-            <span className="text-xs">Biology</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Member Modal */}
+      {/* Member Details Modal */}
       {selectedMember && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedMember(null)}>
-          <div className="bg-white rounded-3xl max-w-md w-full max-h-[85vh] overflow-y-auto shadow-2xl animate-modalIn" onClick={e => e.stopPropagation()}>
-            <style>{`
-              @keyframes modalIn {
-                from { opacity: 0; transform: scale(0.9) translateY(20px); }
-                to { opacity: 1; transform: scale(1) translateY(0); }
-              }
-              .animate-modalIn { animation: modalIn 0.3s ease-out; }
-            `}</style>
-            
-            <div className="p-6 text-white relative rounded-t-3xl" style={{ 
-              background: selectedMember.type === 'ph' ? 'linear-gradient(135deg, #7c3aed, #6d28d9)' :
-                         selectedMember.type === 'pm' ? 'linear-gradient(135deg, #ec4899, #be185d)' :
-                         selectedMember.type === 'apm' ? 'linear-gradient(135deg, #f97316, #ea580c)' :
-                         selectedMember.type === 'apc' ? 'linear-gradient(135deg, #14b8a6, #0d9488)' :
+          <div className="bg-white rounded-3xl max-w-md w-full max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="p-6 text-white rounded-t-3xl" style={{ 
+              background: selectedMember.memberType === 'pm' ? 'linear-gradient(135deg, #b8a0c8, #9080a8)' :
+                         selectedMember.memberType === 'apm' ? 'linear-gradient(135deg, #ddc8c0, #c8a8a0)' :
+                         selectedMember.memberType === 'apc' ? 'linear-gradient(135deg, #d4a88e, #b88868)' :
+                         selectedMember.memberType === 'school' ? 'linear-gradient(135deg, #d4c4e0, #b8a0c8)' :
                          `linear-gradient(135deg, ${getSubjectColor(selectedMember.subject)}, ${getSubjectColor(selectedMember.subject)}99)`
             }}>
               <button onClick={() => setSelectedMember(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">✕</button>
@@ -19445,18 +19325,24 @@ function OrgChartDirectory({ teachers, currentUser }) {
                   <img src={selectedMember.profilePhoto} alt="" className="w-20 h-20 rounded-2xl object-cover border-4 border-white/30" />
                 ) : (
                   <div className="w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center text-4xl font-bold">
-                    {selectedMember.name?.charAt(0)}
+                    {selectedMember.memberType === 'school' ? '🏫' : selectedMember.name?.charAt(0)}
                   </div>
                 )}
                 <div>
                   <h3 className="text-2xl font-bold">{selectedMember.name}</h3>
-                  <p className="opacity-90">{getRoleLabel(selectedMember.role) || selectedMember.subject}</p>
+                  <p className="opacity-90">
+                    {selectedMember.memberType === 'pm' ? 'Program Manager' :
+                     selectedMember.memberType === 'apm' ? 'Associate Program Manager' :
+                     selectedMember.memberType === 'apc' ? 'Academic Program Coordinator' :
+                     selectedMember.memberType === 'school' ? 'School' :
+                     selectedMember.subject}
+                  </p>
                 </div>
               </div>
             </div>
 
             <div className="p-5 space-y-3">
-              {selectedMember.school && (
+              {selectedMember.school && selectedMember.memberType !== 'school' && (
                 <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl">
                   <span className="text-xl">🏫</span>
                   <div><div className="text-xs text-gray-500">School</div><div className="font-semibold">{selectedMember.school}</div></div>
@@ -19465,46 +19351,13 @@ function OrgChartDirectory({ teachers, currentUser }) {
               {selectedMember.directSchools?.length > 0 && (
                 <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl">
                   <span className="text-xl">🏫</span>
-                  <div><div className="text-xs text-gray-500">Manages Schools</div><div className="font-semibold">{selectedMember.directSchools.join(', ')}</div></div>
-                </div>
-              )}
-              {selectedMember.subject && (
-                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl">
-                  <span className="text-xl">📚</span>
-                  <div><div className="text-xs text-gray-500">Subject</div><div className="font-semibold">{selectedMember.subject}</div></div>
-                </div>
-              )}
-              {selectedMember.qualification && (
-                <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">
-                  <span className="text-xl">🎓</span>
-                  <div><div className="text-xs text-gray-500">Qualification</div><div className="font-semibold">{selectedMember.qualification}</div></div>
-                </div>
-              )}
-              {selectedMember.experience && (
-                <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl">
-                  <span className="text-xl">💼</span>
-                  <div><div className="text-xs text-gray-500">Experience</div><div className="font-semibold">{selectedMember.experience}</div></div>
-                </div>
-              )}
-              {selectedMember.bio && (
-                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
-                  <span className="text-xl">📝</span>
-                  <div><div className="text-xs text-gray-500">About</div><div className="font-semibold text-sm">{selectedMember.bio}</div></div>
-                </div>
-              )}
-              {selectedMember.joiningDate && (
-                <div className="flex items-center gap-3 p-3 bg-teal-50 rounded-xl">
-                  <span className="text-xl">📅</span>
-                  <div>
-                    <div className="text-xs text-gray-500">Joined Avanti</div>
-                    <div className="font-semibold">{new Date(selectedMember.joiningDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-                  </div>
+                  <div><div className="text-xs text-gray-500">Manages</div><div className="font-semibold">{selectedMember.directSchools.join(', ')}</div></div>
                 </div>
               )}
               {selectedMember.email && (
                 <div className="flex items-center gap-3 p-3 bg-indigo-50 rounded-xl">
                   <span className="text-xl">📧</span>
-                  <div><div className="text-xs text-gray-500">Email</div><a href={`mailto:${selectedMember.email}`} className="font-semibold text-blue-600 hover:underline break-all">{selectedMember.email}</a></div>
+                  <div><div className="text-xs text-gray-500">Email</div><a href={`mailto:${selectedMember.email}`} className="font-semibold text-blue-600 hover:underline">{selectedMember.email}</a></div>
                 </div>
               )}
               {selectedMember.phone && (
@@ -19525,21 +19378,23 @@ function OrgChartDirectory({ teachers, currentUser }) {
                   <div><div className="text-xs text-gray-500">Birthday</div><div className="font-semibold">{new Date(selectedMember.dateOfBirth).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}</div></div>
                 </div>
               )}
-              {selectedMember.driveLink && (
-                <div className="flex items-center gap-3 p-3 bg-sky-50 rounded-xl">
-                  <span className="text-xl">📁</span>
-                  <div><div className="text-xs text-gray-500">Drive</div><a href={selectedMember.driveLink} target="_blank" className="font-semibold text-blue-600 hover:underline">Open Folder →</a></div>
+              {selectedMember.joiningDate && (
+                <div className="flex items-center gap-3 p-3 bg-teal-50 rounded-xl">
+                  <span className="text-xl">📅</span>
+                  <div><div className="text-xs text-gray-500">Joined</div><div className="font-semibold">{new Date(selectedMember.joiningDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div></div>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3 pt-3">
-                {selectedMember.phone && (
-                  <a href={`tel:${selectedMember.phone}`} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg transition-all">📱 Call</a>
-                )}
-                {selectedMember.whatsapp && (
-                  <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" className="bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg transition-all">💬 WhatsApp</a>
-                )}
-              </div>
+              {(selectedMember.phone || selectedMember.whatsapp) && (
+                <div className="grid grid-cols-2 gap-3 pt-3">
+                  {selectedMember.phone && (
+                    <a href={`tel:${selectedMember.phone}`} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg">📱 Call</a>
+                  )}
+                  {selectedMember.whatsapp && (
+                    <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" className="bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg">💬 WhatsApp</a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -19547,6 +19402,8 @@ function OrgChartDirectory({ teachers, currentUser }) {
     </div>
   );
 }
+
+
 
 
 // ========================================
@@ -25916,6 +25773,17 @@ const NotificationManager = {
         // Initialize notification sound
         this.initSound();
         
+        // Resume audio context on first user interaction
+        const resumeAudio = () => {
+            if (this.audioContext && this.audioContext.state === 'suspended') {
+                this.audioContext.resume().then(() => {
+                    console.log('[NotificationManager] AudioContext resumed');
+                });
+            }
+        };
+        document.addEventListener('click', resumeAudio, { once: true });
+        document.addEventListener('touchstart', resumeAudio, { once: true });
+        
         // Get user ID
         this.getUserId();
         
@@ -25940,8 +25808,20 @@ const NotificationManager = {
     
     initSound: function() {
         try {
-            this.notificationSound = new Audio('/notification.mp3');
+            // Use a simple beep sound (base64 encoded)
+            // This is a short notification beep that works without external files
+            const beepData = 'data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU' + 
+              Array(300).fill('A').join('') + 
+              Array(300).fill('/').join('') + 
+              Array(200).fill('A').join('');
+            
+            // Create audio context for better browser support
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.notificationSound = new Audio(beepData);
             this.notificationSound.volume = 0.5;
+            
+            // Also create an oscillator-based sound as backup
+            this.useOscillator = true;
             console.log('[NotificationManager] Sound initialized');
         } catch (e) {
             console.log('[NotificationManager] Sound init error:', e);
@@ -25949,15 +25829,28 @@ const NotificationManager = {
     },
     
     playSound: function() {
-        if (this.notificationSound) {
-            try {
-                this.notificationSound.currentTime = 0;
-                this.notificationSound.play().catch(e => {
-                    console.log('[NotificationManager] Sound play error:', e);
-                });
-            } catch (e) {
-                console.log('[NotificationManager] Sound error:', e);
+        try {
+            // Try oscillator beep first (more reliable)
+            if (this.audioContext) {
+                const oscillator = this.audioContext.createOscillator();
+                const gainNode = this.audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(this.audioContext.destination);
+                
+                oscillator.frequency.value = 800; // Hz
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.3);
+                
+                oscillator.start(this.audioContext.currentTime);
+                oscillator.stop(this.audioContext.currentTime + 0.3);
+                
+                console.log('[NotificationManager] Beep played!');
             }
+        } catch (e) {
+            console.log('[NotificationManager] Sound error:', e);
         }
     },
     
