@@ -18774,105 +18774,144 @@ function TeacherDirectory({ teachers, currentUser }) {
 // TEAM HIERARCHY - ORGANIZATION VIEW
 // ========================================
 function OrgChartDirectory({ teachers, currentUser }) {
-  const [allMembers, setAllMembers] = useState([]);
+  const [managers, setManagers] = useState([]);
+  const [apcs, setApcs] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch all team members (managers, heads, APCs, teachers)
+  // Fetch managers and APCs
   useEffect(() => {
-    const fetchAllMembers = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         
         // Fetch managers
         const managersSnap = await db.collection('managers').get();
-        const managers = managersSnap.docs.map(doc => ({
+        const managersData = managersSnap.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          role: doc.data().position || 'Manager',
-          level: doc.data().position?.includes('Program Head') ? 1 : 
-                 doc.data().position?.includes('Program Manager') ? 2 : 
-                 doc.data().position?.includes('Associate') ? 3 : 2
+          role: doc.data().position || 'Manager'
         }));
+        setManagers(managersData);
 
         // Fetch APCs
         const apcsSnap = await db.collection('apcs').get();
-        const apcs = apcsSnap.docs.map(doc => ({
+        const apcsData = apcsSnap.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          role: 'Associate Program Coordinator',
-          level: 4
+          role: 'APC'
         }));
+        setApcs(apcsData);
 
-        // Convert teachers array to include level
-        const teachersList = teachers.map(t => ({
-          ...t,
-          role: 'Teacher',
-          level: 5
-        }));
-
-        // Combine all
-        const combined = [...managers, ...apcs, ...teachersList];
-        setAllMembers(combined);
       } catch (error) {
-        console.error('Error fetching team members:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAllMembers();
-  }, [teachers]);
+    fetchData();
+  }, []);
 
-  // Group members by level/role
+  // Build hierarchy structure
   const hierarchy = useMemo(() => {
-    const levels = {
-      1: { title: 'Program Heads', color: '#6366f1', members: [] },
-      2: { title: 'Program Managers', color: '#8b5cf6', members: [] },
-      3: { title: 'Associate Program Managers', color: '#ec4899', members: [] },
-      4: { title: 'Associate Program Coordinators', color: '#f97316', members: [] },
-      5: { title: 'Teachers', color: '#f59e0b', members: [] }
-    };
+    // Get unique schools from teachers
+    const schoolsSet = new Set(teachers.map(t => t.school).filter(Boolean));
+    const schools = Array.from(schoolsSet);
 
-    allMembers.forEach(member => {
-      if (levels[member.level]) {
-        levels[member.level].members.push(member);
-      }
+    // Find Program Manager (top level)
+    const programManager = managers.find(m => 
+      m.position?.includes('Program Manager') && !m.position?.includes('Associate')
+    );
+
+    // Find APMs (Associate Program Managers)
+    const apms = managers.filter(m => 
+      m.position?.includes('Associate Program Manager') || m.position?.includes('APM')
+    );
+
+    // Build school data with their APCs and teachers
+    const schoolData = schools.map(school => {
+      // Find APC for this school
+      const schoolApc = apcs.find(a => a.school === school || a.schools?.includes(school));
+      
+      // Find APM for this school
+      const schoolApm = apms.find(a => a.schools?.includes(school));
+      
+      // Get teachers for this school
+      const schoolTeachers = teachers.filter(t => t.school === school && !t.isArchived);
+      
+      return {
+        name: school,
+        apc: schoolApc,
+        apm: schoolApm,
+        teachers: schoolTeachers
+      };
     });
 
-    return levels;
-  }, [allMembers]);
-
-  // Get level color
-  const getLevelColor = (level) => {
-    const colors = {
-      1: '#6366f1', // Indigo
-      2: '#8b5cf6', // Purple
-      3: '#ec4899', // Pink
-      4: '#f97316', // Orange
-      5: '#f59e0b'  // Amber
+    return {
+      programManager,
+      schools: schoolData
     };
-    return colors[level] || '#6b7280';
+  }, [managers, apcs, teachers]);
+
+  // Get subject color
+  const getSubjectColor = (subject) => {
+    const colors = {
+      'Physics': '#3b82f6',    // Blue
+      'Chemistry': '#8b5cf6',  // Purple
+      'Mathematics': '#ef4444', // Red
+      'Maths': '#ef4444',      // Red
+      'Biology': '#10b981'     // Green
+    };
+    return colors[subject] || '#6b7280';
   };
 
   // Person Card Component
-  const PersonCard = ({ member, color }) => (
-    <div 
-      onClick={() => setSelectedMember(member)}
-      className="org-card cursor-pointer transform hover:scale-105 transition-all duration-200"
-      style={{ '--card-color': color }}
-    >
-      <div className="org-card-avatar" style={{ background: color }}>
-        {member.profilePhoto ? (
-          <img src={member.profilePhoto} alt={member.name} className="w-full h-full object-cover rounded-lg" />
-        ) : (
-          <span className="text-white text-xl font-bold">{member.name?.charAt(0) || '?'}</span>
+  const PersonCard = ({ person, type = 'teacher', showSubject = true }) => {
+    const bgColor = type === 'manager' ? '#c4b5fd' : 
+                    type === 'school' ? '#fcd34d' :
+                    type === 'apm' ? '#fecaca' :
+                    type === 'apc' ? '#fed7aa' : 
+                    '#bfdbfe';
+    
+    const subjectColor = getSubjectColor(person.subject);
+    
+    return (
+      <div 
+        onClick={() => setSelectedMember({...person, type})}
+        className="org-node cursor-pointer hover:scale-105 transition-transform"
+      >
+        <div className="org-card" style={{ background: bgColor }}>
+          <div className="org-card-name">{person.name}</div>
+        </div>
+        {showSubject && person.subject && (
+          <div className="org-card-subject" style={{ background: subjectColor }}>
+            {person.subject}
+          </div>
+        )}
+        {type === 'apc' && (
+          <div className="org-card-subject" style={{ background: '#f97316' }}>
+            APC
+          </div>
+        )}
+        {type === 'apm' && (
+          <div className="org-card-subject" style={{ background: '#ec4899' }}>
+            APM
+          </div>
+        )}
+        {type === 'manager' && (
+          <div className="org-card-subject" style={{ background: '#7c3aed' }}>
+            {person.position || 'Program Manager'}
+          </div>
         )}
       </div>
-      <div className="org-card-info" style={{ borderColor: color }}>
-        <div className="org-card-name">{member.name}</div>
-        <div className="org-card-role" style={{ color: color }}>{member.role || member.position}</div>
-      </div>
+    );
+  };
+
+  // School Box Component
+  const SchoolBox = ({ name }) => (
+    <div className="school-box">
+      {name}
     </div>
   );
 
@@ -18890,202 +18929,327 @@ function OrgChartDirectory({ teachers, currentUser }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-4">
         <h2 className="text-3xl font-bold text-gray-800">🏛️ Directory</h2>
-        <p className="text-gray-600 mt-2">{allMembers.length} team members across all centers</p>
+        <p className="text-gray-600 mt-2">Organization Hierarchy</p>
       </div>
 
       {/* Org Chart Styles */}
       <style>{`
-        .org-chart-container {
-          background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
-          border-radius: 1.5rem;
-          padding: 3rem 2rem;
+        .org-chart {
+          background: #f8f4f0;
+          border-radius: 1rem;
+          padding: 2rem;
           overflow-x: auto;
+          min-height: 500px;
         }
         
-        .org-level {
+        .org-tree {
           display: flex;
-          justify-content: center;
-          flex-wrap: wrap;
-          gap: 1.5rem;
-          position: relative;
-          padding: 1rem 0;
-        }
-        
-        .org-level-wrapper {
-          position: relative;
-        }
-        
-        .org-level-wrapper:not(:last-child)::after {
-          content: '';
-          position: absolute;
-          left: 50%;
-          bottom: -20px;
-          width: 2px;
-          height: 40px;
-          background: rgba(255,255,255,0.3);
-        }
-        
-        .org-connector-line {
-          height: 40px;
-          display: flex;
-          justify-content: center;
+          flex-direction: column;
           align-items: center;
-          position: relative;
         }
         
-        .org-connector-line::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 50%;
-          width: 2px;
-          height: 20px;
-          background: rgba(255,255,255,0.3);
-        }
-        
-        .org-connector-line::after {
-          content: '';
-          position: absolute;
-          top: 20px;
-          left: 10%;
-          right: 10%;
-          height: 2px;
-          background: rgba(255,255,255,0.3);
+        .org-node {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          margin: 0 8px;
         }
         
         .org-card {
+          padding: 8px 16px;
+          border-radius: 8px;
+          border: 2px solid #e879a0;
+          text-align: center;
+          min-width: 100px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .org-card-name {
+          font-weight: 600;
+          font-size: 0.85rem;
+          color: #1f2937;
+        }
+        
+        .org-card-subject {
+          margin-top: 4px;
+          padding: 4px 12px;
+          border-radius: 4px;
+          color: white;
+          font-size: 0.75rem;
+          font-weight: 600;
+          text-align: center;
+        }
+        
+        .school-box {
+          background: #fcd34d;
+          padding: 10px 24px;
+          border-radius: 8px;
+          border: 2px solid #e879a0;
+          font-weight: 700;
+          font-size: 0.9rem;
+          color: #1f2937;
+          text-align: center;
+          min-width: 140px;
+        }
+        
+        .level-row {
+          display: flex;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 20px;
+          position: relative;
+          padding: 20px 0;
+        }
+        
+        .school-section {
           display: flex;
           flex-direction: column;
           align-items: center;
           position: relative;
+          margin: 0 10px;
         }
         
-        .org-card::before {
+        .school-section::before {
           content: '';
           position: absolute;
           top: -20px;
           left: 50%;
           width: 2px;
           height: 20px;
-          background: rgba(255,255,255,0.3);
+          background: #e879a0;
         }
         
-        .org-level:first-child .org-card::before {
-          display: none;
+        .connector-down {
+          width: 2px;
+          height: 30px;
+          background: #e879a0;
+          margin: 0 auto;
         }
         
-        .org-card-avatar {
-          width: 60px;
-          height: 60px;
-          border-radius: 12px;
+        .connector-horizontal {
+          height: 2px;
+          background: #e879a0;
+          position: absolute;
+          top: 0;
+        }
+        
+        .teachers-row {
           display: flex;
-          align-items: center;
           justify-content: center;
-          overflow: hidden;
-          border: 3px solid rgba(255,255,255,0.3);
-          margin-bottom: -15px;
-          z-index: 2;
+          flex-wrap: wrap;
+          gap: 10px;
+          position: relative;
+          padding-top: 20px;
         }
         
-        .org-card-info {
-          background: white;
-          border-radius: 10px;
-          padding: 1.25rem 1rem 0.75rem;
-          text-align: center;
-          min-width: 120px;
-          max-width: 150px;
-          border-bottom: 4px solid;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        .teachers-row::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 20%;
+          right: 20%;
+          height: 2px;
+          background: #e879a0;
         }
         
-        .org-card-name {
-          font-weight: 700;
-          font-size: 0.85rem;
-          color: #1f2937;
-          margin-bottom: 2px;
-          line-height: 1.2;
-          word-break: break-word;
+        .teachers-row .org-node::before {
+          content: '';
+          position: absolute;
+          top: -20px;
+          left: 50%;
+          width: 2px;
+          height: 20px;
+          background: #e879a0;
         }
         
-        .org-card-role {
-          font-size: 0.7rem;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+        .teachers-row .org-node {
+          position: relative;
         }
         
-        .org-level-title {
-          color: white;
-          font-size: 0.9rem;
-          font-weight: 600;
-          margin-bottom: 1rem;
-          text-align: center;
-          opacity: 0.9;
-          padding: 0.5rem 1.5rem;
-          background: rgba(255,255,255,0.1);
-          border-radius: 2rem;
-          display: inline-block;
-        }
-        
-        .org-level-container {
+        .manager-section {
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin-bottom: 2rem;
+          margin-bottom: 30px;
+        }
+        
+        .manager-section::after {
+          content: '';
+          width: 2px;
+          height: 30px;
+          background: #e879a0;
+          margin-top: 10px;
+        }
+        
+        .schools-connector {
+          display: flex;
+          justify-content: center;
+          position: relative;
+          margin-bottom: 20px;
+        }
+        
+        .schools-connector::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 10%;
+          right: 10%;
+          height: 2px;
+          background: #e879a0;
+        }
+        
+        .schools-row {
+          display: flex;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 40px;
+        }
+        
+        .school-branch {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          min-width: 200px;
+        }
+        
+        .school-branch-line {
+          width: 2px;
+          height: 20px;
+          background: #e879a0;
+        }
+        
+        .vacant-card {
+          background: #fca5a5 !important;
         }
         
         @media (max-width: 768px) {
-          .org-chart-container {
-            padding: 2rem 1rem;
+          .org-chart {
+            padding: 1rem;
           }
-          .org-card-info {
-            min-width: 100px;
-            max-width: 120px;
-            padding: 1rem 0.75rem 0.5rem;
+          .schools-row {
+            gap: 20px;
+          }
+          .school-branch {
+            min-width: 150px;
+          }
+          .org-card {
+            min-width: 80px;
+            padding: 6px 10px;
           }
           .org-card-name {
             font-size: 0.75rem;
           }
-          .org-card-role {
-            font-size: 0.6rem;
-          }
-          .org-card-avatar {
-            width: 50px;
-            height: 50px;
+          .school-box {
+            padding: 8px 16px;
+            font-size: 0.8rem;
+            min-width: 120px;
           }
         }
       `}</style>
 
       {/* Org Chart */}
-      <div className="org-chart-container">
-        {Object.entries(hierarchy).map(([level, { title, color, members }]) => (
-          members.length > 0 && (
-            <div key={level} className="org-level-container">
-              <span className="org-level-title" style={{ borderColor: color }}>
-                {title} ({members.length})
-              </span>
-              <div className="org-level">
-                {members.map((member, idx) => (
-                  <PersonCard key={member.id || idx} member={member} color={color} />
-                ))}
-              </div>
+      <div className="org-chart">
+        <div className="org-tree">
+          {/* Program Manager at Top */}
+          {hierarchy.programManager && (
+            <div className="manager-section">
+              <PersonCard person={hierarchy.programManager} type="manager" showSubject={false} />
             </div>
-          )
-        ))}
+          )}
+
+          {/* Schools Connector Line */}
+          <div className="schools-connector" style={{ width: '80%' }}></div>
+
+          {/* Schools Row */}
+          <div className="schools-row">
+            {hierarchy.schools.map((school, idx) => (
+              <div key={school.name} className="school-branch">
+                {/* Vertical line from horizontal connector */}
+                <div className="school-branch-line"></div>
+                
+                {/* School Name Box */}
+                <SchoolBox name={school.name} />
+                
+                {/* Connector to APC/APM or Teachers */}
+                <div className="connector-down"></div>
+
+                {/* APC if exists */}
+                {school.apc && (
+                  <>
+                    <PersonCard person={school.apc} type="apc" showSubject={false} />
+                    <div className="connector-down"></div>
+                  </>
+                )}
+
+                {/* APM if exists */}
+                {school.apm && !school.apc && (
+                  <>
+                    <PersonCard person={school.apm} type="apm" showSubject={false} />
+                    <div className="connector-down"></div>
+                  </>
+                )}
+
+                {/* Teachers */}
+                {school.teachers.length > 0 && (
+                  <div className="teachers-row">
+                    {school.teachers.map((teacher, tidx) => (
+                      <PersonCard key={teacher.docId || tidx} person={teacher} type="teacher" />
+                    ))}
+                  </div>
+                )}
+
+                {school.teachers.length === 0 && (
+                  <div className="org-node">
+                    <div className="org-card vacant-card">
+                      <div className="org-card-name">No Teachers</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
-        {Object.entries(hierarchy).map(([level, { title, color, members }]) => (
-          members.length > 0 && (
-            <div key={level} className="bg-white rounded-xl p-4 shadow text-center" style={{ borderTop: `4px solid ${color}` }}>
-              <div className="text-2xl font-bold" style={{ color }}>{members.length}</div>
-              <div className="text-sm text-gray-600">{title}</div>
-            </div>
-          )
-        ))}
+      {/* Legend */}
+      <div className="bg-white rounded-xl p-4 shadow">
+        <h3 className="font-bold mb-3">Legend</h3>
+        <div className="flex flex-wrap gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded" style={{ background: '#c4b5fd' }}></div>
+            <span className="text-sm">Manager</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded" style={{ background: '#fcd34d' }}></div>
+            <span className="text-sm">School</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded" style={{ background: '#fed7aa' }}></div>
+            <span className="text-sm">APC</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded" style={{ background: '#bfdbfe' }}></div>
+            <span className="text-sm">Teacher</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded" style={{ background: '#3b82f6' }}></div>
+            <span className="text-sm">Physics</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded" style={{ background: '#8b5cf6' }}></div>
+            <span className="text-sm">Chemistry</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded" style={{ background: '#ef4444' }}></div>
+            <span className="text-sm">Maths</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded" style={{ background: '#10b981' }}></div>
+            <span className="text-sm">Biology</span>
+          </div>
+        </div>
       </div>
 
       {/* Member Detail Modal */}
@@ -19093,10 +19257,12 @@ function OrgChartDirectory({ teachers, currentUser }) {
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={() => setSelectedMember(null)}>
           <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
             {/* Header */}
-            <div 
-              className="p-6 text-white relative"
-              style={{ background: `linear-gradient(135deg, ${getLevelColor(selectedMember.level)}, ${getLevelColor(selectedMember.level)}dd)` }}
-            >
+            <div className="p-6 text-white relative" style={{ 
+              background: selectedMember.type === 'manager' ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)' :
+                         selectedMember.type === 'apc' ? 'linear-gradient(135deg, #f97316, #ea580c)' :
+                         selectedMember.type === 'apm' ? 'linear-gradient(135deg, #ec4899, #db2777)' :
+                         `linear-gradient(135deg, ${getSubjectColor(selectedMember.subject)}, ${getSubjectColor(selectedMember.subject)}dd)`
+            }}>
               <button
                 onClick={() => setSelectedMember(null)}
                 className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl font-bold"
@@ -19117,13 +19283,13 @@ function OrgChartDirectory({ teachers, currentUser }) {
                 )}
                 <div>
                   <h3 className="text-2xl font-bold">{selectedMember.name}</h3>
-                  <p className="opacity-90">{selectedMember.role || selectedMember.position}</p>
+                  <p className="opacity-90">{selectedMember.role || selectedMember.position || selectedMember.subject}</p>
                 </div>
               </div>
             </div>
 
             {/* Info */}
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-3">
               {selectedMember.school && (
                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <span className="text-xl">🏫</span>
@@ -19156,7 +19322,7 @@ function OrgChartDirectory({ teachers, currentUser }) {
                   <span className="text-xl">📧</span>
                   <div>
                     <div className="text-xs text-gray-500">Email</div>
-                    <a href={`mailto:${selectedMember.email}`} className="font-semibold text-blue-600 hover:underline">{selectedMember.email}</a>
+                    <a href={`mailto:${selectedMember.email}`} className="font-semibold text-blue-600 hover:underline break-all">{selectedMember.email}</a>
                   </div>
                 </div>
               )}
