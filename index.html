@@ -6522,6 +6522,51 @@ const[show2FAVerify,setShow2FAVerify]=useState(false); // Show 2FA verification 
 const[show2FASetup,setShow2FASetup]=useState(false); // Show 2FA setup modal for new users
 const[needs2FASetup,setNeeds2FASetup]=useState(false); // Flag if user needs to set up 2FA
 
+// Login Sound - play when user logs in
+const prevUserRef = useRef(null);
+useEffect(() => {
+  // Play sound when user logs in (currentUser changes from null to a value)
+  if (currentUser && !prevUserRef.current && !loading) {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Pleasant login sound - two quick ascending tones
+      oscillator.frequency.value = 600;
+      oscillator.type = 'sine';
+      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.15);
+      
+      // Second higher tone
+      setTimeout(() => {
+        try {
+          const osc2 = audioContext.createOscillator();
+          const gain2 = audioContext.createGain();
+          osc2.connect(gain2);
+          gain2.connect(audioContext.destination);
+          osc2.frequency.value = 800;
+          osc2.type = 'sine';
+          gain2.gain.setValueAtTime(0.2, audioContext.currentTime);
+          gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+          osc2.start(audioContext.currentTime);
+          osc2.stop(audioContext.currentTime + 0.2);
+        } catch(e) {}
+      }, 100);
+      
+      console.log('🔔 Login sound played');
+    } catch(e) {
+      console.log('Could not play login sound:', e);
+    }
+  }
+  prevUserRef.current = currentUser;
+}, [currentUser, loading]);
+
 // Helper function to get accessible schools for a manager (supports 4-level hierarchy)
 const getAccessibleSchools = useCallback((managerData, allManagers) => {
   if (!managerData) return [];
@@ -18904,20 +18949,34 @@ function OrgChartDirectory({ teachers, currentUser }) {
 
   // Build hierarchy matching the reference image
   const hierarchy = useMemo(() => {
-    // Get PM (Program Manager)
-    const pm = managers.find(m => m.role === 'pm');
+    // Get all PMs (Program Managers)
+    const allPMs = managers.filter(m => m.role === 'pm');
+    const pm = allPMs[0]; // Main PM
     
-    // Get APMs under this PM
-    const apms = managers.filter(m => m.role === 'apm' && m.reportsTo === pm?.id);
+    // Get ALL APMs (even those without reportsTo)
+    const allAPMs = managers.filter(m => m.role === 'apm');
+    
+    // Get all unique schools from teachers
+    const allSchoolsFromTeachers = [...new Set(teachers.filter(t => !t.isArchived && t.school).map(t => t.school))];
     
     // Get all schools managed by APMs
-    const apmSchools = new Set();
-    apms.forEach(apm => {
-      (apm.directSchools || []).forEach(s => apmSchools.add(s));
+    const apmSchoolsSet = new Set();
+    allAPMs.forEach(apm => {
+      (apm.directSchools || []).forEach(s => apmSchoolsSet.add(s));
     });
     
-    // Schools directly under PM (not under any APM)
-    const pmDirectSchools = (pm?.directSchools || []).filter(s => !apmSchools.has(s));
+    // Schools directly under PM = PM's directSchools that are NOT under any APM
+    // PLUS any schools from teachers that aren't under PM or APM
+    const pmSchools = pm?.directSchools || [];
+    const pmDirectSchools = pmSchools.filter(s => !apmSchoolsSet.has(s));
+    
+    // Also include schools from teachers that have no manager assignment
+    const unassignedSchools = allSchoolsFromTeachers.filter(s => 
+      !pmSchools.includes(s) && !apmSchoolsSet.has(s)
+    );
+    
+    // Combine PM direct schools with unassigned schools
+    const allPMDirectSchools = [...new Set([...pmDirectSchools, ...unassignedSchools])];
     
     // Build school data with teachers and APCs
     const getSchoolData = (schoolName) => {
@@ -18933,8 +18992,8 @@ function OrgChartDirectory({ teachers, currentUser }) {
 
     return { 
       pm, 
-      pmDirectSchools: pmDirectSchools.map(getSchoolData),
-      apms: apms.map(apm => ({
+      pmDirectSchools: allPMDirectSchools.map(getSchoolData),
+      apms: allAPMs.map(apm => ({
         ...apm,
         schools: (apm.directSchools || []).map(getSchoolData)
       }))
@@ -19342,49 +19401,106 @@ function OrgChartDirectory({ teachers, currentUser }) {
             </div>
 
             <div className="p-5 space-y-3">
+              {/* AFID */}
+              {selectedMember.afid && (
+                <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">
+                  <span className="text-xl">🆔</span>
+                  <div><div className="text-xs text-gray-500">AF ID</div><div className="font-semibold">{selectedMember.afid}</div></div>
+                </div>
+              )}
+              {/* AF Code */}
+              {selectedMember.afCode && (
+                <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">
+                  <span className="text-xl">🏷️</span>
+                  <div><div className="text-xs text-gray-500">AF Code</div><div className="font-semibold">{selectedMember.afCode}</div></div>
+                </div>
+              )}
+              {/* School */}
               {selectedMember.school && selectedMember.memberType !== 'school' && (
                 <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl">
                   <span className="text-xl">🏫</span>
                   <div><div className="text-xs text-gray-500">School</div><div className="font-semibold">{selectedMember.school}</div></div>
                 </div>
               )}
+              {/* Manages Schools */}
               {selectedMember.directSchools?.length > 0 && (
                 <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl">
                   <span className="text-xl">🏫</span>
                   <div><div className="text-xs text-gray-500">Manages</div><div className="font-semibold">{selectedMember.directSchools.join(', ')}</div></div>
                 </div>
               )}
+              {/* Subject */}
+              {selectedMember.subject && (
+                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl">
+                  <span className="text-xl">📚</span>
+                  <div><div className="text-xs text-gray-500">Subject</div><div className="font-semibold">{selectedMember.subject}</div></div>
+                </div>
+              )}
+              {/* Qualification */}
+              {selectedMember.qualification && (
+                <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl">
+                  <span className="text-xl">🎓</span>
+                  <div><div className="text-xs text-gray-500">Qualification</div><div className="font-semibold">{selectedMember.qualification}</div></div>
+                </div>
+              )}
+              {/* Experience */}
+              {selectedMember.experience && (
+                <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl">
+                  <span className="text-xl">💼</span>
+                  <div><div className="text-xs text-gray-500">Experience</div><div className="font-semibold">{selectedMember.experience}</div></div>
+                </div>
+              )}
+              {/* Bio */}
+              {selectedMember.bio && (
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
+                  <span className="text-xl">📝</span>
+                  <div><div className="text-xs text-gray-500">About</div><div className="font-semibold text-sm">{selectedMember.bio}</div></div>
+                </div>
+              )}
+              {/* Email */}
               {selectedMember.email && (
                 <div className="flex items-center gap-3 p-3 bg-indigo-50 rounded-xl">
                   <span className="text-xl">📧</span>
-                  <div><div className="text-xs text-gray-500">Email</div><a href={`mailto:${selectedMember.email}`} className="font-semibold text-blue-600 hover:underline">{selectedMember.email}</a></div>
+                  <div><div className="text-xs text-gray-500">Email</div><a href={`mailto:${selectedMember.email}`} className="font-semibold text-blue-600 hover:underline break-all">{selectedMember.email}</a></div>
                 </div>
               )}
+              {/* Phone */}
               {selectedMember.phone && (
                 <div className="flex items-center gap-3 p-3 bg-cyan-50 rounded-xl">
                   <span className="text-xl">📱</span>
                   <div><div className="text-xs text-gray-500">Phone</div><a href={`tel:${selectedMember.phone}`} className="font-semibold text-blue-600 hover:underline">{selectedMember.phone}</a></div>
                 </div>
               )}
+              {/* WhatsApp */}
               {selectedMember.whatsapp && (
                 <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">
                   <span className="text-xl">💬</span>
                   <div><div className="text-xs text-gray-500">WhatsApp</div><a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" className="font-semibold text-green-600 hover:underline">{selectedMember.whatsapp}</a></div>
                 </div>
               )}
-              {selectedMember.dateOfBirth && (
+              {/* Birthday */}
+              {(selectedMember.dateOfBirth || selectedMember.dob) && (
                 <div className="flex items-center gap-3 p-3 bg-pink-50 rounded-xl">
                   <span className="text-xl">🎂</span>
-                  <div><div className="text-xs text-gray-500">Birthday</div><div className="font-semibold">{new Date(selectedMember.dateOfBirth).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}</div></div>
+                  <div><div className="text-xs text-gray-500">Birthday</div><div className="font-semibold">{new Date(selectedMember.dateOfBirth || selectedMember.dob).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}</div></div>
                 </div>
               )}
+              {/* Joining Date */}
               {selectedMember.joiningDate && (
                 <div className="flex items-center gap-3 p-3 bg-teal-50 rounded-xl">
                   <span className="text-xl">📅</span>
-                  <div><div className="text-xs text-gray-500">Joined</div><div className="font-semibold">{new Date(selectedMember.joiningDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div></div>
+                  <div><div className="text-xs text-gray-500">Joined Avanti</div><div className="font-semibold">{new Date(selectedMember.joiningDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div></div>
+                </div>
+              )}
+              {/* Drive Link */}
+              {selectedMember.driveLink && (
+                <div className="flex items-center gap-3 p-3 bg-sky-50 rounded-xl">
+                  <span className="text-xl">📁</span>
+                  <div><div className="text-xs text-gray-500">Drive Folder</div><a href={selectedMember.driveLink} target="_blank" className="font-semibold text-blue-600 hover:underline">Open Folder →</a></div>
                 </div>
               )}
 
+              {/* Action Buttons */}
               {(selectedMember.phone || selectedMember.whatsapp) && (
                 <div className="grid grid-cols-2 gap-3 pt-3">
                   {selectedMember.phone && (
