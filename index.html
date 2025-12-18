@@ -8804,7 +8804,10 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
     reportsTo: '',
     directSchools: [],
     phone: '',
-    status: 'active'
+    status: 'active',
+    dateOfBirth: '',
+    joiningDate: '',
+    whatsapp: ''
   });
   const [filterRole, setFilterRole] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -8887,7 +8890,10 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
       reportsTo: '',
       directSchools: [],
       phone: '',
-      status: 'active'
+      whatsapp: '',
+      status: 'active',
+      dateOfBirth: '',
+      joiningDate: ''
     });
     setShowModal(true);
   };
@@ -8901,7 +8907,10 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
       reportsTo: manager.reportsTo || '',
       directSchools: manager.directSchools || [],
       phone: manager.phone || '',
-      status: manager.status || 'active'
+      whatsapp: manager.whatsapp || '',
+      status: manager.status || 'active',
+      dateOfBirth: manager.dateOfBirth || '',
+      joiningDate: manager.joiningDate || ''
     });
     setShowModal(true);
   };
@@ -8927,7 +8936,10 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
         reportsTo: form.role === MANAGER_ROLES.APH ? null : form.reportsTo,
         directSchools: form.directSchools,
         phone: form.phone,
+        whatsapp: form.whatsapp || null,
         status: form.status,
+        dateOfBirth: form.dateOfBirth || null,
+        joiningDate: form.joiningDate || null,
         updatedAt: new Date().toISOString()
       };
 
@@ -9320,6 +9332,43 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                     placeholder="e.g., 9876543210"
                   />
                 </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1">WhatsApp Number</label>
+                  <input 
+                    type="tel" 
+                    value={form.whatsapp || ''} 
+                    onChange={e => setForm({ ...form, whatsapp: e.target.value })}
+                    className="w-full border-2 px-3 py-2 rounded-lg"
+                    placeholder="e.g., 9876543210"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-1">🎂 Date of Birth</label>
+                  <input 
+                    type="date" 
+                    value={form.dateOfBirth || ''} 
+                    onChange={e => setForm({ ...form, dateOfBirth: e.target.value })}
+                    className="w-full border-2 px-3 py-2 rounded-lg"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">For birthday celebrations</p>
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1">📅 Joining Date</label>
+                  <input 
+                    type="date" 
+                    value={form.joiningDate || ''} 
+                    onChange={e => setForm({ ...form, joiningDate: e.target.value })}
+                    className="w-full border-2 px-3 py-2 rounded-lg"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">For work anniversary celebrations</p>
+                </div>
+                <div></div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
@@ -18817,7 +18866,13 @@ function OrgChartDirectory({ teachers, currentUser }) {
     // Schools with their data
     const schoolData = schools.map(school => {
       const schoolApc = apcs.find(a => a.school === school || a.schools?.includes(school));
-      const schoolTeachers = teachers.filter(t => t.school === school && !t.isArchived);
+      // Filter teachers: exclude APCs and archived teachers
+      const schoolTeachers = teachers.filter(t => 
+        t.school === school && 
+        !t.isArchived && 
+        t.role !== 'apc' && 
+        !t.isAPC
+      );
       // Check if this school is under an APM
       const underApm = apms.find(a => a.schools?.includes(school));
       
@@ -18980,33 +19035,37 @@ function OrgChartDirectory({ teachers, currentUser }) {
           display: flex;
           justify-content: center;
           flex-wrap: wrap;
-          gap: 10px;
+          gap: 15px;
           position: relative;
-          padding-top: 25px;
+          padding-top: 30px;
+          max-width: 350px;
         }
         
         .teachers-grid::before {
           content: '';
           position: absolute;
           top: 0;
-          left: 15%;
-          right: 15%;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 80%;
+          max-width: 200px;
           height: 2px;
           background: #e879a0;
         }
         
         .teacher-item {
           position: relative;
+          margin-bottom: 5px;
         }
         
         .teacher-item::before {
           content: '';
           position: absolute;
-          top: -25px;
+          top: -30px;
           left: 50%;
           transform: translateX(-50%);
           width: 2px;
-          height: 25px;
+          height: 30px;
           background: #e879a0;
         }
         
@@ -19014,23 +19073,28 @@ function OrgChartDirectory({ teachers, currentUser }) {
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin: 0 20px;
+          margin: 0 25px;
+          padding: 10px;
         }
         
         .direct-schools-row {
           display: flex;
           justify-content: center;
-          gap: 30px;
+          gap: 40px;
+          flex-wrap: wrap;
           position: relative;
-          padding-top: 30px;
+          padding-top: 35px;
+          margin-top: 5px;
         }
         
         .direct-schools-row::before {
           content: '';
           position: absolute;
           top: 0;
-          left: 10%;
-          right: 10%;
+          left: 50%;
+          transform: translateX(-50%);
+          width: calc(100% - 100px);
+          max-width: 800px;
           height: 2px;
           background: #e879a0;
         }
@@ -19040,15 +19104,17 @@ function OrgChartDirectory({ teachers, currentUser }) {
           flex-direction: column;
           align-items: center;
           position: relative;
+          min-width: 150px;
+          padding-bottom: 10px;
         }
         
         .school-branch::before {
           content: '';
           position: absolute;
-          top: -30px;
+          top: -35px;
           left: 50%;
           width: 2px;
-          height: 30px;
+          height: 35px;
           background: #e879a0;
         }
         
@@ -19056,35 +19122,39 @@ function OrgChartDirectory({ teachers, currentUser }) {
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin-top: 40px;
+          margin-top: 50px;
           position: relative;
+          padding: 0 20px;
         }
         
         .apm-section::before {
           content: '';
           position: absolute;
-          top: -40px;
+          top: -50px;
           left: 50%;
           width: 2px;
-          height: 40px;
+          height: 50px;
           background: #e879a0;
         }
         
         .apm-schools-row {
           display: flex;
           justify-content: center;
-          gap: 40px;
+          gap: 50px;
+          flex-wrap: wrap;
           position: relative;
-          padding-top: 30px;
-          margin-top: 10px;
+          padding-top: 35px;
+          margin-top: 15px;
         }
         
         .apm-schools-row::before {
           content: '';
           position: absolute;
           top: 0;
-          left: 20%;
-          right: 20%;
+          left: 50%;
+          transform: translateX(-50%);
+          width: calc(100% - 80px);
+          max-width: 600px;
           height: 2px;
           background: #e879a0;
         }
@@ -19327,10 +19397,50 @@ function OrgChartDirectory({ teachers, currentUser }) {
                   <div><div className="text-xs text-gray-500">Schools</div><div className="font-semibold">{selectedMember.schools.join(', ')}</div></div>
                 </div>
               )}
+              {selectedMember.directSchools?.length > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl">
+                  <span className="text-xl">🏫</span>
+                  <div><div className="text-xs text-gray-500">Manages Schools</div><div className="font-semibold">{selectedMember.directSchools.join(', ')}</div></div>
+                </div>
+              )}
               {selectedMember.subject && (
                 <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl">
                   <span className="text-xl">📚</span>
                   <div><div className="text-xs text-gray-500">Subject</div><div className="font-semibold">{selectedMember.subject}</div></div>
+                </div>
+              )}
+              {selectedMember.qualification && (
+                <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">
+                  <span className="text-xl">🎓</span>
+                  <div><div className="text-xs text-gray-500">Qualification</div><div className="font-semibold">{selectedMember.qualification}</div></div>
+                </div>
+              )}
+              {selectedMember.experience && (
+                <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl">
+                  <span className="text-xl">💼</span>
+                  <div><div className="text-xs text-gray-500">Experience</div><div className="font-semibold">{selectedMember.experience}</div></div>
+                </div>
+              )}
+              {selectedMember.bio && (
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
+                  <span className="text-xl">📝</span>
+                  <div><div className="text-xs text-gray-500">About</div><div className="font-semibold text-sm">{selectedMember.bio}</div></div>
+                </div>
+              )}
+              {selectedMember.joiningDate && (
+                <div className="flex items-center gap-3 p-3 bg-teal-50 rounded-xl">
+                  <span className="text-xl">📅</span>
+                  <div>
+                    <div className="text-xs text-gray-500">Joined Avanti</div>
+                    <div className="font-semibold">{new Date(selectedMember.joiningDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                    <div className="text-xs text-teal-600 font-medium">
+                      {(() => {
+                        const years = Math.floor((new Date() - new Date(selectedMember.joiningDate)) / (365.25 * 24 * 60 * 60 * 1000));
+                        const months = Math.floor(((new Date() - new Date(selectedMember.joiningDate)) % (365.25 * 24 * 60 * 60 * 1000)) / (30.44 * 24 * 60 * 60 * 1000));
+                        return years > 0 ? `${years} year${years > 1 ? 's' : ''} ${months > 0 ? `${months} month${months > 1 ? 's' : ''}` : ''}` : `${months} month${months > 1 ? 's' : ''}`;
+                      })()}
+                    </div>
+                  </div>
                 </div>
               )}
               {selectedMember.email && (
@@ -19388,6 +19498,8 @@ function SocialWall({ teachers, currentUser }) {
   const [birthdays, setBirthdays] = useState([]);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState([]);
   const [anniversaries, setAnniversaries] = useState([]);
+  const [weekAnniversaries, setWeekAnniversaries] = useState([]);
+  const [monthAnniversaries, setMonthAnniversaries] = useState([]);
   const [showNewPost, setShowNewPost] = useState(false);
   const [newPostContent, setNewPostContent] = useState('');
   const [posting, setPosting] = useState(false);
@@ -19440,13 +19552,35 @@ function SocialWall({ teachers, currentUser }) {
         }).slice(0, 10);
         setUpcomingBirthdays(upcoming);
 
-        // Anniversaries
+        // Today's Anniversaries (using joiningDate)
         const todayAnniversaries = combined.filter(m => {
-          if (!m.anniversary) return false;
-          const ann = new Date(m.anniversary);
-          return ann.getMonth() + 1 === todayMonth && ann.getDate() === todayDate;
+          if (!m.joiningDate) return false;
+          const j = new Date(m.joiningDate);
+          // Must have at least 1 year at company
+          if (j.getFullYear() >= today.getFullYear()) return false;
+          return j.getMonth() + 1 === todayMonth && j.getDate() === todayDate;
         });
         setAnniversaries(todayAnniversaries);
+
+        // This Week's Anniversaries
+        const weekAnn = combined.filter(m => {
+          if (!m.joiningDate) return false;
+          const j = new Date(m.joiningDate);
+          if (j.getFullYear() >= today.getFullYear()) return false;
+          const thisYearAnn = new Date(today.getFullYear(), j.getMonth(), j.getDate());
+          const diffDays = Math.ceil((thisYearAnn - today) / (1000 * 60 * 60 * 24));
+          return diffDays >= 0 && diffDays <= 7;
+        });
+        setWeekAnniversaries(weekAnn);
+
+        // This Month's Anniversaries
+        const monthAnn = combined.filter(m => {
+          if (!m.joiningDate) return false;
+          const j = new Date(m.joiningDate);
+          if (j.getFullYear() >= today.getFullYear()) return false;
+          return j.getMonth() === today.getMonth();
+        });
+        setMonthAnniversaries(monthAnn);
 
         // Show birthday popup
         if (todayBirthdays.length > 0) {
@@ -19763,8 +19897,92 @@ function SocialWall({ teachers, currentUser }) {
             )}
           </div>
 
+          {/* This Week's Anniversaries */}
+          <div className="bg-white rounded-3xl p-6 shadow-lg">
+            <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
+              <span className="text-2xl">🎉</span> This Week's Work Anniversaries
+            </h3>
+            {weekAnniversaries.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No work anniversaries this week</p>
+            ) : (
+              <div className="space-y-3">
+                {weekAnniversaries.map((person, idx) => {
+                  const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
+                  const jDate = new Date(person.joiningDate);
+                  return (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-amber-50 rounded-xl hover:bg-amber-100 transition-colors">
+                      <div className="flex items-center gap-3">
+                        {person.profilePhoto ? (
+                          <img src={person.profilePhoto} alt="" className="w-10 h-10 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold">
+                            {person.name?.charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-semibold text-gray-800">{person.name}</div>
+                          <div className="text-xs text-gray-500">{person.school || person.role}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-amber-600">
+                          {years} Year{years > 1 ? 's' : ''}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {jDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* This Month's Anniversaries */}
+          <div className="bg-white rounded-3xl p-6 shadow-lg">
+            <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
+              <span className="text-2xl">📅</span> This Month's Work Anniversaries
+            </h3>
+            {monthAnniversaries.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No work anniversaries this month</p>
+            ) : (
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {monthAnniversaries.map((person, idx) => {
+                  const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
+                  const jDate = new Date(person.joiningDate);
+                  return (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-green-50 rounded-xl hover:bg-green-100 transition-colors">
+                      <div className="flex items-center gap-3">
+                        {person.profilePhoto ? (
+                          <img src={person.profilePhoto} alt="" className="w-10 h-10 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center text-white font-bold">
+                            {person.name?.charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-semibold text-gray-800">{person.name}</div>
+                          <div className="text-xs text-gray-500">{person.school || person.role}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-green-600">
+                          {years} Year{years > 1 ? 's' : ''}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {jDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* No celebrations message */}
-          {birthdays.length === 0 && anniversaries.length === 0 && upcomingBirthdays.length === 0 && (
+          {birthdays.length === 0 && anniversaries.length === 0 && upcomingBirthdays.length === 0 && weekAnniversaries.length === 0 && monthAnniversaries.length === 0 && (
             <div className="text-center py-12">
               <div className="text-6xl mb-4">🎈</div>
               <p className="text-gray-500">No celebrations today. Check back soon!</p>
@@ -20092,6 +20310,124 @@ function RoadmapPage({ currentUser }) {
         >
           ✨ Request Feature
         </button>
+      </div>
+
+      {/* 🎯 OFFICIAL ROADMAP TIMELINE - Planned Features */}
+      <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-2xl p-6 border-2 border-indigo-200">
+        <div className="flex items-center gap-3 mb-6">
+          <span className="text-3xl">🚀</span>
+          <div>
+            <h3 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Official Roadmap Timeline</h3>
+            <p className="text-gray-600 text-sm">Features we're planning to build</p>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Q1 2025 - January-March */}
+          <div className="bg-white rounded-xl p-5 shadow-lg border-l-4 border-blue-500">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-bold">Q1 2025</span>
+              <span className="text-sm text-gray-500">Jan - Mar</span>
+            </div>
+            <div className="space-y-3">
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <div className="font-semibold flex items-center gap-2">👤 Individual Student Profile</div>
+                <p className="text-xs text-gray-600 mt-1">Student academic level, AIET exam reports, chapter test reports, performance analytics</p>
+              </div>
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <div className="font-semibold flex items-center gap-2">📝 Teacher Timesheet</div>
+                <p className="text-xs text-gray-600 mt-1">Daily logs - what chapter/topic taught, time spent, activities conducted</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Q2 2025 - April-June */}
+          <div className="bg-white rounded-xl p-5 shadow-lg border-l-4 border-green-500">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">Q2 2025</span>
+              <span className="text-sm text-gray-500">Apr - Jun</span>
+            </div>
+            <div className="space-y-3">
+              <div className="p-3 bg-green-50 rounded-lg">
+                <div className="font-semibold flex items-center gap-2">📅 Exam Schedule Manager</div>
+                <p className="text-xs text-gray-600 mt-1">Create, track and manage exam schedules across schools</p>
+              </div>
+              <div className="p-3 bg-green-50 rounded-lg">
+                <div className="font-semibold flex items-center gap-2">📊 Advanced Analytics Dashboard</div>
+                <p className="text-xs text-gray-600 mt-1">Cross-school comparisons, trend analysis, predictive insights</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Q3 2025 - July-September */}
+          <div className="bg-white rounded-xl p-5 shadow-lg border-l-4 border-orange-500">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">Q3 2025</span>
+              <span className="text-sm text-gray-500">Jul - Sep</span>
+            </div>
+            <div className="space-y-3">
+              <div className="p-3 bg-orange-50 rounded-lg">
+                <div className="font-semibold flex items-center gap-2">📱 Offline Mode</div>
+                <p className="text-xs text-gray-600 mt-1">Full offline support with automatic sync when connected</p>
+              </div>
+              <div className="p-3 bg-orange-50 rounded-lg">
+                <div className="font-semibold flex items-center gap-2">🔔 Smart Notifications</div>
+                <p className="text-xs text-gray-600 mt-1">Auto reminders for curriculum deadlines, pending tasks</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Q4 2025 - October-December */}
+          <div className="bg-white rounded-xl p-5 shadow-lg border-l-4 border-purple-500">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-bold">Q4 2025</span>
+              <span className="text-sm text-gray-500">Oct - Dec</span>
+            </div>
+            <div className="space-y-3">
+              <div className="p-3 bg-purple-50 rounded-lg">
+                <div className="font-semibold flex items-center gap-2">📚 Resource Library</div>
+                <p className="text-xs text-gray-600 mt-1">Shared teaching materials, lesson plans, worksheets</p>
+              </div>
+              <div className="p-3 bg-purple-50 rounded-lg">
+                <div className="font-semibold flex items-center gap-2">🎯 Goal Tracking</div>
+                <p className="text-xs text-gray-600 mt-1">Set and track personal & school goals</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Future Plans */}
+          <div className="bg-white rounded-xl p-5 shadow-lg border-l-4 border-gray-400">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-bold">2026+</span>
+              <span className="text-sm text-gray-500">Future</span>
+            </div>
+            <div className="space-y-3">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <div className="font-semibold flex items-center gap-2">🤖 AI Insights</div>
+                <p className="text-xs text-gray-600 mt-1">AI-powered suggestions for curriculum pacing</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <div className="font-semibold flex items-center gap-2">👥 Parent Portal</div>
+                <p className="text-xs text-gray-600 mt-1">Parent access to student progress reports</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Coming Soon */}
+          <div className="bg-gradient-to-br from-pink-100 to-purple-100 rounded-xl p-5 shadow-lg border-2 border-dashed border-pink-300">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-2xl">✨</span>
+              <span className="font-bold text-pink-700">Want a Feature?</span>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">Have an idea? Request it below and vote for features you want!</p>
+            <button
+              onClick={() => setShowNewRequest(true)}
+              className="w-full py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all text-sm"
+            >
+              ✨ Request Feature
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Roadmap Section */}
@@ -21620,15 +21956,90 @@ function TeacherSelfProfile({ currentUser, teachers }) {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-bold mb-2">Profile Photo URL</label>
+                  <label className="block text-sm font-bold mb-2">Profile Photo</label>
+                  
+                  {/* Current photo preview */}
+                  <div className="flex items-center gap-4 mb-3">
+                    {editForm.profilePhoto ? (
+                      <img 
+                        src={editForm.profilePhoto} 
+                        alt="Profile" 
+                        className="w-20 h-20 rounded-full object-cover border-2 border-yellow-400"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-3xl text-white font-bold">
+                        {teacherData?.name?.charAt(0) || '?'}
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-600">Upload a photo (max 1MB, JPG/PNG)</p>
+                    </div>
+                  </div>
+                  
+                  {/* File upload */}
                   <input
-                    type="url"
-                    value={editForm.profilePhoto}
-                    onChange={e => setEditForm({...editForm, profilePhoto: e.target.value})}
-                    placeholder="https://drive.google.com/... (max 2MB image)"
-                    className="w-full border-2 px-4 py-3 rounded-xl"
+                    type="file"
+                    id="profilePhotoUpload"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      
+                      // Validate file size (max 1MB)
+                      if (file.size > 1024 * 1024) {
+                        alert('❌ File too large! Please upload an image under 1MB');
+                        e.target.value = '';
+                        return;
+                      }
+                      
+                      // Validate file type
+                      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+                        alert('❌ Invalid file type! Please upload JPG, PNG, or WebP image');
+                        e.target.value = '';
+                        return;
+                      }
+                      
+                      try {
+                        // Show uploading state
+                        const uploadBtn = document.getElementById('uploadStatus');
+                        if (uploadBtn) uploadBtn.textContent = '⏳ Uploading...';
+                        
+                        // Upload to Firebase Storage
+                        const storageRef = firebase.storage().ref();
+                        const fileName = `profile-photos/${teacherData.afid || teacherData.email}_${Date.now()}.${file.name.split('.').pop()}`;
+                        const photoRef = storageRef.child(fileName);
+                        
+                        await photoRef.put(file);
+                        const downloadURL = await photoRef.getDownloadURL();
+                        
+                        setEditForm({...editForm, profilePhoto: downloadURL});
+                        if (uploadBtn) uploadBtn.textContent = '✅ Uploaded!';
+                        
+                        setTimeout(() => {
+                          if (uploadBtn) uploadBtn.textContent = '';
+                        }, 2000);
+                      } catch (error) {
+                        console.error('Upload error:', error);
+                        alert('❌ Upload failed: ' + error.message);
+                        const uploadBtn = document.getElementById('uploadStatus');
+                        if (uploadBtn) uploadBtn.textContent = '';
+                      }
+                    }}
+                    className="w-full border-2 px-4 py-3 rounded-xl cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Use Google Drive or any image URL (under 2MB)</p>
+                  <span id="uploadStatus" className="text-sm text-green-600 font-medium"></span>
+                  
+                  {/* Or enter URL manually */}
+                  <div className="mt-3">
+                    <p className="text-xs text-gray-500 mb-2">Or paste an image URL:</p>
+                    <input
+                      type="url"
+                      value={editForm.profilePhoto}
+                      onChange={e => setEditForm({...editForm, profilePhoto: e.target.value})}
+                      placeholder="https://example.com/photo.jpg"
+                      className="w-full border-2 px-4 py-2 rounded-xl text-sm"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -25155,9 +25566,13 @@ const NotificationManager = {
     fcmToken: null,
     isOpen: false,
     userId: null,
+    notificationSound: null,
     
     init: function() {
         console.log('[NotificationManager] Initializing...');
+        
+        // Initialize notification sound
+        this.initSound();
         
         // Get user ID
         this.getUserId();
@@ -25168,6 +25583,9 @@ const NotificationManager = {
         // Load notifications from Firestore
         setTimeout(() => this.loadNotifications(), 2000);
         
+        // Check for today's birthdays/anniversaries at 8 AM
+        this.scheduleCelebrationNotifications();
+        
         // Close panel when clicking outside
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.notification-bell') && !e.target.closest('.notification-panel')) {
@@ -25176,6 +25594,119 @@ const NotificationManager = {
         });
         
         console.log('[NotificationManager] Initialized');
+    },
+    
+    initSound: function() {
+        try {
+            this.notificationSound = new Audio('/notification.mp3');
+            this.notificationSound.volume = 0.5;
+            console.log('[NotificationManager] Sound initialized');
+        } catch (e) {
+            console.log('[NotificationManager] Sound init error:', e);
+        }
+    },
+    
+    playSound: function() {
+        if (this.notificationSound) {
+            try {
+                this.notificationSound.currentTime = 0;
+                this.notificationSound.play().catch(e => {
+                    console.log('[NotificationManager] Sound play error:', e);
+                });
+            } catch (e) {
+                console.log('[NotificationManager] Sound error:', e);
+            }
+        }
+    },
+    
+    scheduleCelebrationNotifications: function() {
+        // Check if we should send celebration notifications
+        const now = new Date();
+        const targetHour = 8; // 8 AM
+        
+        // Calculate milliseconds until 8 AM
+        const target = new Date(now);
+        target.setHours(targetHour, 0, 0, 0);
+        
+        if (now >= target) {
+            // Already past 8 AM today, check for next day
+            target.setDate(target.getDate() + 1);
+        }
+        
+        const msUntil8AM = target - now;
+        
+        // Schedule the check
+        setTimeout(() => {
+            this.sendCelebrationNotifications();
+            // Then repeat every 24 hours
+            setInterval(() => this.sendCelebrationNotifications(), 24 * 60 * 60 * 1000);
+        }, msUntil8AM);
+        
+        console.log('[NotificationManager] Celebration check scheduled');
+    },
+    
+    sendCelebrationNotifications: async function() {
+        if (!this.userId || typeof firebase === 'undefined') return;
+        
+        const today = new Date();
+        const todayStr = today.toDateString();
+        
+        // Check if already sent today
+        const sentToday = localStorage.getItem('celebrationNotifSent_' + todayStr);
+        if (sentToday) return;
+        
+        try {
+            // Check for birthdays and anniversaries
+            const teachersSnap = await firebase.firestore().collection('teachers').get();
+            const managersSnap = await firebase.firestore().collection('managers').get();
+            
+            const all = [
+                ...teachersSnap.docs.map(d => ({ ...d.data(), type: 'teacher' })),
+                ...managersSnap.docs.map(d => ({ ...d.data(), type: 'manager' }))
+            ];
+            
+            const birthdays = all.filter(m => {
+                if (!m.dateOfBirth) return false;
+                const dob = new Date(m.dateOfBirth);
+                return dob.getMonth() === today.getMonth() && dob.getDate() === today.getDate();
+            });
+            
+            const anniversaries = all.filter(m => {
+                if (!m.joiningDate) return false;
+                const j = new Date(m.joiningDate);
+                if (j.getFullYear() >= today.getFullYear()) return false;
+                return j.getMonth() === today.getMonth() && j.getDate() === today.getDate();
+            });
+            
+            // Show browser notification
+            if (Notification.permission === 'granted') {
+                if (birthdays.length > 0) {
+                    const names = birthdays.map(b => b.name).slice(0, 3).join(', ');
+                    new Notification('🎂 Birthday Today!', {
+                        body: birthdays.length === 1 
+                            ? `Wish ${names} a Happy Birthday!`
+                            : `${names}${birthdays.length > 3 ? ` and ${birthdays.length - 3} more` : ''} have birthdays today!`,
+                        icon: '/icon-192.png'
+                    });
+                    this.playSound();
+                }
+                
+                if (anniversaries.length > 0) {
+                    const names = anniversaries.map(a => a.name).slice(0, 3).join(', ');
+                    new Notification('🎉 Work Anniversary Today!', {
+                        body: anniversaries.length === 1
+                            ? `Congratulate ${names} on their work anniversary!`
+                            : `${names}${anniversaries.length > 3 ? ` and ${anniversaries.length - 3} more` : ''} have work anniversaries today!`,
+                        icon: '/icon-192.png'
+                    });
+                    this.playSound();
+                }
+            }
+            
+            localStorage.setItem('celebrationNotifSent_' + todayStr, 'true');
+        } catch (e) {
+            console.error('[NotificationManager] Celebration check error:', e);
+        }
     },
     
     getUserId: function() {
@@ -25213,6 +25744,9 @@ const NotificationManager = {
             // Handle foreground messages
             this.messaging.onMessage((payload) => {
                 console.log('[NotificationManager] Message received:', payload);
+                
+                // Play notification sound
+                this.playSound();
                 
                 // Show browser notification
                 if (Notification.permission === 'granted') {
@@ -25340,6 +25874,16 @@ const NotificationManager = {
     
     // Merge notifications from different sources
     mergeNotifications: function(newNotifs, source) {
+        // Check if there are new notifications we haven't seen before
+        const readIds = JSON.parse(localStorage.getItem('readNotifications') || '[]');
+        const existingIds = this.notifications.map(n => n.id);
+        const trulyNewNotifs = newNotifs.filter(n => !existingIds.includes(n.id) && !readIds.includes(n.id));
+        
+        // Play sound if there are new unread notifications
+        if (trulyNewNotifs.length > 0 && this.notifications.length > 0) {
+            this.playSound();
+        }
+        
         // Remove old notifications from same source
         this.notifications = this.notifications.filter(n => n.source !== source);
         
