@@ -8109,7 +8109,7 @@ function TeacherView({
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'syllabus11', label: 'Class 11 Syllabus', icon: '📚' },
     { id: 'syllabus12', label: 'Class 12 Syllabus', icon: '📕' },
-    { id: 'hierarchy', label: 'Hierarchy', icon: '🏛️' },
+    { id: 'directory', label: 'Directory', icon: '🏛️' },
     { id: 'socialwall', label: 'Social Wall', icon: '🎉' },
     { id: 'attendance', label: 'Student Attendance', icon: '✅' },
     { id: 'attendancedash', label: 'Attendance Dashboard', icon: '📊' },
@@ -8124,7 +8124,7 @@ function TeacherView({
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'class11', label: 'Class 11', icon: '📚' },
     { id: 'class12', label: 'Class 12', icon: '📕' },
-    { id: 'hierarchy', label: 'Hierarchy', icon: '🏛️' },
+    { id: 'directory', label: 'Directory', icon: '🏛️' },
     { id: 'socialwall', label: 'Social Wall', icon: '🎉' },
     { id: 'attendance', label: 'Student Attendance', icon: '✅' },
     { id: 'attendancedash', label: 'Attendance Dashboard', icon: '📊' },
@@ -8355,8 +8355,8 @@ function TeacherView({
           />
         )}
 
-        {activeTab === 'hierarchy' && (
-          <TeamHierarchy teachers={teachers} currentUser={currentUser} />
+        {activeTab === 'directory' && (
+          <OrgChartDirectory teachers={teachers} currentUser={currentUser} />
         )}
 
         {activeTab === 'myprofile' && (
@@ -10463,7 +10463,7 @@ function AdminView({
     { id: 'teacherhistory', label: 'Teacher History', icon: '📈' },
     // Students tab - Super Admin has full access, Managers have view-only access
     { id: 'students', label: 'Students', icon: '👨‍🎓' },
-    { id: 'hierarchy', label: 'Hierarchy', icon: '🏛️' },
+    { id: 'directory', label: 'Directory', icon: '🏛️' },
     { id: 'socialwall', label: 'Social Wall', icon: '🎉' },
     { id: 'observations', label: 'Class Observations', icon: '📋' },
     // Curriculum Management - only for Super Admin (contains add/edit/delete chapters)
@@ -10631,8 +10631,8 @@ function AdminView({
 
         {activeTab === 'students' && <StudentManagement students={filteredStudents} isSuperAdmin={isSuperAdmin} accessibleSchools={availableSchools} />}
 
-        {activeTab === 'hierarchy' && (
-          <TeamHierarchy teachers={filteredTeachers} currentUser={currentUser} />
+        {activeTab === 'directory' && (
+          <OrgChartDirectory teachers={filteredTeachers} currentUser={currentUser} />
         )}
 
         {activeTab === 'socialwall' && (
@@ -18773,14 +18773,10 @@ function TeacherDirectory({ teachers, currentUser }) {
 // ========================================
 // TEAM HIERARCHY - ORGANIZATION VIEW
 // ========================================
-function TeamHierarchy({ teachers, currentUser }) {
+function OrgChartDirectory({ teachers, currentUser }) {
   const [allMembers, setAllMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('hierarchy'); // 'hierarchy' or 'cards' or 'search'
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterSchool, setFilterSchool] = useState('All');
-  const [filterRole, setFilterRole] = useState('All');
 
   // Fetch all team members (managers, heads, APCs, teachers)
   useEffect(() => {
@@ -18831,11 +18827,11 @@ function TeamHierarchy({ teachers, currentUser }) {
   // Group members by level/role
   const hierarchy = useMemo(() => {
     const levels = {
-      1: { title: '👑 Program Heads', members: [] },
-      2: { title: '📊 Program Managers', members: [] },
-      3: { title: '📋 Associate Program Managers', members: [] },
-      4: { title: '🎯 Associate Program Coordinators', members: [] },
-      5: { title: '👨‍🏫 Teachers', members: [] }
+      1: { title: 'Program Heads', color: '#6366f1', members: [] },
+      2: { title: 'Program Managers', color: '#8b5cf6', members: [] },
+      3: { title: 'Associate Program Managers', color: '#ec4899', members: [] },
+      4: { title: 'Associate Program Coordinators', color: '#f97316', members: [] },
+      5: { title: 'Teachers', color: '#f59e0b', members: [] }
     };
 
     allMembers.forEach(member => {
@@ -18847,54 +18843,45 @@ function TeamHierarchy({ teachers, currentUser }) {
     return levels;
   }, [allMembers]);
 
-  // Get unique schools from all members
-  const allSchools = useMemo(() => {
-    const schools = new Set();
-    allMembers.forEach(m => {
-      if (m.school) schools.add(m.school);
-      if (m.schools) m.schools.forEach(s => schools.add(s));
-    });
-    return ['All', ...Array.from(schools).sort()];
-  }, [allMembers]);
-
-  // Filtered members for search view
-  const filteredMembers = useMemo(() => {
-    return allMembers.filter(member => {
-      const matchesSearch = !searchTerm || 
-        member.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.phone?.includes(searchTerm);
-      
-      const memberSchools = member.school ? [member.school] : (member.schools || []);
-      const matchesSchool = filterSchool === 'All' || memberSchools.includes(filterSchool);
-      
-      const matchesRole = filterRole === 'All' || 
-        (filterRole === 'Teacher' && member.level === 5) ||
-        (filterRole === 'APC' && member.level === 4) ||
-        (filterRole === 'Manager' && member.level <= 3);
-      
-      return matchesSearch && matchesSchool && matchesRole;
-    });
-  }, [allMembers, searchTerm, filterSchool, filterRole]);
-
-  // Get role color
-  const getRoleColor = (level) => {
+  // Get level color
+  const getLevelColor = (level) => {
     const colors = {
-      1: 'from-purple-500 to-purple-600',
-      2: 'from-blue-500 to-blue-600',
-      3: 'from-green-500 to-green-600',
-      4: 'from-yellow-500 to-orange-500',
-      5: 'from-gray-500 to-gray-600'
+      1: '#6366f1', // Indigo
+      2: '#8b5cf6', // Purple
+      3: '#ec4899', // Pink
+      4: '#f97316', // Orange
+      5: '#f59e0b'  // Amber
     };
-    return colors[level] || 'from-gray-500 to-gray-600';
+    return colors[level] || '#6b7280';
   };
+
+  // Person Card Component
+  const PersonCard = ({ member, color }) => (
+    <div 
+      onClick={() => setSelectedMember(member)}
+      className="org-card cursor-pointer transform hover:scale-105 transition-all duration-200"
+      style={{ '--card-color': color }}
+    >
+      <div className="org-card-avatar" style={{ background: color }}>
+        {member.profilePhoto ? (
+          <img src={member.profilePhoto} alt={member.name} className="w-full h-full object-cover rounded-lg" />
+        ) : (
+          <span className="text-white text-xl font-bold">{member.name?.charAt(0) || '?'}</span>
+        )}
+      </div>
+      <div className="org-card-info" style={{ borderColor: color }}>
+        <div className="org-card-name">{member.name}</div>
+        <div className="org-card-role" style={{ color: color }}>{member.role || member.position}</div>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-yellow-500 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading team...</p>
+          <p className="mt-4 text-gray-600">Loading directory...</p>
         </div>
       </div>
     );
@@ -18903,214 +18890,228 @@ function TeamHierarchy({ teachers, currentUser }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-3xl font-bold">🏛️ Hierarchy</h2>
-          <p className="text-gray-600">{allMembers.length} team members across all centers</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setViewMode('hierarchy')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-              viewMode === 'hierarchy' ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            🏛️ By Role
-          </button>
-          <button
-            onClick={() => setViewMode('cards')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-              viewMode === 'cards' ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            🃏 All Cards
-          </button>
-          <button
-            onClick={() => setViewMode('search')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-              viewMode === 'search' ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-700'
-            }`}
-          >
-            🔍 Search
-          </button>
-        </div>
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold text-gray-800">🏛️ Directory</h2>
+        <p className="text-gray-600 mt-2">{allMembers.length} team members across all centers</p>
       </div>
 
-      {/* Search and Filters - Only show in search mode */}
-      {viewMode === 'search' && (
-        <div className="bg-white p-6 rounded-2xl shadow-lg">
-          <div className="grid md:grid-cols-4 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-semibold mb-2">🔍 Search</label>
-              <input
-                type="text"
-                placeholder="Name, email, or phone..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-yellow-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold mb-2">🏫 School</label>
-              <select
-                value={filterSchool}
-                onChange={(e) => setFilterSchool(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-yellow-500"
-              >
-                {allSchools.map(school => (
-                  <option key={school} value={school}>{school}</option>
+      {/* Org Chart Styles */}
+      <style>{`
+        .org-chart-container {
+          background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
+          border-radius: 1.5rem;
+          padding: 3rem 2rem;
+          overflow-x: auto;
+        }
+        
+        .org-level {
+          display: flex;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 1.5rem;
+          position: relative;
+          padding: 1rem 0;
+        }
+        
+        .org-level-wrapper {
+          position: relative;
+        }
+        
+        .org-level-wrapper:not(:last-child)::after {
+          content: '';
+          position: absolute;
+          left: 50%;
+          bottom: -20px;
+          width: 2px;
+          height: 40px;
+          background: rgba(255,255,255,0.3);
+        }
+        
+        .org-connector-line {
+          height: 40px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          position: relative;
+        }
+        
+        .org-connector-line::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 50%;
+          width: 2px;
+          height: 20px;
+          background: rgba(255,255,255,0.3);
+        }
+        
+        .org-connector-line::after {
+          content: '';
+          position: absolute;
+          top: 20px;
+          left: 10%;
+          right: 10%;
+          height: 2px;
+          background: rgba(255,255,255,0.3);
+        }
+        
+        .org-card {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          position: relative;
+        }
+        
+        .org-card::before {
+          content: '';
+          position: absolute;
+          top: -20px;
+          left: 50%;
+          width: 2px;
+          height: 20px;
+          background: rgba(255,255,255,0.3);
+        }
+        
+        .org-level:first-child .org-card::before {
+          display: none;
+        }
+        
+        .org-card-avatar {
+          width: 60px;
+          height: 60px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          border: 3px solid rgba(255,255,255,0.3);
+          margin-bottom: -15px;
+          z-index: 2;
+        }
+        
+        .org-card-info {
+          background: white;
+          border-radius: 10px;
+          padding: 1.25rem 1rem 0.75rem;
+          text-align: center;
+          min-width: 120px;
+          max-width: 150px;
+          border-bottom: 4px solid;
+          box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .org-card-name {
+          font-weight: 700;
+          font-size: 0.85rem;
+          color: #1f2937;
+          margin-bottom: 2px;
+          line-height: 1.2;
+          word-break: break-word;
+        }
+        
+        .org-card-role {
+          font-size: 0.7rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        
+        .org-level-title {
+          color: white;
+          font-size: 0.9rem;
+          font-weight: 600;
+          margin-bottom: 1rem;
+          text-align: center;
+          opacity: 0.9;
+          padding: 0.5rem 1.5rem;
+          background: rgba(255,255,255,0.1);
+          border-radius: 2rem;
+          display: inline-block;
+        }
+        
+        .org-level-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          margin-bottom: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+          .org-chart-container {
+            padding: 2rem 1rem;
+          }
+          .org-card-info {
+            min-width: 100px;
+            max-width: 120px;
+            padding: 1rem 0.75rem 0.5rem;
+          }
+          .org-card-name {
+            font-size: 0.75rem;
+          }
+          .org-card-role {
+            font-size: 0.6rem;
+          }
+          .org-card-avatar {
+            width: 50px;
+            height: 50px;
+          }
+        }
+      `}</style>
+
+      {/* Org Chart */}
+      <div className="org-chart-container">
+        {Object.entries(hierarchy).map(([level, { title, color, members }]) => (
+          members.length > 0 && (
+            <div key={level} className="org-level-container">
+              <span className="org-level-title" style={{ borderColor: color }}>
+                {title} ({members.length})
+              </span>
+              <div className="org-level">
+                {members.map((member, idx) => (
+                  <PersonCard key={member.id || idx} member={member} color={color} />
                 ))}
-              </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-semibold mb-2">👤 Role</label>
-              <select
-                value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-yellow-500"
-              >
-                <option value="All">All Roles</option>
-                <option value="Manager">Managers & Heads</option>
-                <option value="APC">APCs</option>
-                <option value="Teacher">Teachers</option>
-              </select>
-            </div>
-          </div>
-          <div className="mt-3 text-sm text-gray-500">
-            Showing {filteredMembers.length} of {allMembers.length} members
-          </div>
-        </div>
-      )}
+          )
+        ))}
+      </div>
 
-      {viewMode === 'hierarchy' ? (
-        // Hierarchy View
-        <div className="space-y-8">
-          {Object.entries(hierarchy).map(([level, { title, members }]) => (
-            members.length > 0 && (
-              <div key={level} className="bg-white rounded-2xl shadow-lg overflow-hidden">
-                <div className={`bg-gradient-to-r ${getRoleColor(parseInt(level))} text-white p-4`}>
-                  <h3 className="text-xl font-bold">{title}</h3>
-                  <p className="text-sm opacity-90">{members.length} {members.length === 1 ? 'member' : 'members'}</p>
-                </div>
-                <div className="p-4">
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {members.map((member, idx) => (
-                      <div
-                        key={member.id || idx}
-                        onClick={() => setSelectedMember(member)}
-                        className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 cursor-pointer transition-all hover:shadow-md text-center"
-                      >
-                        {member.profilePhoto ? (
-                          <img
-                            src={member.profilePhoto}
-                            alt={member.name}
-                            className="w-16 h-16 rounded-full mx-auto mb-3 object-cover border-2 border-yellow-400"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 rounded-full mx-auto mb-3 bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-2xl font-bold text-white">
-                            {member.name?.charAt(0) || '?'}
-                          </div>
-                        )}
-                        <div className="font-semibold text-gray-800 text-sm">{member.name}</div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {member.school || member.schools?.join(', ') || member.position || member.subject}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )
-          ))}
-        </div>
-      ) : (
-        // Cards View
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {allMembers.map((member, idx) => (
-            <div
-              key={member.id || idx}
-              onClick={() => setSelectedMember(member)}
-              className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1"
-            >
-              <div className={`bg-gradient-to-r ${getRoleColor(member.level)} h-16`}></div>
-              <div className="p-4 -mt-8 text-center">
-                {member.profilePhoto ? (
-                  <img
-                    src={member.profilePhoto}
-                    alt={member.name}
-                    className="w-16 h-16 rounded-full mx-auto mb-3 object-cover border-4 border-white shadow"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full mx-auto mb-3 bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-2xl font-bold text-white border-4 border-white shadow">
-                    {member.name?.charAt(0) || '?'}
-                  </div>
-                )}
-                <div className="font-bold text-gray-800">{member.name}</div>
-                <div className="text-xs text-gray-500">{member.role}</div>
-                <div className="text-xs text-gray-400 mt-1">
-                  {member.school || member.schools?.join(', ') || member.subject}
-                </div>
-              </div>
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
+        {Object.entries(hierarchy).map(([level, { title, color, members }]) => (
+          members.length > 0 && (
+            <div key={level} className="bg-white rounded-xl p-4 shadow text-center" style={{ borderTop: `4px solid ${color}` }}>
+              <div className="text-2xl font-bold" style={{ color }}>{members.length}</div>
+              <div className="text-sm text-gray-600">{title}</div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Search View */}
-      {viewMode === 'search' && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredMembers.length === 0 ? (
-            <div className="col-span-full bg-white rounded-2xl p-12 text-center">
-              <div className="text-6xl mb-4">🔍</div>
-              <div className="text-xl font-semibold text-gray-600">No members found</div>
-              <div className="text-gray-500 mt-2">Try adjusting your search filters</div>
-            </div>
-          ) : (
-            filteredMembers.map((member, idx) => (
-              <div
-                key={member.id || idx}
-                onClick={() => setSelectedMember(member)}
-                className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl cursor-pointer transition-all hover:-translate-y-1"
-              >
-                <div className={`bg-gradient-to-r ${getRoleColor(member.level)} h-16`}></div>
-                <div className="p-4 -mt-8 text-center">
-                  {member.profilePhoto ? (
-                    <img
-                      src={member.profilePhoto}
-                      alt={member.name}
-                      className="w-16 h-16 rounded-full mx-auto mb-3 object-cover border-4 border-white shadow"
-                    />
-                  ) : (
-                    <div className="w-16 h-16 rounded-full mx-auto mb-3 bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-2xl font-bold text-white border-4 border-white shadow">
-                      {member.name?.charAt(0) || '?'}
-                    </div>
-                  )}
-                  <div className="font-bold text-gray-800">{member.name}</div>
-                  <div className="text-xs text-gray-500">{member.role}</div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    {member.school || member.schools?.join(', ') || member.subject}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+          )
+        ))}
+      </div>
 
       {/* Member Detail Modal */}
       {selectedMember && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedMember(null)}>
-          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className={`bg-gradient-to-r ${getRoleColor(selectedMember.level)} p-6 text-white`}>
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={() => setSelectedMember(null)}>
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div 
+              className="p-6 text-white relative"
+              style={{ background: `linear-gradient(135deg, ${getLevelColor(selectedMember.level)}, ${getLevelColor(selectedMember.level)}dd)` }}
+            >
+              <button
+                onClick={() => setSelectedMember(null)}
+                className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl font-bold"
+              >
+                ×
+              </button>
               <div className="flex items-center gap-4">
                 {selectedMember.profilePhoto ? (
                   <img
                     src={selectedMember.profilePhoto}
                     alt={selectedMember.name}
-                    className="w-20 h-20 rounded-full object-cover border-4 border-white/30"
+                    className="w-20 h-20 rounded-xl object-cover border-4 border-white/30"
                   />
                 ) : (
-                  <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-3xl font-bold">
+                  <div className="w-20 h-20 rounded-xl bg-white/20 flex items-center justify-center text-3xl font-bold">
                     {selectedMember.name?.charAt(0) || '?'}
                   </div>
                 )}
@@ -19119,80 +19120,128 @@ function TeamHierarchy({ teachers, currentUser }) {
                   <p className="opacity-90">{selectedMember.role || selectedMember.position}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedMember(null)}
-                className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl"
-              >
-                ×
-              </button>
             </div>
+
+            {/* Info */}
             <div className="p-6 space-y-4">
               {selectedMember.school && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <span className="text-xl">🏫</span>
-                  <span>{selectedMember.school}</span>
+                  <div>
+                    <div className="text-xs text-gray-500">School</div>
+                    <div className="font-semibold">{selectedMember.school}</div>
+                  </div>
                 </div>
               )}
-              {selectedMember.schools && (
-                <div className="flex items-center gap-3">
+              {selectedMember.schools && selectedMember.schools.length > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <span className="text-xl">🏫</span>
-                  <span>{selectedMember.schools.join(', ')}</span>
+                  <div>
+                    <div className="text-xs text-gray-500">Schools</div>
+                    <div className="font-semibold">{selectedMember.schools.join(', ')}</div>
+                  </div>
                 </div>
               )}
               {selectedMember.subject && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <span className="text-xl">📚</span>
-                  <span>{selectedMember.subject}</span>
+                  <div>
+                    <div className="text-xs text-gray-500">Subject</div>
+                    <div className="font-semibold">{selectedMember.subject}</div>
+                  </div>
                 </div>
               )}
               {selectedMember.email && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <span className="text-xl">📧</span>
-                  <a href={`mailto:${selectedMember.email}`} className="text-blue-600 hover:underline">{selectedMember.email}</a>
+                  <div>
+                    <div className="text-xs text-gray-500">Email</div>
+                    <a href={`mailto:${selectedMember.email}`} className="font-semibold text-blue-600 hover:underline">{selectedMember.email}</a>
+                  </div>
                 </div>
               )}
               {selectedMember.phone && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <span className="text-xl">📱</span>
-                  <a href={`tel:${selectedMember.phone}`} className="text-blue-600 hover:underline">{selectedMember.phone}</a>
+                  <div>
+                    <div className="text-xs text-gray-500">Phone</div>
+                    <a href={`tel:${selectedMember.phone}`} className="font-semibold text-blue-600 hover:underline">{selectedMember.phone}</a>
+                  </div>
                 </div>
               )}
               {selectedMember.whatsapp && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
                   <span className="text-xl">💬</span>
-                  <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">{selectedMember.whatsapp}</a>
+                  <div>
+                    <div className="text-xs text-gray-500">WhatsApp</div>
+                    <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-green-600 hover:underline">{selectedMember.whatsapp}</a>
+                  </div>
                 </div>
               )}
               {selectedMember.dateOfBirth && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 p-3 bg-pink-50 rounded-lg">
                   <span className="text-xl">🎂</span>
-                  <span>{new Date(selectedMember.dateOfBirth).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}</span>
+                  <div>
+                    <div className="text-xs text-gray-500">Birthday</div>
+                    <div className="font-semibold">{new Date(selectedMember.dateOfBirth).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}</div>
+                  </div>
                 </div>
               )}
               {selectedMember.driveLink && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
                   <span className="text-xl">📁</span>
-                  <a href={selectedMember.driveLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Open Google Drive Folder →</a>
+                  <div>
+                    <div className="text-xs text-gray-500">Google Drive</div>
+                    <a href={selectedMember.driveLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 hover:underline">Open Folder →</a>
+                  </div>
                 </div>
               )}
               {selectedMember.qualification && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <span className="text-xl">🎓</span>
-                  <span>{selectedMember.qualification}</span>
+                  <div>
+                    <div className="text-xs text-gray-500">Qualification</div>
+                    <div className="font-semibold">{selectedMember.qualification}</div>
+                  </div>
                 </div>
               )}
               {selectedMember.experience && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                   <span className="text-xl">💼</span>
-                  <span>{selectedMember.experience}</span>
+                  <div>
+                    <div className="text-xs text-gray-500">Experience</div>
+                    <div className="font-semibold">{selectedMember.experience}</div>
+                  </div>
                 </div>
               )}
               {selectedMember.bio && (
-                <div className="bg-gray-50 p-4 rounded-xl mt-4">
-                  <div className="text-sm text-gray-500 mb-1">About</div>
+                <div className="p-3 bg-yellow-50 rounded-lg">
+                  <div className="text-xs text-gray-500 mb-1">About</div>
                   <p className="text-gray-700">{selectedMember.bio}</p>
                 </div>
               )}
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                {selectedMember.phone && (
+                  <a
+                    href={`tel:${selectedMember.phone}`}
+                    className="bg-blue-500 text-white px-4 py-3 rounded-xl font-semibold text-center hover:bg-blue-600 transition-colors"
+                  >
+                    📱 Call
+                  </a>
+                )}
+                {selectedMember.whatsapp && (
+                  <a
+                    href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-green-500 text-white px-4 py-3 rounded-xl font-semibold text-center hover:bg-green-600 transition-colors"
+                  >
+                    💬 WhatsApp
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -19200,6 +19249,7 @@ function TeamHierarchy({ teachers, currentUser }) {
     </div>
   );
 }
+
 
 // ========================================
 // SOCIAL WALL - BIRTHDAYS & POSTS
