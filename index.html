@@ -10478,7 +10478,6 @@ function AdminView({
     { id: 'attendance', label: 'Attendance Analytics', icon: '📊' },
     { id: 'assets', label: 'Asset Management', icon: '📦' },
     { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
-    { id: 'birthdays', label: 'Celebrations', icon: '🎂' },
     // Student Profiles - for viewing student demographics with graphs
     { id: 'studentprofiles', label: 'Student Profiles', icon: '👨‍🎓' },
     { id: 'examstats', label: 'Exam Statistics', icon: '📊' },
@@ -18770,327 +18769,263 @@ function TeacherDirectory({ teachers, currentUser }) {
     </div>
   );
 }
-// ========================================
-// TEAM HIERARCHY - ORGANIZATION VIEW
-// ========================================
 function OrgChartDirectory({ teachers, currentUser }) {
   const [managers, setManagers] = useState([]);
   const [apcs, setApcs] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch managers and APCs
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        
-        // Fetch managers
         const managersSnap = await db.collection('managers').get();
         const managersData = managersSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
+          id: doc.id, ...doc.data(),
           role: doc.data().position || 'Manager'
         }));
         setManagers(managersData);
 
-        // Fetch APCs
         const apcsSnap = await db.collection('apcs').get();
         const apcsData = apcsSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
+          id: doc.id, ...doc.data(),
           role: 'APC'
         }));
         setApcs(apcsData);
-
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error:', error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, []);
 
-  // Build hierarchy structure
+  // Build hierarchy exactly like the image
   const hierarchy = useMemo(() => {
-    // Get unique schools from teachers
     const schoolsSet = new Set(teachers.map(t => t.school).filter(Boolean));
-    const schools = Array.from(schoolsSet);
+    const schools = Array.from(schoolsSet).sort();
 
-    // Find Program Manager (top level)
-    const programManager = managers.find(m => 
+    const pm = managers.find(m => 
       m.position?.includes('Program Manager') && !m.position?.includes('Associate')
     );
 
-    // Find APMs (Associate Program Managers)
     const apms = managers.filter(m => 
       m.position?.includes('Associate Program Manager') || m.position?.includes('APM')
     );
 
-    // Build school data with their APCs and teachers
+    // Schools with their data
     const schoolData = schools.map(school => {
-      // Find APC for this school
       const schoolApc = apcs.find(a => a.school === school || a.schools?.includes(school));
-      
-      // Find APM for this school
-      const schoolApm = apms.find(a => a.schools?.includes(school));
-      
-      // Get teachers for this school
       const schoolTeachers = teachers.filter(t => t.school === school && !t.isArchived);
+      // Check if this school is under an APM
+      const underApm = apms.find(a => a.schools?.includes(school));
       
-      return {
-        name: school,
-        apc: schoolApc,
-        apm: schoolApm,
-        teachers: schoolTeachers
-      };
+      return { name: school, apc: schoolApc, teachers: schoolTeachers, apm: underApm };
     });
 
-    return {
-      programManager,
-      schools: schoolData
-    };
+    // Schools directly under PM (no APM)
+    const directSchools = schoolData.filter(s => !s.apm);
+    
+    // Group schools by APM
+    const apmGroups = apms.map(apm => ({
+      apm,
+      schools: schoolData.filter(s => s.apm?.id === apm.id)
+    })).filter(g => g.schools.length > 0);
+
+    return { pm, directSchools, apmGroups };
   }, [managers, apcs, teachers]);
 
-  // Get subject color
-  const getSubjectColor = (subject) => {
-    const colors = {
-      'Physics': '#3b82f6',    // Blue
-      'Chemistry': '#8b5cf6',  // Purple
-      'Mathematics': '#ef4444', // Red
-      'Maths': '#ef4444',      // Red
-      'Biology': '#10b981'     // Green
-    };
-    return colors[subject] || '#6b7280';
-  };
-
-  // Person Card Component
-  const PersonCard = ({ person, type = 'teacher', showSubject = true }) => {
-    const bgColor = type === 'manager' ? '#c4b5fd' : 
-                    type === 'school' ? '#fcd34d' :
-                    type === 'apm' ? '#fecaca' :
-                    type === 'apc' ? '#fed7aa' : 
-                    '#bfdbfe';
-    
-    const subjectColor = getSubjectColor(person.subject);
-    
-    return (
-      <div 
-        onClick={() => setSelectedMember({...person, type})}
-        className="org-node cursor-pointer hover:scale-105 transition-transform"
-      >
-        <div className="org-card" style={{ background: bgColor }}>
-          <div className="org-card-name">{person.name}</div>
-        </div>
-        {showSubject && person.subject && (
-          <div className="org-card-subject" style={{ background: subjectColor }}>
-            {person.subject}
-          </div>
-        )}
-        {type === 'apc' && (
-          <div className="org-card-subject" style={{ background: '#f97316' }}>
-            APC
-          </div>
-        )}
-        {type === 'apm' && (
-          <div className="org-card-subject" style={{ background: '#ec4899' }}>
-            APM
-          </div>
-        )}
-        {type === 'manager' && (
-          <div className="org-card-subject" style={{ background: '#7c3aed' }}>
-            {person.position || 'Program Manager'}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // School Box Component
-  const SchoolBox = ({ name }) => (
-    <div className="school-box">
-      {name}
-    </div>
-  );
+  const getSubjectColor = (subject) => ({
+    'Physics': '#3b82f6', 'Chemistry': '#8b5cf6', 
+    'Mathematics': '#ef4444', 'Maths': '#ef4444', 'Biology': '#10b981'
+  }[subject] || '#6b7280');
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-yellow-500 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading directory...</p>
-        </div>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-pink-500 border-t-transparent mx-auto"></div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="text-center mb-4">
-        <h2 className="text-3xl font-bold text-gray-800">🏛️ Directory</h2>
-        <p className="text-gray-600 mt-2">Organization Hierarchy</p>
-      </div>
-
-      {/* Org Chart Styles */}
       <style>{`
-        .org-chart {
-          background: #f8f4f0;
-          border-radius: 1rem;
-          padding: 2rem;
+        .org-chart-wrapper {
+          background: linear-gradient(180deg, #fef7f7 0%, #fdf4ff 50%, #f0fdf4 100%);
+          border-radius: 24px;
+          padding: 40px 20px;
           overflow-x: auto;
-          min-height: 500px;
         }
         
-        .org-tree {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
+        .tree { display: flex; flex-direction: column; align-items: center; }
         
-        .org-node {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          margin: 0 8px;
-        }
-        
-        .org-card {
-          padding: 8px 16px;
-          border-radius: 8px;
-          border: 2px solid #e879a0;
-          text-align: center;
-          min-width: 100px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .org-card-name {
-          font-weight: 600;
-          font-size: 0.85rem;
-          color: #1f2937;
-        }
-        
-        .org-card-subject {
-          margin-top: 4px;
-          padding: 4px 12px;
-          border-radius: 4px;
-          color: white;
-          font-size: 0.75rem;
-          font-weight: 600;
-          text-align: center;
-        }
-        
-        .school-box {
-          background: #fcd34d;
-          padding: 10px 24px;
-          border-radius: 8px;
-          border: 2px solid #e879a0;
-          font-weight: 700;
-          font-size: 0.9rem;
-          color: #1f2937;
-          text-align: center;
-          min-width: 140px;
-        }
-        
-        .level-row {
+        .tree-row {
           display: flex;
           justify-content: center;
-          flex-wrap: wrap;
-          gap: 20px;
           position: relative;
-          padding: 20px 0;
         }
         
-        .school-section {
+        .tree-node {
           display: flex;
           flex-direction: column;
           align-items: center;
+          margin: 0 15px;
           position: relative;
-          margin: 0 10px;
         }
         
-        .school-section::before {
-          content: '';
-          position: absolute;
-          top: -20px;
-          left: 50%;
+        .node-card {
+          padding: 10px 18px;
+          border-radius: 10px;
+          border: 2px solid #e879a0;
+          text-align: center;
+          font-weight: 600;
+          font-size: 13px;
+          cursor: pointer;
+          transition: all 0.2s;
+          position: relative;
+          z-index: 2;
+          min-width: 90px;
+        }
+        
+        .node-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 8px 25px rgba(232, 121, 160, 0.3);
+        }
+        
+        .pm-card { background: linear-gradient(135deg, #ddd6fe, #c4b5fd); }
+        .school-card { background: linear-gradient(135deg, #fef08a, #fde047); }
+        .apm-card { background: linear-gradient(135deg, #fecaca, #fca5a5); }
+        .apc-card { background: linear-gradient(135deg, #fed7aa, #fdba74); }
+        .teacher-card { background: linear-gradient(135deg, #bfdbfe, #93c5fd); }
+        .vacant-card { background: linear-gradient(135deg, #fca5a5, #f87171) !important; color: white; }
+        
+        .node-label {
+          margin-top: 5px;
+          padding: 3px 10px;
+          border-radius: 5px;
+          color: white;
+          font-size: 11px;
+          font-weight: 600;
+        }
+        
+        /* Connector Lines */
+        .v-line {
           width: 2px;
-          height: 20px;
           background: #e879a0;
+          position: relative;
+          z-index: 1;
+        }
+        
+        .h-line {
+          height: 2px;
+          background: #e879a0;
+          position: absolute;
+          z-index: 1;
         }
         
         .connector-down {
           width: 2px;
-          height: 30px;
+          height: 25px;
           background: #e879a0;
           margin: 0 auto;
         }
         
-        .connector-horizontal {
-          height: 2px;
-          background: #e879a0;
-          position: absolute;
-          top: 0;
+        .branch-container {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
         }
         
-        .teachers-row {
+        .branch-row {
+          display: flex;
+          justify-content: center;
+          position: relative;
+        }
+        
+        .branch-row::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          height: 2px;
+          background: #e879a0;
+          z-index: 1;
+        }
+        
+        .branch-item {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          position: relative;
+        }
+        
+        .branch-item::before {
+          content: '';
+          position: absolute;
+          top: -25px;
+          left: 50%;
+          width: 2px;
+          height: 25px;
+          background: #e879a0;
+          z-index: 1;
+        }
+        
+        .teachers-container {
+          margin-top: 10px;
+        }
+        
+        .teachers-grid {
           display: flex;
           justify-content: center;
           flex-wrap: wrap;
           gap: 10px;
           position: relative;
-          padding-top: 20px;
+          padding-top: 25px;
         }
         
-        .teachers-row::before {
+        .teachers-grid::before {
           content: '';
           position: absolute;
           top: 0;
-          left: 20%;
-          right: 20%;
+          left: 15%;
+          right: 15%;
           height: 2px;
           background: #e879a0;
         }
         
-        .teachers-row .org-node::before {
-          content: '';
-          position: absolute;
-          top: -20px;
-          left: 50%;
-          width: 2px;
-          height: 20px;
-          background: #e879a0;
-        }
-        
-        .teachers-row .org-node {
+        .teacher-item {
           position: relative;
         }
         
-        .manager-section {
+        .teacher-item::before {
+          content: '';
+          position: absolute;
+          top: -25px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 2px;
+          height: 25px;
+          background: #e879a0;
+        }
+        
+        .section-group {
           display: flex;
           flex-direction: column;
           align-items: center;
-          margin-bottom: 30px;
+          margin: 0 20px;
         }
         
-        .manager-section::after {
-          content: '';
-          width: 2px;
-          height: 30px;
-          background: #e879a0;
-          margin-top: 10px;
-        }
-        
-        .schools-connector {
+        .direct-schools-row {
           display: flex;
           justify-content: center;
+          gap: 30px;
           position: relative;
-          margin-bottom: 20px;
+          padding-top: 30px;
         }
         
-        .schools-connector::before {
+        .direct-schools-row::before {
           content: '';
           position: absolute;
           top: 0;
@@ -19100,185 +19035,276 @@ function OrgChartDirectory({ teachers, currentUser }) {
           background: #e879a0;
         }
         
-        .schools-row {
-          display: flex;
-          justify-content: center;
-          flex-wrap: wrap;
-          gap: 40px;
-        }
-        
         .school-branch {
           display: flex;
           flex-direction: column;
           align-items: center;
-          min-width: 200px;
+          position: relative;
         }
         
-        .school-branch-line {
+        .school-branch::before {
+          content: '';
+          position: absolute;
+          top: -30px;
+          left: 50%;
           width: 2px;
-          height: 20px;
+          height: 30px;
           background: #e879a0;
         }
         
-        .vacant-card {
-          background: #fca5a5 !important;
+        .apm-section {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          margin-top: 40px;
+          position: relative;
+        }
+        
+        .apm-section::before {
+          content: '';
+          position: absolute;
+          top: -40px;
+          left: 50%;
+          width: 2px;
+          height: 40px;
+          background: #e879a0;
+        }
+        
+        .apm-schools-row {
+          display: flex;
+          justify-content: center;
+          gap: 40px;
+          position: relative;
+          padding-top: 30px;
+          margin-top: 10px;
+        }
+        
+        .apm-schools-row::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 20%;
+          right: 20%;
+          height: 2px;
+          background: #e879a0;
+        }
+        
+        .fun-emoji {
+          font-size: 24px;
+          animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-5px); }
         }
         
         @media (max-width: 768px) {
-          .org-chart {
-            padding: 1rem;
-          }
-          .schools-row {
-            gap: 20px;
-          }
-          .school-branch {
-            min-width: 150px;
-          }
-          .org-card {
-            min-width: 80px;
-            padding: 6px 10px;
-          }
-          .org-card-name {
-            font-size: 0.75rem;
-          }
-          .school-box {
-            padding: 8px 16px;
-            font-size: 0.8rem;
-            min-width: 120px;
-          }
+          .direct-schools-row, .apm-schools-row { gap: 15px; flex-wrap: wrap; }
+          .node-card { padding: 8px 12px; font-size: 11px; min-width: 70px; }
+          .section-group { margin: 0 10px; }
         }
       `}</style>
 
+      {/* Fun Header */}
+      <div className="text-center">
+        <div className="inline-flex items-center gap-3 bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100 px-6 py-3 rounded-full shadow-lg">
+          <span className="fun-emoji">👨‍👩‍👧‍👦</span>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 bg-clip-text text-transparent">
+            Our Family Tree
+          </h2>
+          <span className="fun-emoji">🌳</span>
+        </div>
+        <p className="text-gray-500 mt-3 text-sm">Click on anyone to see their details & contact info! 📞</p>
+      </div>
+
       {/* Org Chart */}
-      <div className="org-chart">
-        <div className="org-tree">
-          {/* Program Manager at Top */}
-          {hierarchy.programManager && (
-            <div className="manager-section">
-              <PersonCard person={hierarchy.programManager} type="manager" showSubject={false} />
+      <div className="org-chart-wrapper">
+        <div className="tree">
+          
+          {/* Level 1: Program Manager */}
+          {hierarchy.pm && (
+            <div className="tree-node">
+              <div className="node-card pm-card" onClick={() => setSelectedMember({...hierarchy.pm, type: 'pm'})}>
+                {hierarchy.pm.name}
+              </div>
+              <div className="node-label" style={{ background: '#7c3aed' }}>Program Manager</div>
+            </div>
+          )}
+          
+          <div className="connector-down" style={{ height: '35px' }}></div>
+
+          {/* Level 2: Direct Schools */}
+          {hierarchy.directSchools.length > 0 && (
+            <div className="direct-schools-row">
+              {hierarchy.directSchools.map((school, idx) => (
+                <div key={school.name} className="school-branch">
+                  <div className="tree-node">
+                    <div className="node-card school-card">
+                      {school.name}
+                    </div>
+                  </div>
+                  
+                  {/* APC under school if exists */}
+                  {school.apc && (
+                    <>
+                      <div className="connector-down"></div>
+                      <div className="tree-node">
+                        <div className="node-card apc-card" onClick={() => setSelectedMember({...school.apc, type: 'apc'})}>
+                          {school.apc.name}
+                        </div>
+                        <div className="node-label" style={{ background: '#f97316' }}>APC</div>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Teachers */}
+                  {school.teachers.length > 0 && (
+                    <div className="teachers-container">
+                      <div className="connector-down"></div>
+                      <div className="teachers-grid">
+                        {school.teachers.map((teacher, tidx) => (
+                          <div key={teacher.docId || tidx} className="teacher-item">
+                            <div 
+                              className={`node-card teacher-card ${teacher.name?.toLowerCase() === 'vacant' ? 'vacant-card' : ''}`}
+                              onClick={() => setSelectedMember({...teacher, type: 'teacher'})}
+                            >
+                              {teacher.name}
+                            </div>
+                            <div className="node-label" style={{ background: getSubjectColor(teacher.subject) }}>
+                              {teacher.subject}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Schools Connector Line */}
-          <div className="schools-connector" style={{ width: '80%' }}></div>
-
-          {/* Schools Row */}
-          <div className="schools-row">
-            {hierarchy.schools.map((school, idx) => (
-              <div key={school.name} className="school-branch">
-                {/* Vertical line from horizontal connector */}
-                <div className="school-branch-line"></div>
-                
-                {/* School Name Box */}
-                <SchoolBox name={school.name} />
-                
-                {/* Connector to APC/APM or Teachers */}
-                <div className="connector-down"></div>
-
-                {/* APC if exists */}
-                {school.apc && (
-                  <>
-                    <PersonCard person={school.apc} type="apc" showSubject={false} />
-                    <div className="connector-down"></div>
-                  </>
-                )}
-
-                {/* APM if exists */}
-                {school.apm && !school.apc && (
-                  <>
-                    <PersonCard person={school.apm} type="apm" showSubject={false} />
-                    <div className="connector-down"></div>
-                  </>
-                )}
-
-                {/* Teachers */}
-                {school.teachers.length > 0 && (
-                  <div className="teachers-row">
-                    {school.teachers.map((teacher, tidx) => (
-                      <PersonCard key={teacher.docId || tidx} person={teacher} type="teacher" />
-                    ))}
-                  </div>
-                )}
-
-                {school.teachers.length === 0 && (
-                  <div className="org-node">
-                    <div className="org-card vacant-card">
-                      <div className="org-card-name">No Teachers</div>
-                    </div>
-                  </div>
-                )}
+          {/* Level 3: APM Sections */}
+          {hierarchy.apmGroups.map((group, idx) => (
+            <div key={group.apm.id} className="apm-section">
+              <div className="tree-node">
+                <div className="node-card apm-card" onClick={() => setSelectedMember({...group.apm, type: 'apm'})}>
+                  {group.apm.name}
+                </div>
+                <div className="node-label" style={{ background: '#ec4899' }}>APM</div>
               </div>
-            ))}
+              
+              {/* Schools under APM */}
+              <div className="apm-schools-row">
+                {group.schools.map((school, sidx) => (
+                  <div key={school.name} className="school-branch">
+                    <div className="tree-node">
+                      <div className="node-card school-card">
+                        {school.name}
+                      </div>
+                    </div>
+                    
+                    {/* Teachers */}
+                    {school.teachers.length > 0 && (
+                      <div className="teachers-container">
+                        <div className="connector-down"></div>
+                        <div className="teachers-grid">
+                          {school.teachers.map((teacher, tidx) => (
+                            <div key={teacher.docId || tidx} className="teacher-item">
+                              <div 
+                                className={`node-card teacher-card ${teacher.name?.toLowerCase() === 'vacant' ? 'vacant-card' : ''}`}
+                                onClick={() => setSelectedMember({...teacher, type: 'teacher'})}
+                              >
+                                {teacher.name}
+                              </div>
+                              <div className="node-label" style={{ background: getSubjectColor(teacher.subject) }}>
+                                {teacher.subject}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Fun Legend */}
+      <div className="bg-white/90 backdrop-blur rounded-2xl p-5 shadow-xl border border-pink-100">
+        <h3 className="font-bold mb-4 text-gray-700 flex items-center gap-2">
+          <span>🎨</span> Color Guide
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="flex items-center gap-2 bg-purple-50 p-2 rounded-lg">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-r from-purple-200 to-purple-300 border-2 border-pink-400"></div>
+            <span className="text-xs font-medium">Manager</span>
+          </div>
+          <div className="flex items-center gap-2 bg-yellow-50 p-2 rounded-lg">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-r from-yellow-200 to-yellow-300 border-2 border-pink-400"></div>
+            <span className="text-xs font-medium">School</span>
+          </div>
+          <div className="flex items-center gap-2 bg-red-50 p-2 rounded-lg">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-r from-red-200 to-red-300 border-2 border-pink-400"></div>
+            <span className="text-xs font-medium">APM</span>
+          </div>
+          <div className="flex items-center gap-2 bg-orange-50 p-2 rounded-lg">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-r from-orange-200 to-orange-300 border-2 border-pink-400"></div>
+            <span className="text-xs font-medium">APC</span>
+          </div>
+          <div className="flex items-center gap-2 bg-blue-50 p-2 rounded-lg">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-r from-blue-200 to-blue-300 border-2 border-pink-400"></div>
+            <span className="text-xs font-medium">Teacher</span>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-gray-100">
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded" style={{ background: '#3b82f6' }}></div>
+            <span className="text-xs">Physics</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded" style={{ background: '#8b5cf6' }}></div>
+            <span className="text-xs">Chemistry</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded" style={{ background: '#ef4444' }}></div>
+            <span className="text-xs">Maths</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded" style={{ background: '#10b981' }}></div>
+            <span className="text-xs">Biology</span>
           </div>
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="bg-white rounded-xl p-4 shadow">
-        <h3 className="font-bold mb-3">Legend</h3>
-        <div className="flex flex-wrap gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded" style={{ background: '#c4b5fd' }}></div>
-            <span className="text-sm">Manager</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded" style={{ background: '#fcd34d' }}></div>
-            <span className="text-sm">School</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded" style={{ background: '#fed7aa' }}></div>
-            <span className="text-sm">APC</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded" style={{ background: '#bfdbfe' }}></div>
-            <span className="text-sm">Teacher</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded" style={{ background: '#3b82f6' }}></div>
-            <span className="text-sm">Physics</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded" style={{ background: '#8b5cf6' }}></div>
-            <span className="text-sm">Chemistry</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded" style={{ background: '#ef4444' }}></div>
-            <span className="text-sm">Maths</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded" style={{ background: '#10b981' }}></div>
-            <span className="text-sm">Biology</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Member Detail Modal */}
+      {/* Member Modal */}
       {selectedMember && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4" onClick={() => setSelectedMember(null)}>
-          <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="p-6 text-white relative" style={{ 
-              background: selectedMember.type === 'manager' ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)' :
-                         selectedMember.type === 'apc' ? 'linear-gradient(135deg, #f97316, #ea580c)' :
-                         selectedMember.type === 'apm' ? 'linear-gradient(135deg, #ec4899, #db2777)' :
-                         `linear-gradient(135deg, ${getSubjectColor(selectedMember.subject)}, ${getSubjectColor(selectedMember.subject)}dd)`
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedMember(null)}>
+          <div className="bg-white rounded-3xl max-w-md w-full max-h-[85vh] overflow-y-auto shadow-2xl animate-modalIn" onClick={e => e.stopPropagation()}>
+            <style>{`
+              @keyframes modalIn {
+                from { opacity: 0; transform: scale(0.9) translateY(20px); }
+                to { opacity: 1; transform: scale(1) translateY(0); }
+              }
+              .animate-modalIn { animation: modalIn 0.3s ease-out; }
+            `}</style>
+            
+            <div className="p-6 text-white relative rounded-t-3xl" style={{ 
+              background: selectedMember.type === 'pm' ? 'linear-gradient(135deg, #8b5cf6, #6d28d9)' :
+                         selectedMember.type === 'apm' ? 'linear-gradient(135deg, #ec4899, #be185d)' :
+                         selectedMember.type === 'apc' ? 'linear-gradient(135deg, #f97316, #c2410c)' :
+                         `linear-gradient(135deg, ${getSubjectColor(selectedMember.subject)}, ${getSubjectColor(selectedMember.subject)}99)`
             }}>
-              <button
-                onClick={() => setSelectedMember(null)}
-                className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl font-bold"
-              >
-                ×
-              </button>
+              <button onClick={() => setSelectedMember(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">✕</button>
               <div className="flex items-center gap-4">
                 {selectedMember.profilePhoto ? (
-                  <img
-                    src={selectedMember.profilePhoto}
-                    alt={selectedMember.name}
-                    className="w-20 h-20 rounded-xl object-cover border-4 border-white/30"
-                  />
+                  <img src={selectedMember.profilePhoto} alt="" className="w-20 h-20 rounded-2xl object-cover border-4 border-white/30" />
                 ) : (
-                  <div className="w-20 h-20 rounded-xl bg-white/20 flex items-center justify-center text-3xl font-bold">
-                    {selectedMember.name?.charAt(0) || '?'}
+                  <div className="w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center text-4xl font-bold">
+                    {selectedMember.name?.charAt(0)}
                   </div>
                 )}
                 <div>
@@ -19288,124 +19314,62 @@ function OrgChartDirectory({ teachers, currentUser }) {
               </div>
             </div>
 
-            {/* Info */}
-            <div className="p-6 space-y-3">
+            <div className="p-5 space-y-3">
               {selectedMember.school && (
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl">
                   <span className="text-xl">🏫</span>
-                  <div>
-                    <div className="text-xs text-gray-500">School</div>
-                    <div className="font-semibold">{selectedMember.school}</div>
-                  </div>
+                  <div><div className="text-xs text-gray-500">School</div><div className="font-semibold">{selectedMember.school}</div></div>
                 </div>
               )}
-              {selectedMember.schools && selectedMember.schools.length > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              {selectedMember.schools?.length > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl">
                   <span className="text-xl">🏫</span>
-                  <div>
-                    <div className="text-xs text-gray-500">Schools</div>
-                    <div className="font-semibold">{selectedMember.schools.join(', ')}</div>
-                  </div>
+                  <div><div className="text-xs text-gray-500">Schools</div><div className="font-semibold">{selectedMember.schools.join(', ')}</div></div>
                 </div>
               )}
               {selectedMember.subject && (
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl">
                   <span className="text-xl">📚</span>
-                  <div>
-                    <div className="text-xs text-gray-500">Subject</div>
-                    <div className="font-semibold">{selectedMember.subject}</div>
-                  </div>
+                  <div><div className="text-xs text-gray-500">Subject</div><div className="font-semibold">{selectedMember.subject}</div></div>
                 </div>
               )}
               {selectedMember.email && (
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3 p-3 bg-indigo-50 rounded-xl">
                   <span className="text-xl">📧</span>
-                  <div>
-                    <div className="text-xs text-gray-500">Email</div>
-                    <a href={`mailto:${selectedMember.email}`} className="font-semibold text-blue-600 hover:underline break-all">{selectedMember.email}</a>
-                  </div>
+                  <div><div className="text-xs text-gray-500">Email</div><a href={`mailto:${selectedMember.email}`} className="font-semibold text-blue-600 hover:underline break-all">{selectedMember.email}</a></div>
                 </div>
               )}
               {selectedMember.phone && (
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3 p-3 bg-cyan-50 rounded-xl">
                   <span className="text-xl">📱</span>
-                  <div>
-                    <div className="text-xs text-gray-500">Phone</div>
-                    <a href={`tel:${selectedMember.phone}`} className="font-semibold text-blue-600 hover:underline">{selectedMember.phone}</a>
-                  </div>
+                  <div><div className="text-xs text-gray-500">Phone</div><a href={`tel:${selectedMember.phone}`} className="font-semibold text-blue-600 hover:underline">{selectedMember.phone}</a></div>
                 </div>
               )}
               {selectedMember.whatsapp && (
-                <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+                <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">
                   <span className="text-xl">💬</span>
-                  <div>
-                    <div className="text-xs text-gray-500">WhatsApp</div>
-                    <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-green-600 hover:underline">{selectedMember.whatsapp}</a>
-                  </div>
+                  <div><div className="text-xs text-gray-500">WhatsApp</div><a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" className="font-semibold text-green-600 hover:underline">{selectedMember.whatsapp}</a></div>
                 </div>
               )}
               {selectedMember.dateOfBirth && (
-                <div className="flex items-center gap-3 p-3 bg-pink-50 rounded-lg">
+                <div className="flex items-center gap-3 p-3 bg-pink-50 rounded-xl">
                   <span className="text-xl">🎂</span>
-                  <div>
-                    <div className="text-xs text-gray-500">Birthday</div>
-                    <div className="font-semibold">{new Date(selectedMember.dateOfBirth).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}</div>
-                  </div>
+                  <div><div className="text-xs text-gray-500">Birthday</div><div className="font-semibold">{new Date(selectedMember.dateOfBirth).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}</div></div>
                 </div>
               )}
               {selectedMember.driveLink && (
-                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-3 p-3 bg-sky-50 rounded-xl">
                   <span className="text-xl">📁</span>
-                  <div>
-                    <div className="text-xs text-gray-500">Google Drive</div>
-                    <a href={selectedMember.driveLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 hover:underline">Open Folder →</a>
-                  </div>
-                </div>
-              )}
-              {selectedMember.qualification && (
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <span className="text-xl">🎓</span>
-                  <div>
-                    <div className="text-xs text-gray-500">Qualification</div>
-                    <div className="font-semibold">{selectedMember.qualification}</div>
-                  </div>
-                </div>
-              )}
-              {selectedMember.experience && (
-                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <span className="text-xl">💼</span>
-                  <div>
-                    <div className="text-xs text-gray-500">Experience</div>
-                    <div className="font-semibold">{selectedMember.experience}</div>
-                  </div>
-                </div>
-              )}
-              {selectedMember.bio && (
-                <div className="p-3 bg-yellow-50 rounded-lg">
-                  <div className="text-xs text-gray-500 mb-1">About</div>
-                  <p className="text-gray-700">{selectedMember.bio}</p>
+                  <div><div className="text-xs text-gray-500">Drive</div><a href={selectedMember.driveLink} target="_blank" className="font-semibold text-blue-600 hover:underline">Open Folder →</a></div>
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-3 pt-4">
+              <div className="grid grid-cols-2 gap-3 pt-3">
                 {selectedMember.phone && (
-                  <a
-                    href={`tel:${selectedMember.phone}`}
-                    className="bg-blue-500 text-white px-4 py-3 rounded-xl font-semibold text-center hover:bg-blue-600 transition-colors"
-                  >
-                    📱 Call
-                  </a>
+                  <a href={`tel:${selectedMember.phone}`} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg transition-all">📱 Call</a>
                 )}
                 {selectedMember.whatsapp && (
-                  <a
-                    href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-green-500 text-white px-4 py-3 rounded-xl font-semibold text-center hover:bg-green-600 transition-colors"
-                  >
-                    💬 WhatsApp
-                  </a>
+                  <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" className="bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg transition-all">💬 WhatsApp</a>
                 )}
               </div>
             </div>
@@ -19416,13 +19380,13 @@ function OrgChartDirectory({ teachers, currentUser }) {
   );
 }
 
-
 // ========================================
-// SOCIAL WALL - BIRTHDAYS & POSTS
+// SOCIAL WALL - WITH CELEBRATIONS
 // ========================================
 function SocialWall({ teachers, currentUser }) {
   const [posts, setPosts] = useState([]);
   const [birthdays, setBirthdays] = useState([]);
+  const [upcomingBirthdays, setUpcomingBirthdays] = useState([]);
   const [anniversaries, setAnniversaries] = useState([]);
   const [showNewPost, setShowNewPost] = useState(false);
   const [newPostContent, setNewPostContent] = useState('');
@@ -19430,30 +19394,27 @@ function SocialWall({ teachers, currentUser }) {
   const [loading, setLoading] = useState(true);
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(null);
   const [allMembers, setAllMembers] = useState([]);
+  const [activeTab, setActiveTab] = useState('feed'); // 'feed' or 'celebrations'
 
-  // Fetch all members and posts
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         
-        // Fetch managers
         const managersSnap = await db.collection('managers').get();
         const managers = managersSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'Manager' }));
         
-        // Fetch APCs
         const apcsSnap = await db.collection('apcs').get();
         const apcs = apcsSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'APC' }));
         
-        // Combine all
         const combined = [...managers, ...apcs, ...teachers];
         setAllMembers(combined);
 
-        // Check today's birthdays and anniversaries
         const today = new Date();
         const todayMonth = today.getMonth() + 1;
         const todayDate = today.getDate();
 
+        // Today's birthdays
         const todayBirthdays = combined.filter(m => {
           if (!m.dateOfBirth) return false;
           const dob = new Date(m.dateOfBirth);
@@ -19461,6 +19422,25 @@ function SocialWall({ teachers, currentUser }) {
         });
         setBirthdays(todayBirthdays);
 
+        // Upcoming birthdays (next 30 days)
+        const upcoming = combined.filter(m => {
+          if (!m.dateOfBirth) return false;
+          const dob = new Date(m.dateOfBirth);
+          const thisYearBday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
+          if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
+          const diffDays = Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
+          return diffDays > 0 && diffDays <= 30;
+        }).sort((a, b) => {
+          const aDate = new Date(a.dateOfBirth);
+          const bDate = new Date(b.dateOfBirth);
+          const aMonth = aDate.getMonth(), aDay = aDate.getDate();
+          const bMonth = bDate.getMonth(), bDay = bDate.getDate();
+          if (aMonth !== bMonth) return aMonth - bMonth;
+          return aDay - bDay;
+        }).slice(0, 10);
+        setUpcomingBirthdays(upcoming);
+
+        // Anniversaries
         const todayAnniversaries = combined.filter(m => {
           if (!m.anniversary) return false;
           const ann = new Date(m.anniversary);
@@ -19468,7 +19448,7 @@ function SocialWall({ teachers, currentUser }) {
         });
         setAnniversaries(todayAnniversaries);
 
-        // Show birthday popup if there are birthdays
+        // Show birthday popup
         if (todayBirthdays.length > 0) {
           const dismissedToday = localStorage.getItem('birthdayDismissed_' + today.toDateString());
           if (!dismissedToday) {
@@ -19482,14 +19462,9 @@ function SocialWall({ teachers, currentUser }) {
           .limit(50)
           .get();
         
-        const postsData = postsSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setPosts(postsData);
-
+        setPosts(postsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (error) {
-        console.error('Error fetching social data:', error);
+        console.error('Error:', error);
       } finally {
         setLoading(false);
       }
@@ -19498,10 +19473,8 @@ function SocialWall({ teachers, currentUser }) {
     fetchData();
   }, [teachers]);
 
-  // Create new post
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
-    
     setPosting(true);
     try {
       const postData = {
@@ -19520,86 +19493,53 @@ function SocialWall({ teachers, currentUser }) {
       setNewPostContent('');
       setShowNewPost(false);
     } catch (error) {
-      console.error('Error creating post:', error);
       alert('Failed to create post');
     } finally {
       setPosting(false);
     }
   };
 
-  // Add reaction to post
   const handleReaction = async (postId, emoji) => {
     const userId = currentUser.afid || currentUser.uid;
     const post = posts.find(p => p.id === postId);
     if (!post) return;
 
-    const currentReaction = post.reactions?.[userId];
     let newReactions = { ...(post.reactions || {}) };
-
-    if (currentReaction === emoji) {
+    if (newReactions[userId] === emoji) {
       delete newReactions[userId];
     } else {
       newReactions[userId] = emoji;
     }
 
     try {
-      await db.collection('socialPosts').doc(postId).update({
-        reactions: newReactions
-      });
-      
-      setPosts(posts.map(p => 
-        p.id === postId ? { ...p, reactions: newReactions } : p
-      ));
+      await db.collection('socialPosts').doc(postId).update({ reactions: newReactions });
+      setPosts(posts.map(p => p.id === postId ? { ...p, reactions: newReactions } : p));
     } catch (error) {
-      console.error('Error updating reaction:', error);
+      console.error('Error:', error);
     }
   };
 
-  // Add comment to post
-  const handleAddComment = async (postId, comment) => {
-    if (!comment.trim()) return;
-    
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-
-    const newComment = {
-      id: Date.now(),
-      authorId: currentUser.afid || currentUser.uid,
-      authorName: currentUser.name,
-      content: comment.trim(),
-      createdAt: new Date().toISOString()
-    };
-
-    const newComments = [...(post.comments || []), newComment];
-
-    try {
-      await db.collection('socialPosts').doc(postId).update({
-        comments: newComments
-      });
-      
-      setPosts(posts.map(p => 
-        p.id === postId ? { ...p, comments: newComments } : p
-      ));
-    } catch (error) {
-      console.error('Error adding comment:', error);
-    }
-  };
-
-  // Dismiss birthday popup
   const dismissBirthdayPopup = () => {
     localStorage.setItem('birthdayDismissed_' + new Date().toDateString(), 'true');
     setShowBirthdayPopup(null);
   };
 
-  // Post reaction emojis
-  const REACTION_EMOJIS = ['👍', '❤️', '😊', '🎉', '👏', '🙌'];
+  const emojis = ['👍', '❤️', '😊', '🎉', '👏', '🙌'];
+
+  const getDaysUntilBirthday = (dob) => {
+    const today = new Date();
+    const bday = new Date(dob);
+    const thisYearBday = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
+    if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
+    return Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-yellow-500 border-t-transparent mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading social wall...</p>
+          <div className="text-6xl mb-4 animate-bounce">🎉</div>
+          <p className="text-gray-600">Loading fun stuff...</p>
         </div>
       </div>
     );
@@ -19607,258 +19547,405 @@ function SocialWall({ teachers, currentUser }) {
 
   return (
     <div className="space-y-6">
-      {/* Birthday Popup */}
-      {showBirthdayPopup && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-          <div className="bg-gradient-to-br from-yellow-400 via-pink-500 to-purple-600 rounded-3xl p-1 max-w-md w-full animate-pulse">
-            <div className="bg-white rounded-3xl p-8 text-center">
-              <div className="text-6xl mb-4">🎂</div>
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">Happy Birthday!</h2>
-              <div className="text-5xl mb-4">🎉🎈🎁</div>
-              {showBirthdayPopup.profilePhoto ? (
-                <img 
-                  src={showBirthdayPopup.profilePhoto} 
-                  alt={showBirthdayPopup.name}
-                  className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-yellow-400 object-cover"
-                />
-              ) : (
-                <div className="w-24 h-24 rounded-full mx-auto mb-4 bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-4xl font-bold text-white">
-                  {showBirthdayPopup.name?.charAt(0)}
-                </div>
-              )}
-              <p className="text-2xl font-bold text-gray-800">{showBirthdayPopup.name}</p>
-              <p className="text-gray-600">{showBirthdayPopup.school || showBirthdayPopup.position}</p>
-              <p className="text-lg mt-4 text-gray-600">Wishing you a wonderful day! 🌟</p>
-              <button
-                onClick={dismissBirthdayPopup}
-                className="mt-6 px-8 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-full font-bold hover:shadow-lg transition-all"
-              >
-                Send Wishes 💝
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <style>{`
+        .confetti {
+          position: fixed;
+          width: 10px;
+          height: 10px;
+          background: #f00;
+          animation: fall 3s linear infinite;
+        }
+        
+        @keyframes fall {
+          to { transform: translateY(100vh) rotate(720deg); }
+        }
+        
+        .celebration-card {
+          background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 50%, #fbcfe8 100%);
+          border: 2px solid #f9a8d4;
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .celebration-card::before {
+          content: '🎈🎉🎊';
+          position: absolute;
+          top: -10px;
+          right: -10px;
+          font-size: 40px;
+          opacity: 0.3;
+          transform: rotate(15deg);
+        }
+        
+        .birthday-card {
+          animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.4); }
+          50% { box-shadow: 0 0 0 10px rgba(236, 72, 153, 0); }
+        }
+        
+        .tab-btn {
+          padding: 12px 24px;
+          border-radius: 12px;
+          font-weight: 600;
+          transition: all 0.3s;
+        }
+        
+        .tab-active {
+          background: linear-gradient(135deg, #ec4899, #8b5cf6);
+          color: white;
+          box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
+        }
+        
+        .tab-inactive {
+          background: white;
+          color: #6b7280;
+        }
+        
+        .tab-inactive:hover {
+          background: #fdf2f8;
+        }
+        
+        .post-card {
+          background: white;
+          border-radius: 20px;
+          border: 1px solid #f3e8ff;
+          transition: all 0.3s;
+        }
+        
+        .post-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 30px rgba(139, 92, 246, 0.1);
+        }
+        
+        .emoji-btn {
+          padding: 6px 10px;
+          border-radius: 20px;
+          transition: all 0.2s;
+          background: #f9fafb;
+        }
+        
+        .emoji-btn:hover {
+          background: #fdf2f8;
+          transform: scale(1.1);
+        }
+        
+        .emoji-btn.active {
+          background: linear-gradient(135deg, #fce7f3, #ede9fe);
+        }
+      `}</style>
 
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-3xl font-bold">🎉 Social Wall</h2>
-          <p className="text-gray-600">Connect with your team</p>
+      {/* Fun Header */}
+      <div className="text-center">
+        <div className="inline-flex items-center gap-3 bg-gradient-to-r from-pink-100 via-purple-100 to-indigo-100 px-8 py-4 rounded-2xl shadow-lg">
+          <span className="text-4xl animate-bounce">🎉</span>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
+            Social Wall
+          </h2>
+          <span className="text-4xl animate-bounce" style={{ animationDelay: '0.5s' }}>🎊</span>
         </div>
-        <button
-          onClick={() => setShowNewPost(true)}
-          className="px-6 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-xl font-bold hover:shadow-lg transition-all"
+      </div>
+
+      {/* Tab Switcher */}
+      <div className="flex justify-center gap-4">
+        <button 
+          onClick={() => setActiveTab('feed')}
+          className={`tab-btn ${activeTab === 'feed' ? 'tab-active' : 'tab-inactive'}`}
         >
-          ✏️ New Post
+          📝 Feed
+        </button>
+        <button 
+          onClick={() => setActiveTab('celebrations')}
+          className={`tab-btn ${activeTab === 'celebrations' ? 'tab-active' : 'tab-inactive'}`}
+        >
+          🎂 Celebrations {birthdays.length > 0 && <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">{birthdays.length}</span>}
         </button>
       </div>
 
-      {/* Today's Celebrations */}
-      {(birthdays.length > 0 || anniversaries.length > 0) && (
-        <div className="bg-gradient-to-r from-pink-100 to-yellow-100 rounded-2xl p-6">
-          <h3 className="text-xl font-bold mb-4">🎊 Today's Celebrations</h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            {birthdays.map(person => (
-              <div key={person.id || person.afid} className="bg-white rounded-xl p-4 flex items-center gap-4 shadow">
-                <div className="text-4xl">🎂</div>
-                <div>
-                  <div className="font-bold">{person.name}</div>
-                  <div className="text-sm text-gray-500">Happy Birthday! 🎈</div>
-                </div>
+      {/* Celebrations Tab */}
+      {activeTab === 'celebrations' && (
+        <div className="space-y-6">
+          {/* Today's Birthdays */}
+          {birthdays.length > 0 && (
+            <div className="celebration-card rounded-3xl p-6">
+              <h3 className="text-2xl font-bold text-pink-700 mb-4 flex items-center gap-2">
+                <span className="text-3xl">🎂</span> Today's Birthday{birthdays.length > 1 ? 's' : ''}!
+              </h3>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {birthdays.map((person, idx) => (
+                  <div key={idx} className="birthday-card bg-white rounded-2xl p-4 flex items-center gap-4">
+                    {person.profilePhoto ? (
+                      <img src={person.profilePhoto} alt="" className="w-16 h-16 rounded-full object-cover border-4 border-pink-300" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-2xl text-white font-bold">
+                        {person.name?.charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-bold text-gray-800">{person.name}</div>
+                      <div className="text-sm text-gray-500">{person.role || person.subject}</div>
+                      <div className="text-xs text-pink-600 font-medium mt-1">🎈 Happy Birthday!</div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-            {anniversaries.map(person => (
-              <div key={person.id || person.afid} className="bg-white rounded-xl p-4 flex items-center gap-4 shadow">
-                <div className="text-4xl">💍</div>
-                <div>
-                  <div className="font-bold">{person.name}</div>
-                  <div className="text-sm text-gray-500">Happy Anniversary! 💕</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Posts */}
-      <div className="space-y-4">
-        {posts.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center">
-            <div className="text-6xl mb-4">📝</div>
-            <p className="text-xl text-gray-600">No posts yet</p>
-            <p className="text-gray-500">Be the first to share something!</p>
-          </div>
-        ) : (
-          posts.map(post => (
-            <PostCard 
-              key={post.id} 
-              post={post} 
-              currentUser={currentUser}
-              onReaction={handleReaction}
-              onAddComment={handleAddComment}
-              reactionEmojis={REACTION_EMOJIS}
-            />
-          ))
-        )}
-      </div>
-
-      {/* New Post Modal */}
-      {showNewPost && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6">
-            <h3 className="text-xl font-bold mb-4">✏️ Create Post</h3>
-            <textarea
-              value={newPostContent}
-              onChange={e => setNewPostContent(e.target.value)}
-              placeholder="What's on your mind?"
-              className="w-full border-2 rounded-xl p-4 h-32 resize-none"
-              autoFocus
-            />
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={handleCreatePost}
-                disabled={posting || !newPostContent.trim()}
-                className="flex-1 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-xl font-bold disabled:opacity-50"
-              >
-                {posting ? '⏳ Posting...' : '📤 Post'}
-              </button>
-              <button
-                onClick={() => setShowNewPost(false)}
-                className="px-6 py-3 bg-gray-200 rounded-xl font-bold"
-              >
-                Cancel
-              </button>
             </div>
+          )}
+
+          {/* Today's Anniversaries */}
+          {anniversaries.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-3xl p-6 border-2 border-amber-200">
+              <h3 className="text-2xl font-bold text-amber-700 mb-4 flex items-center gap-2">
+                <span className="text-3xl">💍</span> Work Anniversary!
+              </h3>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {anniversaries.map((person, idx) => (
+                  <div key={idx} className="bg-white rounded-2xl p-4 flex items-center gap-4 border border-amber-200">
+                    {person.profilePhoto ? (
+                      <img src={person.profilePhoto} alt="" className="w-16 h-16 rounded-full object-cover border-4 border-amber-300" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-2xl text-white font-bold">
+                        {person.name?.charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-bold text-gray-800">{person.name}</div>
+                      <div className="text-sm text-gray-500">{person.school}</div>
+                      <div className="text-xs text-amber-600 font-medium mt-1">🎊 Congratulations!</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Upcoming Birthdays */}
+          <div className="bg-white rounded-3xl p-6 shadow-lg">
+            <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
+              <span className="text-2xl">📅</span> Upcoming Birthdays
+            </h3>
+            {upcomingBirthdays.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No upcoming birthdays in the next 30 days</p>
+            ) : (
+              <div className="space-y-3">
+                {upcomingBirthdays.map((person, idx) => {
+                  const daysLeft = getDaysUntilBirthday(person.dateOfBirth);
+                  const dob = new Date(person.dateOfBirth);
+                  return (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-pink-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        {person.profilePhoto ? (
+                          <img src={person.profilePhoto} alt="" className="w-10 h-10 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold">
+                            {person.name?.charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-semibold text-gray-800">{person.name}</div>
+                          <div className="text-xs text-gray-500">{person.school || person.role}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-pink-600">
+                          {dob.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {daysLeft === 1 ? 'Tomorrow!' : `in ${daysLeft} days`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
-// Post Card Component
-function PostCard({ post, currentUser, onReaction, onAddComment, reactionEmojis }) {
-  const [showComments, setShowComments] = useState(false);
-  const [newComment, setNewComment] = useState('');
-  const [showReactions, setShowReactions] = useState(false);
-
-  const userId = currentUser.afid || currentUser.uid;
-  const myReaction = post.reactions?.[userId];
-
-  // Count reactions
-  const reactionCounts = {};
-  Object.values(post.reactions || {}).forEach(emoji => {
-    reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
-  });
-
-  const timeAgo = (date) => {
-    if (!date) return '';
-    const d = date.toDate ? date.toDate() : new Date(date);
-    const seconds = Math.floor((new Date() - d) / 1000);
-    if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
-    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
-    return Math.floor(seconds / 86400) + 'd ago';
-  };
-
-  return (
-    <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-      {/* Post Header */}
-      <div className="p-4 flex items-center gap-3">
-        {post.authorPhoto ? (
-          <img src={post.authorPhoto} alt={post.authorName} className="w-12 h-12 rounded-full object-cover" />
-        ) : (
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-xl font-bold text-white">
-            {post.authorName?.charAt(0)}
-          </div>
-        )}
-        <div className="flex-1">
-          <div className="font-bold">{post.authorName}</div>
-          <div className="text-sm text-gray-500">{post.authorSchool} • {timeAgo(post.createdAt)}</div>
-        </div>
-      </div>
-
-      {/* Post Content */}
-      <div className="px-4 pb-4">
-        <p className="text-gray-800 whitespace-pre-wrap">{post.content}</p>
-      </div>
-
-      {/* Reaction Summary */}
-      {Object.keys(reactionCounts).length > 0 && (
-        <div className="px-4 pb-2 flex gap-2">
-          {Object.entries(reactionCounts).map(([emoji, count]) => (
-            <span key={emoji} className="bg-gray-100 px-2 py-1 rounded-full text-sm">
-              {emoji} {count}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="px-4 pb-4 flex items-center gap-4 border-t pt-3">
-        <div className="relative">
-          <button
-            onClick={() => setShowReactions(!showReactions)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 ${myReaction ? 'bg-yellow-50' : ''}`}
-          >
-            {myReaction || '👍'} React
-          </button>
-          {showReactions && (
-            <div className="absolute bottom-full left-0 mb-2 bg-white rounded-full shadow-lg p-2 flex gap-1">
-              {reactionEmojis.map(emoji => (
-                <button
-                  key={emoji}
-                  onClick={() => { onReaction(post.id, emoji); setShowReactions(false); }}
-                  className={`text-2xl hover:scale-125 transition-transform p-1 ${myReaction === emoji ? 'bg-yellow-100 rounded-full' : ''}`}
-                >
-                  {emoji}
-                </button>
-              ))}
+          {/* No celebrations message */}
+          {birthdays.length === 0 && anniversaries.length === 0 && upcomingBirthdays.length === 0 && (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">🎈</div>
+              <p className="text-gray-500">No celebrations today. Check back soon!</p>
             </div>
           )}
         </div>
-        <button
-          onClick={() => setShowComments(!showComments)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100"
-        >
-          💬 {post.comments?.length || 0} Comments
-        </button>
-      </div>
+      )}
 
-      {/* Comments Section */}
-      {showComments && (
-        <div className="border-t bg-gray-50 p-4">
-          {/* Existing Comments */}
-          {post.comments?.map(comment => (
-            <div key={comment.id} className="mb-3 bg-white rounded-lg p-3">
-              <div className="font-semibold text-sm">{comment.authorName}</div>
-              <div className="text-gray-700">{comment.content}</div>
-            </div>
-          ))}
-          
-          {/* Add Comment */}
-          <div className="flex gap-2 mt-3">
-            <input
-              type="text"
-              value={newComment}
-              onChange={e => setNewComment(e.target.value)}
-              placeholder="Write a comment..."
-              className="flex-1 border-2 rounded-lg px-4 py-2"
-              onKeyPress={e => {
-                if (e.key === 'Enter' && newComment.trim()) {
-                  onAddComment(post.id, newComment);
-                  setNewComment('');
-                }
-              }}
-            />
-            <button
-              onClick={() => { onAddComment(post.id, newComment); setNewComment(''); }}
-              disabled={!newComment.trim()}
-              className="px-4 py-2 bg-yellow-500 text-white rounded-lg font-bold disabled:opacity-50"
+      {/* Feed Tab */}
+      {activeTab === 'feed' && (
+        <div className="space-y-6">
+          {/* Today's Celebrations Banner (if any) */}
+          {(birthdays.length > 0 || anniversaries.length > 0) && (
+            <div 
+              onClick={() => setActiveTab('celebrations')}
+              className="celebration-card rounded-2xl p-4 cursor-pointer hover:shadow-lg transition-all"
             >
-              Post
-            </button>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">🎉</span>
+                  <div>
+                    <div className="font-bold text-pink-700">
+                      {birthdays.length > 0 && `${birthdays.length} Birthday${birthdays.length > 1 ? 's' : ''} Today!`}
+                      {birthdays.length > 0 && anniversaries.length > 0 && ' + '}
+                      {anniversaries.length > 0 && `${anniversaries.length} Anniversary`}
+                    </div>
+                    <div className="text-sm text-pink-600">Click to view celebrations →</div>
+                  </div>
+                </div>
+                <div className="flex -space-x-2">
+                  {[...birthdays, ...anniversaries].slice(0, 3).map((p, i) => (
+                    p.profilePhoto ? (
+                      <img key={i} src={p.profilePhoto} alt="" className="w-10 h-10 rounded-full border-2 border-white object-cover" />
+                    ) : (
+                      <div key={i} className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm">
+                        {p.name?.charAt(0)}
+                      </div>
+                    )
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Create Post */}
+          <div className="bg-white rounded-2xl p-4 shadow-lg border border-purple-100">
+            {showNewPost ? (
+              <div className="space-y-4">
+                <textarea
+                  value={newPostContent}
+                  onChange={(e) => setNewPostContent(e.target.value)}
+                  placeholder="What's on your mind? Share updates, wins, or just say hi! 👋"
+                  className="w-full p-4 border-2 border-purple-200 rounded-xl focus:border-purple-500 focus:ring-0 resize-none"
+                  rows="3"
+                  autoFocus
+                />
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => { setShowNewPost(false); setNewPostContent(''); }}
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreatePost}
+                    disabled={!newPostContent.trim() || posting}
+                    className="px-6 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-semibold disabled:opacity-50 hover:shadow-lg transition-all"
+                  >
+                    {posting ? 'Posting...' : '✨ Post'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div 
+                onClick={() => setShowNewPost(true)}
+                className="flex items-center gap-4 cursor-pointer p-2 hover:bg-purple-50 rounded-xl transition-colors"
+              >
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                  {currentUser.name?.charAt(0)}
+                </div>
+                <div className="flex-1 text-gray-400 bg-gray-100 rounded-full py-3 px-4">
+                  What's happening? Share something fun! 🚀
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Posts Feed */}
+          {posts.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-2xl">
+              <div className="text-6xl mb-4">📝</div>
+              <p className="text-gray-500">No posts yet. Be the first to share something!</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {posts.map(post => {
+                const reactionCounts = {};
+                Object.values(post.reactions || {}).forEach(emoji => {
+                  reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
+                });
+                const myReaction = post.reactions?.[currentUser.afid || currentUser.uid];
+
+                return (
+                  <div key={post.id} className="post-card p-5">
+                    {/* Author */}
+                    <div className="flex items-center gap-3 mb-4">
+                      {post.authorPhoto ? (
+                        <img src={post.authorPhoto} alt="" className="w-12 h-12 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                          {post.authorName?.charAt(0)}
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-bold text-gray-800">{post.authorName}</div>
+                        <div className="text-xs text-gray-500">
+                          {post.authorSchool} • {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Just now'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Content */}
+                    <p className="text-gray-700 mb-4 whitespace-pre-wrap">{post.content}</p>
+
+                    {/* Reactions */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {emojis.map(emoji => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleReaction(post.id, emoji)}
+                          className={`emoji-btn ${myReaction === emoji ? 'active' : ''}`}
+                        >
+                          {emoji} {reactionCounts[emoji] || ''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Birthday Popup */}
+      {showBirthdayPopup && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-bounce-in">
+            <style>{`
+              @keyframes bounce-in {
+                0% { transform: scale(0.5); opacity: 0; }
+                70% { transform: scale(1.05); }
+                100% { transform: scale(1); opacity: 1; }
+              }
+              .animate-bounce-in { animation: bounce-in 0.5s ease-out; }
+            `}</style>
+            
+            <div className="bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 p-6 text-white text-center">
+              <div className="text-6xl mb-2">🎂</div>
+              <h3 className="text-2xl font-bold">Happy Birthday!</h3>
+            </div>
+            
+            <div className="p-6 text-center">
+              {showBirthdayPopup.profilePhoto ? (
+                <img src={showBirthdayPopup.profilePhoto} alt="" className="w-24 h-24 rounded-full mx-auto mb-4 object-cover border-4 border-pink-300" />
+              ) : (
+                <div className="w-24 h-24 rounded-full mx-auto mb-4 bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-4xl text-white font-bold">
+                  {showBirthdayPopup.name?.charAt(0)}
+                </div>
+              )}
+              <h4 className="text-2xl font-bold text-gray-800">{showBirthdayPopup.name}</h4>
+              <p className="text-gray-500">{showBirthdayPopup.role || showBirthdayPopup.subject}</p>
+              <p className="text-pink-600 mt-2 font-medium">🎈 Wishing you a wonderful day! 🎈</p>
+              
+              <button
+                onClick={dismissBirthdayPopup}
+                className="mt-6 px-8 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-full font-semibold hover:shadow-lg transition-all"
+              >
+                Send Wishes! 🎉
+              </button>
+            </div>
           </div>
         </div>
       )}
