@@ -4461,20 +4461,43 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
 // ========================================
 // ASSIGN ASSET MODAL
 // ========================================
-function AssignAssetModal({ asset, students, onAssign, onClose, onSelectCopy }) {
+function AssignAssetModal({ asset, students, onAssign, onClose, onSelectCopy, currentUserSchool }) {
   const [selectedStudent, setSelectedStudent] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedGrade, setSelectedGrade] = useState('all');
   const [selectedCopy, setSelectedCopy] = useState(asset?.docId || '');
 
+  // Get unique grades from school-filtered students
+  const availableGrades = useMemo(() => {
+    const schoolStudents = students.filter(s => s.school === currentUserSchool);
+    const grades = [...new Set(schoolStudents.map(s => s.grade || s.class).filter(Boolean))];
+    return grades.sort((a, b) => Number(a) - Number(b));
+  }, [students, currentUserSchool]);
+
   const filteredStudents = useMemo(() => {
-    if (!searchTerm) return students;
-    const search = searchTerm.toLowerCase();
-    return students.filter(s => 
-      s.name?.toLowerCase().includes(search) ||
-      s.studentId?.toLowerCase().includes(search) ||
-      s.id?.toLowerCase().includes(search)
-    );
-  }, [students, searchTerm]);
+    // First filter by school
+    let filtered = students.filter(s => s.school === currentUserSchool);
+    
+    // Then filter by grade if selected
+    if (selectedGrade !== 'all') {
+      filtered = filtered.filter(s => 
+        (s.grade || s.class) === selectedGrade || 
+        String(s.grade || s.class) === selectedGrade
+      );
+    }
+    
+    // Then filter by search term
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(s => 
+        s.name?.toLowerCase().includes(search) ||
+        s.studentId?.toLowerCase().includes(search) ||
+        s.id?.toLowerCase().includes(search)
+      );
+    }
+    
+    return filtered;
+  }, [students, currentUserSchool, selectedGrade, searchTerm]);
 
   // Check if we need to show copy selection
   const hasMultipleCopies = asset?.showCopySelection && asset?.availableCopies?.length > 1;
@@ -4536,7 +4559,17 @@ function AssignAssetModal({ asset, students, onAssign, onClose, onSelectCopy }) 
           </div>
 
           <div>
-            <label className="block text-sm font-bold mb-2">Select Student *</label>
+            <label className="block text-sm font-bold mb-2">Filter by Grade</label>
+            <select value={selectedGrade} onChange={(e) => setSelectedGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl bg-yellow-50">
+              <option value="all">All Grades</option>
+              {availableGrades.map(grade => (
+                <option key={grade} value={grade}>Class {grade}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold mb-2">Select Student * ({filteredStudents.length} students)</label>
             <select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl" size={6}>
               <option value="">-- Select --</option>
               {filteredStudents.map(student => (
@@ -5047,7 +5080,7 @@ function AssetManagement({ currentUser, students }) {
 
       {showScanner && <BarcodeScanner key={`scanner-${Date.now()}`} onScanSuccess={handleScanSuccess} onClose={() => setShowScanner(false)} />}
       {showAddModal && <AddAssetModal barcode={scannedBarcode} lookupResult={bookLookupResult} lookingUp={lookingUp} onSave={handleAddAsset} onClose={() => { setShowAddModal(false); setScannedBarcode(''); setBookLookupResult(null); }} />}
-      {showAssignModal && selectedAsset && <AssignAssetModal asset={selectedAsset} students={students} onAssign={handleAssignAsset} onClose={() => { setShowAssignModal(false); setSelectedAsset(null); }} />}
+      {showAssignModal && selectedAsset && <AssignAssetModal asset={selectedAsset} students={students} currentUserSchool={mySchool} onAssign={handleAssignAsset} onClose={() => { setShowAssignModal(false); setSelectedAsset(null); }} />}
     </div>
   );
 }
@@ -8426,25 +8459,51 @@ function TeacherView({
         {isMobileSidebarOpen ? '✕' : '☰'}
       </button>
 
-      {/* Manual Install Button - always visible */}
-      <div className="fixed bottom-20 right-4 z-[9998]">
-        <button
-          onClick={() => {
-            if (window.matchMedia('(display-mode: standalone)').matches) {
-              alert('App is already installed! ✓');
-            } else {
-              alert(
-                'To install:\n\n' +
-                  '📱 Mobile: Tap browser menu → "Add to Home Screen"\n\n' +
-                  '💻 Desktop: Look for install icon in address bar (⊕ or 📥)'
-              );
-            }
-          }}
-          className="bg-blue-600 text-white px-4 py-3 rounded-full shadow-2xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
-        >
-          📱 Install App
-        </button>
-      </div>
+      {/* Manual Install Button - Smart visibility */}
+      {(() => {
+        // Check if already installed
+        const isInstalled = typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches;
+        // Get usage count
+        const usageCount = parseInt(localStorage.getItem('appUsageCount') || '0');
+        // Increment usage count on first render
+        if (typeof window !== 'undefined' && !window.__usageCountIncremented) {
+          window.__usageCountIncremented = true;
+          localStorage.setItem('appUsageCount', String(usageCount + 1));
+        }
+        // Hide if installed or used more than 5 times
+        const shouldHide = isInstalled || usageCount > 5;
+        
+        if (shouldHide) return null;
+        
+        return (
+          <div className="fixed bottom-20 right-4 z-[9998]">
+            <button
+              onClick={() => {
+                if (window.matchMedia('(display-mode: standalone)').matches) {
+                  alert('App is already installed! ✓');
+                  localStorage.setItem('appUsageCount', '999'); // Hide forever
+                } else {
+                  alert(
+                    'To install:\n\n' +
+                      '📱 Mobile: Tap browser menu → "Add to Home Screen"\n\n' +
+                      '💻 Desktop: Look for install icon in address bar (⊕ or 📥)'
+                  );
+                }
+              }}
+              className="bg-blue-600 text-white px-4 py-3 rounded-full shadow-2xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
+            >
+              📱 Install App
+            </button>
+            <button
+              onClick={() => localStorage.setItem('appUsageCount', '999')}
+              className="absolute -top-2 -right-2 bg-gray-700 text-white w-6 h-6 rounded-full text-xs hover:bg-gray-600"
+              title="Don't show again"
+            >
+              ✕
+            </button>
+          </div>
+        );
+      })()}
       
       {/* Mobile Sidebar Overlay */}
       <div 
@@ -19828,6 +19887,73 @@ function SocialWall({ teachers, currentUser }) {
   const [celebrationReactions, setCelebrationReactions] = useState({});
   const [wishMessage, setWishMessage] = useState('');
   const [showWishInput, setShowWishInput] = useState(null);
+  
+  // New state for image attachments and replies
+  const [postImage, setPostImage] = useState(null);
+  const [postImagePreview, setPostImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyContent, setReplyContent] = useState('');
+  const [replyImage, setReplyImage] = useState(null);
+  const [replyImagePreview, setReplyImagePreview] = useState(null);
+  const [showGifPicker, setShowGifPicker] = useState(null);
+  const [expandedReplies, setExpandedReplies] = useState({});
+
+  // Handle image selection for posts
+  const handlePostImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        return;
+      }
+      setPostImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setPostImagePreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Handle image selection for replies
+  const handleReplyImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        return;
+      }
+      setReplyImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setReplyImagePreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Upload image to Firebase Storage
+  const uploadImage = async (file, path) => {
+    if (!file || typeof firebase === 'undefined') return null;
+    try {
+      const storageRef = firebase.storage().ref();
+      const fileRef = storageRef.child(path + '/' + Date.now() + '_' + file.name);
+      await fileRef.put(file);
+      return await fileRef.getDownloadURL();
+    } catch (e) {
+      console.error('Upload error:', e);
+      return null;
+    }
+  };
+
+  // Popular GIFs (predefined list to avoid API calls)
+  const popularGifs = [
+    'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
+    'https://media.giphy.com/media/3oz8xIsloV7zOmt81G/giphy.gif',
+    'https://media.giphy.com/media/BPJmthQ3YRwD6QqcVD/giphy.gif',
+    'https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif',
+    'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif',
+    'https://media.giphy.com/media/KJ1f5iTl4Oo7u/giphy.gif',
+    'https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif',
+    'https://media.giphy.com/media/l3q2K5jinAlChoCLS/giphy.gif'
+  ];
 
   // Celebration emojis for reactions
   const celebrationEmojis = ['🎉', '🎂', '🥳', '❤️', '👏', '🎊'];
@@ -20052,9 +20178,16 @@ function SocialWall({ teachers, currentUser }) {
   }, [teachers]);
 
   const handleCreatePost = async () => {
-    if (!newPostContent.trim()) return;
+    if (!newPostContent.trim() && !postImage) return;
     setPosting(true);
+    setUploadingImage(true);
     try {
+      // Upload image if present
+      let imageUrl = null;
+      if (postImage) {
+        imageUrl = await uploadImage(postImage, 'social_posts');
+      }
+      
       const postData = {
         content: newPostContent.trim(),
         authorId: currentUser.afid || currentUser.uid,
@@ -20063,18 +20196,74 @@ function SocialWall({ teachers, currentUser }) {
         authorSchool: currentUser.school,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         reactions: {},
-        comments: []
+        comments: [],
+        imageUrl: imageUrl || null
       };
       
       const docRef = await db.collection('socialPosts').add(postData);
       setPosts([{ id: docRef.id, ...postData, createdAt: new Date() }, ...posts]);
       setNewPostContent('');
+      setPostImage(null);
+      setPostImagePreview(null);
       setShowNewPost(false);
     } catch (error) {
       alert('Failed to create post');
     } finally {
       setPosting(false);
+      setUploadingImage(false);
     }
+  };
+
+  // Handle reply to a post
+  const handleReply = async (postId) => {
+    if (!replyContent.trim() && !replyImage && !replyImagePreview) return;
+    
+    try {
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+      
+      // Upload reply image if present
+      let replyImageUrl = null;
+      if (replyImage) {
+        replyImageUrl = await uploadImage(replyImage, 'social_replies');
+      } else if (replyImagePreview && replyImagePreview.startsWith('http')) {
+        // It's a GIF URL
+        replyImageUrl = replyImagePreview;
+      }
+      
+      const newReply = {
+        id: Date.now().toString(),
+        authorId: currentUser.afid || currentUser.uid,
+        authorName: currentUser.name,
+        authorPhoto: currentUser.profilePhoto || '',
+        content: replyContent.trim(),
+        imageUrl: replyImageUrl,
+        createdAt: new Date().toISOString()
+      };
+      
+      const updatedComments = [...(post.comments || []), newReply];
+      
+      await db.collection('socialPosts').doc(postId).update({ 
+        comments: updatedComments 
+      });
+      
+      setPosts(posts.map(p => p.id === postId ? { ...p, comments: updatedComments } : p));
+      setReplyContent('');
+      setReplyImage(null);
+      setReplyImagePreview(null);
+      setReplyingTo(null);
+      setShowGifPicker(null);
+    } catch (error) {
+      console.error('Reply error:', error);
+      alert('Failed to post reply');
+    }
+  };
+
+  // Select a GIF
+  const selectGif = (gifUrl) => {
+    setReplyImagePreview(gifUrl);
+    setReplyImage(null); // Clear file if any
+    setShowGifPicker(null);
   };
 
   const handleReaction = async (postId, emoji) => {
@@ -20640,20 +20829,57 @@ function SocialWall({ teachers, currentUser }) {
                   rows="3"
                   autoFocus
                 />
-                <div className="flex justify-end gap-3">
-                  <button
-                    onClick={() => { setShowNewPost(false); setNewPostContent(''); }}
-                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreatePost}
-                    disabled={!newPostContent.trim() || posting}
-                    className="px-6 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-semibold disabled:opacity-50 hover:shadow-lg transition-all"
-                  >
-                    {posting ? 'Posting...' : '✨ Post'}
-                  </button>
+                
+                {/* Image Preview */}
+                {postImagePreview && (
+                  <div className="relative inline-block">
+                    <img src={postImagePreview} alt="Preview" className="max-h-40 rounded-xl border-2 border-purple-200" />
+                    <button
+                      onClick={() => { setPostImage(null); setPostImagePreview(null); }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full text-sm font-bold hover:bg-red-600"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+                
+                <div className="flex justify-between items-center gap-3">
+                  {/* Attachment buttons */}
+                  <div className="flex gap-2">
+                    <label className="cursor-pointer px-3 py-2 bg-green-100 text-green-700 rounded-xl hover:bg-green-200 transition-colors flex items-center gap-1">
+                      <span>📷</span>
+                      <span className="text-sm font-medium">Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePostImageSelect}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      onClick={() => document.getElementById('postGifInput')?.click()}
+                      className="px-3 py-2 bg-purple-100 text-purple-700 rounded-xl hover:bg-purple-200 transition-colors flex items-center gap-1"
+                    >
+                      <span>🎬</span>
+                      <span className="text-sm font-medium">GIF</span>
+                    </button>
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => { setShowNewPost(false); setNewPostContent(''); setPostImage(null); setPostImagePreview(null); }}
+                      className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCreatePost}
+                      disabled={(!newPostContent.trim() && !postImage) || posting}
+                      className="px-6 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-semibold disabled:opacity-50 hover:shadow-lg transition-all flex items-center gap-2"
+                    >
+                      {uploadingImage ? '📤 Uploading...' : posting ? 'Posting...' : '✨ Post'}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -20664,8 +20890,10 @@ function SocialWall({ teachers, currentUser }) {
                 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
                   {currentUser.name?.charAt(0)}
                 </div>
-                <div className="flex-1 text-gray-400 bg-gray-100 rounded-full py-3 px-4">
-                  What's happening? Share something fun! 🚀
+                <div className="flex-1 text-gray-400 bg-gray-100 rounded-full py-3 px-4 flex items-center gap-2">
+                  <span>What's happening? Share something fun!</span>
+                  <span>🚀</span>
+                  <span className="text-green-500">📷</span>
                 </div>
               </div>
             )}
@@ -20707,9 +20935,20 @@ function SocialWall({ teachers, currentUser }) {
 
                     {/* Content */}
                     <p className="text-gray-700 mb-4 whitespace-pre-wrap">{post.content}</p>
+                    
+                    {/* Post Image */}
+                    {post.imageUrl && (
+                      <div className="mb-4">
+                        <img 
+                          src={post.imageUrl} 
+                          alt="Post attachment" 
+                          className="max-w-full rounded-xl border border-purple-100 max-h-96 object-contain"
+                        />
+                      </div>
+                    )}
 
                     {/* Reactions */}
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap mb-3">
                       {emojis.map(emoji => (
                         <button
                           key={emoji}
@@ -20719,7 +20958,126 @@ function SocialWall({ teachers, currentUser }) {
                           {emoji} {reactionCounts[emoji] || ''}
                         </button>
                       ))}
+                      <button
+                        onClick={() => setReplyingTo(replyingTo === post.id ? null : post.id)}
+                        className="emoji-btn ml-2 flex items-center gap-1"
+                      >
+                        💬 {post.comments?.length || 0}
+                      </button>
                     </div>
+                    
+                    {/* Replies/Comments Section */}
+                    {(post.comments?.length > 0 || replyingTo === post.id) && (
+                      <div className="mt-3 pt-3 border-t border-purple-100">
+                        {/* Show replies */}
+                        {post.comments?.length > 0 && (
+                          <div className="space-y-3 mb-3">
+                            {post.comments.slice(0, expandedReplies[post.id] ? post.comments.length : 2).map((reply, idx) => (
+                              <div key={reply.id || idx} className="flex gap-2 bg-purple-50 p-3 rounded-xl">
+                                {reply.authorPhoto ? (
+                                  <img src={reply.authorPhoto} alt="" className="w-8 h-8 rounded-full object-cover" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-300 to-purple-400 flex items-center justify-center text-white text-sm font-bold">
+                                    {reply.authorName?.charAt(0)}
+                                  </div>
+                                )}
+                                <div className="flex-1">
+                                  <div className="text-sm">
+                                    <span className="font-semibold">{reply.authorName}</span>
+                                    <span className="text-gray-400 text-xs ml-2">
+                                      {reply.createdAt ? new Date(reply.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
+                                    </span>
+                                  </div>
+                                  <p className="text-gray-700 text-sm mt-1">{reply.content}</p>
+                                  {reply.imageUrl && (
+                                    <img src={reply.imageUrl} alt="" className="mt-2 max-h-32 rounded-lg" />
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                            {post.comments.length > 2 && !expandedReplies[post.id] && (
+                              <button 
+                                onClick={() => setExpandedReplies({...expandedReplies, [post.id]: true})}
+                                className="text-sm text-purple-600 font-medium hover:text-purple-800"
+                              >
+                                View {post.comments.length - 2} more replies...
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Reply input */}
+                        {replyingTo === post.id && (
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                                {currentUser.name?.charAt(0)}
+                              </div>
+                              <input
+                                type="text"
+                                value={replyContent}
+                                onChange={(e) => setReplyContent(e.target.value)}
+                                placeholder="Write a reply..."
+                                className="flex-1 border-2 border-purple-200 rounded-xl px-3 py-2 text-sm focus:border-purple-500 focus:ring-0"
+                              />
+                            </div>
+                            
+                            {/* Reply image preview */}
+                            {replyImagePreview && (
+                              <div className="relative inline-block ml-10">
+                                <img src={replyImagePreview} alt="Preview" className="max-h-20 rounded-lg" />
+                                <button
+                                  onClick={() => { setReplyImage(null); setReplyImagePreview(null); }}
+                                  className="absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-xs"
+                                >✕</button>
+                              </div>
+                            )}
+                            
+                            <div className="flex justify-between items-center ml-10">
+                              <div className="flex gap-2">
+                                <label className="cursor-pointer text-green-600 hover:text-green-700 p-1">
+                                  📷
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleReplyImageSelect}
+                                    className="hidden"
+                                  />
+                                </label>
+                                <button 
+                                  onClick={() => setShowGifPicker(showGifPicker === post.id ? null : post.id)}
+                                  className="text-purple-600 hover:text-purple-700 p-1"
+                                >
+                                  🎬
+                                </button>
+                              </div>
+                              <button
+                                onClick={() => handleReply(post.id)}
+                                disabled={!replyContent.trim() && !replyImagePreview}
+                                className="px-4 py-1.5 bg-purple-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                              >
+                                Reply
+                              </button>
+                            </div>
+                            
+                            {/* GIF Picker */}
+                            {showGifPicker === post.id && (
+                              <div className="ml-10 bg-gray-100 rounded-xl p-3 grid grid-cols-4 gap-2">
+                                {popularGifs.map((gif, idx) => (
+                                  <img 
+                                    key={idx} 
+                                    src={gif} 
+                                    alt="GIF" 
+                                    className="w-full h-16 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                                    onClick={() => selectGif(gif)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -26073,7 +26431,7 @@ if (document.readyState === 'loading') {
      For entire Curriculum Tracker app
 ============================================ -->
 <style>
-/* Notification Bell */
+/* Notification Bell - Top Right Position */
 .notification-bell {
     position: fixed;
     top: 20px;
@@ -26090,6 +26448,13 @@ if (document.readyState === 'loading') {
     cursor: pointer;
     transition: all 0.3s;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Hide bell when all notifications are read */
+.notification-bell.all-read {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.8);
 }
 
 .notification-bell:hover {
@@ -26122,7 +26487,7 @@ if (document.readyState === 'loading') {
     display: flex;
 }
 
-/* Notification Panel */
+/* Notification Panel - Top Right Position */
 .notification-panel {
     position: fixed;
     top: 70px;
@@ -26212,6 +26577,120 @@ if (document.readyState === 'loading') {
     margin-top: 8px;
 }
 
+/* Notification Expansion Popup */
+.notification-expansion-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.notification-expansion-popup {
+    background: #12121a;
+    border: 1px solid #2a2a3a;
+    border-radius: 16px;
+    max-width: 500px;
+    width: 100%;
+    max-height: 80vh;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.notification-expansion-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #2a2a3a;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.notification-expansion-header h3 {
+    color: #F4B41A;
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.notification-expansion-close {
+    background: none;
+    border: none;
+    color: #8a8a9a;
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.notification-expansion-close:hover {
+    color: #fff;
+}
+
+.notification-expansion-body {
+    padding: 20px;
+    overflow-y: auto;
+    max-height: calc(80vh - 150px);
+}
+
+.notification-expansion-message {
+    color: #e0e0e0;
+    font-size: 15px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    margin-bottom: 16px;
+}
+
+.notification-expansion-meta {
+    color: #6a6a7a;
+    font-size: 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #2a2a3a;
+}
+
+.notification-expansion-actions {
+    padding: 16px 20px;
+    border-top: 1px solid #2a2a3a;
+    display: flex;
+    gap: 12px;
+}
+
+.notification-expansion-actions button {
+    flex: 1;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.notification-reply-btn {
+    background: #F4B41A;
+    color: #000;
+    border: none;
+}
+
+.notification-reply-btn:hover {
+    background: #e5a617;
+}
+
+.notification-close-btn {
+    background: #2a2a3a;
+    color: #fff;
+    border: 1px solid #3a3a4a;
+}
+
+.notification-close-btn:hover {
+    background: #3a3a4a;
+}
+
 .notification-empty {
     text-align: center;
     padding: 40px 20px;
@@ -26253,13 +26732,14 @@ if (document.readyState === 'loading') {
 
 @media (max-width: 480px) {
     .notification-bell {
-        right: 70px;
         top: 15px;
+        right: 70px;
         width: 38px;
         height: 38px;
     }
     
     .notification-panel {
+        top: 60px;
         right: 10px;
         left: 10px;
         width: auto;
@@ -26388,19 +26868,26 @@ const NotificationManager = {
         // Check if we should send celebration notifications
         const now = new Date();
         const targetHour = 8; // 8 AM
+        const currentHour = now.getHours();
         
-        // Calculate milliseconds until 8 AM
+        // If it's between 8 AM and 9 AM, check immediately (for users who just opened the app)
+        if (currentHour >= targetHour && currentHour < 10) {
+            console.log('[NotificationManager] Checking for celebrations now (within morning window)');
+            this.sendCelebrationNotifications();
+        }
+        
+        // Calculate milliseconds until next 8 AM
         const target = new Date(now);
         target.setHours(targetHour, 0, 0, 0);
         
         if (now >= target) {
-            // Already past 8 AM today, check for next day
+            // Already past 8 AM today, schedule for next day
             target.setDate(target.getDate() + 1);
         }
         
         const msUntil8AM = target - now;
         
-        // Schedule the check
+        // Schedule the check for next 8 AM
         setTimeout(() => {
             this.sendCelebrationNotifications();
             // Then repeat every 24 hours
@@ -26792,6 +27279,9 @@ const NotificationManager = {
             badge.textContent = this.unreadCount;
             badge.classList.toggle('show', this.unreadCount > 0);
         }
+        
+        // Check if bell should auto-hide
+        this.checkAutoHideBell();
     },
     
     renderNotifications: function() {
@@ -26848,7 +27338,7 @@ const NotificationManager = {
                 personPhoto = '<div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, ' + (n.type === 'birthday' ? '#ec4899, #f472b6' : '#f59e0b, #fbbf24') + '); display: flex; align-items: center; justify-content: center; font-size: 20px; margin-right: 10px;">' + icon + '</div>';
             }
             
-            return `<div class="notification-item ${isUnread ? 'unread' : ''}" style="${celebrationStyle || priorityStyle}" onclick="NotificationManager.markRead('${n.id}')">
+            return `<div class="notification-item ${isUnread ? 'unread' : ''}" style="${celebrationStyle || priorityStyle}" onclick="NotificationManager.expandNotification('${n.id}')">
                 <div style="display: flex; align-items: flex-start;">
                     ${personPhoto}
                     <div style="flex: 1;">
@@ -26922,6 +27412,121 @@ const NotificationManager = {
         localStorage.setItem('readNotifications', JSON.stringify(readIds));
         this.updateUnreadCount();
         this.renderNotifications();
+        
+        // Auto-hide bell if all read
+        this.checkAutoHideBell();
+    },
+    
+    // Check if bell should auto-hide when all read
+    checkAutoHideBell: function() {
+        const bell = document.getElementById('notificationBell');
+        if (!bell) return;
+        
+        // Hide bell if no unread notifications
+        if (this.unreadCount === 0) {
+            bell.classList.add('all-read');
+        } else {
+            bell.classList.remove('all-read');
+        }
+    },
+    
+    // Expand notification to show full message
+    expandNotification: function(id) {
+        const notification = this.notifications.find(n => n.id === id);
+        if (!notification) return;
+        
+        this.markRead(id);
+        
+        const isTicket = notification.source === 'ticket' || notification.type === 'ticket_update';
+        const time = notification.createdAt?.toDate?.() || new Date();
+        
+        let popup = document.getElementById('notificationExpansionPopup');
+        if (!popup) {
+            popup = document.createElement('div');
+            popup.id = 'notificationExpansionPopup';
+            document.body.appendChild(popup);
+        }
+        
+        const ticketActions = isTicket ? `
+            <button class="notification-reply-btn" onclick="NotificationManager.replyToTicket('${notification.ticketId || id}')">
+                💬 Reply
+            </button>
+            <button class="notification-close-btn" onclick="NotificationManager.endTicketChat('${notification.ticketId || id}')">
+                ✓ End Chat
+            </button>
+        ` : `
+            <button class="notification-close-btn" onclick="NotificationManager.closeExpansion()" style="flex: 1;">
+                Close
+            </button>
+        `;
+        
+        popup.innerHTML = `
+            <div class="notification-expansion-overlay" onclick="NotificationManager.closeExpansion()">
+                <div class="notification-expansion-popup" onclick="event.stopPropagation()">
+                    <div class="notification-expansion-header">
+                        <h3>${isTicket ? '🎫' : '📢'} ${notification.title || 'Notification'}${notification.ticketId ? ' <span style="color:#F4B41A;font-size:13px;">#' + notification.ticketId + '</span>' : ''}</h3>
+                        <button class="notification-expansion-close" onclick="NotificationManager.closeExpansion()">×</button>
+                    </div>
+                    <div class="notification-expansion-body">
+                        <div class="notification-expansion-message">${notification.message || 'No message content'}</div>
+                        ${notification.link ? '<a href="' + notification.link + '" target="_blank" style="display: inline-block; background: #2a2a3a; color: #3b82f6; padding: 8px 16px; border-radius: 8px; text-decoration: none; margin-top: 12px;">🔗 Open Link</a>' : ''}
+                        <div class="notification-expansion-meta">
+                            ${notification.source ? '<span>Source: ' + notification.source + '</span> • ' : ''}
+                            <span>${this.timeAgo(time)}</span>
+                        </div>
+                    </div>
+                    <div class="notification-expansion-actions">
+                        ${ticketActions}
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+    
+    // Close expansion popup
+    closeExpansion: function() {
+        const popup = document.getElementById('notificationExpansionPopup');
+        if (popup) popup.innerHTML = '';
+    },
+    
+    // Reply to a ticket
+    replyToTicket: function(ticketId) {
+        this.closeExpansion();
+        // Open the chatbot and navigate to the ticket
+        if (typeof ChatbotWidget !== 'undefined') {
+            ChatbotWidget.open();
+            setTimeout(() => {
+                ChatbotWidget.loadTicket(ticketId);
+            }, 300);
+        } else {
+            alert('Please open the Help/Support chat to reply to this ticket.');
+        }
+    },
+    
+    // End ticket chat
+    endTicketChat: async function(ticketId) {
+        if (!confirm('Are you sure you want to end this chat?')) return;
+        
+        try {
+            // Find the ticket doc
+            const ticketSnap = await firebase.firestore().collection('support_tickets')
+                .where('ticketId', '==', ticketId)
+                .limit(1)
+                .get();
+            
+            if (!ticketSnap.empty) {
+                await ticketSnap.docs[0].ref.update({
+                    status: 'closed',
+                    closedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    closedBy: 'user'
+                });
+                alert('Chat ended. Thank you!');
+            }
+            this.closeExpansion();
+        } catch (e) {
+            console.error('Error closing ticket:', e);
+            alert('Could not close the chat. Please try again.');
+        }
     }
 };
 
