@@ -19147,9 +19147,13 @@ function OrgChartDirectory({ teachers, currentUser }) {
   const [apcs, setApcs] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'list'
+  
+  // Filter states
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterSchool, setFilterSchool] = useState('all');
   const [filterRole, setFilterRole] = useState('all');
+  const [filterSubject, setFilterSubject] = useState('all');
+  const [filterManager, setFilterManager] = useState('all');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -19171,84 +19175,19 @@ function OrgChartDirectory({ teachers, currentUser }) {
     fetchData();
   }, []);
 
-  // Build complete hierarchy
-  const hierarchy = useMemo(() => {
-    // Get APH (Program Head)
-    const aph = managers.find(m => m.role === 'aph' && m.status === 'active');
-    
-    // Get all PMs under APH
-    const pms = managers.filter(m => m.role === 'pm' && m.status === 'active');
-    
-    // Get all APMs
-    const apms = managers.filter(m => m.role === 'apm' && m.status === 'active');
-    
-    // Get all unique schools from teachers
-    const allSchoolsFromTeachers = [...new Set(teachers.filter(t => !t.isArchived && t.school).map(t => t.school))];
-    
-    // Build school data with teachers and APCs
-    const getSchoolData = (schoolName) => {
-      const schoolTeachers = teachers.filter(t => 
-        t.school === schoolName && 
-        !t.isArchived && 
-        t.role !== 'apc' && 
-        !t.isAPC
-      ).sort((a, b) => (a.subject || '').localeCompare(b.subject || ''));
-      const schoolApc = apcs.find(a => a.school === schoolName || a.schools?.includes(schoolName));
-      return { name: schoolName, teachers: schoolTeachers, apc: schoolApc };
-    };
-
-    // Build PM structure with their APMs and schools
-    const pmStructure = pms.map(pm => {
-      // Get APMs reporting to this PM
-      const pmApms = apms.filter(apm => apm.reportsTo === pm.id);
-      
-      // Get schools directly under PM (not under any APM)
-      const apmSchoolsSet = new Set();
-      pmApms.forEach(apm => {
-        (apm.directSchools || []).forEach(s => apmSchoolsSet.add(s));
-      });
-      
-      const pmDirectSchools = (pm.directSchools || []).filter(s => !apmSchoolsSet.has(s));
-      
-      return {
-        ...pm,
-        pmDirectSchools: pmDirectSchools.map(getSchoolData),
-        apms: pmApms.map(apm => ({
-          ...apm,
-          schools: (apm.directSchools || []).map(getSchoolData)
-        }))
-      };
-    });
-
-    // Get unassigned schools (not under any manager)
-    const allManagedSchools = new Set();
-    pms.forEach(pm => {
-      (pm.directSchools || []).forEach(s => allManagedSchools.add(s));
-    });
-    apms.forEach(apm => {
-      (apm.directSchools || []).forEach(s => allManagedSchools.add(s));
-    });
-    const unassignedSchools = allSchoolsFromTeachers.filter(s => !allManagedSchools.has(s));
-
-    return { 
-      aph,
-      pms: pmStructure,
-      unassignedSchools: unassignedSchools.map(getSchoolData)
-    };
-  }, [managers, apcs, teachers]);
-
-  // Get all members for list view
+  // Get all members combined
   const allMembers = useMemo(() => {
     const members = [];
     
-    // Add managers
+    // Add managers (APH, PM, APM)
     managers.filter(m => m.status === 'active').forEach(m => {
       members.push({
         ...m,
         memberType: m.role,
-        displayRole: m.role === 'aph' ? 'Program Head' :
-                    m.role === 'pm' ? 'Program Manager' :
-                    m.role === 'apm' ? 'Associate Program Manager' : m.role
+        displayRole: m.role === 'aph' ? 'Program Head (APH)' :
+                    m.role === 'pm' ? 'Program Manager (PM)' :
+                    m.role === 'apm' ? 'Associate Program Manager (APM)' : m.role,
+        sortOrder: m.role === 'aph' ? 1 : m.role === 'pm' ? 2 : m.role === 'apm' ? 3 : 4
       });
     });
     
@@ -19257,7 +19196,8 @@ function OrgChartDirectory({ teachers, currentUser }) {
       members.push({
         ...a,
         memberType: 'apc',
-        displayRole: 'Academic Program Coordinator'
+        displayRole: 'Academic Program Coordinator (APC)',
+        sortOrder: 5
       });
     });
     
@@ -19266,375 +19206,435 @@ function OrgChartDirectory({ teachers, currentUser }) {
       members.push({
         ...t,
         memberType: 'teacher',
-        displayRole: t.subject ? `${t.subject} Teacher` : 'Teacher'
+        displayRole: t.subject ? `${t.subject} Teacher` : 'Teacher',
+        sortOrder: 6
       });
     });
     
-    return members;
+    // Sort by role hierarchy, then by name
+    return members.sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return (a.name || '').localeCompare(b.name || '');
+    });
   }, [managers, apcs, teachers]);
 
-  // Filter members for list view
+  // Get unique values for filter dropdowns
+  const filterOptions = useMemo(() => {
+    const schools = new Set();
+    const subjects = new Set();
+    
+    allMembers.forEach(m => {
+      if (m.school) schools.add(m.school);
+      if (m.directSchools) m.directSchools.forEach(s => schools.add(s));
+      if (m.subject) subjects.add(m.subject);
+    });
+    
+    return {
+      schools: Array.from(schools).sort(),
+      subjects: Array.from(subjects).sort(),
+      managers: managers.filter(m => m.status === 'active' && ['pm', 'apm'].includes(m.role))
+    };
+  }, [allMembers, managers]);
+
+  // Get manager info for a member
+  const getMemberManager = (member) => {
+    if (member.memberType === 'teacher' || member.memberType === 'apc') {
+      // Find which manager handles this school
+      const school = member.school;
+      if (!school) return null;
+      
+      // Check APMs first
+      const apm = managers.find(m => m.role === 'apm' && m.directSchools?.includes(school));
+      if (apm) return apm;
+      
+      // Then check PMs
+      const pm = managers.find(m => m.role === 'pm' && m.directSchools?.includes(school));
+      if (pm) return pm;
+    }
+    return null;
+  };
+
+  // Filter members
   const filteredMembers = useMemo(() => {
     return allMembers.filter(m => {
+      // Search filter
       const matchesSearch = !searchQuery || 
         m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         m.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         m.school?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        m.afid?.toLowerCase().includes(searchQuery.toLowerCase());
+        m.afid?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.afCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.phone?.includes(searchQuery) ||
+        m.whatsapp?.includes(searchQuery);
       
+      // Role filter
       const matchesRole = filterRole === 'all' || m.memberType === filterRole;
       
-      return matchesSearch && matchesRole;
+      // School filter
+      let matchesSchool = filterSchool === 'all';
+      if (!matchesSchool) {
+        if (m.school === filterSchool) matchesSchool = true;
+        if (m.directSchools?.includes(filterSchool)) matchesSchool = true;
+      }
+      
+      // Subject filter (only for teachers)
+      const matchesSubject = filterSubject === 'all' || m.subject === filterSubject;
+      
+      // Manager filter
+      let matchesManager = filterManager === 'all';
+      if (!matchesManager) {
+        const memberManager = getMemberManager(m);
+        if (memberManager?.id === filterManager) matchesManager = true;
+        // Also show the manager themselves
+        if (m.id === filterManager) matchesManager = true;
+        // Show members under this manager's schools
+        const selectedManager = managers.find(mgr => mgr.id === filterManager);
+        if (selectedManager?.directSchools?.includes(m.school)) matchesManager = true;
+      }
+      
+      return matchesSearch && matchesRole && matchesSchool && matchesSubject && matchesManager;
     });
-  }, [allMembers, searchQuery, filterRole]);
+  }, [allMembers, searchQuery, filterRole, filterSchool, filterSubject, filterManager, managers]);
+
+  // Get role badge color
+  const getRoleColor = (role) => ({
+    'aph': { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-500', gradient: 'from-purple-500 to-purple-600' },
+    'pm': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-500', gradient: 'from-blue-500 to-blue-600' },
+    'apm': { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-500', gradient: 'from-green-500 to-green-600' },
+    'apc': { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-500', gradient: 'from-orange-500 to-orange-600' },
+    'teacher': { bg: 'bg-pink-100', text: 'text-pink-700', border: 'border-pink-500', gradient: 'from-pink-500 to-pink-600' }
+  }[role] || { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-500', gradient: 'from-gray-500 to-gray-600' });
 
   const getSubjectColor = (subject) => ({
-    'Physics': '#6b9bd1',
-    'Chemistry': '#b8a9c9', 
-    'Mathematics': '#e07b7b',
-    'Maths': '#e07b7b',
-    'Biology': '#7bc8a8',
-    'Bio': '#7bc8a8'
-  }[subject] || '#d4a88e');
+    'Physics': '#3b82f6',
+    'Chemistry': '#8b5cf6', 
+    'Mathematics': '#ef4444',
+    'Maths': '#ef4444',
+    'Biology': '#10b981',
+    'Bio': '#10b981'
+  }[subject] || '#6b7280');
 
-  const getRoleColor = (role) => ({
-    'aph': { bg: 'bg-purple-100', text: 'text-purple-700', gradient: 'from-purple-500 to-purple-600' },
-    'pm': { bg: 'bg-blue-100', text: 'text-blue-700', gradient: 'from-blue-500 to-blue-600' },
-    'apm': { bg: 'bg-green-100', text: 'text-green-700', gradient: 'from-green-500 to-green-600' },
-    'apc': { bg: 'bg-orange-100', text: 'text-orange-700', gradient: 'from-orange-500 to-orange-600' },
-    'teacher': { bg: 'bg-pink-100', text: 'text-pink-700', gradient: 'from-pink-500 to-pink-600' }
-  }[role] || { bg: 'bg-gray-100', text: 'text-gray-700', gradient: 'from-gray-500 to-gray-600' });
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchQuery('');
+    setFilterSchool('all');
+    setFilterRole('all');
+    setFilterSubject('all');
+    setFilterManager('all');
+  };
+
+  const hasActiveFilters = searchQuery || filterSchool !== 'all' || filterRole !== 'all' || filterSubject !== 'all' || filterManager !== 'all';
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-pink-500 border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-yellow-500 border-t-transparent"></div>
       </div>
     );
   }
 
-  // Member Card Component for List View
-  const MemberCard = ({ member }) => {
-    const roleColor = getRoleColor(member.memberType);
-    return (
-      <div 
-        className={`bg-white rounded-xl p-4 shadow-md hover:shadow-lg transition-all cursor-pointer border-l-4 ${
-          member.memberType === 'aph' ? 'border-purple-500' :
-          member.memberType === 'pm' ? 'border-blue-500' :
-          member.memberType === 'apm' ? 'border-green-500' :
-          member.memberType === 'apc' ? 'border-orange-500' :
-          'border-pink-500'
-        }`}
-        onClick={() => setSelectedMember({...member, memberType: member.memberType})}
-      >
-        <div className="flex items-center gap-3">
-          {member.profilePhoto ? (
-            <img src={member.profilePhoto} alt="" className="w-14 h-14 rounded-full object-cover border-2 border-gray-200" />
-          ) : (
-            <div className={`w-14 h-14 rounded-full bg-gradient-to-br ${roleColor.gradient} flex items-center justify-center text-xl font-bold text-white`}>
-              {member.name?.charAt(0) || '?'}
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="font-bold text-gray-800 truncate">{member.name}</div>
-            <div className={`text-xs px-2 py-1 rounded-full inline-block ${roleColor.bg} ${roleColor.text} font-medium`}>
-              {member.displayRole}
-            </div>
-            {member.school && <div className="text-sm text-gray-500 mt-1 truncate">🏫 {member.school}</div>}
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {member.phone && (
-            <a href={`tel:${member.phone}`} onClick={e => e.stopPropagation()} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-full hover:bg-blue-100">📱 {member.phone}</a>
-          )}
-          {member.whatsapp && (
-            <a href={`https://wa.me/${member.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" onClick={e => e.stopPropagation()} className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded-full hover:bg-green-100">💬 WhatsApp</a>
-          )}
-          {member.email && (
-            <a href={`mailto:${member.email}`} onClick={e => e.stopPropagation()} className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded-full hover:bg-purple-100 truncate max-w-32">📧 {member.email.split('@')[0]}</a>
-          )}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6">
-      {/* Header with View Toggle */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="inline-flex items-center gap-3 bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100 px-6 py-3 rounded-full shadow-lg">
-          <span className="text-3xl">👨‍👩‍👧‍👦</span>
-          <h2 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 bg-clip-text text-transparent">
+        <div className="inline-flex items-center gap-3 bg-gradient-to-r from-yellow-100 via-orange-100 to-red-100 px-6 py-3 rounded-full shadow-lg">
+          <span className="text-3xl">👥</span>
+          <h2 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-yellow-600 via-orange-600 to-red-600 bg-clip-text text-transparent">
             Team Directory
           </h2>
-          <span className="text-3xl">🌳</span>
         </div>
-        
-        <div className="flex gap-2">
-          <button 
-            onClick={() => setViewMode('chart')} 
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${viewMode === 'chart' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-          >
-            🌳 Org Chart
-          </button>
-          <button 
-            onClick={() => setViewMode('list')} 
-            className={`px-4 py-2 rounded-lg font-medium transition-all ${viewMode === 'list' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-          >
-            📋 List View
-          </button>
+        <div className="text-sm text-gray-500">
+          {filteredMembers.length} of {allMembers.length} members
         </div>
       </div>
 
-      {/* Search & Filter for List View */}
-      {viewMode === 'list' && (
-        <div className="bg-white rounded-xl p-4 shadow-md">
-          <div className="flex flex-col md:flex-row gap-3">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="🔍 Search by name, email, school, or AFID..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-400 focus:outline-none"
-              />
-            </div>
+      {/* Search & Filters */}
+      <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100">
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xl">🔍</span>
+            <input
+              type="text"
+              placeholder="Search by name, email, phone, AFID..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-yellow-400 focus:outline-none text-lg"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Dropdowns */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* School Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1 ml-1">🏫 School</label>
+            <select
+              value={filterSchool}
+              onChange={e => setFilterSchool(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border-2 border-gray-200 bg-white focus:border-yellow-400 focus:outline-none text-sm"
+            >
+              <option value="all">All Schools</option>
+              {filterOptions.schools.map(school => (
+                <option key={school} value={school}>{school}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Role Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1 ml-1">👤 Role</label>
             <select
               value={filterRole}
               onChange={e => setFilterRole(e.target.value)}
-              className="px-4 py-3 rounded-xl border-2 border-gray-200 bg-white focus:border-purple-400 focus:outline-none"
+              className="w-full px-3 py-2 rounded-lg border-2 border-gray-200 bg-white focus:border-yellow-400 focus:outline-none text-sm"
             >
               <option value="all">All Roles</option>
-              <option value="aph">Program Heads</option>
-              <option value="pm">Program Managers</option>
-              <option value="apm">Associate Program Managers</option>
-              <option value="apc">Academic Coordinators</option>
+              <option value="aph">Program Head (APH)</option>
+              <option value="pm">Program Manager (PM)</option>
+              <option value="apm">Associate PM (APM)</option>
+              <option value="apc">Coordinator (APC)</option>
               <option value="teacher">Teachers</option>
             </select>
           </div>
-          <div className="mt-3 text-sm text-gray-500">
-            Found {filteredMembers.length} members
+
+          {/* Subject Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1 ml-1">📚 Subject</label>
+            <select
+              value={filterSubject}
+              onChange={e => setFilterSubject(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border-2 border-gray-200 bg-white focus:border-yellow-400 focus:outline-none text-sm"
+            >
+              <option value="all">All Subjects</option>
+              {filterOptions.subjects.map(subject => (
+                <option key={subject} value={subject}>{subject}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Manager Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1 ml-1">👨‍💼 Manager</label>
+            <select
+              value={filterManager}
+              onChange={e => setFilterManager(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border-2 border-gray-200 bg-white focus:border-yellow-400 focus:outline-none text-sm"
+            >
+              <option value="all">All Managers</option>
+              {filterOptions.managers.map(mgr => (
+                <option key={mgr.id} value={mgr.id}>
+                  {mgr.name} ({mgr.role === 'pm' ? 'PM' : 'APM'})
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-      )}
 
-      {/* List View */}
-      {viewMode === 'list' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredMembers.map((member, idx) => (
-            <MemberCard key={member.id || idx} member={member} />
-          ))}
-          {filteredMembers.length === 0 && (
-            <div className="col-span-full text-center py-12 text-gray-500">
-              <div className="text-6xl mb-4">🔍</div>
-              <p>No members found matching your search</p>
+        {/* Clear Filters */}
+        {hasActiveFilters && (
+          <div className="mt-3 flex items-center justify-between">
+            <div className="flex flex-wrap gap-2">
+              {searchQuery && (
+                <span className="inline-flex items-center gap-1 bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs">
+                  Search: "{searchQuery}" <button onClick={() => setSearchQuery('')}>✕</button>
+                </span>
+              )}
+              {filterSchool !== 'all' && (
+                <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs">
+                  🏫 {filterSchool} <button onClick={() => setFilterSchool('all')}>✕</button>
+                </span>
+              )}
+              {filterRole !== 'all' && (
+                <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs">
+                  👤 {filterRole.toUpperCase()} <button onClick={() => setFilterRole('all')}>✕</button>
+                </span>
+              )}
+              {filterSubject !== 'all' && (
+                <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs">
+                  📚 {filterSubject} <button onClick={() => setFilterSubject('all')}>✕</button>
+                </span>
+              )}
+              {filterManager !== 'all' && (
+                <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 px-2 py-1 rounded-full text-xs">
+                  👨‍💼 {managers.find(m => m.id === filterManager)?.name} <button onClick={() => setFilterManager('all')}>✕</button>
+                </span>
+              )}
             </div>
-          )}
-        </div>
-      )}
+            <button 
+              onClick={clearFilters}
+              className="text-sm text-red-500 hover:text-red-700 font-medium"
+            >
+              Clear All
+            </button>
+          </div>
+        )}
+      </div>
 
-      {/* Org Chart View */}
-      {viewMode === 'chart' && (
-        <div className="bg-gradient-to-br from-gray-50 to-purple-50 rounded-2xl p-6 overflow-x-auto">
-          <p className="text-center text-gray-500 text-sm mb-6">👆 Click on anyone to see their details & contact info!</p>
+      {/* Members Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredMembers.map((member, idx) => {
+          const roleColor = getRoleColor(member.memberType);
+          const memberManager = getMemberManager(member);
           
-          <div className="flex flex-col items-center min-w-max">
-            {/* APH Level */}
-            {hierarchy.aph && (
-              <div className="flex flex-col items-center">
-                <div 
-                  className="bg-gradient-to-r from-purple-500 to-purple-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg cursor-pointer hover:scale-105 transition-transform"
-                  onClick={() => setSelectedMember({...hierarchy.aph, memberType: 'aph'})}
-                >
-                  <div className="text-xs opacity-80 mb-1">Program Head</div>
-                  <div className="text-lg">{hierarchy.aph.name}</div>
-                </div>
-                <div className="w-1 h-8 bg-purple-300"></div>
-              </div>
-            )}
-
-            {/* PM Level */}
-            {hierarchy.pms.length > 0 && (
-              <div className="flex flex-col items-center">
-                <div className="h-1 bg-purple-300" style={{width: `${Math.max(hierarchy.pms.length * 250, 200)}px`}}></div>
-                <div className="flex gap-8 mt-2">
-                  {hierarchy.pms.map((pm, pmIdx) => (
-                    <div key={pmIdx} className="flex flex-col items-center">
-                      <div className="w-1 h-4 bg-purple-300"></div>
-                      <div 
-                        className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-5 py-3 rounded-xl font-bold shadow-lg cursor-pointer hover:scale-105 transition-transform"
-                        onClick={() => setSelectedMember({...pm, memberType: 'pm'})}
-                      >
-                        <div className="text-xs opacity-80 mb-1">Program Manager</div>
-                        <div>{pm.name}</div>
-                        <div className="text-xs opacity-70 mt-1">
-                          {(pm.pmDirectSchools?.length || 0) + pm.apms.reduce((sum, apm) => sum + (apm.schools?.length || 0), 0)} schools
-                        </div>
-                      </div>
-                      
-                      {/* PM's APMs and Schools */}
-                      {(pm.apms.length > 0 || pm.pmDirectSchools?.length > 0) && (
-                        <>
-                          <div className="w-1 h-6 bg-blue-300"></div>
-                          <div className="flex gap-6">
-                            {/* PM Direct Schools */}
-                            {pm.pmDirectSchools?.map((school, sIdx) => (
-                              <div key={`direct-${sIdx}`} className="flex flex-col items-center">
-                                <div 
-                                  className="bg-white border-2 border-purple-300 px-4 py-2 rounded-lg font-semibold text-purple-700 shadow cursor-pointer hover:bg-purple-50 transition-colors text-sm"
-                                  onClick={() => setSelectedMember({name: school.name, memberType: 'school', teachers: school.teachers, apc: school.apc})}
-                                >
-                                  🏫 {school.name}
-                                </div>
-                                {/* Teachers under this school */}
-                                {school.teachers.length > 0 && (
-                                  <div className="flex flex-wrap gap-2 mt-3 max-w-xs justify-center">
-                                    {school.teachers.slice(0, 6).map((teacher, tIdx) => (
-                                      <div 
-                                        key={tIdx}
-                                        className="text-xs px-2 py-1 rounded-full cursor-pointer hover:scale-110 transition-transform text-white font-medium"
-                                        style={{background: getSubjectColor(teacher.subject)}}
-                                        onClick={() => setSelectedMember({...teacher, memberType: 'teacher'})}
-                                      >
-                                        {teacher.name?.split(' ')[0]}
-                                      </div>
-                                    ))}
-                                    {school.teachers.length > 6 && (
-                                      <div className="text-xs text-gray-500">+{school.teachers.length - 6} more</div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                            
-                            {/* APMs */}
-                            {pm.apms.map((apm, apmIdx) => (
-                              <div key={apmIdx} className="flex flex-col items-center">
-                                <div 
-                                  className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold shadow cursor-pointer hover:scale-105 transition-transform text-sm"
-                                  onClick={() => setSelectedMember({...apm, memberType: 'apm'})}
-                                >
-                                  <div className="text-xs opacity-80">APM</div>
-                                  <div>{apm.name}</div>
-                                </div>
-                                
-                                {/* APM's Schools */}
-                                {apm.schools?.length > 0 && (
-                                  <>
-                                    <div className="w-1 h-4 bg-green-300"></div>
-                                    <div className="flex flex-wrap gap-3 justify-center max-w-md">
-                                      {apm.schools.map((school, sIdx) => (
-                                        <div key={sIdx} className="flex flex-col items-center">
-                                          <div 
-                                            className="bg-white border-2 border-green-300 px-3 py-2 rounded-lg font-semibold text-green-700 shadow cursor-pointer hover:bg-green-50 transition-colors text-xs"
-                                            onClick={() => setSelectedMember({name: school.name, memberType: 'school', teachers: school.teachers, apc: school.apc})}
-                                          >
-                                            🏫 {school.name}
-                                          </div>
-                                          {/* Teachers */}
-                                          {school.teachers.length > 0 && (
-                                            <div className="flex flex-wrap gap-1 mt-2 max-w-32 justify-center">
-                                              {school.teachers.slice(0, 4).map((teacher, tIdx) => (
-                                                <div 
-                                                  key={tIdx}
-                                                  className="text-xs px-2 py-1 rounded-full cursor-pointer hover:scale-110 transition-transform text-white font-medium"
-                                                  style={{background: getSubjectColor(teacher.subject)}}
-                                                  onClick={() => setSelectedMember({...teacher, memberType: 'teacher'})}
-                                                  title={teacher.name}
-                                                >
-                                                  {teacher.name?.split(' ')[0]?.slice(0, 6)}
-                                                </div>
-                                              ))}
-                                              {school.teachers.length > 4 && (
-                                                <div className="text-xs text-gray-400">+{school.teachers.length - 4}</div>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </>
-                      )}
+          return (
+            <div 
+              key={member.id || idx}
+              className={`bg-white rounded-xl p-4 shadow-md hover:shadow-xl transition-all cursor-pointer border-l-4 ${roleColor.border} hover:-translate-y-1`}
+              onClick={() => setSelectedMember(member)}
+            >
+              <div className="flex items-start gap-3">
+                {/* Profile Photo */}
+                {member.profilePhoto ? (
+                  <img src={member.profilePhoto} alt="" className="w-14 h-14 rounded-full object-cover border-2 border-gray-200 flex-shrink-0" />
+                ) : (
+                  <div className={`w-14 h-14 rounded-full bg-gradient-to-br ${roleColor.gradient} flex items-center justify-center text-xl font-bold text-white flex-shrink-0`}>
+                    {member.name?.charAt(0) || '?'}
+                  </div>
+                )}
+                
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-gray-800 truncate">{member.name}</div>
+                  <div className={`text-xs px-2 py-0.5 rounded-full inline-block ${roleColor.bg} ${roleColor.text} font-medium mt-1`}>
+                    {member.displayRole}
+                  </div>
+                  
+                  {/* School */}
+                  {member.school && (
+                    <div className="text-sm text-gray-500 mt-1 truncate flex items-center gap-1">
+                      <span>🏫</span> {member.school}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Unassigned Schools */}
-            {hierarchy.unassignedSchools?.length > 0 && (
-              <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-300 w-full">
-                <div className="text-center text-gray-500 text-sm mb-4">📌 Unassigned Schools</div>
-                <div className="flex flex-wrap gap-4 justify-center">
-                  {hierarchy.unassignedSchools.map((school, idx) => (
-                    <div 
-                      key={idx}
-                      className="bg-white border-2 border-gray-300 px-4 py-2 rounded-lg font-semibold text-gray-700 shadow cursor-pointer hover:bg-gray-50"
-                      onClick={() => setSelectedMember({name: school.name, memberType: 'school', teachers: school.teachers, apc: school.apc})}
+                  )}
+                  
+                  {/* Manages Schools (for managers) */}
+                  {member.directSchools?.length > 0 && (
+                    <div className="text-xs text-gray-400 mt-1 truncate">
+                      Manages: {member.directSchools.slice(0, 2).join(', ')}{member.directSchools.length > 2 ? ` +${member.directSchools.length - 2}` : ''}
+                    </div>
+                  )}
+                  
+                  {/* Subject badge for teachers */}
+                  {member.subject && (
+                    <span 
+                      className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full text-white font-medium"
+                      style={{background: getSubjectColor(member.subject)}}
                     >
-                      🏫 {school.name} ({school.teachers.length})
-                    </div>
-                  ))}
+                      {member.subject}
+                    </span>
+                  )}
                 </div>
               </div>
-            )}
 
-            {/* No data message */}
-            {!hierarchy.aph && hierarchy.pms.length === 0 && (
-              <div className="text-center py-12 text-gray-500">
-                <div className="text-6xl mb-4">🏗️</div>
-                <p className="text-lg font-semibold">No organization structure found</p>
-                <p className="text-sm mt-2">Add managers in the Admin section to see the hierarchy</p>
+              {/* Quick Contact */}
+              <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
+                {member.phone && (
+                  <a 
+                    href={`tel:${member.phone}`} 
+                    onClick={e => e.stopPropagation()} 
+                    className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-full hover:bg-blue-100 flex items-center gap-1"
+                  >
+                    📱 Call
+                  </a>
+                )}
+                {member.whatsapp && (
+                  <a 
+                    href={`https://wa.me/${member.whatsapp.replace(/[^0-9]/g, '')}`} 
+                    target="_blank" 
+                    onClick={e => e.stopPropagation()} 
+                    className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded-full hover:bg-green-100 flex items-center gap-1"
+                  >
+                    💬 WhatsApp
+                  </a>
+                )}
+                {member.email && (
+                  <a 
+                    href={`mailto:${member.email}`} 
+                    onClick={e => e.stopPropagation()} 
+                    className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded-full hover:bg-purple-100 flex items-center gap-1"
+                  >
+                    📧 Email
+                  </a>
+                )}
+                {!member.phone && !member.whatsapp && !member.email && (
+                  <span className="text-xs text-gray-400">No contact info</span>
+                )}
               </div>
+              
+              {/* Reports To (for teachers/APCs) */}
+              {memberManager && (
+                <div className="mt-2 text-xs text-gray-400 flex items-center gap-1">
+                  <span>↳</span> Reports to: <span className="font-medium text-gray-600">{memberManager.name}</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        
+        {/* No Results */}
+        {filteredMembers.length === 0 && (
+          <div className="col-span-full text-center py-16 text-gray-500">
+            <div className="text-6xl mb-4">🔍</div>
+            <p className="text-xl font-semibold">No members found</p>
+            <p className="text-sm mt-2">Try adjusting your filters</p>
+            {hasActiveFilters && (
+              <button 
+                onClick={clearFilters}
+                className="mt-4 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600"
+              >
+                Clear All Filters
+              </button>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Member Details Modal */}
       {selectedMember && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedMember(null)}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedMember(null)}>
           <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="p-6 text-white rounded-t-3xl relative" style={{ 
-              background: selectedMember.memberType === 'aph' ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)' :
-                         selectedMember.memberType === 'pm' ? 'linear-gradient(135deg, #3b82f6, #2563eb)' :
-                         selectedMember.memberType === 'apm' ? 'linear-gradient(135deg, #10b981, #059669)' :
-                         selectedMember.memberType === 'apc' ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
-                         selectedMember.memberType === 'school' ? 'linear-gradient(135deg, #8b5cf6, #6366f1)' :
-                         `linear-gradient(135deg, ${getSubjectColor(selectedMember.subject)}, ${getSubjectColor(selectedMember.subject)}cc)`
+              background: `linear-gradient(135deg, ${
+                selectedMember.memberType === 'aph' ? '#8b5cf6, #7c3aed' :
+                selectedMember.memberType === 'pm' ? '#3b82f6, #2563eb' :
+                selectedMember.memberType === 'apm' ? '#10b981, #059669' :
+                selectedMember.memberType === 'apc' ? '#f59e0b, #d97706' :
+                getSubjectColor(selectedMember.subject) + ', ' + getSubjectColor(selectedMember.subject) + 'cc'
+              })`
             }}>
-              <button onClick={() => setSelectedMember(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-lg">✕</button>
+              <button 
+                onClick={() => setSelectedMember(null)} 
+                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-xl font-bold"
+              >
+                ✕
+              </button>
               <div className="flex items-center gap-4">
                 {selectedMember.profilePhoto ? (
                   <img src={selectedMember.profilePhoto} alt="" className="w-20 h-20 rounded-2xl object-cover border-4 border-white/30" />
                 ) : (
                   <div className="w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center text-4xl font-bold">
-                    {selectedMember.memberType === 'school' ? '🏫' : selectedMember.name?.charAt(0)}
+                    {selectedMember.name?.charAt(0)}
                   </div>
                 )}
                 <div>
                   <h3 className="text-2xl font-bold">{selectedMember.name}</h3>
-                  <p className="opacity-90">
-                    {selectedMember.memberType === 'aph' ? 'Program Head (APH)' :
-                     selectedMember.memberType === 'pm' ? 'Program Manager (PM)' :
-                     selectedMember.memberType === 'apm' ? 'Associate Program Manager (APM)' :
-                     selectedMember.memberType === 'apc' ? 'Academic Program Coordinator (APC)' :
-                     selectedMember.memberType === 'school' ? 'School' :
-                     selectedMember.subject ? `${selectedMember.subject} Teacher` : 'Teacher'}
-                  </p>
+                  <p className="opacity-90">{selectedMember.displayRole}</p>
                 </div>
               </div>
             </div>
 
             {/* Details */}
             <div className="p-5 space-y-3">
-              {/* AFID */}
+              {/* AFID / AF Code */}
               {(selectedMember.afid || selectedMember.afCode) && (
                 <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">
                   <span className="text-xl">🆔</span>
@@ -19646,14 +19646,17 @@ function OrgChartDirectory({ teachers, currentUser }) {
               )}
               
               {/* School */}
-              {selectedMember.school && selectedMember.memberType !== 'school' && (
+              {selectedMember.school && (
                 <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl">
                   <span className="text-xl">🏫</span>
-                  <div><div className="text-xs text-gray-500">School</div><div className="font-semibold">{selectedMember.school}</div></div>
+                  <div>
+                    <div className="text-xs text-gray-500">School</div>
+                    <div className="font-semibold">{selectedMember.school}</div>
+                  </div>
                 </div>
               )}
               
-              {/* Manages Schools (for managers) */}
+              {/* Manages Schools */}
               {selectedMember.directSchools?.length > 0 && (
                 <div className="flex items-start gap-3 p-3 bg-yellow-50 rounded-xl">
                   <span className="text-xl">🏫</span>
@@ -19664,26 +19667,14 @@ function OrgChartDirectory({ teachers, currentUser }) {
                 </div>
               )}
               
-              {/* School Teachers List (for school view) */}
-              {selectedMember.memberType === 'school' && selectedMember.teachers?.length > 0 && (
-                <div className="p-3 bg-blue-50 rounded-xl">
-                  <div className="text-xs text-gray-500 mb-2">Teachers ({selectedMember.teachers.length})</div>
-                  <div className="space-y-2">
-                    {selectedMember.teachers.map((t, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-white p-2 rounded-lg">
-                        <span className="font-medium">{t.name}</span>
-                        <span className="text-xs px-2 py-1 rounded-full text-white" style={{background: getSubjectColor(t.subject)}}>{t.subject}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
               {/* Subject */}
               {selectedMember.subject && (
                 <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl">
                   <span className="text-xl">📚</span>
-                  <div><div className="text-xs text-gray-500">Subject</div><div className="font-semibold">{selectedMember.subject}</div></div>
+                  <div>
+                    <div className="text-xs text-gray-500">Subject</div>
+                    <div className="font-semibold">{selectedMember.subject}</div>
+                  </div>
                 </div>
               )}
               
@@ -19702,7 +19693,10 @@ function OrgChartDirectory({ teachers, currentUser }) {
               {selectedMember.qualification && (
                 <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl">
                   <span className="text-xl">🎓</span>
-                  <div><div className="text-xs text-gray-500">Qualification</div><div className="font-semibold">{selectedMember.qualification}</div></div>
+                  <div>
+                    <div className="text-xs text-gray-500">Qualification</div>
+                    <div className="font-semibold">{selectedMember.qualification}</div>
+                  </div>
                 </div>
               )}
               
@@ -19710,7 +19704,10 @@ function OrgChartDirectory({ teachers, currentUser }) {
               {selectedMember.experience && (
                 <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl">
                   <span className="text-xl">💼</span>
-                  <div><div className="text-xs text-gray-500">Experience</div><div className="font-semibold">{selectedMember.experience}</div></div>
+                  <div>
+                    <div className="text-xs text-gray-500">Experience</div>
+                    <div className="font-semibold">{selectedMember.experience}</div>
+                  </div>
                 </div>
               )}
               
@@ -19781,16 +19778,22 @@ function OrgChartDirectory({ teachers, currentUser }) {
               )}
 
               {/* Action Buttons */}
-              {(selectedMember.phone || selectedMember.whatsapp || selectedMember.email) && selectedMember.memberType !== 'school' && (
+              {(selectedMember.phone || selectedMember.whatsapp || selectedMember.email) && (
                 <div className="grid grid-cols-3 gap-2 pt-3">
                   {selectedMember.phone && (
-                    <a href={`tel:${selectedMember.phone}`} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg text-sm">📱 Call</a>
+                    <a href={`tel:${selectedMember.phone}`} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg text-sm flex items-center justify-center gap-1">
+                      📱 Call
+                    </a>
                   )}
                   {selectedMember.whatsapp && (
-                    <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" className="bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg text-sm">💬 WhatsApp</a>
+                    <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" className="bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg text-sm flex items-center justify-center gap-1">
+                      💬 WhatsApp
+                    </a>
                   )}
                   {selectedMember.email && (
-                    <a href={`mailto:${selectedMember.email}`} className="bg-gradient-to-r from-purple-500 to-purple-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg text-sm">📧 Email</a>
+                    <a href={`mailto:${selectedMember.email}`} className="bg-gradient-to-r from-purple-500 to-purple-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg text-sm flex items-center justify-center gap-1">
+                      📧 Email
+                    </a>
                   )}
                 </div>
               )}
