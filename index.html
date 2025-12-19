@@ -5758,8 +5758,8 @@ function generate2FASecret(email) {
 // Generate TOTP URI for QR code
 function generate2FAURI(email, secret) {
   const totp = new OTPAuth.TOTP({
-    issuer: 'Avanti Curriculum Tracker',
-    label: email,
+    issuer: 'Avanti',
+label: email.split('@')[0],
     algorithm: 'SHA1',
     digits: 6,
     period: 30,
@@ -5968,7 +5968,7 @@ function TwoFactorSetupModal({ user, onClose, onSetupComplete }) {
         height: 200,
         colorDark: '#000000',
         colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.H
+        correctLevel: QRCode.CorrectLevel.L
       });
     }
   }, [qrUri, step]);
