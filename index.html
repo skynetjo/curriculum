@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -736,6 +735,190 @@ const getCurrentAcademicYear = () => {
 };
 
 const CURRENT_ACADEMIC_YEAR = getCurrentAcademicYear();
+
+// ========================================
+// OFFLINE DATA SYNC & AUTOSAVE UTILITY
+// For low connectivity areas (30-40km from city)
+// ========================================
+const DataSyncManager = {
+  pendingOperations: [],
+  retryInterval: null,
+  maxRetries: 5,
+  
+  // Initialize the sync manager
+  init: function() {
+    // Load pending operations from localStorage
+    try {
+      const stored = localStorage.getItem('pendingDataSync');
+      if (stored) {
+        this.pendingOperations = JSON.parse(stored);
+        console.log('[DataSync] Loaded', this.pendingOperations.length, 'pending operations');
+      }
+    } catch (e) {
+      console.error('[DataSync] Error loading pending ops:', e);
+    }
+    
+    // Listen for online event
+    window.addEventListener('online', () => {
+      console.log('[DataSync] Back online, syncing...');
+      this.syncPendingOperations();
+    });
+    
+    // Try to sync periodically
+    setInterval(() => {
+      if (navigator.onLine && this.pendingOperations.length > 0) {
+        this.syncPendingOperations();
+      }
+    }, 30000); // Every 30 seconds
+  },
+  
+  // Save data with retry logic
+  saveWithRetry: async function(collection, docId, data, options = {}) {
+    const { merge = true, maxRetries = this.maxRetries, showToast = true } = options;
+    
+    // Create operation record
+    const operation = {
+      id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+      collection,
+      docId,
+      data,
+      merge,
+      timestamp: new Date().toISOString(),
+      retries: 0
+    };
+    
+    // Try to save immediately
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        if (!navigator.onLine) {
+          throw new Error('Offline');
+        }
+        
+        const docRef = docId 
+          ? db.collection(collection).doc(docId)
+          : db.collection(collection).doc();
+        
+        await docRef.set(data, { merge });
+        
+        if (showToast) {
+          this.showSaveToast('success');
+        }
+        
+        return { success: true, docId: docRef.id };
+      } catch (error) {
+        console.log(`[DataSync] Attempt ${attempt + 1} failed:`, error.message);
+        
+        if (attempt < maxRetries - 1) {
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        }
+      }
+    }
+    
+    // All retries failed, queue for later
+    this.pendingOperations.push(operation);
+    this.savePendingToStorage();
+    
+    if (showToast) {
+      this.showSaveToast('queued');
+    }
+    
+    return { success: false, queued: true, operationId: operation.id };
+  },
+  
+  // Sync all pending operations
+  syncPendingOperations: async function() {
+    if (!navigator.onLine || this.pendingOperations.length === 0) return;
+    
+    console.log('[DataSync] Syncing', this.pendingOperations.length, 'operations');
+    
+    const successfulOps = [];
+    
+    for (const op of this.pendingOperations) {
+      try {
+        const docRef = op.docId 
+          ? db.collection(op.collection).doc(op.docId)
+          : db.collection(op.collection).doc();
+        
+        await docRef.set(op.data, { merge: op.merge });
+        successfulOps.push(op.id);
+        console.log('[DataSync] Synced:', op.collection);
+      } catch (error) {
+        op.retries++;
+        console.log('[DataSync] Failed to sync:', op.collection, error.message);
+        
+        // Remove if too many retries
+        if (op.retries > 10) {
+          successfulOps.push(op.id);
+          console.log('[DataSync] Giving up on:', op.collection);
+        }
+      }
+    }
+    
+    // Remove successful operations
+    this.pendingOperations = this.pendingOperations.filter(op => !successfulOps.includes(op.id));
+    this.savePendingToStorage();
+    
+    if (successfulOps.length > 0) {
+      this.showSaveToast('synced', successfulOps.length);
+    }
+  },
+  
+  // Save pending operations to localStorage
+  savePendingToStorage: function() {
+    try {
+      localStorage.setItem('pendingDataSync', JSON.stringify(this.pendingOperations));
+    } catch (e) {
+      console.error('[DataSync] Error saving to storage:', e);
+    }
+  },
+  
+  // Show save status toast
+  showSaveToast: function(status, count = 1) {
+    const existing = document.getElementById('saveToast');
+    if (existing) existing.remove();
+    
+    const toast = document.createElement('div');
+    toast.id = 'saveToast';
+    toast.className = 'fixed bottom-20 right-4 px-4 py-2 rounded-lg shadow-lg z-50 flex items-center gap-2 text-sm font-medium transition-all';
+    
+    switch (status) {
+      case 'success':
+        toast.className += ' bg-green-500 text-white';
+        toast.innerHTML = '✅ Saved!';
+        break;
+      case 'queued':
+        toast.className += ' bg-yellow-500 text-black';
+        toast.innerHTML = '⏳ Saved offline - will sync when connected';
+        break;
+      case 'synced':
+        toast.className += ' bg-blue-500 text-white';
+        toast.innerHTML = `🔄 Synced ${count} item${count > 1 ? 's' : ''}!`;
+        break;
+      case 'error':
+        toast.className += ' bg-red-500 text-white';
+        toast.innerHTML = '❌ Save failed';
+        break;
+    }
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+    }, status === 'queued' ? 4000 : 2000);
+  },
+  
+  // Get pending count for UI display
+  getPendingCount: function() {
+    return this.pendingOperations.length;
+  }
+};
+
+// Initialize on load
+if (typeof window !== 'undefined') {
+  DataSyncManager.init();
+}
 
 const LEAVE_REASONS=['Present','Personal Leave','Sick Leave','Weekly Off','Public Holiday','Organization Holiday','School Holiday','Emergency Leave','Maternity Leave','Paternity Leave'];
 
@@ -8983,20 +9166,58 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
     }
     
     setUploadingPhoto(true);
-    try {
-      const ext = file.name.split('.').pop();
-      const fileName = `manager_${Date.now()}.${ext}`;
-      const storageRef = firebase.storage().ref(`profile-photos/${fileName}`);
-      await storageRef.put(file);
-      const url = await storageRef.getDownloadURL();
-      setForm({ ...form, profilePhoto: url });
-      alert('✅ Photo uploaded!');
-    } catch (err) {
-      console.error('Upload error:', err);
-      alert('Upload failed: ' + err.message);
-    } finally {
+    
+    // First show immediate preview using base64
+    const reader = new FileReader();
+    reader.onload = async (readerEvent) => {
+      // Show preview immediately
+      const base64 = readerEvent.target.result;
+      setForm(prev => ({ ...prev, profilePhoto: base64 }));
+      
+      try {
+        const ext = file.name.split('.').pop() || 'jpg';
+        const safeFileName = `manager_${Date.now()}.${ext}`;
+        const storageRef = firebase.storage().ref(`profile-photos/${safeFileName}`);
+        
+        // Upload with progress tracking
+        const uploadTask = storageRef.put(file);
+        
+        await new Promise((resolve, reject) => {
+          uploadTask.on('state_changed',
+            (snapshot) => {
+              const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+              console.log('[Manager Photo] Upload progress:', progress + '%');
+            },
+            (error) => {
+              console.error('[Manager Photo] Upload error:', error);
+              reject(error);
+            },
+            async () => {
+              try {
+                const url = await storageRef.getDownloadURL();
+                setForm(prev => ({ ...prev, profilePhoto: url }));
+                resolve(url);
+              } catch (urlError) {
+                reject(urlError);
+              }
+            }
+          );
+        });
+        
+        alert('✅ Photo uploaded successfully!');
+      } catch (err) {
+        console.error('Upload error:', err);
+        // Keep the base64 preview even if cloud upload fails
+        alert('⚠️ Photo saved locally. Cloud upload may have failed, but you can still continue.');
+      } finally {
+        setUploadingPhoto(false);
+      }
+    };
+    reader.onerror = () => {
+      alert('Failed to read image file');
       setUploadingPhoto(false);
-    }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async () => {
@@ -18926,12 +19147,15 @@ function OrgChartDirectory({ teachers, currentUser }) {
   const [apcs, setApcs] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'list'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterRole, setFilterRole] = useState('all');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const managersSnap = await db.collection('managers').where('status', '==', 'active').get();
+        const managersSnap = await db.collection('managers').get();
         const managersData = managersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setManagers(managersData);
 
@@ -18947,36 +19171,19 @@ function OrgChartDirectory({ teachers, currentUser }) {
     fetchData();
   }, []);
 
-  // Build hierarchy matching the reference image
+  // Build complete hierarchy
   const hierarchy = useMemo(() => {
-    // Get all PMs (Program Managers)
-    const allPMs = managers.filter(m => m.role === 'pm');
-    const pm = allPMs[0]; // Main PM
+    // Get APH (Program Head)
+    const aph = managers.find(m => m.role === 'aph' && m.status === 'active');
     
-    // Get ALL APMs (even those without reportsTo)
-    const allAPMs = managers.filter(m => m.role === 'apm');
+    // Get all PMs under APH
+    const pms = managers.filter(m => m.role === 'pm' && m.status === 'active');
+    
+    // Get all APMs
+    const apms = managers.filter(m => m.role === 'apm' && m.status === 'active');
     
     // Get all unique schools from teachers
     const allSchoolsFromTeachers = [...new Set(teachers.filter(t => !t.isArchived && t.school).map(t => t.school))];
-    
-    // Get all schools managed by APMs
-    const apmSchoolsSet = new Set();
-    allAPMs.forEach(apm => {
-      (apm.directSchools || []).forEach(s => apmSchoolsSet.add(s));
-    });
-    
-    // Schools directly under PM = PM's directSchools that are NOT under any APM
-    // PLUS any schools from teachers that aren't under PM or APM
-    const pmSchools = pm?.directSchools || [];
-    const pmDirectSchools = pmSchools.filter(s => !apmSchoolsSet.has(s));
-    
-    // Also include schools from teachers that have no manager assignment
-    const unassignedSchools = allSchoolsFromTeachers.filter(s => 
-      !pmSchools.includes(s) && !apmSchoolsSet.has(s)
-    );
-    
-    // Combine PM direct schools with unassigned schools
-    const allPMDirectSchools = [...new Set([...pmDirectSchools, ...unassignedSchools])];
     
     // Build school data with teachers and APCs
     const getSchoolData = (schoolName) => {
@@ -18985,20 +19192,101 @@ function OrgChartDirectory({ teachers, currentUser }) {
         !t.isArchived && 
         t.role !== 'apc' && 
         !t.isAPC
-      );
+      ).sort((a, b) => (a.subject || '').localeCompare(b.subject || ''));
       const schoolApc = apcs.find(a => a.school === schoolName || a.schools?.includes(schoolName));
       return { name: schoolName, teachers: schoolTeachers, apc: schoolApc };
     };
 
+    // Build PM structure with their APMs and schools
+    const pmStructure = pms.map(pm => {
+      // Get APMs reporting to this PM
+      const pmApms = apms.filter(apm => apm.reportsTo === pm.id);
+      
+      // Get schools directly under PM (not under any APM)
+      const apmSchoolsSet = new Set();
+      pmApms.forEach(apm => {
+        (apm.directSchools || []).forEach(s => apmSchoolsSet.add(s));
+      });
+      
+      const pmDirectSchools = (pm.directSchools || []).filter(s => !apmSchoolsSet.has(s));
+      
+      return {
+        ...pm,
+        pmDirectSchools: pmDirectSchools.map(getSchoolData),
+        apms: pmApms.map(apm => ({
+          ...apm,
+          schools: (apm.directSchools || []).map(getSchoolData)
+        }))
+      };
+    });
+
+    // Get unassigned schools (not under any manager)
+    const allManagedSchools = new Set();
+    pms.forEach(pm => {
+      (pm.directSchools || []).forEach(s => allManagedSchools.add(s));
+    });
+    apms.forEach(apm => {
+      (apm.directSchools || []).forEach(s => allManagedSchools.add(s));
+    });
+    const unassignedSchools = allSchoolsFromTeachers.filter(s => !allManagedSchools.has(s));
+
     return { 
-      pm, 
-      pmDirectSchools: allPMDirectSchools.map(getSchoolData),
-      apms: allAPMs.map(apm => ({
-        ...apm,
-        schools: (apm.directSchools || []).map(getSchoolData)
-      }))
+      aph,
+      pms: pmStructure,
+      unassignedSchools: unassignedSchools.map(getSchoolData)
     };
   }, [managers, apcs, teachers]);
+
+  // Get all members for list view
+  const allMembers = useMemo(() => {
+    const members = [];
+    
+    // Add managers
+    managers.filter(m => m.status === 'active').forEach(m => {
+      members.push({
+        ...m,
+        memberType: m.role,
+        displayRole: m.role === 'aph' ? 'Program Head' :
+                    m.role === 'pm' ? 'Program Manager' :
+                    m.role === 'apm' ? 'Associate Program Manager' : m.role
+      });
+    });
+    
+    // Add APCs
+    apcs.forEach(a => {
+      members.push({
+        ...a,
+        memberType: 'apc',
+        displayRole: 'Academic Program Coordinator'
+      });
+    });
+    
+    // Add teachers
+    teachers.filter(t => !t.isArchived && t.name?.toLowerCase() !== 'vacant').forEach(t => {
+      members.push({
+        ...t,
+        memberType: 'teacher',
+        displayRole: t.subject ? `${t.subject} Teacher` : 'Teacher'
+      });
+    });
+    
+    return members;
+  }, [managers, apcs, teachers]);
+
+  // Filter members for list view
+  const filteredMembers = useMemo(() => {
+    return allMembers.filter(m => {
+      const matchesSearch = !searchQuery || 
+        m.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.school?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.afid?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesRole = filterRole === 'all' || m.memberType === filterRole;
+      
+      return matchesSearch && matchesRole;
+    });
+  }, [allMembers, searchQuery, filterRole]);
 
   const getSubjectColor = (subject) => ({
     'Physics': '#6b9bd1',
@@ -19009,6 +19297,14 @@ function OrgChartDirectory({ teachers, currentUser }) {
     'Bio': '#7bc8a8'
   }[subject] || '#d4a88e');
 
+  const getRoleColor = (role) => ({
+    'aph': { bg: 'bg-purple-100', text: 'text-purple-700', gradient: 'from-purple-500 to-purple-600' },
+    'pm': { bg: 'bg-blue-100', text: 'text-blue-700', gradient: 'from-blue-500 to-blue-600' },
+    'apm': { bg: 'bg-green-100', text: 'text-green-700', gradient: 'from-green-500 to-green-600' },
+    'apc': { bg: 'bg-orange-100', text: 'text-orange-700', gradient: 'from-orange-500 to-orange-600' },
+    'teacher': { bg: 'bg-pink-100', text: 'text-pink-700', gradient: 'from-pink-500 to-pink-600' }
+  }[role] || { bg: 'bg-gray-100', text: 'text-gray-700', gradient: 'from-gray-500 to-gray-600' });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -19017,368 +19313,303 @@ function OrgChartDirectory({ teachers, currentUser }) {
     );
   }
 
+  // Member Card Component for List View
+  const MemberCard = ({ member }) => {
+    const roleColor = getRoleColor(member.memberType);
+    return (
+      <div 
+        className={`bg-white rounded-xl p-4 shadow-md hover:shadow-lg transition-all cursor-pointer border-l-4 ${
+          member.memberType === 'aph' ? 'border-purple-500' :
+          member.memberType === 'pm' ? 'border-blue-500' :
+          member.memberType === 'apm' ? 'border-green-500' :
+          member.memberType === 'apc' ? 'border-orange-500' :
+          'border-pink-500'
+        }`}
+        onClick={() => setSelectedMember({...member, memberType: member.memberType})}
+      >
+        <div className="flex items-center gap-3">
+          {member.profilePhoto ? (
+            <img src={member.profilePhoto} alt="" className="w-14 h-14 rounded-full object-cover border-2 border-gray-200" />
+          ) : (
+            <div className={`w-14 h-14 rounded-full bg-gradient-to-br ${roleColor.gradient} flex items-center justify-center text-xl font-bold text-white`}>
+              {member.name?.charAt(0) || '?'}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-gray-800 truncate">{member.name}</div>
+            <div className={`text-xs px-2 py-1 rounded-full inline-block ${roleColor.bg} ${roleColor.text} font-medium`}>
+              {member.displayRole}
+            </div>
+            {member.school && <div className="text-sm text-gray-500 mt-1 truncate">🏫 {member.school}</div>}
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {member.phone && (
+            <a href={`tel:${member.phone}`} onClick={e => e.stopPropagation()} className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-full hover:bg-blue-100">📱 {member.phone}</a>
+          )}
+          {member.whatsapp && (
+            <a href={`https://wa.me/${member.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" onClick={e => e.stopPropagation()} className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded-full hover:bg-green-100">💬 WhatsApp</a>
+          )}
+          {member.email && (
+            <a href={`mailto:${member.email}`} onClick={e => e.stopPropagation()} className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded-full hover:bg-purple-100 truncate max-w-32">📧 {member.email.split('@')[0]}</a>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
-      <style>{`
-        .org-container {
-          background: linear-gradient(180deg, #f8f5f5 0%, #f5f0f5 100%);
-          border-radius: 20px;
-          padding: 40px 20px;
-          overflow-x: auto;
-        }
-        
-        .tree-wrapper {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          min-width: fit-content;
-        }
-        
-        .pm-box {
-          background: #d4c4e0;
-          border: 3px solid #b8a0c8;
-          border-radius: 8px;
-          padding: 12px 40px;
-          font-weight: 700;
-          font-size: 16px;
-          text-align: center;
-          margin-bottom: 10px;
-          cursor: pointer;
-        }
-        
-        .pm-box:hover { transform: scale(1.02); }
-        
-        .vertical-line {
-          width: 3px;
-          height: 30px;
-          background: #c8a0b0;
-          margin: 0 auto;
-        }
-        
-        .horizontal-connector {
-          height: 3px;
-          background: #c8a0b0;
-          position: relative;
-        }
-        
-        .schools-row {
-          display: flex;
-          justify-content: center;
-          gap: 30px;
-          position: relative;
-        }
-        
-        .school-branch {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-        
-        .school-box {
-          background: #d4c4e0;
-          border: 3px solid #b8a0c8;
-          border-radius: 8px;
-          padding: 10px 20px;
-          font-weight: 600;
-          font-size: 14px;
-          text-align: center;
-          min-width: 120px;
-          cursor: pointer;
-        }
-        
-        .school-box:hover { transform: scale(1.02); }
-        
-        .teachers-row {
-          display: flex;
-          justify-content: center;
-          gap: 8px;
-          margin-top: 10px;
-          flex-wrap: wrap;
-          max-width: 350px;
-        }
-        
-        .teacher-box {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-        
-        .teacher-name {
-          background: #d4c8b8;
-          border: 2px solid #c4b8a8;
-          border-radius: 6px;
-          padding: 8px 12px;
-          font-weight: 600;
-          font-size: 12px;
-          text-align: center;
-          min-width: 80px;
-          cursor: pointer;
-        }
-        
-        .teacher-name:hover { transform: scale(1.05); }
-        
-        .teacher-name.vacant {
-          background: linear-gradient(135deg, #e74c3c, #c0392b);
-          color: white;
-          border-color: #a93226;
-        }
-        
-        .subject-tag {
-          margin-top: 4px;
-          padding: 4px 10px;
-          border-radius: 4px;
-          color: white;
-          font-size: 11px;
-          font-weight: 600;
-          text-align: center;
-        }
-        
-        .apc-box {
-          background: #ddc8b8;
-          border: 2px solid #c8b8a8;
-          border-radius: 6px;
-          padding: 8px 12px;
-          font-weight: 600;
-          font-size: 12px;
-          text-align: center;
-          cursor: pointer;
-        }
-        
-        .apc-tag {
-          background: #d4a88e;
-          color: white;
-          padding: 3px 10px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          margin-top: 4px;
-        }
-        
-        .apm-box {
-          background: #ddc8c0;
-          border: 3px solid #c8b0a8;
-          border-radius: 8px;
-          padding: 10px 20px;
-          font-weight: 600;
-          font-size: 13px;
-          text-align: center;
-          cursor: pointer;
-        }
-        
-        .apm-box:hover { transform: scale(1.02); }
-        
-        .apm-section {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          margin-top: 20px;
-        }
-        
-        .apm-schools-row {
-          display: flex;
-          justify-content: center;
-          gap: 30px;
-          margin-top: 15px;
-        }
-        
-        .connector-down {
-          width: 3px;
-          height: 25px;
-          background: #c8a0b0;
-          margin: 0 auto;
-        }
-        
-        .connector-t {
-          position: relative;
-          height: 25px;
-          display: flex;
-          justify-content: center;
-        }
-        
-        .connector-t::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 50%;
-          width: 3px;
-          height: 15px;
-          background: #c8a0b0;
-          transform: translateX(-50%);
-        }
-        
-        .connector-t::after {
-          content: '';
-          position: absolute;
-          top: 15px;
-          left: 0;
-          right: 0;
-          height: 3px;
-          background: #c8a0b0;
-        }
-        
-        .branch-down {
-          width: 3px;
-          height: 10px;
-          background: #c8a0b0;
-          margin: 0 auto;
-        }
-        
-        @media (max-width: 768px) {
-          .schools-row { flex-direction: column; gap: 20px; }
-          .apm-schools-row { flex-direction: column; gap: 20px; }
-        }
-      `}</style>
-
-      {/* Header */}
-      <div className="text-center">
+      {/* Header with View Toggle */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="inline-flex items-center gap-3 bg-gradient-to-r from-pink-100 via-purple-100 to-blue-100 px-6 py-3 rounded-full shadow-lg">
           <span className="text-3xl">👨‍👩‍👧‍👦</span>
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 bg-clip-text text-transparent">
-            Our Family Tree
+          <h2 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 bg-clip-text text-transparent">
+            Team Directory
           </h2>
           <span className="text-3xl">🌳</span>
         </div>
-        <p className="text-gray-500 mt-3 text-sm">Click on anyone to see their details & contact info! 📞</p>
+        
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setViewMode('chart')} 
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${viewMode === 'chart' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            🌳 Org Chart
+          </button>
+          <button 
+            onClick={() => setViewMode('list')} 
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${viewMode === 'list' ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            📋 List View
+          </button>
+        </div>
       </div>
 
-      {/* Org Chart */}
-      <div className="org-container">
-        <div className="tree-wrapper">
-          
-          {/* PM at top */}
-          {hierarchy.pm && (
-            <>
-              <div className="pm-box" onClick={() => setSelectedMember({...hierarchy.pm, memberType: 'pm'})}>
-                {hierarchy.pm.name}
-              </div>
-              <div className="vertical-line"></div>
-            </>
-          )}
-
-          {/* Horizontal connector for direct schools */}
-          {hierarchy.pmDirectSchools.length > 0 && (
-            <>
-              <div className="connector-t" style={{ width: `${Math.min(hierarchy.pmDirectSchools.length * 180, 800)}px` }}></div>
-              
-              {/* Direct Schools Row */}
-              <div className="schools-row">
-                {hierarchy.pmDirectSchools.map((school, idx) => (
-                  <div key={idx} className="school-branch">
-                    <div className="branch-down"></div>
-                    <div className="school-box" onClick={() => setSelectedMember({name: school.name, memberType: 'school'})}>
-                      {school.name}
-                    </div>
-                    
-                    {/* APC if exists */}
-                    {school.apc && (
-                      <div className="flex flex-col items-center mt-2">
-                        <div className="apc-box" onClick={() => setSelectedMember({...school.apc, memberType: 'apc'})}>
-                          {school.apc.name}
-                        </div>
-                        <div className="apc-tag">APC</div>
-                      </div>
-                    )}
-                    
-                    {/* Teachers */}
-                    {school.teachers.length > 0 && (
-                      <>
-                        <div className="connector-down"></div>
-                        <div className="teachers-row">
-                          {school.teachers.map((teacher, tidx) => (
-                            <div key={tidx} className="teacher-box">
-                              <div 
-                                className={`teacher-name ${teacher.name?.toLowerCase() === 'vacant' ? 'vacant' : ''}`}
-                                onClick={() => setSelectedMember({...teacher, memberType: 'teacher'})}
-                              >
-                                {teacher.name}
-                              </div>
-                              <div className="subject-tag" style={{ background: getSubjectColor(teacher.subject) }}>
-                                {teacher.subject}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* APM Sections */}
-          {hierarchy.apms.map((apm, apmIdx) => (
-            <div key={apmIdx} className="apm-section">
-              <div className="vertical-line"></div>
-              <div className="apm-box" onClick={() => setSelectedMember({...apm, memberType: 'apm'})}>
-                {apm.name}
-                <div className="text-xs text-gray-600 mt-1">(APM)</div>
-              </div>
-              
-              {/* APM's Schools */}
-              {apm.schools.length > 0 && (
-                <>
-                  <div className="connector-t" style={{ width: `${Math.min(apm.schools.length * 200, 500)}px` }}></div>
-                  <div className="apm-schools-row">
-                    {apm.schools.map((school, sidx) => (
-                      <div key={sidx} className="school-branch">
-                        <div className="branch-down"></div>
-                        <div className="school-box" onClick={() => setSelectedMember({name: school.name, memberType: 'school'})}>
-                          {school.name}
-                        </div>
-                        
-                        {/* Teachers */}
-                        {school.teachers.length > 0 && (
-                          <>
-                            <div className="connector-down"></div>
-                            <div className="teachers-row">
-                              {school.teachers.map((teacher, tidx) => (
-                                <div key={tidx} className="teacher-box">
-                                  <div 
-                                    className={`teacher-name ${teacher.name?.toLowerCase() === 'vacant' ? 'vacant' : ''}`}
-                                    onClick={() => setSelectedMember({...teacher, memberType: 'teacher'})}
-                                  >
-                                    {teacher.name}
-                                  </div>
-                                  <div className="subject-tag" style={{ background: getSubjectColor(teacher.subject) }}>
-                                    {teacher.subject}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+      {/* Search & Filter for List View */}
+      {viewMode === 'list' && (
+        <div className="bg-white rounded-xl p-4 shadow-md">
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder="🔍 Search by name, email, school, or AFID..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-400 focus:outline-none"
+              />
             </div>
-          ))}
+            <select
+              value={filterRole}
+              onChange={e => setFilterRole(e.target.value)}
+              className="px-4 py-3 rounded-xl border-2 border-gray-200 bg-white focus:border-purple-400 focus:outline-none"
+            >
+              <option value="all">All Roles</option>
+              <option value="aph">Program Heads</option>
+              <option value="pm">Program Managers</option>
+              <option value="apm">Associate Program Managers</option>
+              <option value="apc">Academic Coordinators</option>
+              <option value="teacher">Teachers</option>
+            </select>
+          </div>
+          <div className="mt-3 text-sm text-gray-500">
+            Found {filteredMembers.length} members
+          </div>
+        </div>
+      )}
 
-          {/* No data message */}
-          {!hierarchy.pm && hierarchy.apms.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              <div className="text-6xl mb-4">🏗️</div>
-              <p className="text-lg font-semibold">No organization structure found</p>
-              <p className="text-sm mt-2">Add managers in the Admin section to see the hierarchy</p>
+      {/* List View */}
+      {viewMode === 'list' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredMembers.map((member, idx) => (
+            <MemberCard key={member.id || idx} member={member} />
+          ))}
+          {filteredMembers.length === 0 && (
+            <div className="col-span-full text-center py-12 text-gray-500">
+              <div className="text-6xl mb-4">🔍</div>
+              <p>No members found matching your search</p>
             </div>
           )}
         </div>
-      </div>
+      )}
+
+      {/* Org Chart View */}
+      {viewMode === 'chart' && (
+        <div className="bg-gradient-to-br from-gray-50 to-purple-50 rounded-2xl p-6 overflow-x-auto">
+          <p className="text-center text-gray-500 text-sm mb-6">👆 Click on anyone to see their details & contact info!</p>
+          
+          <div className="flex flex-col items-center min-w-max">
+            {/* APH Level */}
+            {hierarchy.aph && (
+              <div className="flex flex-col items-center">
+                <div 
+                  className="bg-gradient-to-r from-purple-500 to-purple-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg cursor-pointer hover:scale-105 transition-transform"
+                  onClick={() => setSelectedMember({...hierarchy.aph, memberType: 'aph'})}
+                >
+                  <div className="text-xs opacity-80 mb-1">Program Head</div>
+                  <div className="text-lg">{hierarchy.aph.name}</div>
+                </div>
+                <div className="w-1 h-8 bg-purple-300"></div>
+              </div>
+            )}
+
+            {/* PM Level */}
+            {hierarchy.pms.length > 0 && (
+              <div className="flex flex-col items-center">
+                <div className="h-1 bg-purple-300" style={{width: `${Math.max(hierarchy.pms.length * 250, 200)}px`}}></div>
+                <div className="flex gap-8 mt-2">
+                  {hierarchy.pms.map((pm, pmIdx) => (
+                    <div key={pmIdx} className="flex flex-col items-center">
+                      <div className="w-1 h-4 bg-purple-300"></div>
+                      <div 
+                        className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-5 py-3 rounded-xl font-bold shadow-lg cursor-pointer hover:scale-105 transition-transform"
+                        onClick={() => setSelectedMember({...pm, memberType: 'pm'})}
+                      >
+                        <div className="text-xs opacity-80 mb-1">Program Manager</div>
+                        <div>{pm.name}</div>
+                        <div className="text-xs opacity-70 mt-1">
+                          {(pm.pmDirectSchools?.length || 0) + pm.apms.reduce((sum, apm) => sum + (apm.schools?.length || 0), 0)} schools
+                        </div>
+                      </div>
+                      
+                      {/* PM's APMs and Schools */}
+                      {(pm.apms.length > 0 || pm.pmDirectSchools?.length > 0) && (
+                        <>
+                          <div className="w-1 h-6 bg-blue-300"></div>
+                          <div className="flex gap-6">
+                            {/* PM Direct Schools */}
+                            {pm.pmDirectSchools?.map((school, sIdx) => (
+                              <div key={`direct-${sIdx}`} className="flex flex-col items-center">
+                                <div 
+                                  className="bg-white border-2 border-purple-300 px-4 py-2 rounded-lg font-semibold text-purple-700 shadow cursor-pointer hover:bg-purple-50 transition-colors text-sm"
+                                  onClick={() => setSelectedMember({name: school.name, memberType: 'school', teachers: school.teachers, apc: school.apc})}
+                                >
+                                  🏫 {school.name}
+                                </div>
+                                {/* Teachers under this school */}
+                                {school.teachers.length > 0 && (
+                                  <div className="flex flex-wrap gap-2 mt-3 max-w-xs justify-center">
+                                    {school.teachers.slice(0, 6).map((teacher, tIdx) => (
+                                      <div 
+                                        key={tIdx}
+                                        className="text-xs px-2 py-1 rounded-full cursor-pointer hover:scale-110 transition-transform text-white font-medium"
+                                        style={{background: getSubjectColor(teacher.subject)}}
+                                        onClick={() => setSelectedMember({...teacher, memberType: 'teacher'})}
+                                      >
+                                        {teacher.name?.split(' ')[0]}
+                                      </div>
+                                    ))}
+                                    {school.teachers.length > 6 && (
+                                      <div className="text-xs text-gray-500">+{school.teachers.length - 6} more</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            
+                            {/* APMs */}
+                            {pm.apms.map((apm, apmIdx) => (
+                              <div key={apmIdx} className="flex flex-col items-center">
+                                <div 
+                                  className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-2 rounded-lg font-semibold shadow cursor-pointer hover:scale-105 transition-transform text-sm"
+                                  onClick={() => setSelectedMember({...apm, memberType: 'apm'})}
+                                >
+                                  <div className="text-xs opacity-80">APM</div>
+                                  <div>{apm.name}</div>
+                                </div>
+                                
+                                {/* APM's Schools */}
+                                {apm.schools?.length > 0 && (
+                                  <>
+                                    <div className="w-1 h-4 bg-green-300"></div>
+                                    <div className="flex flex-wrap gap-3 justify-center max-w-md">
+                                      {apm.schools.map((school, sIdx) => (
+                                        <div key={sIdx} className="flex flex-col items-center">
+                                          <div 
+                                            className="bg-white border-2 border-green-300 px-3 py-2 rounded-lg font-semibold text-green-700 shadow cursor-pointer hover:bg-green-50 transition-colors text-xs"
+                                            onClick={() => setSelectedMember({name: school.name, memberType: 'school', teachers: school.teachers, apc: school.apc})}
+                                          >
+                                            🏫 {school.name}
+                                          </div>
+                                          {/* Teachers */}
+                                          {school.teachers.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mt-2 max-w-32 justify-center">
+                                              {school.teachers.slice(0, 4).map((teacher, tIdx) => (
+                                                <div 
+                                                  key={tIdx}
+                                                  className="text-xs px-2 py-1 rounded-full cursor-pointer hover:scale-110 transition-transform text-white font-medium"
+                                                  style={{background: getSubjectColor(teacher.subject)}}
+                                                  onClick={() => setSelectedMember({...teacher, memberType: 'teacher'})}
+                                                  title={teacher.name}
+                                                >
+                                                  {teacher.name?.split(' ')[0]?.slice(0, 6)}
+                                                </div>
+                                              ))}
+                                              {school.teachers.length > 4 && (
+                                                <div className="text-xs text-gray-400">+{school.teachers.length - 4}</div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Unassigned Schools */}
+            {hierarchy.unassignedSchools?.length > 0 && (
+              <div className="mt-8 pt-6 border-t-2 border-dashed border-gray-300 w-full">
+                <div className="text-center text-gray-500 text-sm mb-4">📌 Unassigned Schools</div>
+                <div className="flex flex-wrap gap-4 justify-center">
+                  {hierarchy.unassignedSchools.map((school, idx) => (
+                    <div 
+                      key={idx}
+                      className="bg-white border-2 border-gray-300 px-4 py-2 rounded-lg font-semibold text-gray-700 shadow cursor-pointer hover:bg-gray-50"
+                      onClick={() => setSelectedMember({name: school.name, memberType: 'school', teachers: school.teachers, apc: school.apc})}
+                    >
+                      🏫 {school.name} ({school.teachers.length})
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* No data message */}
+            {!hierarchy.aph && hierarchy.pms.length === 0 && (
+              <div className="text-center py-12 text-gray-500">
+                <div className="text-6xl mb-4">🏗️</div>
+                <p className="text-lg font-semibold">No organization structure found</p>
+                <p className="text-sm mt-2">Add managers in the Admin section to see the hierarchy</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Member Details Modal */}
       {selectedMember && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setSelectedMember(null)}>
-          <div className="bg-white rounded-3xl max-w-md w-full max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="p-6 text-white rounded-t-3xl" style={{ 
-              background: selectedMember.memberType === 'pm' ? 'linear-gradient(135deg, #b8a0c8, #9080a8)' :
-                         selectedMember.memberType === 'apm' ? 'linear-gradient(135deg, #ddc8c0, #c8a8a0)' :
-                         selectedMember.memberType === 'apc' ? 'linear-gradient(135deg, #d4a88e, #b88868)' :
-                         selectedMember.memberType === 'school' ? 'linear-gradient(135deg, #d4c4e0, #b8a0c8)' :
-                         `linear-gradient(135deg, ${getSubjectColor(selectedMember.subject)}, ${getSubjectColor(selectedMember.subject)}99)`
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="p-6 text-white rounded-t-3xl relative" style={{ 
+              background: selectedMember.memberType === 'aph' ? 'linear-gradient(135deg, #8b5cf6, #7c3aed)' :
+                         selectedMember.memberType === 'pm' ? 'linear-gradient(135deg, #3b82f6, #2563eb)' :
+                         selectedMember.memberType === 'apm' ? 'linear-gradient(135deg, #10b981, #059669)' :
+                         selectedMember.memberType === 'apc' ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
+                         selectedMember.memberType === 'school' ? 'linear-gradient(135deg, #8b5cf6, #6366f1)' :
+                         `linear-gradient(135deg, ${getSubjectColor(selectedMember.subject)}, ${getSubjectColor(selectedMember.subject)}cc)`
             }}>
-              <button onClick={() => setSelectedMember(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">✕</button>
+              <button onClick={() => setSelectedMember(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-lg">✕</button>
               <div className="flex items-center gap-4">
                 {selectedMember.profilePhoto ? (
                   <img src={selectedMember.profilePhoto} alt="" className="w-20 h-20 rounded-2xl object-cover border-4 border-white/30" />
@@ -19390,31 +19621,30 @@ function OrgChartDirectory({ teachers, currentUser }) {
                 <div>
                   <h3 className="text-2xl font-bold">{selectedMember.name}</h3>
                   <p className="opacity-90">
-                    {selectedMember.memberType === 'pm' ? 'Program Manager' :
-                     selectedMember.memberType === 'apm' ? 'Associate Program Manager' :
-                     selectedMember.memberType === 'apc' ? 'Academic Program Coordinator' :
+                    {selectedMember.memberType === 'aph' ? 'Program Head (APH)' :
+                     selectedMember.memberType === 'pm' ? 'Program Manager (PM)' :
+                     selectedMember.memberType === 'apm' ? 'Associate Program Manager (APM)' :
+                     selectedMember.memberType === 'apc' ? 'Academic Program Coordinator (APC)' :
                      selectedMember.memberType === 'school' ? 'School' :
-                     selectedMember.subject}
+                     selectedMember.subject ? `${selectedMember.subject} Teacher` : 'Teacher'}
                   </p>
                 </div>
               </div>
             </div>
 
+            {/* Details */}
             <div className="p-5 space-y-3">
               {/* AFID */}
-              {selectedMember.afid && (
+              {(selectedMember.afid || selectedMember.afCode) && (
                 <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">
                   <span className="text-xl">🆔</span>
-                  <div><div className="text-xs text-gray-500">AF ID</div><div className="font-semibold">{selectedMember.afid}</div></div>
+                  <div>
+                    <div className="text-xs text-gray-500">AF ID / Code</div>
+                    <div className="font-semibold">{selectedMember.afid || selectedMember.afCode}</div>
+                  </div>
                 </div>
               )}
-              {/* AF Code */}
-              {selectedMember.afCode && (
-                <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">
-                  <span className="text-xl">🏷️</span>
-                  <div><div className="text-xs text-gray-500">AF Code</div><div className="font-semibold">{selectedMember.afCode}</div></div>
-                </div>
-              )}
+              
               {/* School */}
               {selectedMember.school && selectedMember.memberType !== 'school' && (
                 <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl">
@@ -19422,13 +19652,33 @@ function OrgChartDirectory({ teachers, currentUser }) {
                   <div><div className="text-xs text-gray-500">School</div><div className="font-semibold">{selectedMember.school}</div></div>
                 </div>
               )}
-              {/* Manages Schools */}
+              
+              {/* Manages Schools (for managers) */}
               {selectedMember.directSchools?.length > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-yellow-50 rounded-xl">
+                <div className="flex items-start gap-3 p-3 bg-yellow-50 rounded-xl">
                   <span className="text-xl">🏫</span>
-                  <div><div className="text-xs text-gray-500">Manages</div><div className="font-semibold">{selectedMember.directSchools.join(', ')}</div></div>
+                  <div>
+                    <div className="text-xs text-gray-500">Manages Schools</div>
+                    <div className="font-semibold">{selectedMember.directSchools.join(', ')}</div>
+                  </div>
                 </div>
               )}
+              
+              {/* School Teachers List (for school view) */}
+              {selectedMember.memberType === 'school' && selectedMember.teachers?.length > 0 && (
+                <div className="p-3 bg-blue-50 rounded-xl">
+                  <div className="text-xs text-gray-500 mb-2">Teachers ({selectedMember.teachers.length})</div>
+                  <div className="space-y-2">
+                    {selectedMember.teachers.map((t, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-white p-2 rounded-lg">
+                        <span className="font-medium">{t.name}</span>
+                        <span className="text-xs px-2 py-1 rounded-full text-white" style={{background: getSubjectColor(t.subject)}}>{t.subject}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
               {/* Subject */}
               {selectedMember.subject && (
                 <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl">
@@ -19436,6 +19686,18 @@ function OrgChartDirectory({ teachers, currentUser }) {
                   <div><div className="text-xs text-gray-500">Subject</div><div className="font-semibold">{selectedMember.subject}</div></div>
                 </div>
               )}
+              
+              {/* Bio */}
+              {selectedMember.bio && (
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
+                  <span className="text-xl">📝</span>
+                  <div>
+                    <div className="text-xs text-gray-500">About</div>
+                    <div className="font-medium text-sm">{selectedMember.bio}</div>
+                  </div>
+                </div>
+              )}
+              
               {/* Qualification */}
               {selectedMember.qualification && (
                 <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl">
@@ -19443,6 +19705,7 @@ function OrgChartDirectory({ teachers, currentUser }) {
                   <div><div className="text-xs text-gray-500">Qualification</div><div className="font-semibold">{selectedMember.qualification}</div></div>
                 </div>
               )}
+              
               {/* Experience */}
               {selectedMember.experience && (
                 <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl">
@@ -19450,64 +19713,84 @@ function OrgChartDirectory({ teachers, currentUser }) {
                   <div><div className="text-xs text-gray-500">Experience</div><div className="font-semibold">{selectedMember.experience}</div></div>
                 </div>
               )}
-              {/* Bio */}
-              {selectedMember.bio && (
-                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
-                  <span className="text-xl">📝</span>
-                  <div><div className="text-xs text-gray-500">About</div><div className="font-semibold text-sm">{selectedMember.bio}</div></div>
-                </div>
-              )}
+              
               {/* Email */}
               {selectedMember.email && (
                 <div className="flex items-center gap-3 p-3 bg-indigo-50 rounded-xl">
                   <span className="text-xl">📧</span>
-                  <div><div className="text-xs text-gray-500">Email</div><a href={`mailto:${selectedMember.email}`} className="font-semibold text-blue-600 hover:underline break-all">{selectedMember.email}</a></div>
+                  <div>
+                    <div className="text-xs text-gray-500">Email</div>
+                    <a href={`mailto:${selectedMember.email}`} className="font-semibold text-blue-600 hover:underline break-all">{selectedMember.email}</a>
+                  </div>
                 </div>
               )}
+              
               {/* Phone */}
               {selectedMember.phone && (
                 <div className="flex items-center gap-3 p-3 bg-cyan-50 rounded-xl">
                   <span className="text-xl">📱</span>
-                  <div><div className="text-xs text-gray-500">Phone</div><a href={`tel:${selectedMember.phone}`} className="font-semibold text-blue-600 hover:underline">{selectedMember.phone}</a></div>
+                  <div>
+                    <div className="text-xs text-gray-500">Phone Number</div>
+                    <a href={`tel:${selectedMember.phone}`} className="font-semibold text-blue-600 hover:underline">{selectedMember.phone}</a>
+                  </div>
                 </div>
               )}
+              
               {/* WhatsApp */}
               {selectedMember.whatsapp && (
                 <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl">
                   <span className="text-xl">💬</span>
-                  <div><div className="text-xs text-gray-500">WhatsApp</div><a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" className="font-semibold text-green-600 hover:underline">{selectedMember.whatsapp}</a></div>
+                  <div>
+                    <div className="text-xs text-gray-500">WhatsApp</div>
+                    <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" className="font-semibold text-green-600 hover:underline">{selectedMember.whatsapp}</a>
+                  </div>
                 </div>
               )}
+              
               {/* Birthday */}
               {(selectedMember.dateOfBirth || selectedMember.dob) && (
                 <div className="flex items-center gap-3 p-3 bg-pink-50 rounded-xl">
                   <span className="text-xl">🎂</span>
-                  <div><div className="text-xs text-gray-500">Birthday</div><div className="font-semibold">{new Date(selectedMember.dateOfBirth || selectedMember.dob).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}</div></div>
+                  <div>
+                    <div className="text-xs text-gray-500">Birthday</div>
+                    <div className="font-semibold">{new Date(selectedMember.dateOfBirth || selectedMember.dob).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}</div>
+                  </div>
                 </div>
               )}
+              
               {/* Joining Date */}
               {selectedMember.joiningDate && (
                 <div className="flex items-center gap-3 p-3 bg-teal-50 rounded-xl">
                   <span className="text-xl">📅</span>
-                  <div><div className="text-xs text-gray-500">Joined Avanti</div><div className="font-semibold">{new Date(selectedMember.joiningDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div></div>
+                  <div>
+                    <div className="text-xs text-gray-500">Joined Avanti</div>
+                    <div className="font-semibold">{new Date(selectedMember.joiningDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                  </div>
                 </div>
               )}
+              
               {/* Drive Link */}
               {selectedMember.driveLink && (
                 <div className="flex items-center gap-3 p-3 bg-sky-50 rounded-xl">
                   <span className="text-xl">📁</span>
-                  <div><div className="text-xs text-gray-500">Drive Folder</div><a href={selectedMember.driveLink} target="_blank" className="font-semibold text-blue-600 hover:underline">Open Folder →</a></div>
+                  <div>
+                    <div className="text-xs text-gray-500">Drive Folder</div>
+                    <a href={selectedMember.driveLink} target="_blank" className="font-semibold text-blue-600 hover:underline">Open Folder →</a>
+                  </div>
                 </div>
               )}
 
               {/* Action Buttons */}
-              {(selectedMember.phone || selectedMember.whatsapp) && (
-                <div className="grid grid-cols-2 gap-3 pt-3">
+              {(selectedMember.phone || selectedMember.whatsapp || selectedMember.email) && selectedMember.memberType !== 'school' && (
+                <div className="grid grid-cols-3 gap-2 pt-3">
                   {selectedMember.phone && (
-                    <a href={`tel:${selectedMember.phone}`} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg">📱 Call</a>
+                    <a href={`tel:${selectedMember.phone}`} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg text-sm">📱 Call</a>
                   )}
                   {selectedMember.whatsapp && (
-                    <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" className="bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg">💬 WhatsApp</a>
+                    <a href={`https://wa.me/${selectedMember.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" className="bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg text-sm">💬 WhatsApp</a>
+                  )}
+                  {selectedMember.email && (
+                    <a href={`mailto:${selectedMember.email}`} className="bg-gradient-to-r from-purple-500 to-purple-600 text-white py-3 rounded-xl font-semibold text-center hover:shadow-lg text-sm">📧 Email</a>
                   )}
                 </div>
               )}
@@ -22300,6 +22583,8 @@ function TeacherSelfProfile({ currentUser, teachers }) {
                       const file = e.target.files[0];
                       if (!file) return;
                       
+                      const uploadBtn = document.getElementById('uploadStatus');
+                      
                       // Validate file size (max 1MB)
                       if (file.size > 1024 * 1024) {
                         alert('❌ File too large! Please upload an image under 1MB');
@@ -22316,28 +22601,87 @@ function TeacherSelfProfile({ currentUser, teachers }) {
                       
                       try {
                         // Show uploading state
-                        const uploadBtn = document.getElementById('uploadStatus');
-                        if (uploadBtn) uploadBtn.textContent = '⏳ Uploading...';
+                        if (uploadBtn) {
+                          uploadBtn.textContent = '⏳ Uploading...';
+                          uploadBtn.className = 'text-sm text-blue-600 font-medium';
+                        }
                         
-                        // Upload to Firebase Storage
-                        const storageRef = firebase.storage().ref();
-                        const fileName = `profile-photos/${teacherData.afid || teacherData.email}_${Date.now()}.${file.name.split('.').pop()}`;
-                        const photoRef = storageRef.child(fileName);
+                        // First convert to base64 for immediate preview
+                        const reader = new FileReader();
+                        reader.onload = async (readerEvent) => {
+                          // Show preview immediately
+                          const base64 = readerEvent.target.result;
+                          setEditForm(prev => ({...prev, profilePhoto: base64}));
+                          
+                          try {
+                            // Upload to Firebase Storage
+                            const storageRef = firebase.storage().ref();
+                            const safeId = (teacherData.afid || teacherData.email || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
+                            const fileName = `profile-photos/${safeId}_${Date.now()}.${file.name.split('.').pop() || 'jpg'}`;
+                            const photoRef = storageRef.child(fileName);
+                            
+                            // Create upload task with timeout
+                            const uploadTask = photoRef.put(file);
+                            
+                            // Set a timeout for the upload
+                            const timeoutPromise = new Promise((_, reject) => {
+                              setTimeout(() => reject(new Error('Upload timeout - please try again')), 30000);
+                            });
+                            
+                            // Race between upload and timeout
+                            await Promise.race([
+                              new Promise((resolve, reject) => {
+                                uploadTask.on('state_changed',
+                                  (snapshot) => {
+                                    const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                                    if (uploadBtn) uploadBtn.textContent = `⏳ Uploading... ${progress}%`;
+                                  },
+                                  (error) => reject(error),
+                                  async () => {
+                                    try {
+                                      const downloadURL = await photoRef.getDownloadURL();
+                                      setEditForm(prev => ({...prev, profilePhoto: downloadURL}));
+                                      resolve(downloadURL);
+                                    } catch (urlError) {
+                                      reject(urlError);
+                                    }
+                                  }
+                                );
+                              }),
+                              timeoutPromise
+                            ]);
+                            
+                            if (uploadBtn) {
+                              uploadBtn.textContent = '✅ Uploaded successfully!';
+                              uploadBtn.className = 'text-sm text-green-600 font-medium';
+                            }
+                            
+                            setTimeout(() => {
+                              if (uploadBtn) uploadBtn.textContent = '';
+                            }, 3000);
+                            
+                          } catch (uploadError) {
+                            console.error('Firebase upload error:', uploadError);
+                            // Keep the base64 preview even if upload fails
+                            if (uploadBtn) {
+                              uploadBtn.textContent = '⚠️ Cloud save failed, using local preview';
+                              uploadBtn.className = 'text-sm text-orange-600 font-medium';
+                            }
+                            // If Firebase fails, still allow the base64 image to be used
+                          }
+                        };
+                        reader.onerror = () => {
+                          throw new Error('Failed to read file');
+                        };
+                        reader.readAsDataURL(file);
                         
-                        await photoRef.put(file);
-                        const downloadURL = await photoRef.getDownloadURL();
-                        
-                        setEditForm({...editForm, profilePhoto: downloadURL});
-                        if (uploadBtn) uploadBtn.textContent = '✅ Uploaded!';
-                        
-                        setTimeout(() => {
-                          if (uploadBtn) uploadBtn.textContent = '';
-                        }, 2000);
                       } catch (error) {
                         console.error('Upload error:', error);
-                        alert('❌ Upload failed: ' + error.message);
-                        const uploadBtn = document.getElementById('uploadStatus');
-                        if (uploadBtn) uploadBtn.textContent = '';
+                        if (uploadBtn) {
+                          uploadBtn.textContent = '❌ ' + (error.message || 'Upload failed');
+                          uploadBtn.className = 'text-sm text-red-600 font-medium';
+                        }
+                        e.target.value = '';
                       }
                     }}
                     className="w-full border-2 px-4 py-3 rounded-xl cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100"
@@ -25391,18 +25735,37 @@ searchFAQs: function(query) {
             const file = input.files[0];
             
             // Show progress
-            document.getElementById('uploadProgress').style.display = 'block';
-            document.getElementById('progressText').textContent = 'Processing image...';
-            document.getElementById('progressFill').style.width = '20%';
+            const progressEl = document.getElementById('uploadProgress');
+            const progressText = document.getElementById('progressText');
+            const progressFill = document.getElementById('progressFill');
             
-            // If file is too large, compress it
+            if (progressEl) progressEl.style.display = 'block';
+            if (progressText) progressText.textContent = 'Processing image...';
+            if (progressFill) progressFill.style.width = '20%';
+            
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file');
+                if (progressEl) progressEl.style.display = 'none';
+                input.value = '';
+                return;
+            }
+            
+            // If file is too large (>2MB), compress it
             if (file.size > 2 * 1024 * 1024) {
+                if (progressText) progressText.textContent = 'Compressing large image...';
                 this.compressImage(file).then(compressedFile => {
                     this.setScreenshot(compressedFile);
                 }).catch(err => {
                     console.error('Compression error:', err);
-                    alert('Failed to process image. Please try a smaller file.');
-                    document.getElementById('uploadProgress').style.display = 'none';
+                    // Try to use original file if compression fails
+                    if (file.size <= 5 * 1024 * 1024) {
+                        this.setScreenshot(file);
+                    } else {
+                        alert('Image is too large. Please try a smaller file (under 5MB).');
+                        if (progressEl) progressEl.style.display = 'none';
+                        input.value = '';
+                    }
                 });
             } else {
                 this.setScreenshot(file);
@@ -25494,14 +25857,62 @@ searchFAQs: function(query) {
     
     // Upload screenshot to Firebase Storage
     uploadScreenshot: async function(ticketId) {
-        if (!this.screenshotFile || !this.firebaseReady) return null;
+        if (!this.screenshotFile) return null;
+        
+        // If Firebase is not ready, return the base64 data URL instead
+        if (!this.firebaseReady) {
+            console.log('[AvantiWidget] Firebase not ready, using base64 for screenshot');
+            return this.screenshotDataUrl || null;
+        }
+        
         try {
             const storageRef = firebase.storage().ref();
-            const fileRef = storageRef.child(`helpdesk_screenshots/${ticketId}_${Date.now()}.jpg`);
-            await fileRef.put(this.screenshotFile);
-            return await fileRef.getDownloadURL();
+            const safeTicketId = String(ticketId).replace(/[^a-zA-Z0-9]/g, '_');
+            const fileRef = storageRef.child(`helpdesk_screenshots/${safeTicketId}_${Date.now()}.jpg`);
+            
+            // Create upload with timeout
+            const uploadPromise = new Promise(async (resolve, reject) => {
+                try {
+                    const uploadTask = fileRef.put(this.screenshotFile);
+                    
+                    uploadTask.on('state_changed',
+                        (snapshot) => {
+                            const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                            console.log('[AvantiWidget] Upload progress:', progress + '%');
+                        },
+                        (error) => {
+                            console.error('[AvantiWidget] Upload error during task:', error);
+                            reject(error);
+                        },
+                        async () => {
+                            try {
+                                const url = await fileRef.getDownloadURL();
+                                resolve(url);
+                            } catch (urlError) {
+                                reject(urlError);
+                            }
+                        }
+                    );
+                } catch (err) {
+                    reject(err);
+                }
+            });
+            
+            // Set a 30-second timeout
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Upload timeout')), 30000);
+            });
+            
+            const result = await Promise.race([uploadPromise, timeoutPromise]);
+            return result;
+            
         } catch (e) {
             console.error('[AvantiWidget] Screenshot upload error:', e);
+            // Return base64 as fallback if upload fails
+            if (this.screenshotDataUrl) {
+                console.log('[AvantiWidget] Using base64 fallback for screenshot');
+                return this.screenshotDataUrl;
+            }
             return null;
         }
     },
@@ -26218,8 +26629,122 @@ const NotificationManager = {
                             });
                     });
             }
+            
+            // Load today's birthday/anniversary notifications
+            this.loadCelebrationNotifications();
+            
         } catch (e) {
             console.error('[NotificationManager] Error:', e);
+        }
+    },
+    
+    // Load birthday and anniversary notifications
+    loadCelebrationNotifications: async function() {
+        try {
+            const today = new Date();
+            const todayMonth = today.getMonth();
+            const todayDate = today.getDate();
+            
+            // Load teachers
+            const teachersSnap = await firebase.firestore().collection('teachers')
+                .where('isArchived', '!=', true)
+                .get();
+            
+            // Load managers
+            const managersSnap = await firebase.firestore().collection('managers')
+                .where('status', '==', 'active')
+                .get();
+            
+            // Load APCs
+            const apcsSnap = await firebase.firestore().collection('apcs').get();
+            
+            const allMembers = [
+                ...teachersSnap.docs.map(d => ({ id: d.id, ...d.data(), type: 'teacher' })),
+                ...managersSnap.docs.map(d => ({ id: d.id, ...d.data(), type: 'manager' })),
+                ...apcsSnap.docs.map(d => ({ id: d.id, ...d.data(), type: 'apc' }))
+            ].filter(m => m.name && m.name.toLowerCase() !== 'vacant');
+            
+            const celebrationNotifs = [];
+            
+            // Find today's birthdays
+            allMembers.forEach(member => {
+                const dob = member.dateOfBirth || member.dob;
+                if (dob) {
+                    const birthDate = new Date(dob);
+                    if (birthDate.getMonth() === todayMonth && birthDate.getDate() === todayDate) {
+                        celebrationNotifs.push({
+                            id: 'birthday_' + member.id + '_' + today.toDateString(),
+                            source: 'celebration',
+                            type: 'birthday',
+                            title: '🎂 Birthday Today!',
+                            message: member.name + ' celebrates their birthday today! Send them your wishes! 🎈',
+                            personName: member.name,
+                            personPhoto: member.profilePhoto,
+                            personType: member.type,
+                            createdAt: { toDate: () => today }
+                        });
+                    }
+                }
+                
+                // Find today's work anniversaries
+                const joiningDate = member.joiningDate;
+                if (joiningDate) {
+                    const joinDate = new Date(joiningDate);
+                    const years = today.getFullYear() - joinDate.getFullYear();
+                    if (years > 0 && joinDate.getMonth() === todayMonth && joinDate.getDate() === todayDate) {
+                        celebrationNotifs.push({
+                            id: 'anniversary_' + member.id + '_' + today.toDateString(),
+                            source: 'celebration',
+                            type: 'anniversary',
+                            title: '🎉 Work Anniversary!',
+                            message: member.name + ' completes ' + years + ' year' + (years > 1 ? 's' : '') + ' at Avanti today! Congratulate them! 💐',
+                            personName: member.name,
+                            personPhoto: member.profilePhoto,
+                            personType: member.type,
+                            years: years,
+                            createdAt: { toDate: () => today }
+                        });
+                    }
+                }
+            });
+            
+            // Also find upcoming birthdays (next 7 days) for notification bell
+            allMembers.forEach(member => {
+                const dob = member.dateOfBirth || member.dob;
+                if (dob) {
+                    const birthDate = new Date(dob);
+                    // Create this year's birthday
+                    const thisYearBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
+                    
+                    // If birthday has passed this year, check next year
+                    if (thisYearBirthday < today) {
+                        thisYearBirthday.setFullYear(today.getFullYear() + 1);
+                    }
+                    
+                    const daysUntil = Math.ceil((thisYearBirthday - today) / (1000 * 60 * 60 * 24));
+                    
+                    if (daysUntil > 0 && daysUntil <= 7) {
+                        celebrationNotifs.push({
+                            id: 'upcoming_birthday_' + member.id + '_' + today.toDateString(),
+                            source: 'celebration',
+                            type: 'upcoming_birthday',
+                            title: '📅 Upcoming Birthday',
+                            message: member.name + "'s birthday is in " + daysUntil + ' day' + (daysUntil > 1 ? 's' : '') + '!',
+                            personName: member.name,
+                            personPhoto: member.profilePhoto,
+                            daysUntil: daysUntil,
+                            createdAt: { toDate: () => new Date(today.getTime() - daysUntil * 60000) } // Make upcoming ones appear lower
+                        });
+                    }
+                }
+            });
+            
+            if (celebrationNotifs.length > 0) {
+                this.mergeNotifications(celebrationNotifs, 'celebration');
+            }
+            
+        } catch (e) {
+            console.error('[NotificationManager] Celebration notifications error:', e);
         }
     },
     
@@ -26284,21 +26809,52 @@ const NotificationManager = {
             const time = n.createdAt?.toDate?.() || new Date();
             const timeAgo = this.timeAgo(time);
             const isTicket = n.source === 'ticket' || n.type === 'ticket_update';
-            const icon = isTicket ? '🎫' : '📢';
+            const isCelebration = n.source === 'celebration';
+            
+            // Choose icon based on type
+            let icon = '📢';
+            if (isTicket) icon = '🎫';
+            else if (n.type === 'birthday') icon = '🎂';
+            else if (n.type === 'anniversary') icon = '🎉';
+            else if (n.type === 'upcoming_birthday') icon = '📅';
+            
             const ticketLabel = isTicket && n.ticketId ? '<span style="color: #F4B41A; font-size: 11px; margin-left: 6px;">#' + n.ticketId + '</span>' : '';
             
             // Priority indicator
             const priorityColors = { 'urgent': '#ef4444', 'important': '#f59e0b', 'normal': '#3b82f6' };
-            const priorityStyle = n.priority && n.priority !== 'normal' ? 'border-left: 3px solid ' + (priorityColors[n.priority] || '#3b82f6') + ';' : '';
+            let priorityStyle = n.priority && n.priority !== 'normal' ? 'border-left: 3px solid ' + (priorityColors[n.priority] || '#3b82f6') + ';' : '';
+            
+            // Special styling for celebrations
+            let celebrationStyle = '';
+            if (n.type === 'birthday') {
+                celebrationStyle = 'border-left: 3px solid #ec4899; background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);';
+            } else if (n.type === 'anniversary') {
+                celebrationStyle = 'border-left: 3px solid #f59e0b; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);';
+            } else if (n.type === 'upcoming_birthday') {
+                celebrationStyle = 'border-left: 3px solid #8b5cf6; background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);';
+            }
             
             // Link button
             const linkBtn = n.link ? '<a href="' + n.link + '" target="_blank" style="display: inline-block; margin-top: 8px; background: #2a2a3a; color: #3b82f6; padding: 4px 10px; border-radius: 6px; font-size: 11px; text-decoration: none;">🔗 Open Link</a>' : '';
             
-            return `<div class="notification-item ${isUnread ? 'unread' : ''}" style="${priorityStyle}" onclick="NotificationManager.markRead('${n.id}')">
-                <div class="title">${icon} ${n.title || 'Notification'}${ticketLabel}</div>
-                <div class="message">${n.message || ''}</div>
-                ${linkBtn}
-                <div class="time">${timeAgo}</div>
+            // Person photo for celebrations
+            let personPhoto = '';
+            if (isCelebration && n.personPhoto) {
+                personPhoto = '<img src="' + n.personPhoto + '" alt="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 10px; border: 2px solid ' + (n.type === 'birthday' ? '#ec4899' : '#f59e0b') + ';" />';
+            } else if (isCelebration) {
+                personPhoto = '<div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, ' + (n.type === 'birthday' ? '#ec4899, #f472b6' : '#f59e0b, #fbbf24') + '); display: flex; align-items: center; justify-content: center; font-size: 20px; margin-right: 10px;">' + icon + '</div>';
+            }
+            
+            return `<div class="notification-item ${isUnread ? 'unread' : ''}" style="${celebrationStyle || priorityStyle}" onclick="NotificationManager.markRead('${n.id}')">
+                <div style="display: flex; align-items: flex-start;">
+                    ${personPhoto}
+                    <div style="flex: 1;">
+                        <div class="title">${!isCelebration ? icon + ' ' : ''}${n.title || 'Notification'}${ticketLabel}</div>
+                        <div class="message">${n.message || ''}</div>
+                        ${linkBtn}
+                        <div class="time">${timeAgo}</div>
+                    </div>
+                </div>
             </div>`;
         }).join('');
     },
