@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25260,6 +25259,9 @@ const AvantiWidget = {
         // Show greeting popup after delay
         setTimeout(() => this.showGreeting(), 12000 + Math.random() * 3000);
         
+        // Initialize notification badge from stored notifications
+        setTimeout(() => this.updateNotificationBadge(), 500);
+        
         console.log('[AvantiWidget] Init complete');
     },
     
@@ -25414,8 +25416,38 @@ const AvantiWidget = {
             }
             
             if (query) {
+                // Store previous ticket states for change detection
+                this.previousTicketStates = this.previousTicketStates || {};
+                
                 query.onSnapshot(snap => {
-                    this.tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    const newTickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    
+                    // Detect changes and notify user
+                    newTickets.forEach(ticket => {
+                        const prevState = this.previousTicketStates[ticket.id];
+                        if (prevState) {
+                            // Check for status change
+                            if (prevState.status !== ticket.status) {
+                                this.showTicketNotification(ticket, 'status', prevState.status, ticket.status);
+                            }
+                            // Check for new admin reply
+                            const prevReplies = prevState.repliesCount || 0;
+                            const newReplies = (ticket.replies || []).length;
+                            if (newReplies > prevReplies) {
+                                const latestReply = ticket.replies[newReplies - 1];
+                                if (latestReply && latestReply.isAdmin) {
+                                    this.showTicketNotification(ticket, 'reply', null, latestReply.message);
+                                }
+                            }
+                        }
+                        // Store current state
+                        this.previousTicketStates[ticket.id] = {
+                            status: ticket.status,
+                            repliesCount: (ticket.replies || []).length
+                        };
+                    });
+                    
+                    this.tickets = newTickets;
                     
                     // Sort by createdAt descending (newest first) - client-side
                     this.tickets.sort((a, b) => {
@@ -25427,7 +25459,7 @@ const AvantiWidget = {
                     console.log('[AvantiWidget] ✓ Loaded tickets:', this.tickets.length);
                     
                     // Update badge
-                    const openCount = this.tickets.filter(t => t.status !== 'resolved').length;
+                    const openCount = this.tickets.filter(t => t.status !== 'resolved' && t.status !== 'closed').length;
                     const badge = document.getElementById('ticketsBadge');
                     if (badge) {
                         badge.classList.toggle('show', openCount > 0);
@@ -25443,6 +25475,209 @@ const AvantiWidget = {
             }
         } catch (e) {
             console.error('[AvantiWidget] Error loading tickets:', e);
+        }
+    },
+    
+    // Play notification sound
+    playNotificationSound: function() {
+        try {
+            // Create a simple beep sound using Web Audio API
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            oscillator.frequency.value = 800; // Frequency in Hz
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + 0.3);
+            
+            console.log('[AvantiWidget] 🔔 Notification sound played');
+        } catch (e) {
+            console.log('[AvantiWidget] Could not play sound:', e);
+        }
+    },
+    
+    // Show ticket notification to user
+    showTicketNotification: function(ticket, type, oldValue, newValue) {
+        // Don't show notifications on first load
+        if (!this.ticketsInitialized) {
+            this.ticketsInitialized = true;
+            return;
+        }
+        
+        // Play notification sound
+        this.playNotificationSound();
+        
+        // Create notification message
+        let title, message;
+        if (type === 'status') {
+            title = '🎫 Ticket Status Updated';
+            message = `Your ticket #${ticket.ticketId || ticket.id.slice(0,8)} is now "${newValue}"`;
+        } else if (type === 'reply') {
+            title = '💬 New Admin Reply';
+            message = `New reply on #${ticket.ticketId || ticket.id.slice(0,8)}: "${newValue?.substring(0, 50)}${newValue?.length > 50 ? '...' : ''}"`;
+        }
+        
+        // Show in-app notification toast
+        this.showNotificationToast(title, message, ticket.id);
+        
+        // Also try browser notification if permitted
+        this.showBrowserNotification(title, message);
+        
+        // Update notification center
+        this.addToNotificationCenter(ticket, type, title, message);
+    },
+    
+    // Show toast notification inside the widget
+    showNotificationToast: function(title, message, ticketId) {
+        // Remove existing toast if any
+        const existingToast = document.getElementById('avantiNotificationToast');
+        if (existingToast) existingToast.remove();
+        
+        const toast = document.createElement('div');
+        toast.id = 'avantiNotificationToast';
+        toast.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: linear-gradient(135deg, #1a1a24, #12121a);
+            border: 1px solid #F4B41A;
+            border-radius: 12px;
+            padding: 14px 18px;
+            max-width: 320px;
+            z-index: 10001;
+            box-shadow: 0 8px 32px rgba(244,180,26,0.2);
+            animation: slideInRight 0.3s ease;
+            cursor: pointer;
+        `;
+        
+        toast.innerHTML = `
+            <style>
+                @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+                @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; transform: translateX(20px); } }
+            </style>
+            <div style="display:flex;align-items:flex-start;gap:10px;">
+                <div style="font-size:24px;">🔔</div>
+                <div style="flex:1;">
+                    <div style="color:#F4B41A;font-weight:600;font-size:13px;margin-bottom:4px;">${title}</div>
+                    <div style="color:#d1d1d1;font-size:12px;line-height:1.4;">${message}</div>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:#8a8a9a;font-size:18px;cursor:pointer;padding:0;">×</button>
+            </div>
+        `;
+        
+        toast.onclick = (e) => {
+            if (e.target.tagName !== 'BUTTON') {
+                this.open();
+                this.showTickets();
+                if (ticketId) setTimeout(() => this.viewTicket(ticketId), 300);
+                toast.remove();
+            }
+        };
+        
+        document.body.appendChild(toast);
+        
+        // Auto-remove after 6 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.style.animation = 'fadeOut 0.3s ease forwards';
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 6000);
+    },
+    
+    // Show browser notification (if permitted)
+    showBrowserNotification: function(title, message) {
+        if (!('Notification' in window)) return;
+        
+        if (Notification.permission === 'granted') {
+            new Notification(title, {
+                body: message,
+                icon: '/icon-192.png',
+                badge: '/icon-192.png',
+                tag: 'avanti-helpdesk',
+                requireInteraction: false
+            });
+        } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    new Notification(title, {
+                        body: message,
+                        icon: '/icon-192.png'
+                    });
+                }
+            });
+        }
+    },
+    
+    // Add notification to user's notification center
+    addToNotificationCenter: function(ticket, type, title, message) {
+        // Store in localStorage for persistence
+        const notifications = JSON.parse(localStorage.getItem('avantiTicketNotifications') || '[]');
+        
+        notifications.unshift({
+            id: Date.now(),
+            ticketId: ticket.id,
+            ticketNumber: ticket.ticketId || ticket.id.slice(0,8),
+            type,
+            title,
+            message,
+            timestamp: new Date().toISOString(),
+            read: false
+        });
+        
+        // Keep only last 20 notifications
+        if (notifications.length > 20) notifications.pop();
+        
+        localStorage.setItem('avantiTicketNotifications', JSON.stringify(notifications));
+        
+        // Update unread count
+        this.updateNotificationBadge();
+    },
+    
+    // Update notification badge count
+    updateNotificationBadge: function() {
+        const notifications = JSON.parse(localStorage.getItem('avantiTicketNotifications') || '[]');
+        const unreadCount = notifications.filter(n => !n.read).length;
+        
+        // Update help button with notification indicator
+        const btn = document.getElementById('avantiBtn');
+        if (btn) {
+            let indicator = btn.querySelector('.notif-indicator');
+            if (unreadCount > 0) {
+                if (!indicator) {
+                    indicator = document.createElement('span');
+                    indicator.className = 'notif-indicator';
+                    indicator.style.cssText = `
+                        position: absolute;
+                        top: -4px;
+                        right: -4px;
+                        background: #ef4444;
+                        color: white;
+                        font-size: 10px;
+                        font-weight: 700;
+                        min-width: 16px;
+                        height: 16px;
+                        border-radius: 8px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 0 4px;
+                    `;
+                    btn.style.position = 'relative';
+                    btn.appendChild(indicator);
+                }
+                indicator.textContent = unreadCount > 9 ? '9+' : unreadCount;
+            } else if (indicator) {
+                indicator.remove();
+            }
         }
     },
     
@@ -25613,8 +25848,31 @@ const AvantiWidget = {
     renderTickets: function() {
         const container = document.getElementById('ticketsList');
         
+        // Get stored notifications
+        const notifications = JSON.parse(localStorage.getItem('avantiTicketNotifications') || '[]');
+        const unreadNotifications = notifications.filter(n => !n.read);
+        
+        // Build notification center HTML if there are unread notifications
+        let notificationCenterHTML = '';
+        if (unreadNotifications.length > 0) {
+            notificationCenterHTML = `
+                <div style="margin-bottom:16px;background:rgba(244,180,26,0.1);border:1px solid #F4B41A;border-radius:12px;padding:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <span style="color:#F4B41A;font-weight:600;font-size:13px;">🔔 ${unreadNotifications.length} New Update${unreadNotifications.length > 1 ? 's' : ''}</span>
+                        <button onclick="AvantiWidget.clearAllNotifications()" style="background:none;border:none;color:#8a8a9a;font-size:11px;cursor:pointer;text-decoration:underline;">Clear All</button>
+                    </div>
+                    ${unreadNotifications.slice(0, 3).map(n => `
+                        <div onclick="AvantiWidget.viewTicket('${n.ticketId}'); AvantiWidget.markNotificationRead('${n.id}')" style="background:#1a1a24;border:1px solid #2a2a3a;border-radius:8px;padding:10px;margin-bottom:6px;cursor:pointer;">
+                            <div style="color:#fff;font-size:12px;font-weight:500;">${n.title}</div>
+                            <div style="color:#8a8a9a;font-size:11px;margin-top:4px;">${n.message?.substring(0, 60)}${n.message?.length > 60 ? '...' : ''}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
         if (this.tickets.length === 0) {
-            container.innerHTML = `
+            container.innerHTML = notificationCenterHTML + `
                 <div class="avanti-empty">
                     <div class="icon">📭</div>
                     <h4>No tickets yet</h4>
@@ -25627,7 +25885,7 @@ const AvantiWidget = {
             return;
         }
         
-        container.innerHTML = this.tickets.map(t => {
+        container.innerHTML = notificationCenterHTML + this.tickets.map(t => {
             const date = t.createdAt?.toDate ? t.createdAt.toDate() : new Date();
             const timeAgo = this.timeAgo(date);
             
@@ -25644,6 +25902,26 @@ const AvantiWidget = {
         }).join('');
     },
     
+    // Mark a single notification as read
+    markNotificationRead: function(notifId) {
+        const notifications = JSON.parse(localStorage.getItem('avantiTicketNotifications') || '[]');
+        const notif = notifications.find(n => n.id == notifId);
+        if (notif) {
+            notif.read = true;
+            localStorage.setItem('avantiTicketNotifications', JSON.stringify(notifications));
+            this.updateNotificationBadge();
+        }
+    },
+    
+    // Clear all notifications
+    clearAllNotifications: function() {
+        const notifications = JSON.parse(localStorage.getItem('avantiTicketNotifications') || '[]');
+        notifications.forEach(n => n.read = true);
+        localStorage.setItem('avantiTicketNotifications', JSON.stringify(notifications));
+        this.updateNotificationBadge();
+        this.renderTickets();
+    },
+    
     timeAgo: function(date) {
         const seconds = Math.floor((new Date() - date) / 1000);
         if (seconds < 60) return 'Just now';
@@ -25655,6 +25933,8 @@ const AvantiWidget = {
     viewTicket: function(id) {
         const t = this.tickets.find(x => x.id === id);
         if (!t) return;
+        
+        this.currentTicketId = id; // Store current ticket for reply/close functions
         
         const date = t.createdAt?.toDate ? t.createdAt.toDate() : new Date();
         
@@ -25668,15 +25948,17 @@ const AvantiWidget = {
             `;
         }).join('');
         
+        const isClosed = t.status === 'resolved' || t.status === 'closed';
+        
         const container = document.getElementById('ticketsList');
         container.innerHTML = `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
                 <span style="font-family:'Space Mono',monospace;color:#F4B41A;font-size:15px;">#${t.ticketId || t.id.slice(0,8)}</span>
                 <span style="font-size:12px;padding:4px 10px;border-radius:20px;background:${
-                    t.status === 'resolved' ? 'rgba(16,185,129,0.2)' : 
+                    t.status === 'resolved' || t.status === 'closed' ? 'rgba(16,185,129,0.2)' : 
                     t.status === 'in-progress' ? 'rgba(234,179,8,0.2)' : 'rgba(239,68,68,0.2)'
                 };color:${
-                    t.status === 'resolved' ? '#10b981' : 
+                    t.status === 'resolved' || t.status === 'closed' ? '#10b981' : 
                     t.status === 'in-progress' ? '#eab308' : '#ef4444'
                 };">${t.status.replace('-', ' ')}</span>
             </div>
@@ -25700,10 +25982,140 @@ const AvantiWidget = {
                 </div>
             ` : ''}
             
+            <!-- Reply Section -->
+            <div style="margin-bottom:16px;padding:14px;background:#1a1a24;border:1px solid #2a2a3a;border-radius:12px;">
+                <div style="color:#8a8a9a;font-size:12px;margin-bottom:8px;">✍️ ${isClosed ? 'Reopen & Reply' : 'Send a Reply'}</div>
+                <textarea id="userReplyInput" placeholder="Type your reply here..." style="width:100%;background:#12121a;border:1px solid #2a2a3a;border-radius:8px;padding:10px;color:#fff;font-size:13px;resize:none;min-height:60px;"></textarea>
+                <div style="display:flex;gap:8px;margin-top:10px;">
+                    <button onclick="AvantiWidget.sendUserReply()" style="flex:1;padding:10px 14px;background:linear-gradient(135deg,#F4B41A,#E8B039);color:#000;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
+                        📤 Send Reply
+                    </button>
+                    ${!isClosed ? `
+                        <button onclick="AvantiWidget.closeUserTicket()" style="padding:10px 14px;background:#2a2a3a;color:#10b981;border:1px solid #10b981;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
+                            ✓ End Chat
+                        </button>
+                    ` : `
+                        <button onclick="AvantiWidget.reopenUserTicket()" style="padding:10px 14px;background:#2a2a3a;color:#F4B41A;border:1px solid #F4B41A;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;">
+                            🔄 Reopen
+                        </button>
+                    `}
+                </div>
+            </div>
+            
             <button class="avanti-action-btn secondary" style="width:100%;" onclick="AvantiWidget.showTickets()">
                 ← Back to Tickets
             </button>
         `;
+    },
+    
+    // Send user reply to ticket
+    sendUserReply: async function() {
+        const replyInput = document.getElementById('userReplyInput');
+        const replyText = replyInput?.value?.trim();
+        
+        if (!replyText) {
+            alert('Please enter a reply message');
+            return;
+        }
+        
+        if (!this.currentTicketId || !this.firebaseReady) {
+            alert('Cannot send reply. Please try again.');
+            return;
+        }
+        
+        try {
+            const ticket = this.tickets.find(t => t.id === this.currentTicketId);
+            if (!ticket) {
+                alert('Ticket not found');
+                return;
+            }
+            
+            // Add user reply
+            const newReply = {
+                message: replyText,
+                isAdmin: false,
+                senderName: this.user?.name || 'User',
+                timestamp: new Date()
+            };
+            
+            const ticketRef = firebase.firestore().collection('helpdesk_tickets').doc(this.currentTicketId);
+            
+            await ticketRef.update({
+                replies: firebase.firestore.FieldValue.arrayUnion(newReply),
+                status: 'open', // Reopen if was closed
+                lastUserReply: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            replyInput.value = '';
+            alert('✓ Reply sent!');
+            
+            // Refresh ticket view
+            setTimeout(() => this.viewTicket(this.currentTicketId), 500);
+            
+        } catch (e) {
+            console.error('Error sending reply:', e);
+            alert('Failed to send reply. Please try again.');
+        }
+    },
+    
+    // Close ticket by user
+    closeUserTicket: async function() {
+        if (!confirm('End this chat? You can reopen it later if needed.')) return;
+        
+        if (!this.currentTicketId || !this.firebaseReady) {
+            alert('Cannot close ticket. Please try again.');
+            return;
+        }
+        
+        try {
+            const ticketRef = firebase.firestore().collection('helpdesk_tickets').doc(this.currentTicketId);
+            
+            await ticketRef.update({
+                status: 'closed',
+                closedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                closedBy: 'user',
+                canReopen: true,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            alert('✓ Chat ended. You can reopen it anytime.');
+            
+            // Refresh ticket view
+            setTimeout(() => this.viewTicket(this.currentTicketId), 500);
+            
+        } catch (e) {
+            console.error('Error closing ticket:', e);
+            alert('Could not close the chat. Please try again.');
+        }
+    },
+    
+    // Reopen ticket by user
+    reopenUserTicket: async function() {
+        if (!this.currentTicketId || !this.firebaseReady) {
+            alert('Cannot reopen ticket. Please try again.');
+            return;
+        }
+        
+        try {
+            const ticketRef = firebase.firestore().collection('helpdesk_tickets').doc(this.currentTicketId);
+            
+            await ticketRef.update({
+                status: 'open',
+                reopenedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                reopenedBy: 'user',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            alert('✓ Ticket reopened!');
+            
+            // Refresh ticket view
+            setTimeout(() => this.viewTicket(this.currentTicketId), 500);
+            
+        } catch (e) {
+            console.error('Error reopening ticket:', e);
+            alert('Could not reopen the ticket. Please try again.');
+        }
     },
     
     // Send message in chat
@@ -26157,10 +26569,15 @@ searchFAQs: function(query) {
         }
     },
     
-    // FIXED: Handle screenshot upload with compression
+    // FIXED: Handle screenshot upload with compression - FASTER VERSION
+    isUploadingScreenshot: false, // Flag to prevent auto-submit during upload
+    
     handleScreenshot: function(input) {
         if (input.files && input.files[0]) {
             const file = input.files[0];
+            
+            // Set upload flag to prevent any auto-submit
+            this.isUploadingScreenshot = true;
             
             // Show progress
             const progressEl = document.getElementById('uploadProgress');
@@ -26168,41 +26585,39 @@ searchFAQs: function(query) {
             const progressFill = document.getElementById('progressFill');
             
             if (progressEl) progressEl.style.display = 'block';
-            if (progressText) progressText.textContent = 'Processing image...';
-            if (progressFill) progressFill.style.width = '20%';
+            if (progressText) progressText.textContent = 'Processing...';
+            if (progressFill) progressFill.style.width = '10%';
             
             // Validate file type
             if (!file.type.startsWith('image/')) {
                 alert('Please select an image file');
                 if (progressEl) progressEl.style.display = 'none';
                 input.value = '';
+                this.isUploadingScreenshot = false;
                 return;
             }
             
-            // Compress ALL images over 500KB for faster uploads in low-signal areas
-            if (file.size > 500 * 1024) {
-                if (progressText) progressText.textContent = 'Optimizing for faster upload...';
-                this.compressImage(file).then(compressedFile => {
-                    this.setScreenshot(compressedFile);
-                }).catch(err => {
-                    console.error('Compression error:', err);
-                    // Try to use original file if compression fails
-                    if (file.size <= 5 * 1024 * 1024) {
-                        this.setScreenshot(file);
-                    } else {
-                        alert('Image is too large. Please try a smaller file (under 5MB).');
-                        if (progressEl) progressEl.style.display = 'none';
-                        input.value = '';
-                    }
-                });
-            } else {
-                this.setScreenshot(file);
-            }
+            // Always compress for faster uploads - even small files benefit
+            if (progressText) progressText.textContent = 'Optimizing...';
+            this.compressImageFast(file).then(compressedFile => {
+                this.setScreenshot(compressedFile);
+            }).catch(err => {
+                console.error('Compression error:', err);
+                // Use original if compression fails and file is under 2MB
+                if (file.size <= 2 * 1024 * 1024) {
+                    this.setScreenshot(file);
+                } else {
+                    alert('Image is too large. Please try a smaller file.');
+                    if (progressEl) progressEl.style.display = 'none';
+                    input.value = '';
+                    this.isUploadingScreenshot = false;
+                }
+            });
         }
     },
     
-    // FIXED: Compress large images - aggressive compression for faster uploads
-    compressImage: function(file) {
+    // FASTER compression - aggressive settings for quick uploads
+    compressImageFast: function(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -26212,41 +26627,41 @@ searchFAQs: function(query) {
                     let width = img.width;
                     let height = img.height;
                     
-                    // Smaller max dimensions for faster uploads
-                    const maxWidth = 800;
-                    const maxHeight = 800;
+                    // Aggressive resize - max 600px for very fast uploads
+                    const maxDim = 600;
                     
-                    if (width > maxWidth) {
-                        height = (height * maxWidth) / width;
-                        width = maxWidth;
-                    }
-                    if (height > maxHeight) {
-                        width = (width * maxHeight) / height;
-                        height = maxHeight;
+                    if (width > height && width > maxDim) {
+                        height = (height * maxDim) / width;
+                        width = maxDim;
+                    } else if (height > maxDim) {
+                        width = (width * maxDim) / height;
+                        height = maxDim;
                     }
                     
-                    canvas.width = width;
-                    canvas.height = height;
+                    canvas.width = Math.round(width);
+                    canvas.height = Math.round(height);
                     
                     const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     
-                    document.getElementById('progressFill').style.width = '60%';
-                    document.getElementById('progressText').textContent = 'Compressing...';
+                    const progressFill = document.getElementById('progressFill');
+                    const progressText = document.getElementById('progressText');
+                    if (progressFill) progressFill.style.width = '50%';
+                    if (progressText) progressText.textContent = 'Compressing...';
                     
-                    // More aggressive compression (0.5 quality)
+                    // Very aggressive compression (0.4 quality) for fast upload
                     canvas.toBlob((blob) => {
                         if (blob) {
-                            const compressedFile = new File([blob], file.name, {
+                            const compressedFile = new File([blob], 'screenshot.jpg', {
                                 type: 'image/jpeg',
                                 lastModified: Date.now()
                             });
-                            console.log('[AvantiWidget] Compressed from', (file.size/1024).toFixed(1) + 'KB', 'to', (compressedFile.size/1024).toFixed(1) + 'KB');
+                            console.log('[AvantiWidget] Compressed:', (file.size/1024).toFixed(0) + 'KB →', (compressedFile.size/1024).toFixed(0) + 'KB');
                             resolve(compressedFile);
                         } else {
                             reject(new Error('Compression failed'));
                         }
-                    }, 'image/jpeg', 0.5);
+                    }, 'image/jpeg', 0.4);
                 };
                 img.onerror = reject;
                 img.src = e.target.result;
@@ -26262,15 +26677,21 @@ searchFAQs: function(query) {
         const reader = new FileReader();
         reader.onload = (e) => {
             this.screenshotDataUrl = e.target.result;
-            document.getElementById('screenshotImg').src = e.target.result;
-            document.getElementById('screenshotPreview').style.display = 'block';
+            const imgEl = document.getElementById('screenshotImg');
+            const previewEl = document.getElementById('screenshotPreview');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            const progressEl = document.getElementById('uploadProgress');
             
-            document.getElementById('progressFill').style.width = '100%';
-            document.getElementById('progressText').textContent = 'Ready!';
+            if (imgEl) imgEl.src = e.target.result;
+            if (previewEl) previewEl.style.display = 'block';
+            if (progressFill) progressFill.style.width = '100%';
+            if (progressText) progressText.textContent = '✓ Ready!';
             
             setTimeout(() => {
-                document.getElementById('uploadProgress').style.display = 'none';
-            }, 500);
+                if (progressEl) progressEl.style.display = 'none';
+                this.isUploadingScreenshot = false; // Upload complete, safe to submit
+            }, 400);
         };
         reader.readAsDataURL(file);
     },
@@ -26346,8 +26767,14 @@ searchFAQs: function(query) {
         }
     },
     
-    // Submit ticket (logged in user)
+    // Submit ticket (logged in user) - FIXED: Prevents auto-submit during upload
     submitTicket: async function() {
+        // Prevent submission while screenshot is being processed
+        if (this.isUploadingScreenshot) {
+            alert('Please wait for screenshot to finish processing...');
+            return;
+        }
+        
         if (!this.firebaseReady) {
             alert('Please wait, connecting to server...');
             return;
@@ -26406,8 +26833,14 @@ searchFAQs: function(query) {
         }
     },
     
-    // Submit ticket (manual entry)
+    // Submit ticket (manual entry) - FIXED: Prevents auto-submit during upload
     submitTicketManual: async function() {
+        // Prevent submission while screenshot is being processed
+        if (this.isUploadingScreenshot) {
+            alert('Please wait for screenshot to finish processing...');
+            return;
+        }
+        
         if (!this.firebaseReady) {
             alert('Please wait, connecting to server...');
             return;
