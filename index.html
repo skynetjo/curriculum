@@ -277,6 +277,111 @@
     input[type="checkbox"]:checked::after{content:'✓';position:absolute;color:white;font-size:14px;top:50%;left:50%;transform:translate(-50%,-50%)}
     .birthday-card{background:linear-gradient(135deg,#FFD700,#FFA500);border:3px solid #FF6347;animation:pulse 2s infinite}
     @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+    
+    /* Floating Celebration Card */
+    .floating-celebration-card {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      width: 320px;
+      max-width: calc(100vw - 40px);
+      background: linear-gradient(135deg, #FF6B9D 0%, #C44B6C 50%, #8B2A4D 100%);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 10px 40px rgba(196, 75, 108, 0.4);
+      z-index: 9990;
+      animation: slideInRight 0.5s ease-out, celebrationGlow 2s ease-in-out infinite;
+      color: white;
+    }
+    .floating-celebration-card.anniversary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #6B4D9E 100%);
+      box-shadow: 0 10px 40px rgba(118, 75, 162, 0.4);
+    }
+    @keyframes slideInRight {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes celebrationGlow {
+      0%, 100% { box-shadow: 0 10px 40px rgba(196, 75, 108, 0.4); }
+      50% { box-shadow: 0 10px 50px rgba(196, 75, 108, 0.6), 0 0 60px rgba(255, 107, 157, 0.3); }
+    }
+    .floating-celebration-card .close-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(255,255,255,0.2);
+      border: none;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      cursor: pointer;
+      color: white;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .floating-celebration-card .close-btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    .floating-celebration-card .celebration-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .floating-celebration-card .avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      flex-shrink: 0;
+      border: 3px solid rgba(255,255,255,0.3);
+      overflow: hidden;
+    }
+    .floating-celebration-card .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .floating-celebration-card .info h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+      opacity: 0.9;
+    }
+    .floating-celebration-card .info h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 4px 0;
+    }
+    .floating-celebration-card .info p {
+      font-size: 12px;
+      margin: 0;
+      opacity: 0.8;
+    }
+    .floating-celebration-card .confetti {
+      position: absolute;
+      font-size: 20px;
+      animation: float 3s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-10px) rotate(10deg); }
+    }
+    @media (max-width: 640px) {
+      .floating-celebration-card {
+        top: auto;
+        bottom: 80px;
+        right: 10px;
+        left: 10px;
+        width: auto;
+      }
+    }
     .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9998}
     .modal-content{background:white;border-radius:1rem;padding:2rem;max-width:600px;width:90%;max-height:90vh;overflow-y:auto}
     .status-badge{padding:.5rem 1rem;border-radius:.5rem;font-weight:bold;text-align:center;font-size:.875rem}
@@ -6731,6 +6836,7 @@ const[leaveAdjustments,setLeaveAdjustments]=useState({});
 const[schoolInfo,setSchoolInfo]=useState([]);
 const[isSidebarOpen,setIsSidebarOpen]=useState(false);               
 const[showConfetti,setShowConfetti]=useState(false);const[celebrationMessage,setCelebrationMessage]=useState('');
+const[floatingCelebration,setFloatingCelebration]=useState(null); // Floating birthday/anniversary card
 
 // 2FA State
 const[pending2FAUser,setPending2FAUser]=useState(null); // User waiting for 2FA verification
@@ -6781,6 +6887,81 @@ useEffect(() => {
     }
   }
   prevUserRef.current = currentUser;
+}, [currentUser, loading]);
+
+// Check for team birthdays/anniversaries and show floating card
+useEffect(() => {
+  if (!currentUser || loading) return;
+  
+  // Check if user has already dismissed today's floating card
+  const dismissedKey = 'floatingCelebrationDismissed_' + new Date().toDateString();
+  if (localStorage.getItem(dismissedKey)) return;
+  
+  const checkTeamCelebrations = async () => {
+    try {
+      const today = new Date();
+      const todayMonth = today.getMonth();
+      const todayDate = today.getDate();
+      
+      // Load all team members
+      const [teachersSnap, managersSnap, apcsSnap] = await Promise.all([
+        db.collection('teachers').get(),
+        db.collection('managers').where('status', '==', 'active').get(),
+        db.collection('apcs').get()
+      ]);
+      
+      const allMembers = [
+        ...teachersSnap.docs.map(d => ({ id: d.id, ...d.data(), type: 'teacher' })),
+        ...managersSnap.docs.map(d => ({ id: d.id, ...d.data(), type: 'manager' })),
+        ...apcsSnap.docs.map(d => ({ id: d.id, ...d.data(), type: 'apc' }))
+      ].filter(m => m.name && m.name.toLowerCase() !== 'vacant' && !m.isArchived);
+      
+      // Find today's birthdays (excluding current user)
+      const todayBirthdays = allMembers.filter(m => {
+        if (m.afid === currentUser.afid || m.id === currentUser.afid) return false;
+        const dobField = m.dateOfBirth || m.dob;
+        if (!dobField) return false;
+        const dob = new Date(dobField);
+        return dob.getMonth() === todayMonth && dob.getDate() === todayDate;
+      });
+      
+      // Find today's work anniversaries (excluding current user)
+      const todayAnniversaries = allMembers.filter(m => {
+        if (m.afid === currentUser.afid || m.id === currentUser.afid) return false;
+        if (!m.joiningDate) return false;
+        const j = new Date(m.joiningDate);
+        if (j.getFullYear() >= today.getFullYear()) return false;
+        return j.getMonth() === todayMonth && j.getDate() === todayDate;
+      }).map(m => ({
+        ...m,
+        years: today.getFullYear() - new Date(m.joiningDate).getFullYear()
+      }));
+      
+      // Show floating card for first birthday or anniversary found
+      if (todayBirthdays.length > 0) {
+        const person = todayBirthdays[0];
+        setFloatingCelebration({
+          type: 'birthday',
+          person: person,
+          total: todayBirthdays.length
+        });
+      } else if (todayAnniversaries.length > 0) {
+        const person = todayAnniversaries[0];
+        setFloatingCelebration({
+          type: 'anniversary',
+          person: person,
+          years: person.years,
+          total: todayAnniversaries.length
+        });
+      }
+    } catch (e) {
+      console.log('Could not check team celebrations:', e);
+    }
+  };
+  
+  // Delay check to avoid blocking initial load
+  const timer = setTimeout(checkTeamCelebrations, 2000);
+  return () => clearTimeout(timer);
 }, [currentUser, loading]);
 
 // Helper function to get accessible schools for a manager (supports 4-level hierarchy)
@@ -7451,7 +7632,7 @@ if(currentUser && currentUser.userType === 'student') {
   return <StudentDashboard currentUser={currentUser} handleLogout={handleLogout} />;
 }
 
-return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools} academicYearSettings={academicYearSettings}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} setSchoolInfo={setSchoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments}/>;
+return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools} academicYearSettings={academicYearSettings} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} setSchoolInfo={setSchoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>;
 }
 
 // ========================================
@@ -8360,7 +8541,9 @@ function TeacherView({
   updateChapterProgress,
   activeTab,
   setActiveTab,
-  leaveAdjustments
+  leaveAdjustments,
+  floatingCelebration,
+  setFloatingCelebration
 }) {
   // Check if user is an APC
   const isAPC = currentUser.userType === 'apc' || currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC;
@@ -8447,6 +8630,45 @@ function TeacherView({
   return (
     <div className="min-h-screen bg-gray-50">
       {showConfetti && <Confetti />}
+
+      {/* Floating Celebration Card */}
+      {floatingCelebration && (
+        <div className={`floating-celebration-card ${floatingCelebration.type === 'anniversary' ? 'anniversary' : ''}`}>
+          <button 
+            className="close-btn" 
+            onClick={() => {
+              localStorage.setItem('floatingCelebrationDismissed_' + new Date().toDateString(), 'true');
+              setFloatingCelebration(null);
+            }}
+          >×</button>
+          <span className="confetti" style={{top: '5px', left: '10px'}}>🎉</span>
+          <span className="confetti" style={{top: '10px', right: '40px', animationDelay: '0.5s'}}>✨</span>
+          <span className="confetti" style={{bottom: '10px', left: '30px', animationDelay: '1s'}}>🎊</span>
+          <div className="celebration-content">
+            <div className="avatar">
+              {floatingCelebration.person?.profilePhoto ? (
+                <img src={floatingCelebration.person.profilePhoto} alt="" />
+              ) : (
+                floatingCelebration.type === 'birthday' ? '🎂' : '🎉'
+              )}
+            </div>
+            <div className="info">
+              <h4>{floatingCelebration.type === 'birthday' ? '🎂 Birthday Today!' : '🎉 Work Anniversary!'}</h4>
+              <h3>{floatingCelebration.person?.name}</h3>
+              <p>
+                {floatingCelebration.type === 'birthday' 
+                  ? 'Wish them a Happy Birthday! 🎈' 
+                  : `Completing ${floatingCelebration.years} year${floatingCelebration.years > 1 ? 's' : ''} at Avanti! 💐`}
+              </p>
+              {floatingCelebration.total > 1 && (
+                <p style={{marginTop: '4px', opacity: '0.7'}}>
+                  +{floatingCelebration.total - 1} more {floatingCelebration.type === 'birthday' ? 'birthday' : 'anniversary'}{floatingCelebration.total > 2 ? 's' : ''} today
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* PWA install helper */}
       <InstallPrompt />
@@ -10914,7 +11136,9 @@ function AdminView({
   managers,
   isSuperAdmin,
   accessibleSchools,
-  academicYearSettings
+  academicYearSettings,
+  floatingCelebration,
+  setFloatingCelebration
 }) {
   const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'managers' : 'analytics');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -11009,6 +11233,45 @@ function AdminView({
   return (
     <div className="min-h-screen bg-gray-50">
       <InstallPrompt />
+      
+      {/* Floating Celebration Card for Admin */}
+      {floatingCelebration && (
+        <div className={`floating-celebration-card ${floatingCelebration.type === 'anniversary' ? 'anniversary' : ''}`}>
+          <button 
+            className="close-btn" 
+            onClick={() => {
+              localStorage.setItem('floatingCelebrationDismissed_' + new Date().toDateString(), 'true');
+              setFloatingCelebration(null);
+            }}
+          >×</button>
+          <span className="confetti" style={{top: '5px', left: '10px'}}>🎉</span>
+          <span className="confetti" style={{top: '10px', right: '40px', animationDelay: '0.5s'}}>✨</span>
+          <span className="confetti" style={{bottom: '10px', left: '30px', animationDelay: '1s'}}>🎊</span>
+          <div className="celebration-content">
+            <div className="avatar">
+              {floatingCelebration.person?.profilePhoto ? (
+                <img src={floatingCelebration.person.profilePhoto} alt="" />
+              ) : (
+                floatingCelebration.type === 'birthday' ? '🎂' : '🎉'
+              )}
+            </div>
+            <div className="info">
+              <h4>{floatingCelebration.type === 'birthday' ? '🎂 Birthday Today!' : '🎉 Work Anniversary!'}</h4>
+              <h3>{floatingCelebration.person?.name}</h3>
+              <p>
+                {floatingCelebration.type === 'birthday' 
+                  ? 'Wish them a Happy Birthday! 🎈' 
+                  : `Completing ${floatingCelebration.years} year${floatingCelebration.years > 1 ? 's' : ''} at Avanti! 💐`}
+              </p>
+              {floatingCelebration.total > 1 && (
+                <p style={{marginTop: '4px', opacity: '0.7'}}>
+                  +{floatingCelebration.total - 1} more {floatingCelebration.type === 'birthday' ? 'birthday' : 'anniversary'}{floatingCelebration.total > 2 ? 's' : ''} today
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Mobile Menu Button */}
       <button
@@ -20197,23 +20460,25 @@ function SocialWall({ teachers, currentUser }) {
 
         // Today's birthdays
         const todayBirthdays = combined.filter(m => {
-          if (!m.dateOfBirth) return false;
-          const dob = new Date(m.dateOfBirth);
+          const dobField = m.dateOfBirth || m.dob;
+          if (!dobField) return false;
+          const dob = new Date(dobField);
           return dob.getMonth() + 1 === todayMonth && dob.getDate() === todayDate;
         });
         setBirthdays(todayBirthdays);
 
         // Upcoming birthdays (next 30 days)
         const upcoming = combined.filter(m => {
-          if (!m.dateOfBirth) return false;
-          const dob = new Date(m.dateOfBirth);
+          const dobField = m.dateOfBirth || m.dob;
+          if (!dobField) return false;
+          const dob = new Date(dobField);
           const thisYearBday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
           if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
           const diffDays = Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
           return diffDays > 0 && diffDays <= 30;
         }).sort((a, b) => {
-          const aDate = new Date(a.dateOfBirth);
-          const bDate = new Date(b.dateOfBirth);
+          const aDate = new Date(a.dateOfBirth || a.dob);
+          const bDate = new Date(b.dateOfBirth || b.dob);
           const aMonth = aDate.getMonth(), aDay = aDate.getDate();
           const bMonth = bDate.getMonth(), bDay = bDate.getDate();
           if (aMonth !== bMonth) return aMonth - bMonth;
@@ -20755,8 +21020,9 @@ function SocialWall({ teachers, currentUser }) {
             ) : (
               <div className="space-y-3">
                 {upcomingBirthdays.map((person, idx) => {
-                  const daysLeft = getDaysUntilBirthday(person.dateOfBirth);
-                  const dob = new Date(person.dateOfBirth);
+                  const dobField = person.dateOfBirth || person.dob;
+                  const daysLeft = getDaysUntilBirthday(dobField);
+                  const dob = new Date(dobField);
                   return (
                     <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-pink-50 transition-colors">
                       <div className="flex items-center gap-3">
@@ -24694,6 +24960,16 @@ ReactDOM.render(<App/>,document.getElementById('root'));
     color: #10b981;
 }
 
+.avanti-ticket-card .status.closed {
+    background: rgba(107, 114, 128, 0.2);
+    color: #9ca3af;
+}
+
+.avanti-ticket-card .status.pending {
+    background: rgba(168, 85, 247, 0.2);
+    color: #a855f7;
+}
+
 .avanti-ticket-card .subject {
     color: #fff;
     font-size: 14px;
@@ -25404,74 +25680,118 @@ const AvantiWidget = {
         }
         
         try {
-            let query;
-            if (this.user.type === 'student' && this.user.studentId) {
-                console.log('[AvantiWidget] Loading tickets for student:', this.user.studentId);
-                query = firebase.firestore().collection('helpdesk_tickets')
-                    .where('studentId', '==', String(this.user.studentId));
-            } else if (this.user.email) {
-                console.log('[AvantiWidget] Loading tickets for teacher:', this.user.email);
-                query = firebase.firestore().collection('helpdesk_tickets')
-                    .where('userEmail', '==', this.user.email);
-            }
+            // Store previous ticket states for change detection
+            this.previousTicketStates = this.previousTicketStates || {};
+            this.tickets = [];
             
-            if (query) {
-                // Store previous ticket states for change detection
-                this.previousTicketStates = this.previousTicketStates || {};
-                
-                query.onSnapshot(snap => {
-                    const newTickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    
-                    // Detect changes and notify user
-                    newTickets.forEach(ticket => {
-                        const prevState = this.previousTicketStates[ticket.id];
-                        if (prevState) {
-                            // Check for status change
-                            if (prevState.status !== ticket.status) {
-                                this.showTicketNotification(ticket, 'status', prevState.status, ticket.status);
-                            }
-                            // Check for new admin reply
-                            const prevReplies = prevState.repliesCount || 0;
-                            const newReplies = (ticket.replies || []).length;
-                            if (newReplies > prevReplies) {
-                                const latestReply = ticket.replies[newReplies - 1];
-                                if (latestReply && latestReply.isAdmin) {
-                                    this.showTicketNotification(ticket, 'reply', null, latestReply.message);
-                                }
+            const processTickets = (newTickets, source) => {
+                // Detect changes and notify user
+                newTickets.forEach(ticket => {
+                    const prevState = this.previousTicketStates[ticket.id];
+                    if (prevState) {
+                        // Check for status change
+                        if (prevState.status !== ticket.status) {
+                            this.showTicketNotification(ticket, 'status', prevState.status, ticket.status);
+                        }
+                        // Check for new admin reply
+                        const prevReplies = prevState.repliesCount || 0;
+                        const newReplies = (ticket.replies || []).length;
+                        if (newReplies > prevReplies) {
+                            const latestReply = ticket.replies[newReplies - 1];
+                            if (latestReply && latestReply.isAdmin) {
+                                this.showTicketNotification(ticket, 'reply', null, latestReply.message);
                             }
                         }
-                        // Store current state
-                        this.previousTicketStates[ticket.id] = {
-                            status: ticket.status,
-                            repliesCount: (ticket.replies || []).length
-                        };
-                    });
-                    
-                    this.tickets = newTickets;
-                    
-                    // Sort by createdAt descending (newest first) - client-side
-                    this.tickets.sort((a, b) => {
-                        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
-                        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
-                        return dateB - dateA;
-                    });
-                    
-                    console.log('[AvantiWidget] ✓ Loaded tickets:', this.tickets.length);
-                    
-                    // Update badge
-                    const openCount = this.tickets.filter(t => t.status !== 'resolved' && t.status !== 'closed').length;
-                    const badge = document.getElementById('ticketsBadge');
-                    if (badge) {
-                        badge.classList.toggle('show', openCount > 0);
                     }
-                    
-                    // Update list if visible
-                    if (this.currentView === 'tickets') {
-                        this.renderTickets();
-                    }
-                }, err => {
-                    console.log('[AvantiWidget] Tickets error:', err);
+                    // Store current state
+                    this.previousTicketStates[ticket.id] = {
+                        status: ticket.status,
+                        repliesCount: (ticket.replies || []).length
+                    };
                 });
+                
+                // Merge with existing tickets (remove duplicates by id)
+                const existingIds = this.tickets.map(t => t.id);
+                const uniqueNewTickets = newTickets.filter(t => !existingIds.includes(t.id));
+                this.tickets = [...this.tickets, ...uniqueNewTickets];
+                
+                // Sort by createdAt descending (newest first) - client-side
+                this.tickets.sort((a, b) => {
+                    const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+                    const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+                    return dateB - dateA;
+                });
+                
+                console.log('[AvantiWidget] ✓ Loaded tickets from ' + source + ':', newTickets.length, '| Total:', this.tickets.length);
+                
+                // Update badge - show count of open tickets
+                const openCount = this.tickets.filter(t => t.status !== 'resolved' && t.status !== 'closed').length;
+                const badge = document.getElementById('ticketsBadge');
+                if (badge) {
+                    badge.classList.toggle('show', openCount > 0);
+                }
+                
+                // Update list if visible
+                if (this.currentView === 'tickets') {
+                    this.renderTickets();
+                }
+            };
+            
+            // Query 1: helpdesk_tickets collection
+            if (this.user.type === 'student' && this.user.studentId) {
+                console.log('[AvantiWidget] Loading tickets for student:', this.user.studentId);
+                firebase.firestore().collection('helpdesk_tickets')
+                    .where('studentId', '==', String(this.user.studentId))
+                    .onSnapshot(snap => {
+                        const tickets = snap.docs.map(d => ({ id: d.id, ...d.data(), source: 'helpdesk' }));
+                        processTickets(tickets, 'helpdesk_tickets');
+                    }, err => {
+                        console.log('[AvantiWidget] helpdesk_tickets error:', err);
+                    });
+                    
+                // Also check support_tickets for student
+                firebase.firestore().collection('support_tickets')
+                    .where('studentId', '==', String(this.user.studentId))
+                    .onSnapshot(snap => {
+                        const tickets = snap.docs.map(d => ({ id: d.id, ...d.data(), source: 'support' }));
+                        processTickets(tickets, 'support_tickets');
+                    }, err => {
+                        console.log('[AvantiWidget] support_tickets student error:', err);
+                    });
+                    
+            } else if (this.user.email) {
+                console.log('[AvantiWidget] Loading tickets for teacher:', this.user.email);
+                
+                // Check helpdesk_tickets by email
+                firebase.firestore().collection('helpdesk_tickets')
+                    .where('userEmail', '==', this.user.email)
+                    .onSnapshot(snap => {
+                        const tickets = snap.docs.map(d => ({ id: d.id, ...d.data(), source: 'helpdesk' }));
+                        processTickets(tickets, 'helpdesk_tickets');
+                    }, err => {
+                        console.log('[AvantiWidget] helpdesk_tickets error:', err);
+                    });
+                    
+                // Also check support_tickets by email
+                firebase.firestore().collection('support_tickets')
+                    .where('userEmail', '==', this.user.email)
+                    .onSnapshot(snap => {
+                        const tickets = snap.docs.map(d => ({ id: d.id, ...d.data(), source: 'support' }));
+                        processTickets(tickets, 'support_tickets');
+                    }, err => {
+                        console.log('[AvantiWidget] support_tickets error:', err);
+                    });
+                    
+                // Also try by name for support_tickets (fallback)
+                firebase.firestore().collection('support_tickets')
+                    .where('userName', '==', this.user.name)
+                    .onSnapshot(snap => {
+                        const tickets = snap.docs.map(d => ({ id: d.id, ...d.data(), source: 'support' }));
+                        processTickets(tickets, 'support_tickets (by name)');
+                    }, err => {
+                        // This might fail if index doesn't exist - that's ok
+                        console.log('[AvantiWidget] support_tickets by name error:', err);
+                    });
             }
         } catch (e) {
             console.error('[AvantiWidget] Error loading tickets:', e);
@@ -25886,17 +26206,19 @@ const AvantiWidget = {
         }
         
         container.innerHTML = notificationCenterHTML + this.tickets.map(t => {
-            const date = t.createdAt?.toDate ? t.createdAt.toDate() : new Date();
+            const date = t.createdAt?.toDate ? t.createdAt.toDate() : new Date(t.createdAt || Date.now());
             const timeAgo = this.timeAgo(date);
+            const statusIcon = t.status === 'resolved' ? '✓' : t.status === 'closed' ? '✕' : t.status === 'in-progress' ? '⏳' : '🔴';
+            const formattedDate = date.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined});
             
             return `
-                <div class="avanti-ticket-card" onclick="AvantiWidget.viewTicket('${t.id}')">
+                <div class="avanti-ticket-card" onclick="AvantiWidget.viewTicket('${t.id}')" style="${t.status === 'closed' || t.status === 'resolved' ? 'opacity: 0.8;' : ''}">
                     <div class="ticket-header">
                         <span class="ticket-id">#${t.ticketId || t.id.slice(0,8)}</span>
-                        <span class="status ${t.status}">${t.status.replace('-', ' ')}</span>
+                        <span class="status ${t.status || 'open'}">${statusIcon} ${(t.status || 'open').replace('-', ' ')}</span>
                     </div>
                     <div class="subject">${t.subject || 'No subject'}</div>
-                    <div class="meta">${timeAgo}</div>
+                    <div class="meta">${formattedDate} • ${timeAgo}${t.replies?.length ? ' • ' + t.replies.length + ' replies' : ''}</div>
                 </div>
             `;
         }).join('');
