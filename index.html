@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -20183,6 +20184,8 @@ function SocialWall({ teachers, currentUser }) {
   const [posts, setPosts] = useState([]);
   const [birthdays, setBirthdays] = useState([]);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState([]);
+  const [weekBirthdays, setWeekBirthdays] = useState([]);
+  const [monthBirthdays, setMonthBirthdays] = useState([]);
   const [anniversaries, setAnniversaries] = useState([]);
   const [weekAnniversaries, setWeekAnniversaries] = useState([]);
   const [monthAnniversaries, setMonthAnniversaries] = useState([]);
@@ -20445,78 +20448,137 @@ function SocialWall({ teachers, currentUser }) {
       try {
         setLoading(true);
         
+        // Load managers
         const managersSnap = await db.collection('managers').get();
         const managers = managersSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'Manager' }));
         
+        // Load APCs
         const apcsSnap = await db.collection('apcs').get();
         const apcs = apcsSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'APC' }));
         
-        const combined = [...managers, ...apcs, ...teachers];
+        // Load teachers directly from Firestore to get all data including DOB
+        const teachersSnap = await db.collection('teachers').get();
+        const allTeachers = teachersSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'Teacher' }));
+        
+        // Combine all members
+        const combined = [...managers, ...apcs, ...allTeachers].filter(m => m.name && m.name.toLowerCase() !== 'vacant' && !m.isArchived);
         setAllMembers(combined);
+        
+        console.log('[SocialWall] Total members loaded:', combined.length);
+        console.log('[SocialWall] Members with DOB:', combined.filter(m => m.dateOfBirth || m.dob).length);
+        console.log('[SocialWall] Members with joiningDate:', combined.filter(m => m.joiningDate).length);
 
         const today = new Date();
-        const todayMonth = today.getMonth() + 1;
+        today.setHours(0, 0, 0, 0); // Reset time for accurate day comparison
+        const todayMonth = today.getMonth(); // 0-indexed
         const todayDate = today.getDate();
+
+        // Helper function to get days until birthday
+        const getDaysUntilBday = (dobString) => {
+          if (!dobString) return 999;
+          const dob = new Date(dobString);
+          const thisYearBday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
+          if (thisYearBday < today) {
+            thisYearBday.setFullYear(today.getFullYear() + 1);
+          }
+          return Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
+        };
 
         // Today's birthdays
         const todayBirthdays = combined.filter(m => {
           const dobField = m.dateOfBirth || m.dob;
           if (!dobField) return false;
           const dob = new Date(dobField);
-          return dob.getMonth() + 1 === todayMonth && dob.getDate() === todayDate;
+          return dob.getMonth() === todayMonth && dob.getDate() === todayDate;
         });
         setBirthdays(todayBirthdays);
+        console.log('[SocialWall] Today birthdays:', todayBirthdays.length);
 
-        // Upcoming birthdays (next 30 days)
-        const upcoming = combined.filter(m => {
+        // This Week's Birthdays (next 7 days including today)
+        const thisWeekBdays = combined.filter(m => {
+          const dobField = m.dateOfBirth || m.dob;
+          if (!dobField) return false;
+          const days = getDaysUntilBday(dobField);
+          return days >= 0 && days <= 7;
+        }).sort((a, b) => getDaysUntilBday(a.dateOfBirth || a.dob) - getDaysUntilBday(b.dateOfBirth || b.dob));
+        setWeekBirthdays(thisWeekBdays);
+        console.log('[SocialWall] This week birthdays:', thisWeekBdays.length);
+
+        // This Month's Birthdays
+        const thisMonthBdays = combined.filter(m => {
           const dobField = m.dateOfBirth || m.dob;
           if (!dobField) return false;
           const dob = new Date(dobField);
-          const thisYearBday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
-          if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
-          const diffDays = Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
-          return diffDays > 0 && diffDays <= 30;
+          return dob.getMonth() === todayMonth;
         }).sort((a, b) => {
-          const aDate = new Date(a.dateOfBirth || a.dob);
-          const bDate = new Date(b.dateOfBirth || b.dob);
-          const aMonth = aDate.getMonth(), aDay = aDate.getDate();
-          const bMonth = bDate.getMonth(), bDay = bDate.getDate();
-          if (aMonth !== bMonth) return aMonth - bMonth;
+          const aDay = new Date(a.dateOfBirth || a.dob).getDate();
+          const bDay = new Date(b.dateOfBirth || b.dob).getDate();
           return aDay - bDay;
-        }).slice(0, 10);
-        setUpcomingBirthdays(upcoming);
+        });
+        setMonthBirthdays(thisMonthBdays);
+        console.log('[SocialWall] This month birthdays:', thisMonthBdays.length);
 
-        // Today's Anniversaries (using joiningDate)
+        // Upcoming birthdays (next 30 days, excluding today)
+        const upcoming = combined.filter(m => {
+          const dobField = m.dateOfBirth || m.dob;
+          if (!dobField) return false;
+          const days = getDaysUntilBday(dobField);
+          return days > 0 && days <= 30;
+        }).sort((a, b) => getDaysUntilBday(a.dateOfBirth || a.dob) - getDaysUntilBday(b.dateOfBirth || b.dob))
+        .slice(0, 15);
+        setUpcomingBirthdays(upcoming);
+        console.log('[SocialWall] Upcoming birthdays (30 days):', upcoming.length);
+
+        // Helper function to get days until anniversary
+        const getDaysUntilAnniv = (joinDateString) => {
+          if (!joinDateString) return 999;
+          const jDate = new Date(joinDateString);
+          // Check if at least 1 year has passed
+          if (jDate.getFullYear() >= today.getFullYear()) return 999;
+          const thisYearAnniv = new Date(today.getFullYear(), jDate.getMonth(), jDate.getDate());
+          if (thisYearAnniv < today) {
+            thisYearAnniv.setFullYear(today.getFullYear() + 1);
+          }
+          return Math.ceil((thisYearAnniv - today) / (1000 * 60 * 60 * 24));
+        };
+
+        // Today's Anniversaries
         const todayAnniversaries = combined.filter(m => {
           if (!m.joiningDate) return false;
           const j = new Date(m.joiningDate);
           // Must have at least 1 year at company
           if (j.getFullYear() >= today.getFullYear()) return false;
-          return j.getMonth() + 1 === todayMonth && j.getDate() === todayDate;
+          return j.getMonth() === todayMonth && j.getDate() === todayDate;
         });
         setAnniversaries(todayAnniversaries);
+        console.log('[SocialWall] Today anniversaries:', todayAnniversaries.length);
 
-        // This Week's Anniversaries
+        // This Week's Anniversaries (next 7 days)
         const weekAnn = combined.filter(m => {
           if (!m.joiningDate) return false;
           const j = new Date(m.joiningDate);
           if (j.getFullYear() >= today.getFullYear()) return false;
-          const thisYearAnn = new Date(today.getFullYear(), j.getMonth(), j.getDate());
-          const diffDays = Math.ceil((thisYearAnn - today) / (1000 * 60 * 60 * 24));
-          return diffDays >= 0 && diffDays <= 7;
-        });
+          const days = getDaysUntilAnniv(m.joiningDate);
+          return days >= 0 && days <= 7;
+        }).sort((a, b) => getDaysUntilAnniv(a.joiningDate) - getDaysUntilAnniv(b.joiningDate));
         setWeekAnniversaries(weekAnn);
+        console.log('[SocialWall] This week anniversaries:', weekAnn.length);
 
         // This Month's Anniversaries
         const monthAnn = combined.filter(m => {
           if (!m.joiningDate) return false;
           const j = new Date(m.joiningDate);
           if (j.getFullYear() >= today.getFullYear()) return false;
-          return j.getMonth() === today.getMonth();
+          return j.getMonth() === todayMonth;
+        }).sort((a, b) => {
+          const aDay = new Date(a.joiningDate).getDate();
+          const bDay = new Date(b.joiningDate).getDate();
+          return aDay - bDay;
         });
         setMonthAnniversaries(monthAnn);
+        console.log('[SocialWall] This month anniversaries:', monthAnn.length);
 
-        // Show birthday popup
+        // Show birthday popup for today's birthdays
         if (todayBirthdays.length > 0) {
           const dismissedToday = localStorage.getItem('birthdayDismissed_' + today.toDateString());
           if (!dismissedToday) {
@@ -20532,7 +20594,7 @@ function SocialWall({ teachers, currentUser }) {
         
         setPosts(postsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (error) {
-        console.error('Error:', error);
+        console.error('[SocialWall] Error:', error);
       } finally {
         setLoading(false);
       }
@@ -21013,18 +21075,19 @@ function SocialWall({ teachers, currentUser }) {
           {/* Upcoming Birthdays */}
           <div className="bg-white rounded-3xl p-6 shadow-lg">
             <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
-              <span className="text-2xl">📅</span> Upcoming Birthdays
+              <span className="text-2xl">🗓️</span> This Week's Birthdays
             </h3>
-            {upcomingBirthdays.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">No upcoming birthdays in the next 30 days</p>
+            {weekBirthdays.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No birthdays this week</p>
             ) : (
               <div className="space-y-3">
-                {upcomingBirthdays.map((person, idx) => {
+                {weekBirthdays.map((person, idx) => {
                   const dobField = person.dateOfBirth || person.dob;
                   const daysLeft = getDaysUntilBirthday(dobField);
                   const dob = new Date(dobField);
+                  const isToday = daysLeft === 0;
                   return (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-pink-50 transition-colors">
+                    <div key={idx} className={`flex items-center justify-between p-3 rounded-xl transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : 'bg-gray-50 hover:bg-pink-50'}`}>
                       <div className="flex items-center gap-3">
                         {person.profilePhoto ? (
                           <img src={person.profilePhoto} alt="" className="w-10 h-10 rounded-full object-cover" />
@@ -21034,7 +21097,7 @@ function SocialWall({ teachers, currentUser }) {
                           </div>
                         )}
                         <div>
-                          <div className="font-semibold text-gray-800">{person.name}</div>
+                          <div className="font-semibold text-gray-800">{person.name} {isToday && '🎂'}</div>
                           <div className="text-xs text-gray-500">{person.school || person.role}</div>
                         </div>
                       </div>
@@ -21043,7 +21106,52 @@ function SocialWall({ teachers, currentUser }) {
                           {dob.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {daysLeft === 1 ? 'Tomorrow!' : `in ${daysLeft} days`}
+                          {isToday ? '🎉 Today!' : daysLeft === 1 ? 'Tomorrow!' : `in ${daysLeft} days`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* This Month's Birthdays */}
+          <div className="bg-white rounded-3xl p-6 shadow-lg">
+            <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
+              <span className="text-2xl">📅</span> This Month's Birthdays ({new Date().toLocaleDateString('en-IN', { month: 'long' })})
+            </h3>
+            {monthBirthdays.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No birthdays this month</p>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-3">
+                {monthBirthdays.map((person, idx) => {
+                  const dobField = person.dateOfBirth || person.dob;
+                  const dob = new Date(dobField);
+                  const daysLeft = getDaysUntilBirthday(dobField);
+                  const isPast = dob.getDate() < new Date().getDate();
+                  const isToday = daysLeft === 0;
+                  return (
+                    <div key={idx} className={`flex items-center justify-between p-3 rounded-xl transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : isPast ? 'bg-gray-100 opacity-60' : 'bg-gray-50 hover:bg-pink-50'}`}>
+                      <div className="flex items-center gap-3">
+                        {person.profilePhoto ? (
+                          <img src={person.profilePhoto} alt="" className="w-9 h-9 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                            {person.name?.charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-semibold text-gray-800 text-sm">{person.name} {isToday && '🎂'}</div>
+                          <div className="text-xs text-gray-500">{person.school || person.role}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-sm font-bold ${isPast ? 'text-gray-400' : 'text-pink-600'}`}>
+                          {dob.getDate()} {dob.toLocaleDateString('en-IN', { month: 'short' })}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {isToday ? '🎉 Today!' : isPast ? 'Passed' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
                         </div>
                       </div>
                     </div>
@@ -27728,21 +27836,31 @@ const NotificationManager = {
         
         // Check if already sent today
         const sentToday = localStorage.getItem('celebrationNotifSent_' + todayStr);
-        if (sentToday) return;
+        if (sentToday) {
+            console.log('[NotificationManager] Celebration notification already sent today');
+            return;
+        }
         
         try {
+            console.log('[NotificationManager] Checking for celebrations at 8 AM...');
+            
             // Check for birthdays and anniversaries
             const teachersSnap = await firebase.firestore().collection('teachers').get();
             const managersSnap = await firebase.firestore().collection('managers').get();
+            const apcsSnap = await firebase.firestore().collection('apcs').get();
             
             const all = [
-                ...teachersSnap.docs.map(d => ({ ...d.data(), type: 'teacher' })),
-                ...managersSnap.docs.map(d => ({ ...d.data(), type: 'manager' }))
-            ];
+                ...teachersSnap.docs.map(d => ({ ...d.data(), id: d.id, type: 'teacher' })),
+                ...managersSnap.docs.map(d => ({ ...d.data(), id: d.id, type: 'manager' })),
+                ...apcsSnap.docs.map(d => ({ ...d.data(), id: d.id, type: 'apc' }))
+            ].filter(m => m.name && m.name.toLowerCase() !== 'vacant' && !m.isArchived);
+            
+            console.log('[NotificationManager] Total members to check:', all.length);
             
             const birthdays = all.filter(m => {
-                if (!m.dateOfBirth) return false;
-                const dob = new Date(m.dateOfBirth);
+                const dobField = m.dateOfBirth || m.dob;
+                if (!dobField) return false;
+                const dob = new Date(dobField);
                 return dob.getMonth() === today.getMonth() && dob.getDate() === today.getDate();
             });
             
@@ -27753,34 +27871,111 @@ const NotificationManager = {
                 return j.getMonth() === today.getMonth() && j.getDate() === today.getDate();
             });
             
-            // Show browser notification
+            console.log('[NotificationManager] Birthdays found:', birthdays.length);
+            console.log('[NotificationManager] Anniversaries found:', anniversaries.length);
+            
+            // Request notification permission if not granted
+            if (Notification.permission === 'default') {
+                console.log('[NotificationManager] Requesting notification permission...');
+                await Notification.requestPermission();
+            }
+            
+            // Show browser notification with sound
             if (Notification.permission === 'granted') {
                 if (birthdays.length > 0) {
                     const names = birthdays.map(b => b.name).slice(0, 3).join(', ');
-                    new Notification('🎂 Birthday Today!', {
+                    const notif = new Notification('🎂 Birthday Today!', {
                         body: birthdays.length === 1 
                             ? `Wish ${names} a Happy Birthday!`
                             : `${names}${birthdays.length > 3 ? ` and ${birthdays.length - 3} more` : ''} have birthdays today!`,
-                        icon: '/icon-192.png'
+                        icon: '/icon-192.png',
+                        tag: 'birthday-notification',
+                        requireInteraction: true
                     });
-                    this.playSound();
+                    
+                    // Play notification sound
+                    this.playNotificationSound('birthday');
+                    
+                    // Click handler to open app
+                    notif.onclick = function() {
+                        window.focus();
+                        notif.close();
+                    };
                 }
                 
                 if (anniversaries.length > 0) {
-                    const names = anniversaries.map(a => a.name).slice(0, 3).join(', ');
-                    new Notification('🎉 Work Anniversary Today!', {
-                        body: anniversaries.length === 1
-                            ? `Congratulate ${names} on their work anniversary!`
-                            : `${names}${anniversaries.length > 3 ? ` and ${anniversaries.length - 3} more` : ''} have work anniversaries today!`,
-                        icon: '/icon-192.png'
-                    });
-                    this.playSound();
+                    // Delay second notification by 2 seconds if there's a birthday notification
+                    setTimeout(() => {
+                        const names = anniversaries.map(a => a.name).slice(0, 3).join(', ');
+                        const notif = new Notification('🎉 Work Anniversary Today!', {
+                            body: anniversaries.length === 1
+                                ? `Congratulate ${names} on their work anniversary!`
+                                : `${names}${anniversaries.length > 3 ? ` and ${anniversaries.length - 3} more` : ''} have work anniversaries today!`,
+                            icon: '/icon-192.png',
+                            tag: 'anniversary-notification',
+                            requireInteraction: true
+                        });
+                        
+                        this.playNotificationSound('anniversary');
+                        
+                        notif.onclick = function() {
+                            window.focus();
+                            notif.close();
+                        };
+                    }, birthdays.length > 0 ? 2000 : 0);
                 }
+            } else {
+                console.log('[NotificationManager] Notification permission not granted:', Notification.permission);
             }
             
             localStorage.setItem('celebrationNotifSent_' + todayStr, 'true');
         } catch (e) {
             console.error('[NotificationManager] Celebration check error:', e);
+        }
+    },
+    
+    // Play celebration notification sound
+    playNotificationSound: function(type) {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            if (type === 'birthday') {
+                // Happy birthday jingle - C E G C (higher)
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, i) => {
+                    setTimeout(() => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.frequency.value = freq;
+                        osc.type = 'sine';
+                        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                        osc.start(audioCtx.currentTime);
+                        osc.stop(audioCtx.currentTime + 0.3);
+                    }, i * 150);
+                });
+            } else {
+                // Celebration sound - ascending chord
+                const notes = [440, 554.37, 659.25];
+                notes.forEach((freq, i) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.frequency.value = freq;
+                    osc.type = 'sine';
+                    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                    osc.start(audioCtx.currentTime);
+                    osc.stop(audioCtx.currentTime + 0.5);
+                });
+            }
+            
+            console.log('[NotificationManager] 🔔 Celebration sound played');
+        } catch (e) {
+            console.log('[NotificationManager] Could not play sound:', e);
         }
     },
     
@@ -27955,18 +28150,17 @@ const NotificationManager = {
     loadCelebrationNotifications: async function() {
         try {
             const today = new Date();
+            today.setHours(0, 0, 0, 0);
             const todayMonth = today.getMonth();
             const todayDate = today.getDate();
             
-            // Load teachers
-            const teachersSnap = await firebase.firestore().collection('teachers')
-                .where('isArchived', '!=', true)
-                .get();
+            console.log('[NotificationManager] Loading celebration notifications for', today.toDateString());
+            
+            // Load teachers (without problematic query - filter client-side)
+            const teachersSnap = await firebase.firestore().collection('teachers').get();
             
             // Load managers
-            const managersSnap = await firebase.firestore().collection('managers')
-                .where('status', '==', 'active')
-                .get();
+            const managersSnap = await firebase.firestore().collection('managers').get();
             
             // Load APCs
             const apcsSnap = await firebase.firestore().collection('apcs').get();
@@ -27975,16 +28169,20 @@ const NotificationManager = {
                 ...teachersSnap.docs.map(d => ({ id: d.id, ...d.data(), type: 'teacher' })),
                 ...managersSnap.docs.map(d => ({ id: d.id, ...d.data(), type: 'manager' })),
                 ...apcsSnap.docs.map(d => ({ id: d.id, ...d.data(), type: 'apc' }))
-            ].filter(m => m.name && m.name.toLowerCase() !== 'vacant');
+            ].filter(m => m.name && m.name.toLowerCase() !== 'vacant' && !m.isArchived && m.status !== 'inactive');
+            
+            console.log('[NotificationManager] Total members:', allMembers.length);
+            console.log('[NotificationManager] Members with DOB:', allMembers.filter(m => m.dateOfBirth || m.dob).length);
             
             const celebrationNotifs = [];
             
             // Find today's birthdays
             allMembers.forEach(member => {
-                const dob = member.dateOfBirth || member.dob;
-                if (dob) {
-                    const birthDate = new Date(dob);
+                const dobField = member.dateOfBirth || member.dob;
+                if (dobField) {
+                    const birthDate = new Date(dobField);
                     if (birthDate.getMonth() === todayMonth && birthDate.getDate() === todayDate) {
+                        console.log('[NotificationManager] Found birthday:', member.name);
                         celebrationNotifs.push({
                             id: 'birthday_' + member.id + '_' + today.toDateString(),
                             source: 'celebration',
@@ -28005,6 +28203,7 @@ const NotificationManager = {
                     const joinDate = new Date(joiningDate);
                     const years = today.getFullYear() - joinDate.getFullYear();
                     if (years > 0 && joinDate.getMonth() === todayMonth && joinDate.getDate() === todayDate) {
+                        console.log('[NotificationManager] Found anniversary:', member.name, years, 'years');
                         celebrationNotifs.push({
                             id: 'anniversary_' + member.id + '_' + today.toDateString(),
                             source: 'celebration',
@@ -28023,9 +28222,9 @@ const NotificationManager = {
             
             // Also find upcoming birthdays (next 7 days) for notification bell
             allMembers.forEach(member => {
-                const dob = member.dateOfBirth || member.dob;
-                if (dob) {
-                    const birthDate = new Date(dob);
+                const dobField = member.dateOfBirth || member.dob;
+                if (dobField) {
+                    const birthDate = new Date(dobField);
                     // Create this year's birthday
                     const thisYearBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
                     
@@ -28051,6 +28250,39 @@ const NotificationManager = {
                     }
                 }
             });
+            
+            // Also find upcoming work anniversaries (next 7 days)
+            allMembers.forEach(member => {
+                if (member.joiningDate) {
+                    const joinDate = new Date(member.joiningDate);
+                    if (joinDate.getFullYear() >= today.getFullYear()) return;
+                    
+                    const thisYearAnniv = new Date(today.getFullYear(), joinDate.getMonth(), joinDate.getDate());
+                    if (thisYearAnniv < today) {
+                        thisYearAnniv.setFullYear(today.getFullYear() + 1);
+                    }
+                    
+                    const daysUntil = Math.ceil((thisYearAnniv - today) / (1000 * 60 * 60 * 24));
+                    const years = today.getFullYear() - joinDate.getFullYear() + (thisYearAnniv.getFullYear() > today.getFullYear() ? 1 : 0);
+                    
+                    if (daysUntil > 0 && daysUntil <= 7) {
+                        celebrationNotifs.push({
+                            id: 'upcoming_anniversary_' + member.id + '_' + today.toDateString(),
+                            source: 'celebration',
+                            type: 'upcoming_anniversary',
+                            title: '🎉 Upcoming Anniversary',
+                            message: member.name + "'s " + years + " year work anniversary is in " + daysUntil + ' day' + (daysUntil > 1 ? 's' : '') + '!',
+                            personName: member.name,
+                            personPhoto: member.profilePhoto,
+                            daysUntil: daysUntil,
+                            years: years,
+                            createdAt: { toDate: () => new Date(today.getTime() - daysUntil * 60000) }
+                        });
+                    }
+                }
+            });
+            
+            console.log('[NotificationManager] Total celebration notifications:', celebrationNotifs.length);
             
             if (celebrationNotifs.length > 0) {
                 this.mergeNotifications(celebrationNotifs, 'celebration');
@@ -28149,6 +28381,7 @@ const NotificationManager = {
             else if (n.type === 'birthday') icon = '🎂';
             else if (n.type === 'anniversary') icon = '🎉';
             else if (n.type === 'upcoming_birthday') icon = '📅';
+            else if (n.type === 'upcoming_anniversary') icon = '🎊';
             
             const ticketLabel = isTicket && n.ticketId ? '<span style="color: #F4B41A; font-size: 11px; margin-left: 6px;">#' + n.ticketId + '</span>' : '';
             
@@ -28164,6 +28397,8 @@ const NotificationManager = {
                 celebrationStyle = 'border-left: 3px solid #f59e0b; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);';
             } else if (n.type === 'upcoming_birthday') {
                 celebrationStyle = 'border-left: 3px solid #8b5cf6; background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);';
+            } else if (n.type === 'upcoming_anniversary') {
+                celebrationStyle = 'border-left: 3px solid #06b6d4; background: linear-gradient(135deg, #ecfeff 0%, #cffafe 100%);';
             }
             
             // Link button
@@ -28172,9 +28407,11 @@ const NotificationManager = {
             // Person photo for celebrations
             let personPhoto = '';
             if (isCelebration && n.personPhoto) {
-                personPhoto = '<img src="' + n.personPhoto + '" alt="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 10px; border: 2px solid ' + (n.type === 'birthday' ? '#ec4899' : '#f59e0b') + ';" />';
+                const borderColor = n.type === 'birthday' || n.type === 'upcoming_birthday' ? '#ec4899' : '#f59e0b';
+                personPhoto = '<img src="' + n.personPhoto + '" alt="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 10px; border: 2px solid ' + borderColor + ';" />';
             } else if (isCelebration) {
-                personPhoto = '<div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, ' + (n.type === 'birthday' ? '#ec4899, #f472b6' : '#f59e0b, #fbbf24') + '); display: flex; align-items: center; justify-content: center; font-size: 20px; margin-right: 10px;">' + icon + '</div>';
+                const gradientColor = n.type === 'birthday' || n.type === 'upcoming_birthday' ? '#ec4899, #f472b6' : '#f59e0b, #fbbf24';
+                personPhoto = '<div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, ' + gradientColor + '); display: flex; align-items: center; justify-content: center; font-size: 20px; margin-right: 10px;">' + icon + '</div>';
             }
             
             return `<div class="notification-item ${isUnread ? 'unread' : ''}" style="${celebrationStyle || priorityStyle}" onclick="NotificationManager.expandNotification('${n.id}')">
