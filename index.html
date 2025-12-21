@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -736,6 +735,215 @@
     max-width: 100%;
   }
 }
+
+/* ========================================
+   ONLINE STATUS CARD STYLES
+   ======================================== */
+.online-status-card {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  background: linear-gradient(135deg, #1a1a24 0%, #12121a 100%);
+  border: 1px solid #2a2a3a;
+  border-radius: 16px;
+  padding: 12px 16px;
+  min-width: 180px;
+  z-index: 9990;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.online-status-card .close-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.online-status-card .close-btn:hover {
+  background: #2a2a3a;
+  color: #fff;
+}
+
+.online-status-card .status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.online-status-card .status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+.online-status-card .status-dot.online {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.online-status-card .status-dot.offline {
+  background: #6b7280;
+  animation: none;
+}
+
+/* ========================================
+   REACTION TOOLTIP STYLES
+   ======================================== */
+.reaction-btn-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.reaction-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a24;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+
+.reaction-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #1a1a24;
+}
+
+.reaction-btn-wrapper:hover .reaction-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ========================================
+   @MENTION STYLES
+   ======================================== */
+.mention-input-container {
+  position: relative;
+}
+
+.mention-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.1);
+  z-index: 100;
+  margin-bottom: 4px;
+}
+
+.mention-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.2s;
+}
+
+.mention-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.mention-dropdown-item:hover {
+  background: #f3e8ff;
+}
+
+.mention-dropdown-item.highlighted {
+  background: #ede9fe;
+}
+
+.mention-dropdown-item .avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.mention-tag {
+  background: linear-gradient(135deg, #ede9fe, #fce7f3);
+  color: #7c3aed;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.mention-everyone {
+  background: linear-gradient(135deg, #fee2e2, #fef3c7);
+  color: #dc2626;
+}
+
+/* Last Active Badge */
+.last-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #6b7280;
+  padding: 2px 6px;
+  background: #f3f4f6;
+  border-radius: 10px;
+}
+
+.last-active-badge.online {
+  background: #d1fae5;
+  color: #059669;
+}
+
+/* Notification sound indicator */
+@keyframes bellRing {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(10deg); }
+  50% { transform: rotate(-10deg); }
+  75% { transform: rotate(5deg); }
+}
+
+.bell-ringing {
+  animation: bellRing 0.5s ease-in-out;
+}
   </style>
 </head>
 <body>
@@ -789,11 +997,299 @@ if (typeof Chart !== 'undefined' && Chart.overrides) {
 </script>
   <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
+
+// ========================================
+// DEBOUNCE UTILITY - Prevents page refresh while typing
+// ========================================
+const useDebounce = (value, delay = 300) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  
+  return debouncedValue;
+};
+
+// Debounced state hook - prevents excessive re-renders while typing
+const useDebouncedState = (initialValue, delay = 300) => {
+  const [value, setValue] = useState(initialValue);
+  const [debouncedValue, setDebouncedValue] = useState(initialValue);
+  const timeoutRef = useRef(null);
+  
+  const setValueDebounced = useCallback((newValue) => {
+    setValue(newValue);
+    
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    timeoutRef.current = setTimeout(() => {
+      setDebouncedValue(newValue);
+    }, delay);
+  }, [delay]);
+  
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+  
+  return [value, setValueDebounced, debouncedValue];
+};
 const firebaseConfig={apiKey:"AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",authDomain:"curriculum-dbb10.firebaseapp.com",projectId:"curriculum-dbb10",storageBucket:"curriculum-dbb10.firebasestorage.app",messagingSenderId:"706387632109",appId:"1:706387632109:web:06c78a304fdbdc12f391e4"};
 if(!firebase.apps.length){firebase.initializeApp(firebaseConfig)}
 const db=firebase.firestore();
 const auth=firebase.auth();
 const SUBJECTS=['Physics','Chemistry','Maths','Biology'];
+
+// ========================================
+// PRESENCE SYSTEM - Track Online/Offline Status
+// ========================================
+const PresenceSystem = {
+  userId: null,
+  presenceRef: null,
+  heartbeatInterval: null,
+  onlineUsers: {},
+  listeners: [],
+  
+  init: function(userId) {
+    if (!userId) return;
+    this.userId = userId;
+    this.updatePresence('online');
+    
+    // Heartbeat every 30 seconds
+    this.heartbeatInterval = setInterval(() => {
+      this.updatePresence('online');
+    }, 30000);
+    
+    // Handle tab visibility
+    document.addEventListener('visibilitychange', () => {
+      this.updatePresence(document.hidden ? 'away' : 'online');
+    });
+    
+    // Handle page unload
+    window.addEventListener('beforeunload', () => {
+      this.updatePresence('offline');
+    });
+    
+    // Listen for presence changes
+    this.listenToPresence();
+  },
+  
+  updatePresence: async function(status) {
+    if (!this.userId || typeof firebase === 'undefined') return;
+    try {
+      await db.collection('user_presence').doc(this.userId).set({
+        status: status,
+        lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
+        userId: this.userId
+      }, { merge: true });
+    } catch (e) {
+      console.log('[Presence] Update error:', e);
+    }
+  },
+  
+  listenToPresence: function() {
+    try {
+      db.collection('user_presence')
+        .where('status', 'in', ['online', 'away'])
+        .onSnapshot(snap => {
+          const users = {};
+          snap.docs.forEach(doc => {
+            users[doc.id] = doc.data();
+          });
+          this.onlineUsers = users;
+          this.notifyListeners();
+        });
+    } catch (e) {
+      console.log('[Presence] Listen error:', e);
+    }
+  },
+  
+  getOnlineCount: function() {
+    return Object.keys(this.onlineUsers).length;
+  },
+  
+  isOnline: function(userId) {
+    return this.onlineUsers[userId]?.status === 'online';
+  },
+  
+  getLastSeen: function(userId) {
+    const presence = this.onlineUsers[userId];
+    if (!presence?.lastSeen) return null;
+    const lastSeen = presence.lastSeen.toDate ? presence.lastSeen.toDate() : new Date(presence.lastSeen);
+    return lastSeen;
+  },
+  
+  formatLastSeen: function(userId) {
+    const lastSeen = this.getLastSeen(userId);
+    if (!lastSeen) return 'Never';
+    
+    const now = new Date();
+    const diff = Math.floor((now - lastSeen) / 1000);
+    
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+  },
+  
+  subscribe: function(callback) {
+    this.listeners.push(callback);
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== callback);
+    };
+  },
+  
+  notifyListeners: function() {
+    this.listeners.forEach(callback => callback(this.onlineUsers));
+  },
+  
+  cleanup: function() {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+    this.updatePresence('offline');
+  }
+};
+
+// ========================================
+// NOTIFICATION SOUND SYSTEM
+// ========================================
+const NotificationSound = {
+  audioContext: null,
+  
+  init: function() {
+    try {
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      console.log('[Sound] AudioContext not available');
+    }
+  },
+  
+  playChime: function() {
+    if (!this.audioContext) this.init();
+    if (!this.audioContext) return;
+    
+    try {
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      
+      oscillator.frequency.setValueAtTime(880, this.audioContext.currentTime);
+      oscillator.frequency.setValueAtTime(1108.73, this.audioContext.currentTime + 0.1);
+      oscillator.frequency.setValueAtTime(1318.51, this.audioContext.currentTime + 0.2);
+      
+      gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.4);
+      
+      oscillator.start(this.audioContext.currentTime);
+      oscillator.stop(this.audioContext.currentTime + 0.4);
+    } catch (e) {
+      console.log('[Sound] Chime error:', e);
+    }
+  }
+};
+
+// ========================================
+// MENTION NOTIFICATION SYSTEM
+// ========================================
+const MentionNotificationSystem = {
+  sendMentionNotification: async function(mentionedUserId, mentionedUserName, postContent, authorName, authorId) {
+    if (!mentionedUserId || typeof firebase === 'undefined') return;
+    
+    try {
+      await db.collection('mention_notifications').add({
+        targetUserId: mentionedUserId,
+        targetUserName: mentionedUserName,
+        postContent: postContent.substring(0, 100) + (postContent.length > 100 ? '...' : ''),
+        authorName: authorName,
+        authorId: authorId,
+        type: 'mention',
+        read: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      console.log('[Mentions] Notification sent to:', mentionedUserName);
+    } catch (e) {
+      console.log('[Mentions] Error sending notification:', e);
+    }
+  },
+  
+  sendEveryoneNotification: async function(postContent, authorName, authorId) {
+    if (typeof firebase === 'undefined') return;
+    
+    try {
+      await db.collection('everyone_notifications').add({
+        postContent: postContent.substring(0, 100) + (postContent.length > 100 ? '...' : ''),
+        authorName: authorName,
+        authorId: authorId,
+        type: 'everyone',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      console.log('[Mentions] @everyone notification sent');
+    } catch (e) {
+      console.log('[Mentions] Error sending @everyone notification:', e);
+    }
+  },
+  
+  listenForMentions: function(userId, callback) {
+    if (!userId || typeof firebase === 'undefined') return () => {};
+    
+    return db.collection('mention_notifications')
+      .where('targetUserId', '==', userId)
+      .where('read', '==', false)
+      .orderBy('createdAt', 'desc')
+      .limit(10)
+      .onSnapshot(snap => {
+        const mentions = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (mentions.length > 0) {
+          NotificationSound.playChime();
+        }
+        callback(mentions);
+      });
+  },
+  
+  listenForEveryone: function(callback) {
+    if (typeof firebase === 'undefined') return () => {};
+    
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    
+    return db.collection('everyone_notifications')
+      .where('createdAt', '>', fiveMinutesAgo)
+      .orderBy('createdAt', 'desc')
+      .limit(5)
+      .onSnapshot(snap => {
+        const notifications = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (notifications.length > 0) {
+          NotificationSound.playChime();
+        }
+        callback(notifications);
+      });
+  },
+  
+  markAsRead: async function(notificationId) {
+    try {
+      await db.collection('mention_notifications').doc(notificationId).update({ read: true });
+    } catch (e) {
+      console.log('[Mentions] Mark read error:', e);
+    }
+  }
+};
+
+// Initialize sound on first user interaction
+document.addEventListener('click', function initSound() {
+  NotificationSound.init();
+  document.removeEventListener('click', initSound);
+}, { once: true });
 
 // Default schools - will be overridden by dynamic schools from Firebase
 let SCHOOLS=['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal','JNV Bharuch'];
@@ -6830,6 +7326,429 @@ function NetworkStatus() {
   );
 }
 
+// ========================================
+// ONLINE STATUS CARD COMPONENT
+// ========================================
+function OnlineStatusCard({ currentUser }) {
+  const [onlineCount, setOnlineCount] = useState(0);
+  const [isVisible, setIsVisible] = useState(true);
+  const [onlineUsers, setOnlineUsers] = useState({});
+  
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    // Initialize presence system
+    const userId = currentUser.afid || currentUser.uid || currentUser.email;
+    PresenceSystem.init(userId);
+    
+    // Subscribe to presence updates
+    const unsubscribe = PresenceSystem.subscribe((users) => {
+      setOnlineUsers(users);
+      setOnlineCount(Object.keys(users).length);
+    });
+    
+    return () => {
+      unsubscribe();
+      PresenceSystem.cleanup();
+    };
+  }, [currentUser]);
+  
+  if (!isVisible) return null;
+  
+  const totalUsers = 100; // Approximate total users
+  const offlineCount = Math.max(0, totalUsers - onlineCount);
+  
+  return (
+    <div className="online-status-card">
+      <button className="close-btn" onClick={() => setIsVisible(false)}>✕</button>
+      <div className="text-xs text-gray-400 mb-2 font-semibold">TEAM STATUS</div>
+      <div className="status-row">
+        <div className="status-dot online"></div>
+        <span className="text-green-400 font-bold">{onlineCount}</span>
+        <span className="text-gray-400 text-sm">Online</span>
+      </div>
+      <div className="status-row">
+        <div className="status-dot offline"></div>
+        <span className="text-gray-500 font-bold">{offlineCount}</span>
+        <span className="text-gray-400 text-sm">Offline</span>
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// MENTION INPUT COMPONENT
+// ========================================
+function MentionInput({ value, onChange, placeholder, allMembers, className, onSubmit }) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionStart, setMentionStart] = useState(null);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const inputRef = useRef(null);
+  
+  // Filter members based on mention query
+  const filteredMembers = useMemo(() => {
+    if (!mentionQuery) return [];
+    
+    const query = mentionQuery.toLowerCase();
+    
+    // Add @everyone option at the top
+    let results = [];
+    if ('everyone'.includes(query)) {
+      results.push({ id: 'everyone', name: 'everyone', isEveryone: true });
+    }
+    
+    // Filter actual members
+    const memberResults = (allMembers || [])
+      .filter(m => m.name?.toLowerCase().includes(query))
+      .slice(0, 5);
+    
+    return [...results, ...memberResults];
+  }, [mentionQuery, allMembers]);
+  
+  const handleInputChange = (e) => {
+    const newValue = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    
+    // Check for @ symbol
+    const textBeforeCursor = newValue.slice(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
+      // Check if there's a space between @ and cursor (which means mention is complete)
+      if (!textAfterAt.includes(' ')) {
+        setMentionQuery(textAfterAt);
+        setMentionStart(lastAtIndex);
+        setShowDropdown(true);
+        setHighlightedIndex(0);
+      } else {
+        setShowDropdown(false);
+      }
+    } else {
+      setShowDropdown(false);
+    }
+    
+    onChange(newValue);
+  };
+  
+  const selectMention = (member) => {
+    if (mentionStart === null) return;
+    
+    const beforeMention = value.slice(0, mentionStart);
+    const afterCursor = value.slice(mentionStart + mentionQuery.length + 1);
+    const mention = member.isEveryone ? '@everyone ' : `@${member.name} `;
+    
+    const newValue = beforeMention + mention + afterCursor;
+    onChange(newValue);
+    setShowDropdown(false);
+    setMentionQuery('');
+    setMentionStart(null);
+    
+    // Focus back on input
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        const newPos = beforeMention.length + mention.length;
+        inputRef.current.setSelectionRange(newPos, newPos);
+      }
+    }, 0);
+  };
+  
+  const handleKeyDown = (e) => {
+    if (!showDropdown || filteredMembers.length === 0) {
+      if (e.key === 'Enter' && onSubmit && value.trim()) {
+        e.preventDefault();
+        onSubmit();
+      }
+      return;
+    }
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(i => Math.min(i + 1, filteredMembers.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      selectMention(filteredMembers[highlightedIndex]);
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+    }
+  };
+  
+  // Parse and render mentions in display
+  const renderWithMentions = (text) => {
+    if (!text) return text;
+    
+    const parts = text.split(/(@\w+(?:\s\w+)?)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('@')) {
+        const isEveryone = part.toLowerCase() === '@everyone';
+        return (
+          <span key={i} className={`mention-tag ${isEveryone ? 'mention-everyone' : ''}`}>
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  };
+  
+  return (
+    <div className="mention-input-container">
+      {showDropdown && filteredMembers.length > 0 && (
+        <div className="mention-dropdown">
+          {filteredMembers.map((member, idx) => (
+            <div
+              key={member.id || member.afid || idx}
+              className={`mention-dropdown-item ${idx === highlightedIndex ? 'highlighted' : ''}`}
+              onClick={() => selectMention(member)}
+            >
+              {member.isEveryone ? (
+                <>
+                  <div className="avatar" style={{ background: 'linear-gradient(135deg, #ef4444, #f59e0b)' }}>@</div>
+                  <div>
+                    <div className="font-semibold text-red-600">@everyone</div>
+                    <div className="text-xs text-gray-500">Notify all team members</div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {member.profilePhoto ? (
+                    <img src={member.profilePhoto} alt="" className="w-8 h-8 rounded-full object-cover" />
+                  ) : (
+                    <div className="avatar">{member.name?.charAt(0)}</div>
+                  )}
+                  <div>
+                    <div className="font-semibold">{member.name}</div>
+                    <div className="text-xs text-gray-500">{member.school || member.role}</div>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className={className}
+      />
+    </div>
+  );
+}
+
+// ========================================
+// MENTION TEXTAREA COMPONENT (for posts)
+// ========================================
+function MentionTextarea({ value, onChange, placeholder, allMembers, className, rows }) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionStart, setMentionStart] = useState(null);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const textareaRef = useRef(null);
+  
+  // Filter members based on mention query
+  const filteredMembers = useMemo(() => {
+    if (!mentionQuery) return [];
+    
+    const query = mentionQuery.toLowerCase();
+    
+    // Add @everyone option at the top
+    let results = [];
+    if ('everyone'.includes(query)) {
+      results.push({ id: 'everyone', name: 'everyone', isEveryone: true });
+    }
+    
+    // Filter actual members
+    const memberResults = (allMembers || [])
+      .filter(m => m.name?.toLowerCase().includes(query))
+      .slice(0, 5);
+    
+    return [...results, ...memberResults];
+  }, [mentionQuery, allMembers]);
+  
+  const handleInputChange = (e) => {
+    const newValue = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    
+    // Check for @ symbol
+    const textBeforeCursor = newValue.slice(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
+      // Check if there's a space between @ and cursor (which means mention is complete)
+      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+        setMentionQuery(textAfterAt);
+        setMentionStart(lastAtIndex);
+        setShowDropdown(true);
+        setHighlightedIndex(0);
+      } else {
+        setShowDropdown(false);
+      }
+    } else {
+      setShowDropdown(false);
+    }
+    
+    onChange(newValue);
+  };
+  
+  const selectMention = (member) => {
+    if (mentionStart === null) return;
+    
+    const beforeMention = value.slice(0, mentionStart);
+    const afterCursor = value.slice(mentionStart + mentionQuery.length + 1);
+    const mention = member.isEveryone ? '@everyone ' : `@${member.name} `;
+    
+    const newValue = beforeMention + mention + afterCursor;
+    onChange(newValue);
+    setShowDropdown(false);
+    setMentionQuery('');
+    setMentionStart(null);
+    
+    // Focus back on textarea
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newPos = beforeMention.length + mention.length;
+        textareaRef.current.setSelectionRange(newPos, newPos);
+      }
+    }, 0);
+  };
+  
+  const handleKeyDown = (e) => {
+    if (!showDropdown || filteredMembers.length === 0) return;
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(i => Math.min(i + 1, filteredMembers.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      selectMention(filteredMembers[highlightedIndex]);
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
+    }
+  };
+  
+  return (
+    <div className="mention-input-container">
+      {showDropdown && filteredMembers.length > 0 && (
+        <div className="mention-dropdown" style={{ bottom: 'auto', top: '100%', marginTop: '4px', marginBottom: '0' }}>
+          {filteredMembers.map((member, idx) => (
+            <div
+              key={member.id || member.afid || idx}
+              className={`mention-dropdown-item ${idx === highlightedIndex ? 'highlighted' : ''}`}
+              onClick={() => selectMention(member)}
+            >
+              {member.isEveryone ? (
+                <>
+                  <div className="avatar" style={{ background: 'linear-gradient(135deg, #ef4444, #f59e0b)' }}>@</div>
+                  <div>
+                    <div className="font-semibold text-red-600">@everyone</div>
+                    <div className="text-xs text-gray-500">Notify all team members</div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {member.profilePhoto ? (
+                    <img src={member.profilePhoto} alt="" className="w-8 h-8 rounded-full object-cover" />
+                  ) : (
+                    <div className="avatar">{member.name?.charAt(0)}</div>
+                  )}
+                  <div>
+                    <div className="font-semibold">{member.name}</div>
+                    <div className="text-xs text-gray-500">{member.school || member.role}</div>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className={className}
+        rows={rows}
+        autoFocus
+      />
+    </div>
+  );
+}
+
+// ========================================
+// REACTION WITH TOOLTIP COMPONENT
+// ========================================
+function ReactionButton({ emoji, count, isActive, onClick, reactedBy, allMembers }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  
+  // Get names of people who reacted
+  const getReactorNames = () => {
+    if (!reactedBy || reactedBy.length === 0) return '';
+    
+    const names = reactedBy.map(userId => {
+      const member = (allMembers || []).find(m => 
+        m.afid === userId || m.uid === userId || m.id === userId || m.email === userId
+      );
+      return member?.name || 'Someone';
+    }).slice(0, 5);
+    
+    if (reactedBy.length > 5) {
+      names.push(`+${reactedBy.length - 5} more`);
+    }
+    
+    return names.join(', ');
+  };
+  
+  const tooltipText = getReactorNames();
+  
+  return (
+    <div 
+      className="reaction-btn-wrapper"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      {showTooltip && tooltipText && (
+        <div className="reaction-tooltip">{tooltipText}</div>
+      )}
+      <button
+        onClick={onClick}
+        className={`emoji-btn ${isActive ? 'active' : ''}`}
+      >
+        {emoji} {count || ''}
+      </button>
+    </div>
+  );
+}
+
+// ========================================
+// LAST ACTIVE BADGE COMPONENT
+// ========================================
+function LastActiveBadge({ userId }) {
+  const isOnline = PresenceSystem.isOnline(userId);
+  const lastSeen = PresenceSystem.formatLastSeen(userId);
+  
+  return (
+    <span className={`last-active-badge ${isOnline ? 'online' : ''}`}>
+      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isOnline ? '#10b981' : '#9ca3af' }}></span>
+      {isOnline ? 'Online' : lastSeen}
+    </span>
+  );
+}
+
 function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[isSuperAdmin,setIsSuperAdmin]=useState(false);const[managerProfile,setManagerProfile]=useState(null);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:'',studentId:'',loginType:'teacher'});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);const[managers,setManagers]=useState([]);const[accessibleSchools,setAccessibleSchools]=useState([]);const[academicYearSettings,setAcademicYearSettings]=useState(null);
 const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);
@@ -7633,7 +8552,7 @@ if(currentUser && currentUser.userType === 'student') {
   return <StudentDashboard currentUser={currentUser} handleLogout={handleLogout} />;
 }
 
-return isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools} academicYearSettings={academicYearSettings} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} setSchoolInfo={setSchoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>;
+return (<>{currentUser && <OnlineStatusCard currentUser={currentUser} />}{isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools} academicYearSettings={academicYearSettings} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} setSchoolInfo={setSchoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>}</>);
 }
 
 // ========================================
@@ -11373,11 +12292,11 @@ function AdminView({
         {activeTab === 'students' && <StudentManagement students={filteredStudents} isSuperAdmin={isSuperAdmin} accessibleSchools={availableSchools} />}
 
         {activeTab === 'directory' && (
-          <OrgChartDirectory teachers={filteredTeachers} currentUser={currentUser} />
+          <OrgChartDirectory teachers={teachers} currentUser={currentUser} allEmployeesAccess={true} />
         )}
 
         {activeTab === 'socialwall' && (
-          <SocialWall teachers={filteredTeachers} currentUser={currentUser} />
+          <SocialWall teachers={teachers} currentUser={currentUser} allMembers={true} />
         )}
 
         {activeTab === 'roadmap' && (
@@ -19905,6 +20824,9 @@ function OrgChartDirectory({ teachers, currentUser }) {
 
               {/* Quick Contact */}
               <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
+                {/* Last Active Badge */}
+                <LastActiveBadge userId={member.afid || member.uid || member.id || member.email} />
+                
                 {member.phone && (
                   <a 
                     href={`tel:${member.phone}`} 
@@ -20629,6 +21551,40 @@ function SocialWall({ teachers, currentUser }) {
       
       const docRef = await db.collection('socialPosts').add(postData);
       setPosts([{ id: docRef.id, ...postData, createdAt: new Date() }, ...posts]);
+      
+      // Process mentions and send notifications
+      const postContent = newPostContent.trim();
+      const mentionRegex = /@(\w+(?:\s\w+)?)/g;
+      let match;
+      
+      // Check for @everyone first
+      if (postContent.toLowerCase().includes('@everyone')) {
+        MentionNotificationSystem.sendEveryoneNotification(
+          postContent,
+          currentUser.name,
+          currentUser.afid || currentUser.uid
+        );
+      } else {
+        // Process individual mentions
+        while ((match = mentionRegex.exec(postContent)) !== null) {
+          const mentionedName = match[1];
+          const mentionedMember = allMembers.find(m => 
+            m.name?.toLowerCase() === mentionedName.toLowerCase()
+          );
+          
+          if (mentionedMember) {
+            const mentionedUserId = mentionedMember.afid || mentionedMember.uid || mentionedMember.id;
+            MentionNotificationSystem.sendMentionNotification(
+              mentionedUserId,
+              mentionedMember.name,
+              postContent,
+              currentUser.name,
+              currentUser.afid || currentUser.uid
+            );
+          }
+        }
+      }
+      
       setNewPostContent('');
       setPostImage(null);
       setPostImagePreview(null);
@@ -21295,14 +22251,14 @@ function SocialWall({ teachers, currentUser }) {
           <div className="bg-white rounded-2xl p-4 shadow-lg border border-purple-100">
             {showNewPost ? (
               <div className="space-y-3">
-                <div className="relative">
-                  <textarea
+                <div className="relative mention-input-container">
+                  <MentionTextarea
                     value={newPostContent}
-                    onChange={(e) => setNewPostContent(e.target.value)}
-                    placeholder="What's on your mind? Share updates, wins, or just say hi! 👋"
+                    onChange={setNewPostContent}
+                    placeholder="What's on your mind? Type @ to mention someone 👋"
+                    allMembers={allMembers}
                     className="w-full p-4 pr-12 border-2 border-purple-200 rounded-2xl focus:border-purple-400 focus:ring-0 resize-none"
-                    rows="3"
-                    autoFocus
+                    rows={3}
                   />
                   {/* Attachment button inside textarea area */}
                   <label className="absolute bottom-3 right-3 cursor-pointer text-gray-400 hover:text-purple-600 transition-colors">
@@ -21314,6 +22270,11 @@ function SocialWall({ teachers, currentUser }) {
                       className="hidden"
                     />
                   </label>
+                </div>
+                
+                {/* Mention hint */}
+                <div className="text-xs text-gray-400 flex items-center gap-2">
+                  <span>💡 Tip: Type <span className="mention-tag">@name</span> to mention someone or <span className="mention-tag mention-everyone">@everyone</span> to notify all</span>
                 </div>
                 
                 {/* Image Preview */}
@@ -21412,17 +22373,26 @@ function SocialWall({ teachers, currentUser }) {
                       </div>
                     )}
 
-                    {/* Reactions */}
+                    {/* Reactions with tooltips showing who reacted */}
                     <div className="flex items-center gap-2 flex-wrap mb-3">
-                      {emojis.map(emoji => (
-                        <button
-                          key={emoji}
-                          onClick={() => handleReaction(post.id, emoji)}
-                          className={`emoji-btn ${myReaction === emoji ? 'active' : ''}`}
-                        >
-                          {emoji} {reactionCounts[emoji] || ''}
-                        </button>
-                      ))}
+                      {emojis.map(emoji => {
+                        // Get list of user IDs who reacted with this emoji
+                        const reactedBy = Object.entries(post.reactions || {})
+                          .filter(([userId, reaction]) => reaction === emoji)
+                          .map(([userId]) => userId);
+                        
+                        return (
+                          <ReactionButton
+                            key={emoji}
+                            emoji={emoji}
+                            count={reactionCounts[emoji]}
+                            isActive={myReaction === emoji}
+                            onClick={() => handleReaction(post.id, emoji)}
+                            reactedBy={reactedBy}
+                            allMembers={allMembers}
+                          />
+                        );
+                      })}
                       {post.comments?.length > 0 && (
                         <span className="text-gray-400 text-sm ml-2">
                           💬 {post.comments.length} {post.comments.length === 1 ? 'comment' : 'comments'}
@@ -25646,7 +26616,23 @@ const AvantiWidget = {
         // Initialize notification badge from stored notifications
         setTimeout(() => this.updateNotificationBadge(), 500);
         
+        // CHATBOT VISIBILITY PROTECTION: Ensure chatbot is ALWAYS visible
+        // This fixes the bug where chatbot disappears after marking all notifications as read
+        this.ensureChatbotVisible();
+        setInterval(() => this.ensureChatbotVisible(), 2000);
+        
         console.log('[AvantiWidget] Init complete');
+    },
+    
+    // Ensure chatbot button is always visible (fix for disappearing chatbot bug)
+    ensureChatbotVisible: function() {
+        const btn = document.getElementById('avantiBtn');
+        if (btn) {
+            btn.style.display = 'flex';
+            btn.style.opacity = '1';
+            btn.style.visibility = 'visible';
+            btn.style.pointerEvents = 'auto';
+        }
     },
     
     // Wait for Firebase to be initialized
@@ -28494,15 +29480,25 @@ const NotificationManager = {
     },
     
     // Check if bell should auto-hide when all read
+    // NOTE: This ONLY affects the notification bell, NOT the chatbot (AvantiWidget)
     checkAutoHideBell: function() {
         const bell = document.getElementById('notificationBell');
         if (!bell) return;
         
-        // Hide bell if no unread notifications
+        // Only hide the notification bell, never touch the chatbot
+        // The chatbot (avantiBtn) should always remain visible
         if (this.unreadCount === 0) {
             bell.classList.add('all-read');
         } else {
             bell.classList.remove('all-read');
+        }
+        
+        // Ensure chatbot button is ALWAYS visible (fix for disappearing chatbot bug)
+        const chatbotBtn = document.getElementById('avantiBtn');
+        if (chatbotBtn) {
+            chatbotBtn.style.display = 'flex';
+            chatbotBtn.style.opacity = '1';
+            chatbotBtn.style.visibility = 'visible';
         }
     },
     
