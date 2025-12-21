@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1073,7 +1071,7 @@ const auth=firebase.auth();
 const SUBJECTS=['Physics','Chemistry','Maths','Biology'];
 
 // ========================================
-// PRESENCE SYSTEM - Track Online/Offline Status
+// PRESENCE SYSTEM - Track Online/Offline Status (with Timeout Detection)
 // ========================================
 const PresenceSystem = {
   userId: null,
@@ -1081,9 +1079,13 @@ const PresenceSystem = {
   presenceRef: null,
   heartbeatInterval: null,
   onlineUsers: {},
-  allPresence: {}, // Store all presence data (including offline)
+  allPresence: {},
   listeners: [],
   initialized: false,
+  
+  // Timeout threshold (2 minutes = 120000ms)
+  // If a user hasn't sent heartbeat in this time, they're considered offline
+  OFFLINE_THRESHOLD_MS: 120000,
   
   init: function(userId, userName) {
     if (!userId || this.initialized) return;
@@ -1095,7 +1097,7 @@ const PresenceSystem = {
     
     this.updatePresence('online');
     
-    // Heartbeat every 30 seconds
+    // Heartbeat every 30 seconds (more frequent to ensure detection)
     this.heartbeatInterval = setInterval(() => {
       this.updatePresence('online');
     }, 30000);
@@ -1105,27 +1107,47 @@ const PresenceSystem = {
       this.updatePresence(document.hidden ? 'away' : 'online');
     });
     
-    // Handle page unload
+    // Handle page unload - try to set offline (may not always work)
     window.addEventListener('beforeunload', () => {
       this.updatePresence('offline');
     });
     
-    // Listen for ALL presence changes (not just online)
+    // Also try pagehide for mobile browsers
+    window.addEventListener('pagehide', () => {
+      this.updatePresence('offline');
+    });
+    
+    // Handle browser/app losing focus (mobile specific)
+    window.addEventListener('blur', () => {
+      if (document.hidden) {
+        this.updatePresence('away');
+      }
+    });
+    
+    window.addEventListener('focus', () => {
+      this.updatePresence('online');
+    });
+    
+    // Listen for presence changes
     this.listenToPresence();
   },
   
   updatePresence: async function(status) {
     if (!this.userId || typeof firebase === 'undefined') return;
     try {
-      const docId = this.userId.replace(/[^a-zA-Z0-9]/g, '_'); // Sanitize for Firestore doc ID
+      const docId = this.userId.replace(/[^a-zA-Z0-9]/g, '_');
+      const now = new Date();
+      
       await db.collection('user_presence').doc(docId).set({
         status: status,
         lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
         userId: this.userId,
         userName: this.userName,
-        updatedAt: new Date().toISOString()
+        lastHeartbeat: now.toISOString(),
+        updatedAt: now.toISOString()
       }, { merge: true });
-      console.log('[Presence] Updated:', status);
+      
+      console.log('[Presence] Updated:', status, 'at', now.toISOString());
     } catch (e) {
       console.log('[Presence] Update error:', e);
     }
@@ -1133,28 +1155,59 @@ const PresenceSystem = {
   
   listenToPresence: function() {
     try {
-      // Listen to ALL presence documents
       db.collection('user_presence')
         .onSnapshot(snap => {
           const online = {};
           const all = {};
+          const now = new Date();
           
           snap.docs.forEach(doc => {
             const data = doc.data();
-            all[doc.id] = data;
             
-            // Also index by userId and userName for flexible lookup
-            if (data.userId) all[data.userId] = data;
-            if (data.userName) all[data.userName.toLowerCase()] = data;
+            // Check if user is actually online based on last heartbeat
+            let isActuallyOnline = false;
             
-            if (data.status === 'online' || data.status === 'away') {
-              online[doc.id] = data;
+            if (data.lastHeartbeat) {
+              const lastHeartbeat = new Date(data.lastHeartbeat);
+              const timeSinceLastHeartbeat = now - lastHeartbeat;
+              
+              if (timeSinceLastHeartbeat < this.OFFLINE_THRESHOLD_MS && 
+                  (data.status === 'online' || data.status === 'away')) {
+                isActuallyOnline = true;
+              }
+            } else if (data.lastSeen) {
+              try {
+                const lastSeen = data.lastSeen.toDate ? data.lastSeen.toDate() : new Date(data.lastSeen);
+                const timeSinceLastSeen = now - lastSeen;
+                
+                if (timeSinceLastSeen < this.OFFLINE_THRESHOLD_MS && 
+                    (data.status === 'online' || data.status === 'away')) {
+                  isActuallyOnline = true;
+                }
+              } catch (e) {
+                console.log('[Presence] Error parsing lastSeen:', e);
+              }
+            }
+            
+            const enrichedData = {
+              ...data,
+              computedStatus: isActuallyOnline ? (data.status || 'online') : 'offline'
+            };
+            
+            all[doc.id] = enrichedData;
+            if (data.userId) all[data.userId] = enrichedData;
+            if (data.userName) all[data.userName.toLowerCase()] = enrichedData;
+            
+            if (isActuallyOnline) {
+              online[doc.id] = enrichedData;
             }
           });
           
           this.onlineUsers = online;
           this.allPresence = all;
           this.notifyListeners();
+          
+          console.log('[Presence] Online users:', Object.keys(online).length);
         }, err => {
           console.log('[Presence] Listen error:', err);
         });
@@ -1167,19 +1220,16 @@ const PresenceSystem = {
     return Object.keys(this.onlineUsers).length;
   },
   
-  // Flexible lookup for presence data
   findPresence: function(userId) {
     if (!userId) return null;
     
     const searchKey = String(userId).toLowerCase();
     const sanitizedKey = searchKey.replace(/[^a-zA-Z0-9]/g, '_');
     
-    // Try direct matches first
     if (this.allPresence[userId]) return this.allPresence[userId];
     if (this.allPresence[sanitizedKey]) return this.allPresence[sanitizedKey];
     if (this.allPresence[searchKey]) return this.allPresence[searchKey];
     
-    // Try to find by partial match
     for (const [key, data] of Object.entries(this.allPresence)) {
       if (data.userId && String(data.userId).toLowerCase().includes(searchKey)) return data;
       if (data.userName && String(data.userName).toLowerCase().includes(searchKey)) return data;
@@ -1191,18 +1241,22 @@ const PresenceSystem = {
   
   isOnline: function(userId) {
     const presence = this.findPresence(userId);
-    return presence?.status === 'online' || presence?.status === 'away';
+    return presence?.computedStatus === 'online' || presence?.computedStatus === 'away';
   },
   
   getLastSeen: function(userId) {
     const presence = this.findPresence(userId);
-    if (!presence?.lastSeen) return null;
+    if (!presence) return null;
+    
+    if (presence.lastHeartbeat) {
+      return new Date(presence.lastHeartbeat);
+    }
+    
+    if (!presence.lastSeen) return null;
     
     try {
-      const lastSeen = presence.lastSeen.toDate ? presence.lastSeen.toDate() : new Date(presence.lastSeen);
-      return lastSeen;
+      return presence.lastSeen.toDate ? presence.lastSeen.toDate() : new Date(presence.lastSeen);
     } catch (e) {
-      // Try parsing updatedAt as fallback
       if (presence.updatedAt) {
         return new Date(presence.updatedAt);
       }
@@ -1221,6 +1275,12 @@ const PresenceSystem = {
     if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
     if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
     return Math.floor(diff / 86400) + 'd ago';
+  },
+  
+  getStatus: function(userId) {
+    const presence = this.findPresence(userId);
+    if (!presence) return 'offline';
+    return presence.computedStatus || 'offline';
   },
   
   subscribe: function(callback) {
@@ -7878,20 +7938,37 @@ function LastActiveBadge({ userId }) {
 }
 
 // ========================================
-// PROFILE COMPLETION BANNER COMPONENT
+// PROFILE COMPLETION BANNER COMPONENT (Manager-Aware)
 // ========================================
 function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
   const [isDismissed, setIsDismissed] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   
-  // Required fields for teacher/manager profile
-  const requiredFields = [
+  // Check if user is a manager/admin type (they don't need full profile)
+  const isManagerRole = currentUser?.role && [
+    'Super Admin',
+    'Program Manager', 
+    'Associate Program Manager',
+    'Program Head',
+    'Manager',
+    'Admin'
+  ].some(role => currentUser.role.toLowerCase().includes(role.toLowerCase()));
+  
+  // For managers, only require basic fields
+  const managerRequiredFields = [
+    { key: 'name', label: 'Full Name' },
+    { key: 'email', label: 'Email Address' },
+    { key: 'phone', label: 'Phone Number' }
+  ];
+  
+  // For teachers, require full profile
+  const teacherRequiredFields = [
     { key: 'name', label: 'Full Name' },
     { key: 'email', label: 'Email Address' },
     { key: 'phone', label: 'Phone Number' },
     { key: 'whatsapp', label: 'WhatsApp Number' },
     { key: 'dob', label: 'Date of Birth' },
-    { key: 'dateOfBirth', label: 'Date of Birth' }, // Alternative field name
+    { key: 'dateOfBirth', label: 'Date of Birth' },
     { key: 'school', label: 'School/Centre' },
     { key: 'subject', label: 'Subject' },
     { key: 'profilePhoto', label: 'Profile Photo' },
@@ -7902,16 +7979,18 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
     { key: 'bloodGroup', label: 'Blood Group' }
   ];
   
+  // Use appropriate required fields based on role
+  const requiredFields = isManagerRole ? managerRequiredFields : teacherRequiredFields;
+  
   // Calculate completion
   const calculateCompletion = () => {
     if (!currentUser) return { percentage: 0, filled: [], missing: [] };
     
     const filled = [];
     const missing = [];
-    const checkedKeys = new Set(); // Avoid duplicate field counting
+    const checkedKeys = new Set();
     
     requiredFields.forEach(field => {
-      // Skip if we already counted this field (e.g., dob vs dateOfBirth)
       if (field.key === 'dateOfBirth' && checkedKeys.has('dob')) return;
       if (field.key === 'dob' && checkedKeys.has('dateOfBirth')) return;
       
@@ -7922,7 +8001,6 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
         filled.push(field);
         checkedKeys.add(field.key);
       } else if (!checkedKeys.has(field.key)) {
-        // Only add to missing if alternative field wasn't filled
         if (field.key === 'dob' || field.key === 'dateOfBirth') {
           const altValue = currentUser[field.key === 'dob' ? 'dateOfBirth' : 'dob'];
           if (!altValue || String(altValue).trim() === '') {
@@ -7935,8 +8013,7 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
       }
     });
     
-    // Normalize - count dob/dateOfBirth as one field
-    const totalFields = 13; // Actual unique fields
+    const totalFields = isManagerRole ? 3 : 13;
     const filledCount = Math.min(filled.length, totalFields);
     const percentage = Math.round((filledCount / totalFields) * 100);
     
@@ -7945,7 +8022,6 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
   
   const { percentage, filled, missing } = calculateCompletion();
   
-  // Don't show if 100% complete or dismissed for today
   const dismissKey = `profileBannerDismissed_${currentUser?.afid || currentUser?.uid}_${new Date().toDateString()}`;
   
   useEffect(() => {
@@ -7963,7 +8039,9 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
   // Don't show if complete or dismissed
   if (percentage >= 100 || isDismissed) return null;
   
-  // Determine urgency color
+  // For managers, if only missing optional fields, don't show
+  if (isManagerRole && missing.length === 0) return null;
+  
   const getUrgencyColor = () => {
     if (percentage < 30) return 'from-red-500 to-red-600';
     if (percentage < 60) return 'from-orange-500 to-amber-500';
@@ -7980,11 +8058,9 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
   
   return (
     <div className={`mb-4 bg-gradient-to-r ${getUrgencyColor()} rounded-2xl p-4 shadow-lg text-white relative overflow-hidden`}>
-      {/* Background decoration */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-16 -mt-16"></div>
       <div className="absolute bottom-0 left-0 w-24 h-24 bg-white opacity-10 rounded-full -ml-12 -mb-12"></div>
       
-      {/* Close button */}
       <button 
         onClick={handleDismiss}
         className="absolute top-2 right-2 w-6 h-6 bg-white bg-opacity-20 rounded-full flex items-center justify-center hover:bg-opacity-30 transition-all text-sm"
@@ -7999,9 +8075,14 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
             {percentage < 30 ? '⚠️' : percentage < 60 ? '📝' : percentage < 80 ? '📋' : '✨'}
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-lg">Complete Your Profile</h3>
+            <h3 className="font-bold text-lg">
+              {isManagerRole ? 'Complete Basic Info' : 'Complete Your Profile'}
+            </h3>
             <p className="text-sm opacity-90">
-              Your profile is {percentage}% complete. {missing.length} field{missing.length !== 1 ? 's' : ''} remaining.
+              {isManagerRole 
+                ? `Please add your ${missing.map(m => m.label).join(', ')}`
+                : `Your profile is ${percentage}% complete. ${missing.length} field${missing.length !== 1 ? 's' : ''} remaining.`
+              }
             </p>
           </div>
           <div className="text-right">
@@ -8009,7 +8090,6 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
           </div>
         </div>
         
-        {/* Progress bar */}
         <div className="bg-white bg-opacity-30 rounded-full h-3 mb-3 overflow-hidden">
           <div 
             className={`h-full ${getProgressColor()} rounded-full transition-all duration-500`}
@@ -8017,26 +8097,32 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
           />
         </div>
         
-        {/* Missing fields - collapsible */}
         <div className="flex items-center justify-between">
-          <button 
-            onClick={() => setShowDetails(!showDetails)}
-            className="text-sm bg-white bg-opacity-20 px-3 py-1 rounded-lg hover:bg-opacity-30 transition-all"
-          >
-            {showDetails ? '▲ Hide Details' : '▼ Show Missing Fields'}
-          </button>
+          {!isManagerRole && (
+            <button 
+              onClick={() => setShowDetails(!showDetails)}
+              className="text-sm bg-white bg-opacity-20 px-3 py-1 rounded-lg hover:bg-opacity-30 transition-all"
+            >
+              {showDetails ? '▲ Hide Details' : '▼ Show Missing Fields'}
+            </button>
+          )}
           
           <button 
-            onClick={() => onNavigateToProfile && onNavigateToProfile()}
-            className="bg-white text-gray-800 px-4 py-2 rounded-xl font-bold hover:bg-opacity-90 transition-all shadow-lg flex items-center gap-2"
+            onClick={() => {
+              if (isManagerRole) {
+                alert('Please contact Super Admin to update your profile information.');
+              } else if (onNavigateToProfile) {
+                onNavigateToProfile();
+              }
+            }}
+            className="bg-white text-gray-800 px-4 py-2 rounded-xl font-bold hover:bg-opacity-90 transition-all shadow-lg flex items-center gap-2 ml-auto"
           >
-            <span>Complete Now</span>
+            <span>{isManagerRole ? 'Contact Admin' : 'Complete Now'}</span>
             <span>→</span>
           </button>
         </div>
         
-        {/* Expandable missing fields list */}
-        {showDetails && missing.length > 0 && (
+        {showDetails && !isManagerRole && missing.length > 0 && (
           <div className="mt-3 bg-white bg-opacity-20 rounded-xl p-3">
             <p className="text-sm font-semibold mb-2">Missing Information:</p>
             <div className="flex flex-wrap gap-2">
@@ -21533,12 +21619,11 @@ function SocialWall({ teachers, currentUser }) {
   const [loading, setLoading] = useState(true);
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(null);
   const [allMembers, setAllMembers] = useState([]);
-  const [activeTab, setActiveTab] = useState('feed'); // 'feed' or 'celebrations'
+  const [activeTab, setActiveTab] = useState('feed');
   const [celebrationReactions, setCelebrationReactions] = useState({});
   const [wishMessage, setWishMessage] = useState('');
   const [showWishInput, setShowWishInput] = useState(null);
   
-  // New state for image attachments and replies
   const [postImage, setPostImage] = useState(null);
   const [postImagePreview, setPostImagePreview] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -21548,16 +21633,21 @@ function SocialWall({ teachers, currentUser }) {
   const [replyImagePreview, setReplyImagePreview] = useState(null);
   const [showGifPicker, setShowGifPicker] = useState(null);
   const [expandedReplies, setExpandedReplies] = useState({});
+  
+  // NEW: State for nested replies and hover interactions
+  const [replyingToComment, setReplyingToComment] = useState(null);
+  const [nestedReplyContent, setNestedReplyContent] = useState('');
+  const [hoveredPost, setHoveredPost] = useState(null);
+  const [hoveredComment, setHoveredComment] = useState(null);
+  const [showLikedByPopup, setShowLikedByPopup] = useState(null);
+  const [collapsedThreads, setCollapsedThreads] = useState({});
 
-  // Compress image for faster uploads
   const compressImage = (file, maxWidth = 1200, quality = 0.7) => {
     return new Promise((resolve) => {
-      // If file is small enough, return as-is
-      if (file.size < 200 * 1024) { // Less than 200KB
+      if (file.size < 200 * 1024) {
         resolve(file);
         return;
       }
-      
       const reader = new FileReader();
       reader.onload = (e) => {
         const img = new Image();
@@ -21565,25 +21655,19 @@ function SocialWall({ teachers, currentUser }) {
           const canvas = document.createElement('canvas');
           let width = img.width;
           let height = img.height;
-          
-          // Scale down if too large
           if (width > maxWidth) {
             height = (height * maxWidth) / width;
             width = maxWidth;
           }
-          
           canvas.width = width;
           canvas.height = height;
-          
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, width, height);
-          
           canvas.toBlob((blob) => {
             const compressedFile = new File([blob], file.name, {
               type: 'image/jpeg',
               lastModified: Date.now()
             });
-            console.log(`Compressed: ${(file.size/1024).toFixed(1)}KB → ${(compressedFile.size/1024).toFixed(1)}KB`);
             resolve(compressedFile);
           }, 'image/jpeg', quality);
         };
@@ -21593,7 +21677,6 @@ function SocialWall({ teachers, currentUser }) {
     });
   };
 
-  // Handle image selection for posts (with compression)
   const handlePostImageSelect = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -21601,19 +21684,14 @@ function SocialWall({ teachers, currentUser }) {
         alert('Image size should be less than 10MB');
         return;
       }
-      
-      // Show preview immediately
       const reader = new FileReader();
       reader.onloadend = () => setPostImagePreview(reader.result);
       reader.readAsDataURL(file);
-      
-      // Compress in background
       const compressed = await compressImage(file);
       setPostImage(compressed);
     }
   };
 
-  // Handle image selection for replies (with compression)
   const handleReplyImageSelect = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -21621,19 +21699,14 @@ function SocialWall({ teachers, currentUser }) {
         alert('Image size should be less than 10MB');
         return;
       }
-      
-      // Show preview immediately  
       const reader = new FileReader();
       reader.onloadend = () => setReplyImagePreview(reader.result);
       reader.readAsDataURL(file);
-      
-      // Compress in background
       const compressed = await compressImage(file);
       setReplyImage(compressed);
     }
   };
 
-  // Upload image to Firebase Storage
   const uploadImage = async (file, path) => {
     if (!file || typeof firebase === 'undefined') return null;
     try {
@@ -21647,7 +21720,6 @@ function SocialWall({ teachers, currentUser }) {
     }
   };
 
-  // Popular GIFs (predefined list to avoid API calls)
   const popularGifs = [
     'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
     'https://media.giphy.com/media/3oz8xIsloV7zOmt81G/giphy.gif',
@@ -21659,17 +21731,15 @@ function SocialWall({ teachers, currentUser }) {
     'https://media.giphy.com/media/l3q2K5jinAlChoCLS/giphy.gif'
   ];
 
-  // Celebration emojis for reactions
   const celebrationEmojis = ['🎉', '🎂', '🥳', '❤️', '👏', '🎊'];
+  const emojis = ['👍', '❤️', '😊', '🎉', '👏', '🙌'];
 
-  // Load celebration reactions
   const loadCelebrationReactions = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const reactionsSnap = await db.collection('celebrationReactions')
         .where('date', '==', today)
         .get();
-      
       const reactions = {};
       reactionsSnap.docs.forEach(doc => {
         const data = doc.data();
@@ -21681,25 +21751,20 @@ function SocialWall({ teachers, currentUser }) {
     }
   };
 
-  // Handle celebration reaction
   const handleCelebrationReaction = async (person, emoji) => {
     const personId = person.afid || person.id || person.email;
     const userId = currentUser.afid || currentUser.uid || currentUser.email;
     const today = new Date().toISOString().split('T')[0];
     const docId = `${today}_${personId}`;
-    
     try {
       const currentReactions = celebrationReactions[personId] || { reactions: {}, wishes: [] };
       const userReaction = currentReactions.reactions?.[userId];
-      
-      // Toggle reaction
       const newReactions = { ...currentReactions.reactions };
       if (userReaction === emoji) {
         delete newReactions[userId];
       } else {
         newReactions[userId] = emoji;
       }
-      
       await db.collection('celebrationReactions').doc(docId).set({
         personId,
         personName: person.name,
@@ -21708,8 +21773,6 @@ function SocialWall({ teachers, currentUser }) {
         wishes: currentReactions.wishes || [],
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
-      
-      // Update local state
       setCelebrationReactions(prev => ({
         ...prev,
         [personId]: { ...currentReactions, reactions: newReactions }
@@ -21719,15 +21782,12 @@ function SocialWall({ teachers, currentUser }) {
     }
   };
 
-  // Send birthday/anniversary wish
   const sendWish = async (person) => {
     if (!wishMessage.trim()) return;
-    
     const personId = person.afid || person.id || person.email;
     const userId = currentUser.afid || currentUser.uid || currentUser.email;
     const today = new Date().toISOString().split('T')[0];
     const docId = `${today}_${personId}`;
-    
     try {
       const currentReactions = celebrationReactions[personId] || { reactions: {}, wishes: [] };
       const newWish = {
@@ -21737,7 +21797,6 @@ function SocialWall({ teachers, currentUser }) {
         message: wishMessage.trim(),
         timestamp: new Date().toISOString()
       };
-      
       await db.collection('celebrationReactions').doc(docId).set({
         personId,
         personName: person.name,
@@ -21746,8 +21805,6 @@ function SocialWall({ teachers, currentUser }) {
         wishes: firebase.firestore.FieldValue.arrayUnion(newWish),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
-      
-      // Update local state
       setCelebrationReactions(prev => ({
         ...prev,
         [personId]: {
@@ -21755,252 +21812,159 @@ function SocialWall({ teachers, currentUser }) {
           wishes: [...(currentReactions.wishes || []), newWish]
         }
       }));
-      
       setWishMessage('');
       setShowWishInput(null);
-      alert('🎉 Your wish has been sent!');
     } catch (e) {
       console.error('Wish error:', e);
       alert('Failed to send wish');
     }
   };
 
-  // Get reaction counts for a person
   const getReactionCounts = (personId) => {
-    const reactions = celebrationReactions[personId]?.reactions || {};
+    const data = celebrationReactions[personId];
+    if (!data?.reactions) return {};
     const counts = {};
-    Object.values(reactions).forEach(emoji => {
+    Object.values(data.reactions).forEach(emoji => {
       counts[emoji] = (counts[emoji] || 0) + 1;
     });
     return counts;
   };
 
-  // Check if current user reacted
   const getUserReaction = (personId) => {
     const userId = currentUser.afid || currentUser.uid || currentUser.email;
     return celebrationReactions[personId]?.reactions?.[userId];
   };
 
+  // Load members and posts
   useEffect(() => {
-    const fetchData = async () => {
+    const loadData = async () => {
       try {
-        setLoading(true);
-        
-        // Load managers
-        const managersSnap = await db.collection('managers').get();
-        const managers = managersSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'Manager' }));
-        
-        // Load APCs
-        const apcsSnap = await db.collection('apcs').get();
-        const apcs = apcsSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'APC' }));
-        
-        // Load teachers directly from Firestore to get all data including DOB
-        const teachersSnap = await db.collection('teachers').get();
-        const allTeachers = teachersSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'Teacher' }));
-        
-        // Combine all members
-        const combined = [...managers, ...apcs, ...allTeachers].filter(m => m.name && m.name.toLowerCase() !== 'vacant' && !m.isArchived);
+        const [teachersSnap, managersSnap] = await Promise.all([
+          db.collection('teachers').where('isArchived', '!=', true).get(),
+          db.collection('managers').get()
+        ]);
+        const teachersList = teachersSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          type: 'teacher'
+        }));
+        const managersList = managersSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          type: 'manager'
+        }));
+        const combined = [...teachersList, ...managersList];
         setAllMembers(combined);
         
-        console.log('[SocialWall] Total members loaded:', combined.length);
-        console.log('[SocialWall] Members with DOB:', combined.filter(m => m.dateOfBirth || m.dob).length);
-        console.log('[SocialWall] Members with joiningDate:', combined.filter(m => m.joiningDate).length);
-
         const today = new Date();
-        today.setHours(0, 0, 0, 0); // Reset time for accurate day comparison
-        const todayMonth = today.getMonth(); // 0-indexed
+        const todayMonth = today.getMonth();
         const todayDate = today.getDate();
-
-        // Helper function to get days until birthday
-        const getDaysUntilBday = (dobString) => {
-          if (!dobString) return 999;
-          const dob = new Date(dobString);
-          const thisYearBday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
-          if (thisYearBday < today) {
-            thisYearBday.setFullYear(today.getFullYear() + 1);
+        
+        const todayBirthdays = [];
+        const thisWeekBdays = [];
+        const thisMonthBdays = [];
+        const upcoming = [];
+        const todayAnniversaries = [];
+        const weekAnn = [];
+        const monthAnn = [];
+        
+        combined.forEach(member => {
+          const dobField = member.dateOfBirth || member.dob;
+          if (dobField) {
+            const dob = new Date(dobField);
+            const dobMonth = dob.getMonth();
+            const dobDate = dob.getDate();
+            
+            if (dobMonth === todayMonth && dobDate === todayDate) {
+              todayBirthdays.push(member);
+            }
+            if (dobMonth === todayMonth) {
+              thisMonthBdays.push(member);
+            }
+            const thisYearBday = new Date(today.getFullYear(), dobMonth, dobDate);
+            const daysDiff = Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
+            if (daysDiff >= 0 && daysDiff <= 7) {
+              thisWeekBdays.push(member);
+            }
+            if (daysDiff > 0 && daysDiff <= 30) {
+              upcoming.push(member);
+            }
           }
-          return Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
-        };
-
-        // Today's birthdays
-        const todayBirthdays = combined.filter(m => {
-          const dobField = m.dateOfBirth || m.dob;
-          if (!dobField) return false;
-          const dob = new Date(dobField);
-          return dob.getMonth() === todayMonth && dob.getDate() === todayDate;
+          
+          if (member.joiningDate) {
+            const jDate = new Date(member.joiningDate);
+            const jMonth = jDate.getMonth();
+            const jDateNum = jDate.getDate();
+            
+            if (jMonth === todayMonth && jDateNum === todayDate) {
+              todayAnniversaries.push(member);
+            }
+            if (jMonth === todayMonth) {
+              monthAnn.push(member);
+            }
+            const thisYearAnn = new Date(today.getFullYear(), jMonth, jDateNum);
+            const annDaysDiff = Math.ceil((thisYearAnn - today) / (1000 * 60 * 60 * 24));
+            if (annDaysDiff >= 0 && annDaysDiff <= 7) {
+              weekAnn.push(member);
+            }
+          }
         });
+        
         setBirthdays(todayBirthdays);
-        console.log('[SocialWall] Today birthdays:', todayBirthdays.length);
-
-        // This Week's Birthdays (next 7 days including today)
-        const thisWeekBdays = combined.filter(m => {
-          const dobField = m.dateOfBirth || m.dob;
-          if (!dobField) return false;
-          const days = getDaysUntilBday(dobField);
-          return days >= 0 && days <= 7;
-        }).sort((a, b) => getDaysUntilBday(a.dateOfBirth || a.dob) - getDaysUntilBday(b.dateOfBirth || b.dob));
         setWeekBirthdays(thisWeekBdays);
-        console.log('[SocialWall] This week birthdays:', thisWeekBdays.length);
-
-        // This Month's Birthdays
-        const thisMonthBdays = combined.filter(m => {
-          const dobField = m.dateOfBirth || m.dob;
-          if (!dobField) return false;
-          const dob = new Date(dobField);
-          return dob.getMonth() === todayMonth;
-        }).sort((a, b) => {
-          const aDay = new Date(a.dateOfBirth || a.dob).getDate();
-          const bDay = new Date(b.dateOfBirth || b.dob).getDate();
-          return aDay - bDay;
-        });
         setMonthBirthdays(thisMonthBdays);
-        console.log('[SocialWall] This month birthdays:', thisMonthBdays.length);
-
-        // Upcoming birthdays (next 30 days, excluding today)
-        const upcoming = combined.filter(m => {
-          const dobField = m.dateOfBirth || m.dob;
-          if (!dobField) return false;
-          const days = getDaysUntilBday(dobField);
-          return days > 0 && days <= 30;
-        }).sort((a, b) => getDaysUntilBday(a.dateOfBirth || a.dob) - getDaysUntilBday(b.dateOfBirth || b.dob))
-        .slice(0, 15);
         setUpcomingBirthdays(upcoming);
-        console.log('[SocialWall] Upcoming birthdays (30 days):', upcoming.length);
-
-        // Helper function to get days until anniversary
-        const getDaysUntilAnniv = (joinDateString) => {
-          if (!joinDateString) return 999;
-          const jDate = new Date(joinDateString);
-          // Check if at least 1 year has passed
-          if (jDate.getFullYear() >= today.getFullYear()) return 999;
-          const thisYearAnniv = new Date(today.getFullYear(), jDate.getMonth(), jDate.getDate());
-          if (thisYearAnniv < today) {
-            thisYearAnniv.setFullYear(today.getFullYear() + 1);
-          }
-          return Math.ceil((thisYearAnniv - today) / (1000 * 60 * 60 * 24));
-        };
-
-        // Today's Anniversaries
-        const todayAnniversaries = combined.filter(m => {
-          if (!m.joiningDate) return false;
-          const j = new Date(m.joiningDate);
-          // Must have at least 1 year at company
-          if (j.getFullYear() >= today.getFullYear()) return false;
-          return j.getMonth() === todayMonth && j.getDate() === todayDate;
-        });
         setAnniversaries(todayAnniversaries);
-        console.log('[SocialWall] Today anniversaries:', todayAnniversaries.length);
-
-        // This Week's Anniversaries (next 7 days)
-        const weekAnn = combined.filter(m => {
-          if (!m.joiningDate) return false;
-          const j = new Date(m.joiningDate);
-          if (j.getFullYear() >= today.getFullYear()) return false;
-          const days = getDaysUntilAnniv(m.joiningDate);
-          return days >= 0 && days <= 7;
-        }).sort((a, b) => getDaysUntilAnniv(a.joiningDate) - getDaysUntilAnniv(b.joiningDate));
         setWeekAnniversaries(weekAnn);
-        console.log('[SocialWall] This week anniversaries:', weekAnn.length);
-
-        // This Month's Anniversaries
-        const monthAnn = combined.filter(m => {
-          if (!m.joiningDate) return false;
-          const j = new Date(m.joiningDate);
-          if (j.getFullYear() >= today.getFullYear()) return false;
-          return j.getMonth() === todayMonth;
-        }).sort((a, b) => {
-          const aDay = new Date(a.joiningDate).getDate();
-          const bDay = new Date(b.joiningDate).getDate();
-          return aDay - bDay;
-        });
         setMonthAnniversaries(monthAnn);
-        console.log('[SocialWall] This month anniversaries:', monthAnn.length);
-
-        // Show birthday popup for today's birthdays
-        if (todayBirthdays.length > 0) {
-          const dismissedToday = localStorage.getItem('birthdayDismissed_' + today.toDateString());
-          if (!dismissedToday) {
-            setShowBirthdayPopup(todayBirthdays[0]);
-          }
-        }
-
-        // Fetch posts
+        
+        loadCelebrationReactions();
+        
         const postsSnap = await db.collection('socialPosts')
           .orderBy('createdAt', 'desc')
           .limit(50)
           .get();
         
         setPosts(postsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        
+        if (todayBirthdays.length > 0) {
+          const dismissed = localStorage.getItem('birthdayDismissed_' + new Date().toDateString());
+          if (!dismissed) {
+            setShowBirthdayPopup(todayBirthdays[0]);
+          }
+        }
+        
+        setLoading(false);
       } catch (error) {
         console.error('[SocialWall] Error:', error);
-      } finally {
         setLoading(false);
       }
     };
-
-    fetchData();
-    loadCelebrationReactions();
-  }, [teachers]);
+    loadData();
+  }, []);
 
   const handleCreatePost = async () => {
     if (!newPostContent.trim() && !postImage) return;
     setPosting(true);
-    setUploadingImage(true);
     try {
-      // Upload image if present
       let imageUrl = null;
       if (postImage) {
+        setUploadingImage(true);
         imageUrl = await uploadImage(postImage, 'social_posts');
       }
-      
       const postData = {
         content: newPostContent.trim(),
+        imageUrl: imageUrl,
         authorId: currentUser.afid || currentUser.uid,
         authorName: currentUser.name,
         authorPhoto: currentUser.profilePhoto || '',
-        authorSchool: currentUser.school,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        authorSchool: currentUser.school || currentUser.role || '',
         reactions: {},
         comments: [],
-        imageUrl: imageUrl || null
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
-      
       const docRef = await db.collection('socialPosts').add(postData);
       setPosts([{ id: docRef.id, ...postData, createdAt: new Date() }, ...posts]);
-      
-      // Process mentions and send notifications
-      const postContent = newPostContent.trim();
-      const mentionRegex = /@(\w+(?:\s\w+)?)/g;
-      let match;
-      
-      // Check for @everyone first
-      if (postContent.toLowerCase().includes('@everyone')) {
-        MentionNotificationSystem.sendEveryoneNotification(
-          postContent,
-          currentUser.name,
-          currentUser.afid || currentUser.uid
-        );
-      } else {
-        // Process individual mentions
-        while ((match = mentionRegex.exec(postContent)) !== null) {
-          const mentionedName = match[1];
-          const mentionedMember = allMembers.find(m => 
-            m.name?.toLowerCase() === mentionedName.toLowerCase()
-          );
-          
-          if (mentionedMember) {
-            const mentionedUserId = mentionedMember.afid || mentionedMember.uid || mentionedMember.id;
-            MentionNotificationSystem.sendMentionNotification(
-              mentionedUserId,
-              mentionedMember.name,
-              postContent,
-              currentUser.name,
-              currentUser.afid || currentUser.uid
-            );
-          }
-        }
-      }
-      
       setNewPostContent('');
       setPostImage(null);
       setPostImagePreview(null);
@@ -22013,23 +21977,17 @@ function SocialWall({ teachers, currentUser }) {
     }
   };
 
-  // Handle reply to a post
   const handleReply = async (postId) => {
     if (!replyContent.trim() && !replyImage && !replyImagePreview) return;
-    
     try {
       const post = posts.find(p => p.id === postId);
       if (!post) return;
-      
-      // Upload reply image if present
       let replyImageUrl = null;
       if (replyImage) {
         replyImageUrl = await uploadImage(replyImage, 'social_replies');
       } else if (replyImagePreview && replyImagePreview.startsWith('http')) {
-        // It's a GIF URL
         replyImageUrl = replyImagePreview;
       }
-      
       const newReply = {
         id: Date.now().toString(),
         authorId: currentUser.afid || currentUser.uid,
@@ -22037,49 +21995,12 @@ function SocialWall({ teachers, currentUser }) {
         authorPhoto: currentUser.profilePhoto || '',
         content: replyContent.trim(),
         imageUrl: replyImageUrl,
-        reactions: {}, // Initialize empty reactions for the comment
+        reactions: {},
+        replies: [],
         createdAt: new Date().toISOString()
       };
-      
       const updatedComments = [...(post.comments || []), newReply];
-      
-      await db.collection('socialPosts').doc(postId).update({ 
-        comments: updatedComments 
-      });
-      
-      // Process mentions in comment and send notifications
-      const commentContent = replyContent.trim();
-      const mentionRegex = /@(\w+(?:\s\w+)?)/g;
-      let match;
-      
-      // Check for @everyone first
-      if (commentContent.toLowerCase().includes('@everyone')) {
-        MentionNotificationSystem.sendEveryoneNotification(
-          commentContent,
-          currentUser.name,
-          currentUser.afid || currentUser.uid
-        );
-      } else {
-        // Process individual mentions
-        while ((match = mentionRegex.exec(commentContent)) !== null) {
-          const mentionedName = match[1];
-          const mentionedMember = allMembers.find(m => 
-            m.name?.toLowerCase() === mentionedName.toLowerCase()
-          );
-          
-          if (mentionedMember) {
-            const mentionedUserId = mentionedMember.afid || mentionedMember.uid || mentionedMember.id;
-            MentionNotificationSystem.sendMentionNotification(
-              mentionedUserId,
-              mentionedMember.name,
-              commentContent,
-              currentUser.name,
-              currentUser.afid || currentUser.uid
-            );
-          }
-        }
-      }
-      
+      await db.collection('socialPosts').doc(postId).update({ comments: updatedComments });
       setPosts(posts.map(p => p.id === postId ? { ...p, comments: updatedComments } : p));
       setReplyContent('');
       setReplyImage(null);
@@ -22092,10 +22013,43 @@ function SocialWall({ teachers, currentUser }) {
     }
   };
 
-  // Select a GIF
+  const handleNestedReply = async (postId, parentCommentId) => {
+    if (!nestedReplyContent.trim()) return;
+    try {
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+      const newNestedReply = {
+        id: Date.now().toString(),
+        authorId: currentUser.afid || currentUser.uid,
+        authorName: currentUser.name,
+        authorPhoto: currentUser.profilePhoto || '',
+        content: nestedReplyContent.trim(),
+        reactions: {},
+        parentId: parentCommentId,
+        createdAt: new Date().toISOString()
+      };
+      const updatedComments = post.comments.map(comment => {
+        if (comment.id === parentCommentId) {
+          return {
+            ...comment,
+            replies: [...(comment.replies || []), newNestedReply]
+          };
+        }
+        return comment;
+      });
+      await db.collection('socialPosts').doc(postId).update({ comments: updatedComments });
+      setPosts(posts.map(p => p.id === postId ? { ...p, comments: updatedComments } : p));
+      setNestedReplyContent('');
+      setReplyingToComment(null);
+    } catch (error) {
+      console.error('Nested reply error:', error);
+      alert('Failed to post reply');
+    }
+  };
+
   const selectGif = (gifUrl) => {
     setReplyImagePreview(gifUrl);
-    setReplyImage(null); // Clear file if any
+    setReplyImage(null);
     setShowGifPicker(null);
   };
 
@@ -22103,14 +22057,12 @@ function SocialWall({ teachers, currentUser }) {
     const userId = currentUser.afid || currentUser.uid;
     const post = posts.find(p => p.id === postId);
     if (!post) return;
-
     let newReactions = { ...(post.reactions || {}) };
     if (newReactions[userId] === emoji) {
       delete newReactions[userId];
     } else {
       newReactions[userId] = emoji;
     }
-
     try {
       await db.collection('socialPosts').doc(postId).update({ reactions: newReactions });
       setPosts(posts.map(p => p.id === postId ? { ...p, reactions: newReactions } : p));
@@ -22119,27 +22071,21 @@ function SocialWall({ teachers, currentUser }) {
     }
   };
 
-  // Handle comment/reply reactions
   const handleCommentReaction = async (postId, commentId, emoji) => {
     const userId = currentUser.afid || currentUser.uid;
     const post = posts.find(p => p.id === postId);
     if (!post) return;
-
     const comments = [...(post.comments || [])];
     const commentIndex = comments.findIndex(c => c.id === commentId);
     if (commentIndex === -1) return;
-
     const comment = comments[commentIndex];
     let newReactions = { ...(comment.reactions || {}) };
-    
     if (newReactions[userId] === emoji) {
       delete newReactions[userId];
     } else {
       newReactions[userId] = emoji;
     }
-
     comments[commentIndex] = { ...comment, reactions: newReactions };
-
     try {
       await db.collection('socialPosts').doc(postId).update({ comments: comments });
       setPosts(posts.map(p => p.id === postId ? { ...p, comments: comments } : p));
@@ -22148,12 +22094,20 @@ function SocialWall({ teachers, currentUser }) {
     }
   };
 
+  const getLikedByNames = (reactions) => {
+    if (!reactions) return [];
+    return Object.keys(reactions).map(userId => {
+      const member = allMembers.find(m => 
+        (m.afid === userId) || (m.uid === userId) || (m.id === userId)
+      );
+      return member?.name || 'Unknown';
+    });
+  };
+
   const dismissBirthdayPopup = () => {
     localStorage.setItem('birthdayDismissed_' + new Date().toDateString(), 'true');
     setShowBirthdayPopup(null);
   };
-
-  const emojis = ['👍', '❤️', '😊', '🎉', '👏', '🙌'];
 
   const getDaysUntilBirthday = (dob) => {
     const today = new Date();
@@ -22161,6 +22115,13 @@ function SocialWall({ teachers, currentUser }) {
     const thisYearBday = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
     if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
     return Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
+  };
+
+  const toggleThread = (commentId) => {
+    setCollapsedThreads(prev => ({
+      ...prev,
+      [commentId]: !prev[commentId]
+    }));
   };
 
   if (loading) {
@@ -22177,25 +22138,241 @@ function SocialWall({ teachers, currentUser }) {
   return (
     <div className="space-y-6">
       <style>{`
-        .confetti {
-          position: fixed;
-          width: 10px;
-          height: 10px;
-          background: #f00;
-          animation: fall 3s linear infinite;
+        .reddit-post {
+          background: #ffffff;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          margin-bottom: 10px;
+          transition: border-color 0.2s;
         }
-        
-        @keyframes fall {
-          to { transform: translateY(100vh) rotate(720deg); }
+        .reddit-post:hover {
+          border-color: #898989;
         }
-        
+        .vote-sidebar {
+          background: #f8f9fa;
+          padding: 8px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+          border-radius: 4px 0 0 4px;
+          min-width: 40px;
+        }
+        .vote-btn {
+          width: 24px;
+          height: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 2px;
+          cursor: pointer;
+          color: #878a8c;
+          transition: all 0.1s;
+          background: transparent;
+          border: none;
+          min-height: auto;
+        }
+        .vote-btn:hover {
+          background: #f0f0f0;
+          color: #ff4500;
+        }
+        .vote-btn.active {
+          color: #ff4500;
+        }
+        .vote-count {
+          font-size: 12px;
+          font-weight: 700;
+          color: #1a1a1b;
+        }
+        .post-content-area {
+          padding: 8px 12px;
+          flex: 1;
+        }
+        .post-header {
+          font-size: 12px;
+          color: #787c7e;
+          margin-bottom: 8px;
+        }
+        .post-header .author-name {
+          color: #1a1a1b;
+          font-weight: 500;
+        }
+        .post-title {
+          font-size: 16px;
+          font-weight: 400;
+          color: #222;
+          margin-bottom: 8px;
+          line-height: 1.4;
+        }
+        .action-bar {
+          display: flex;
+          gap: 4px;
+          margin-top: 8px;
+          flex-wrap: wrap;
+        }
+        .action-btn {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 6px 8px;
+          font-size: 12px;
+          font-weight: 700;
+          color: #878a8c;
+          border-radius: 2px;
+          cursor: pointer;
+          transition: background 0.1s;
+          background: transparent;
+          border: none;
+          min-height: auto;
+        }
+        .action-btn:hover {
+          background: #f6f7f8;
+        }
+        .emoji-reactions-popup {
+          display: none;
+          gap: 4px;
+          padding: 6px 10px;
+          background: white;
+          border-radius: 24px;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+          position: absolute;
+          bottom: 100%;
+          left: 0;
+          margin-bottom: 8px;
+          z-index: 10;
+        }
+        .post-actions-wrapper:hover .emoji-reactions-popup {
+          display: flex;
+        }
+        .emoji-reaction-btn {
+          padding: 4px 8px;
+          border-radius: 16px;
+          cursor: pointer;
+          transition: all 0.15s;
+          font-size: 18px;
+          background: transparent;
+          border: none;
+          min-height: auto;
+        }
+        .emoji-reaction-btn:hover {
+          background: #f0f0f0;
+          transform: scale(1.2);
+        }
+        .emoji-reaction-btn.active {
+          background: #ffecec;
+        }
+        .liked-by-tooltip {
+          position: absolute;
+          bottom: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #1a1a1b;
+          color: white;
+          padding: 8px 12px;
+          border-radius: 4px;
+          font-size: 11px;
+          white-space: nowrap;
+          max-width: 200px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          z-index: 20;
+          margin-bottom: 4px;
+        }
+        .comment-thread {
+          position: relative;
+          margin-left: 8px;
+          padding-left: 12px;
+          border-left: 2px solid #edeff1;
+        }
+        .comment-thread:hover {
+          border-left-color: #0079d3;
+        }
+        .comment-collapse-line {
+          position: absolute;
+          left: -2px;
+          top: 0;
+          bottom: 0;
+          width: 12px;
+          cursor: pointer;
+        }
+        .comment-item {
+          padding: 6px 0;
+        }
+        .comment-header {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          color: #787c7e;
+          margin-bottom: 4px;
+          flex-wrap: wrap;
+        }
+        .comment-author {
+          color: #1c1c1c;
+          font-weight: 500;
+        }
+        .comment-body {
+          font-size: 14px;
+          line-height: 1.4;
+          color: #1a1a1b;
+        }
+        .comment-actions {
+          display: flex;
+          gap: 8px;
+          margin-top: 4px;
+          position: relative;
+          flex-wrap: wrap;
+        }
+        .comment-action {
+          font-size: 12px;
+          font-weight: 700;
+          color: #878a8c;
+          cursor: pointer;
+          padding: 2px 4px;
+          border-radius: 2px;
+          background: transparent;
+          border: none;
+          min-height: auto;
+        }
+        .comment-action:hover {
+          background: #f0f0f0;
+        }
+        .create-post-box {
+          background: white;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          padding: 12px;
+        }
+        .create-post-box:focus-within {
+          border-color: #0079d3;
+        }
+        .reddit-tab {
+          padding: 12px 16px;
+          font-weight: 700;
+          font-size: 14px;
+          color: #878a8c;
+          border-bottom: 2px solid transparent;
+          cursor: pointer;
+          transition: all 0.1s;
+          background: transparent;
+          border-left: none;
+          border-right: none;
+          border-top: none;
+        }
+        .reddit-tab:hover {
+          color: #0079d3;
+        }
+        .reddit-tab.active {
+          color: #0079d3;
+          border-bottom-color: #0079d3;
+        }
         .celebration-card {
           background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 50%, #fbcfe8 100%);
           border: 2px solid #f9a8d4;
+          border-radius: 12px;
           position: relative;
           overflow: hidden;
         }
-        
         .celebration-card::before {
           content: '🎈🎉🎊';
           position: absolute;
@@ -22205,100 +22382,62 @@ function SocialWall({ teachers, currentUser }) {
           opacity: 0.3;
           transform: rotate(15deg);
         }
-        
-        .birthday-card {
-          animation: pulse 2s infinite;
+        .nested-reply-input {
+          margin-top: 8px;
+          padding: 8px;
+          background: #f6f7f8;
+          border-radius: 4px;
         }
-        
-        @keyframes pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.4); }
-          50% { box-shadow: 0 0 0 10px rgba(236, 72, 153, 0); }
-        }
-        
-        .tab-btn {
-          padding: 12px 24px;
-          border-radius: 12px;
-          font-weight: 600;
-          transition: all 0.3s;
-        }
-        
-        .tab-active {
-          background: linear-gradient(135deg, #ec4899, #8b5cf6);
-          color: white;
-          box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
-        }
-        
-        .tab-inactive {
-          background: white;
-          color: #6b7280;
-        }
-        
-        .tab-inactive:hover {
-          background: #fdf2f8;
-        }
-        
-        .post-card {
-          background: white;
-          border-radius: 20px;
-          border: 1px solid #f3e8ff;
-          transition: all 0.3s;
-        }
-        
-        .post-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 30px rgba(139, 92, 246, 0.1);
-        }
-        
-        .emoji-btn {
-          padding: 6px 10px;
-          border-radius: 20px;
-          transition: all 0.2s;
-          background: #f9fafb;
-        }
-        
-        .emoji-btn:hover {
-          background: #fdf2f8;
-          transform: scale(1.1);
-        }
-        
-        .emoji-btn.active {
-          background: linear-gradient(135deg, #fce7f3, #ede9fe);
+        @media (max-width: 768px) {
+          .vote-sidebar {
+            padding: 4px;
+            min-width: 32px;
+          }
+          .post-content-area {
+            padding: 8px;
+          }
+          .action-btn {
+            padding: 4px 6px;
+            font-size: 11px;
+          }
         }
       `}</style>
 
-      {/* Fun Header */}
+      {/* Header */}
       <div className="text-center">
-        <div className="inline-flex items-center gap-3 bg-gradient-to-r from-pink-100 via-purple-100 to-indigo-100 px-8 py-4 rounded-2xl shadow-lg">
-          <span className="text-4xl animate-bounce">🎉</span>
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
-            Social Wall
-          </h2>
-          <span className="text-4xl animate-bounce" style={{ animationDelay: '0.5s' }}>🎊</span>
+        <div className="inline-flex items-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 px-6 py-3 rounded-lg shadow-lg">
+          <span className="text-3xl">🔥</span>
+          <h2 className="text-2xl font-bold text-white">Community Wall</h2>
+          <span className="text-3xl">🔥</span>
         </div>
       </div>
 
-      {/* Tab Switcher */}
-      <div className="flex justify-center gap-4">
+      {/* Tabs */}
+      <div className="bg-white border border-gray-300 rounded-lg flex overflow-hidden">
         <button 
           onClick={() => setActiveTab('feed')}
-          className={`tab-btn ${activeTab === 'feed' ? 'tab-active' : 'tab-inactive'}`}
+          className={`reddit-tab flex-1 ${activeTab === 'feed' ? 'active' : ''}`}
         >
-          📝 Feed
+          📝 Posts
         </button>
         <button 
           onClick={() => setActiveTab('celebrations')}
-          className={`tab-btn ${activeTab === 'celebrations' ? 'tab-active' : 'tab-inactive'}`}
+          className={`reddit-tab flex-1 ${activeTab === 'celebrations' ? 'active' : ''}`}
         >
-          🎂 Celebrations {birthdays.length > 0 && <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">{birthdays.length}</span>}
+          🎂 Celebrations 
+          {birthdays.length > 0 && (
+            <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+              {birthdays.length}
+            </span>
+          )}
         </button>
       </div>
 
       {/* Celebrations Tab */}
       {activeTab === 'celebrations' && (
         <div className="space-y-6">
-          {/* Today's Birthdays */}
           {birthdays.length > 0 && (
-            <div className="celebration-card rounded-3xl p-6">
+            <div className="celebration-card p-6">
               <h3 className="text-2xl font-bold text-pink-700 mb-4 flex items-center gap-2">
                 <span className="text-3xl">🎂</span> Today's Birthday{birthdays.length > 1 ? 's' : ''}!
               </h3>
@@ -22311,7 +22450,6 @@ function SocialWall({ teachers, currentUser }) {
                   
                   return (
                     <div key={idx} className="bg-white rounded-2xl p-4 shadow-lg border-2 border-pink-200">
-                      {/* Person info */}
                       <div className="flex items-center gap-4 mb-4">
                         {person.profilePhoto ? (
                           <img src={person.profilePhoto} alt="" className="w-16 h-16 rounded-full object-cover border-4 border-pink-300" />
@@ -22327,8 +22465,6 @@ function SocialWall({ teachers, currentUser }) {
                           <div className="text-sm text-pink-600 font-medium mt-1">🎈 Happy Birthday!</div>
                         </div>
                       </div>
-                      
-                      {/* Reaction buttons */}
                       <div className="flex items-center gap-2 flex-wrap mb-3">
                         {celebrationEmojis.map(emoji => (
                           <button
@@ -22344,54 +22480,44 @@ function SocialWall({ teachers, currentUser }) {
                           </button>
                         ))}
                       </div>
-                      
-                      {/* Wishes */}
                       {wishes.length > 0 && (
                         <div className="mb-3 max-h-32 overflow-y-auto">
                           {wishes.map((wish, widx) => (
                             <div key={widx} className="flex items-start gap-2 p-2 bg-pink-50 rounded-lg mb-1">
-                              <div className="w-6 h-6 rounded-full bg-pink-300 flex items-center justify-center text-xs text-white font-bold">
+                              <div className="w-6 h-6 rounded-full bg-pink-300 flex items-center justify-center text-xs text-white font-bold flex-shrink-0">
                                 {wish.userName?.charAt(0)}
                               </div>
-                              <div className="flex-1">
+                              <div className="flex-1 min-w-0">
                                 <div className="text-xs font-semibold text-pink-700">{wish.userName}</div>
-                                <div className="text-sm text-gray-700">{wish.message}</div>
+                                <div className="text-sm text-gray-700 break-words">{wish.message}</div>
                               </div>
                             </div>
                           ))}
                         </div>
                       )}
-                      
-                      {/* Send wish */}
                       {showWishInput === personId ? (
                         <div className="flex gap-2">
                           <input
                             type="text"
                             value={wishMessage}
-                            onChange={e => setWishMessage(e.target.value)}
-                            placeholder="Send your wishes..."
-                            className="flex-1 border-2 border-pink-200 px-3 py-2 rounded-lg text-sm focus:border-pink-400 focus:ring-0"
-                            autoFocus
+                            onChange={(e) => setWishMessage(e.target.value)}
+                            placeholder="Send a birthday wish..."
+                            className="flex-1 px-3 py-2 border border-pink-300 rounded-lg text-sm focus:ring-2 focus:ring-pink-400"
+                            onKeyPress={(e) => e.key === 'Enter' && sendWish(person)}
                           />
                           <button
                             onClick={() => sendWish(person)}
-                            className="px-4 py-2 bg-pink-500 text-white rounded-lg font-semibold hover:bg-pink-600"
+                            className="px-4 py-2 bg-pink-500 text-white rounded-lg text-sm font-semibold hover:bg-pink-600"
                           >
                             Send
-                          </button>
-                          <button
-                            onClick={() => { setShowWishInput(null); setWishMessage(''); }}
-                            className="px-3 py-2 bg-gray-200 rounded-lg"
-                          >
-                            ✕
                           </button>
                         </div>
                       ) : (
                         <button
                           onClick={() => setShowWishInput(personId)}
-                          className="w-full py-2 bg-gradient-to-r from-pink-400 to-purple-500 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+                          className="w-full py-2 text-pink-600 font-semibold text-sm hover:bg-pink-50 rounded-lg"
                         >
-                          🎁 Send Birthday Wishes
+                          ✨ Send Birthday Wish
                         </button>
                       )}
                     </div>
@@ -22401,128 +22527,19 @@ function SocialWall({ teachers, currentUser }) {
             </div>
           )}
 
-          {/* Today's Anniversaries */}
-          {anniversaries.length > 0 && (
-            <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-3xl p-6 border-2 border-amber-200">
-              <h3 className="text-2xl font-bold text-amber-700 mb-4 flex items-center gap-2">
-                <span className="text-3xl">💍</span> Work Anniversary!
+          {weekBirthdays.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-300 p-6">
+              <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
+                <span className="text-2xl">📅</span> This Week's Birthdays
               </h3>
-              <div className="grid md:grid-cols-2 gap-4">
-                {anniversaries.map((person, idx) => {
-                  const personId = person.afid || person.id || person.email;
-                  const reactionCounts = getReactionCounts(personId);
-                  const myReaction = getUserReaction(personId);
-                  const wishes = celebrationReactions[personId]?.wishes || [];
-                  const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
-                  
-                  return (
-                    <div key={idx} className="bg-white rounded-2xl p-4 shadow-lg border-2 border-amber-200">
-                      {/* Person info */}
-                      <div className="flex items-center gap-4 mb-4">
-                        {person.profilePhoto ? (
-                          <img src={person.profilePhoto} alt="" className="w-16 h-16 rounded-full object-cover border-4 border-amber-300" />
-                        ) : (
-                          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-2xl text-white font-bold">
-                            {person.name?.charAt(0)}
-                          </div>
-                        )}
-                        <div className="flex-1">
-                          <div className="font-bold text-gray-800 text-lg">{person.name}</div>
-                          <div className="text-sm text-gray-500">{person.role || person.subject}</div>
-                          {person.school && <div className="text-xs text-gray-400">{person.school}</div>}
-                          <div className="text-sm text-amber-600 font-medium mt-1">🎊 {years} Year{years > 1 ? 's' : ''} at Avanti!</div>
-                        </div>
-                      </div>
-                      
-                      {/* Reaction buttons */}
-                      <div className="flex items-center gap-2 flex-wrap mb-3">
-                        {celebrationEmojis.map(emoji => (
-                          <button
-                            key={emoji}
-                            onClick={() => handleCelebrationReaction(person, emoji)}
-                            className={`px-3 py-1.5 rounded-full text-lg transition-all ${
-                              myReaction === emoji 
-                                ? 'bg-amber-100 scale-110 ring-2 ring-amber-400' 
-                                : 'bg-gray-100 hover:bg-amber-50 hover:scale-105'
-                            }`}
-                          >
-                            {emoji} {reactionCounts[emoji] ? <span className="text-xs font-bold">{reactionCounts[emoji]}</span> : ''}
-                          </button>
-                        ))}
-                      </div>
-                      
-                      {/* Wishes */}
-                      {wishes.length > 0 && (
-                        <div className="mb-3 max-h-32 overflow-y-auto">
-                          {wishes.map((wish, widx) => (
-                            <div key={widx} className="flex items-start gap-2 p-2 bg-amber-50 rounded-lg mb-1">
-                              <div className="w-6 h-6 rounded-full bg-amber-300 flex items-center justify-center text-xs text-white font-bold">
-                                {wish.userName?.charAt(0)}
-                              </div>
-                              <div className="flex-1">
-                                <div className="text-xs font-semibold text-amber-700">{wish.userName}</div>
-                                <div className="text-sm text-gray-700">{wish.message}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {/* Send wish */}
-                      {showWishInput === personId ? (
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={wishMessage}
-                            onChange={e => setWishMessage(e.target.value)}
-                            placeholder="Send congratulations..."
-                            className="flex-1 border-2 border-amber-200 px-3 py-2 rounded-lg text-sm focus:border-amber-400 focus:ring-0"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => sendWish(person)}
-                            className="px-4 py-2 bg-amber-500 text-white rounded-lg font-semibold hover:bg-amber-600"
-                          >
-                            Send
-                          </button>
-                          <button
-                            onClick={() => { setShowWishInput(null); setWishMessage(''); }}
-                            className="px-3 py-2 bg-gray-200 rounded-lg"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setShowWishInput(personId)}
-                          className="w-full py-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
-                        >
-                          🎉 Send Congratulations
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Upcoming Birthdays */}
-          <div className="bg-white rounded-3xl p-6 shadow-lg">
-            <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
-              <span className="text-2xl">🗓️</span> This Week's Birthdays
-            </h3>
-            {weekBirthdays.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No birthdays this week</p>
-            ) : (
-              <div className="space-y-3">
-                {weekBirthdays.map((person, idx) => {
+              <div className="grid md:grid-cols-2 gap-3">
+                {weekBirthdays.filter(p => !birthdays.find(b => b.name === p.name)).map((person, idx) => {
                   const dobField = person.dateOfBirth || person.dob;
-                  const daysLeft = getDaysUntilBirthday(dobField);
                   const dob = new Date(dobField);
+                  const daysLeft = getDaysUntilBirthday(dobField);
                   const isToday = daysLeft === 0;
                   return (
-                    <div key={idx} className={`flex items-center justify-between p-3 rounded-xl transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : 'bg-gray-50 hover:bg-pink-50'}`}>
+                    <div key={idx} className={`flex items-center justify-between p-3 rounded-xl ${isToday ? 'bg-pink-100 border-2 border-pink-300' : 'bg-gray-50 hover:bg-pink-50'}`}>
                       <div className="flex items-center gap-3">
                         {person.profilePhoto ? (
                           <img src={person.profilePhoto} alt="" className="w-10 h-10 rounded-full object-cover" />
@@ -22532,7 +22549,7 @@ function SocialWall({ teachers, currentUser }) {
                           </div>
                         )}
                         <div>
-                          <div className="font-semibold text-gray-800">{person.name} {isToday && '🎂'}</div>
+                          <div className="font-semibold text-gray-800">{person.name}</div>
                           <div className="text-xs text-gray-500">{person.school || person.role}</div>
                         </div>
                       </div>
@@ -22548,141 +22565,11 @@ function SocialWall({ teachers, currentUser }) {
                   );
                 })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* This Month's Birthdays */}
-          <div className="bg-white rounded-3xl p-6 shadow-lg">
-            <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
-              <span className="text-2xl">📅</span> This Month's Birthdays ({new Date().toLocaleDateString('en-IN', { month: 'long' })})
-            </h3>
-            {monthBirthdays.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No birthdays this month</p>
-            ) : (
-              <div className="grid md:grid-cols-2 gap-3">
-                {monthBirthdays.map((person, idx) => {
-                  const dobField = person.dateOfBirth || person.dob;
-                  const dob = new Date(dobField);
-                  const daysLeft = getDaysUntilBirthday(dobField);
-                  const isPast = dob.getDate() < new Date().getDate();
-                  const isToday = daysLeft === 0;
-                  return (
-                    <div key={idx} className={`flex items-center justify-between p-3 rounded-xl transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : isPast ? 'bg-gray-100 opacity-60' : 'bg-gray-50 hover:bg-pink-50'}`}>
-                      <div className="flex items-center gap-3">
-                        {person.profilePhoto ? (
-                          <img src={person.profilePhoto} alt="" className="w-9 h-9 rounded-full object-cover" />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
-                            {person.name?.charAt(0)}
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-semibold text-gray-800 text-sm">{person.name} {isToday && '🎂'}</div>
-                          <div className="text-xs text-gray-500">{person.school || person.role}</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-sm font-bold ${isPast ? 'text-gray-400' : 'text-pink-600'}`}>
-                          {dob.getDate()} {dob.toLocaleDateString('en-IN', { month: 'short' })}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {isToday ? '🎉 Today!' : isPast ? 'Passed' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* This Week's Anniversaries */}
-          <div className="bg-white rounded-3xl p-6 shadow-lg">
-            <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
-              <span className="text-2xl">🎉</span> This Week's Work Anniversaries
-            </h3>
-            {weekAnniversaries.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No work anniversaries this week</p>
-            ) : (
-              <div className="space-y-3">
-                {weekAnniversaries.map((person, idx) => {
-                  const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
-                  const jDate = new Date(person.joiningDate);
-                  return (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-amber-50 rounded-xl hover:bg-amber-100 transition-colors">
-                      <div className="flex items-center gap-3">
-                        {person.profilePhoto ? (
-                          <img src={person.profilePhoto} alt="" className="w-10 h-10 rounded-full object-cover" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold">
-                            {person.name?.charAt(0)}
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-semibold text-gray-800">{person.name}</div>
-                          <div className="text-xs text-gray-500">{person.school || person.role}</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-amber-600">
-                          {years} Year{years > 1 ? 's' : ''}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {jDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* This Month's Anniversaries */}
-          <div className="bg-white rounded-3xl p-6 shadow-lg">
-            <h3 className="text-xl font-bold text-gray-700 mb-4 flex items-center gap-2">
-              <span className="text-2xl">📅</span> This Month's Work Anniversaries
-            </h3>
-            {monthAnniversaries.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No work anniversaries this month</p>
-            ) : (
-              <div className="space-y-3 max-h-80 overflow-y-auto">
-                {monthAnniversaries.map((person, idx) => {
-                  const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
-                  const jDate = new Date(person.joiningDate);
-                  return (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-green-50 rounded-xl hover:bg-green-100 transition-colors">
-                      <div className="flex items-center gap-3">
-                        {person.profilePhoto ? (
-                          <img src={person.profilePhoto} alt="" className="w-10 h-10 rounded-full object-cover" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center text-white font-bold">
-                            {person.name?.charAt(0)}
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-semibold text-gray-800">{person.name}</div>
-                          <div className="text-xs text-gray-500">{person.school || person.role}</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-green-600">
-                          {years} Year{years > 1 ? 's' : ''}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {jDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* No celebrations message */}
-          {birthdays.length === 0 && anniversaries.length === 0 && upcomingBirthdays.length === 0 && weekAnniversaries.length === 0 && monthAnniversaries.length === 0 && (
-            <div className="text-center py-12">
+          {birthdays.length === 0 && anniversaries.length === 0 && weekBirthdays.length === 0 && (
+            <div className="text-center py-12 bg-white rounded-lg border border-gray-300">
               <div className="text-6xl mb-4">🎈</div>
               <p className="text-gray-500">No celebrations today. Check back soon!</p>
             </div>
@@ -22692,12 +22579,11 @@ function SocialWall({ teachers, currentUser }) {
 
       {/* Feed Tab */}
       {activeTab === 'feed' && (
-        <div className="space-y-6">
-          {/* Today's Celebrations Banner (if any) */}
+        <div className="space-y-4">
           {(birthdays.length > 0 || anniversaries.length > 0) && (
             <div 
               onClick={() => setActiveTab('celebrations')}
-              className="celebration-card rounded-2xl p-4 cursor-pointer hover:shadow-lg transition-all"
+              className="celebration-card p-4 cursor-pointer hover:shadow-lg transition-all"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -22727,287 +22613,343 @@ function SocialWall({ teachers, currentUser }) {
           )}
 
           {/* Create Post */}
-          <div className="bg-white rounded-2xl p-4 shadow-lg border border-purple-100">
+          <div className="create-post-box">
             {showNewPost ? (
               <div className="space-y-3">
-                <div className="relative mention-input-container">
-                  <MentionTextarea
-                    value={newPostContent}
-                    onChange={setNewPostContent}
-                    placeholder="What's on your mind? Type @ to mention someone 👋"
-                    allMembers={allMembers}
-                    className="w-full p-4 pr-12 border-2 border-purple-200 rounded-2xl focus:border-purple-400 focus:ring-0 resize-none"
-                    rows={3}
-                  />
-                  {/* Attachment button inside textarea area */}
-                  <label className="absolute bottom-3 right-3 cursor-pointer text-gray-400 hover:text-purple-600 transition-colors">
-                    <span className="text-xl">📎</span>
-                    <input
-                      type="file"
-                      accept="image/*,video/*"
-                      onChange={handlePostImageSelect}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-                
-                {/* Mention hint */}
-                <div className="text-xs text-gray-400 flex items-center gap-2">
-                  <span>💡 Tip: Type <span className="mention-tag">@name</span> to mention someone or <span className="mention-tag mention-everyone">@everyone</span> to notify all</span>
-                </div>
-                
-                {/* Image Preview */}
+                <textarea
+                  value={newPostContent}
+                  onChange={(e) => setNewPostContent(e.target.value)}
+                  placeholder="What's on your mind?"
+                  className="w-full p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  rows={4}
+                  autoFocus
+                />
                 {postImagePreview && (
                   <div className="relative inline-block">
-                    <img src={postImagePreview} alt="Preview" className="max-h-40 rounded-xl border-2 border-purple-200" />
+                    <img src={postImagePreview} alt="Preview" className="max-h-40 rounded border" />
                     <button
                       onClick={() => { setPostImage(null); setPostImagePreview(null); }}
                       className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full text-sm font-bold hover:bg-red-600"
-                    >
-                      ✕
-                    </button>
+                    >✕</button>
                   </div>
                 )}
-                
-                <div className="flex justify-end items-center gap-3">
-                  <button
-                    onClick={() => { setShowNewPost(false); setNewPostContent(''); setPostImage(null); setPostImagePreview(null); }}
-                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCreatePost}
-                    disabled={(!newPostContent.trim() && !postImage) || posting}
-                    className="px-6 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-semibold disabled:opacity-50 hover:shadow-lg transition-all"
-                  >
-                    {uploadingImage ? '📤 Uploading...' : posting ? 'Posting...' : '✨ Post'}
-                  </button>
+                <div className="flex justify-between items-center">
+                  <label className="cursor-pointer text-gray-500 hover:text-blue-600 p-2 rounded hover:bg-gray-100">
+                    📷 Add Image
+                    <input type="file" accept="image/*" onChange={handlePostImageSelect} className="hidden" />
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setShowNewPost(false); setNewPostContent(''); setPostImage(null); setPostImagePreview(null); }}
+                      className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded font-medium"
+                    >Cancel</button>
+                    <button
+                      onClick={handleCreatePost}
+                      disabled={(!newPostContent.trim() && !postImage) || posting}
+                      className="px-6 py-2 bg-blue-600 text-white rounded font-bold disabled:opacity-50 hover:bg-blue-700"
+                    >{uploadingImage ? 'Uploading...' : posting ? 'Posting...' : 'Post'}</button>
+                  </div>
                 </div>
               </div>
             ) : (
-              <div 
-                onClick={() => setShowNewPost(true)}
-                className="flex items-center gap-4 cursor-pointer p-2 hover:bg-purple-50 rounded-xl transition-colors"
-              >
+              <div onClick={() => setShowNewPost(true)} className="flex items-center gap-3 cursor-pointer">
                 {currentUser.profilePhoto ? (
-                  <img src={currentUser.profilePhoto} alt="" className="w-11 h-11 rounded-full object-cover" />
+                  <img src={currentUser.profilePhoto} alt="" className="w-10 h-10 rounded-full object-cover" />
                 ) : (
-                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                  <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-bold">
                     {currentUser.name?.charAt(0)}
                   </div>
                 )}
-                <div className="flex-1 text-gray-400 bg-gray-100 rounded-full py-3 px-4">
-                  What's on your mind?
+                <div className="flex-1 bg-gray-100 rounded-full py-3 px-4 text-gray-500 hover:bg-gray-200 transition">
+                  Create Post
                 </div>
               </div>
             )}
           </div>
 
-          {/* Posts Feed */}
+          {/* Posts */}
           {posts.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-2xl">
+            <div className="text-center py-12 bg-white rounded-lg border border-gray-300">
               <div className="text-6xl mb-4">📝</div>
               <p className="text-gray-500">No posts yet. Be the first to share something!</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {posts.map(post => {
                 const reactionCounts = {};
                 Object.values(post.reactions || {}).forEach(emoji => {
                   reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
                 });
+                const totalReactions = Object.keys(post.reactions || {}).length;
                 const myReaction = post.reactions?.[currentUser.afid || currentUser.uid];
+                const likedByNames = getLikedByNames(post.reactions);
 
                 return (
-                  <div key={post.id} className="post-card p-5">
-                    {/* Author */}
-                    <div className="flex items-center gap-3 mb-4">
-                      {post.authorPhoto ? (
-                        <img src={post.authorPhoto} alt="" className="w-12 h-12 rounded-full object-cover" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
-                          {post.authorName?.charAt(0)}
-                        </div>
-                      )}
-                      <div>
-                        <div className="font-bold text-gray-800">{post.authorName}</div>
-                        <div className="text-xs text-gray-500">
-                          {post.authorSchool} • {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Just now'}
-                        </div>
+                  <div key={post.id} className="reddit-post">
+                    <div className="flex">
+                      <div className="vote-sidebar">
+                        <button 
+                          className={`vote-btn ${myReaction === '👍' ? 'active' : ''}`}
+                          onClick={() => handleReaction(post.id, '👍')}
+                        >▲</button>
+                        <span className="vote-count">{totalReactions || 0}</span>
+                        <button className="vote-btn" onClick={() => handleReaction(post.id, '👎')}>▼</button>
                       </div>
-                    </div>
-
-                    {/* Content */}
-                    <p className="text-gray-700 mb-4 whitespace-pre-wrap">{post.content}</p>
-                    
-                    {/* Post Image */}
-                    {post.imageUrl && (
-                      <div className="mb-4">
-                        <img 
-                          src={post.imageUrl} 
-                          alt="Post attachment" 
-                          className="max-w-full rounded-xl border border-purple-100 max-h-96 object-contain"
-                        />
-                      </div>
-                    )}
-
-                    {/* Reactions with tooltips showing who reacted */}
-                    <div className="flex items-center gap-2 flex-wrap mb-3">
-                      {emojis.map(emoji => {
-                        // Get list of user IDs who reacted with this emoji
-                        const reactedBy = Object.entries(post.reactions || {})
-                          .filter(([userId, reaction]) => reaction === emoji)
-                          .map(([userId]) => userId);
+                      
+                      <div className="post-content-area">
+                        <div className="post-header">
+                          <span className="flex items-center gap-2 flex-wrap">
+                            {post.authorPhoto ? (
+                              <img src={post.authorPhoto} alt="" className="w-5 h-5 rounded-full" />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-white text-xs font-bold">
+                                {post.authorName?.charAt(0)}
+                              </div>
+                            )}
+                            <span className="author-name">{post.authorName}</span>
+                            <span>•</span>
+                            <span>{post.authorSchool}</span>
+                            <span>•</span>
+                            <span>{post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Just now'}</span>
+                          </span>
+                        </div>
                         
-                        return (
-                          <ReactionButton
-                            key={emoji}
-                            emoji={emoji}
-                            count={reactionCounts[emoji]}
-                            isActive={myReaction === emoji}
-                            onClick={() => handleReaction(post.id, emoji)}
-                            reactedBy={reactedBy}
-                            allMembers={allMembers}
-                          />
-                        );
-                      })}
-                      {post.comments?.length > 0 && (
-                        <span className="text-gray-400 text-sm ml-2">
-                          💬 {post.comments.length} {post.comments.length === 1 ? 'comment' : 'comments'}
-                        </span>
-                      )}
-                    </div>
-                    
-                    {/* Comments Section */}
-                    {post.comments?.length > 0 && (
-                      <div className="space-y-3 mb-3">
-                        {post.comments.slice(0, expandedReplies[post.id] ? post.comments.length : 2).map((reply, idx) => {
-                          // Calculate comment reaction counts
-                          const commentReactionCounts = {};
-                          Object.values(reply.reactions || {}).forEach(e => {
-                            commentReactionCounts[e] = (commentReactionCounts[e] || 0) + 1;
-                          });
-                          const myCommentReaction = reply.reactions?.[currentUser.afid || currentUser.uid];
-                          const commentEmojis = ['👍', '❤️', '😊'];
+                        <div className="post-title whitespace-pre-wrap break-words">{post.content}</div>
+                        
+                        {post.imageUrl && (
+                          <div className="my-3">
+                            <img src={post.imageUrl} alt="" className="max-w-full rounded max-h-96 object-contain" />
+                          </div>
+                        )}
+                        
+                        <div className="action-bar">
+                          <div className="post-actions-wrapper relative">
+                            <div className="emoji-reactions-popup">
+                              {emojis.map(emoji => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => handleReaction(post.id, emoji)}
+                                  className={`emoji-reaction-btn ${myReaction === emoji ? 'active' : ''}`}
+                                >{emoji}</button>
+                              ))}
+                            </div>
+                            <div 
+                              className="action-btn relative"
+                              onMouseEnter={() => setShowLikedByPopup(post.id)}
+                              onMouseLeave={() => setShowLikedByPopup(null)}
+                            >
+                              {Object.entries(reactionCounts).slice(0, 3).map(([emoji]) => (
+                                <span key={emoji}>{emoji}</span>
+                              ))}
+                              {totalReactions > 0 && <span>{totalReactions}</span>}
+                              {showLikedByPopup === post.id && likedByNames.length > 0 && (
+                                <div className="liked-by-tooltip">
+                                  {likedByNames.slice(0, 5).join(', ')}
+                                  {likedByNames.length > 5 && ` +${likedByNames.length - 5} more`}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                           
-                          return (
-                            <div key={reply.id || idx} className="flex gap-2">
-                              {reply.authorPhoto ? (
-                                <img src={reply.authorPhoto} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                          <button 
+                            className="action-btn"
+                            onClick={() => setReplyingTo(replyingTo === post.id ? null : post.id)}
+                          >
+                            💬 {post.comments?.length || 0} Comments
+                          </button>
+                        </div>
+                        
+                        {/* Comments */}
+                        {post.comments?.length > 0 && (
+                          <div className="mt-4 border-t border-gray-200 pt-4">
+                            {post.comments.slice(0, expandedReplies[post.id] ? post.comments.length : 3).map((comment, idx) => {
+                              const commentReactionCounts = {};
+                              Object.values(comment.reactions || {}).forEach(e => {
+                                commentReactionCounts[e] = (commentReactionCounts[e] || 0) + 1;
+                              });
+                              const myCommentReaction = comment.reactions?.[currentUser.afid || currentUser.uid];
+                              const commentTotalReactions = Object.keys(comment.reactions || {}).length;
+                              const isCollapsed = collapsedThreads[comment.id];
+                              
+                              return (
+                                <div key={comment.id || idx} className="comment-thread">
+                                  <div 
+                                    className="comment-collapse-line"
+                                    onClick={() => toggleThread(comment.id)}
+                                    title={isCollapsed ? 'Expand' : 'Collapse'}
+                                  />
+                                  <div className="comment-item">
+                                    <div className="comment-header">
+                                      {comment.authorPhoto ? (
+                                        <img src={comment.authorPhoto} alt="" className="w-6 h-6 rounded-full" />
+                                      ) : (
+                                        <div className="w-6 h-6 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs font-bold">
+                                          {comment.authorName?.charAt(0)}
+                                        </div>
+                                      )}
+                                      <span className="comment-author">{comment.authorName}</span>
+                                      <span>•</span>
+                                      <span>{comment.createdAt ? new Date(comment.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}</span>
+                                      {isCollapsed && (
+                                        <span className="text-blue-600 cursor-pointer text-xs" onClick={() => toggleThread(comment.id)}>
+                                          [+] expand
+                                        </span>
+                                      )}
+                                    </div>
+                                    
+                                    {!isCollapsed && (
+                                      <>
+                                        <div className="comment-body break-words">{comment.content}</div>
+                                        {comment.imageUrl && (
+                                          <img src={comment.imageUrl} alt="" className="mt-2 max-h-32 rounded" />
+                                        )}
+                                        <div className="comment-actions">
+                                          <button 
+                                            className="comment-action"
+                                            onClick={() => handleCommentReaction(post.id, comment.id, '👍')}
+                                          >
+                                            {myCommentReaction === '👍' ? '👍' : '▲'} {commentTotalReactions || ''}
+                                          </button>
+                                          <button 
+                                            className="comment-action"
+                                            onClick={() => setReplyingToComment(
+                                              replyingToComment?.commentId === comment.id ? null : { postId: post.id, commentId: comment.id }
+                                            )}
+                                          >Reply</button>
+                                        </div>
+                                        
+                                        {replyingToComment?.postId === post.id && replyingToComment?.commentId === comment.id && (
+                                          <div className="nested-reply-input">
+                                            <textarea
+                                              value={nestedReplyContent}
+                                              onChange={(e) => setNestedReplyContent(e.target.value)}
+                                              placeholder={`Reply to ${comment.authorName}...`}
+                                              className="w-full p-2 border border-gray-300 rounded text-sm resize-none focus:ring-2 focus:ring-blue-500"
+                                              rows={2}
+                                              autoFocus
+                                            />
+                                            <div className="flex justify-end gap-2 mt-2">
+                                              <button
+                                                onClick={() => { setReplyingToComment(null); setNestedReplyContent(''); }}
+                                                className="px-3 py-1 text-gray-600 text-sm hover:bg-gray-200 rounded"
+                                              >Cancel</button>
+                                              <button
+                                                onClick={() => handleNestedReply(post.id, comment.id)}
+                                                disabled={!nestedReplyContent.trim()}
+                                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded font-medium disabled:opacity-50"
+                                              >Reply</button>
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {comment.replies?.length > 0 && (
+                                          <div className="ml-2 mt-2">
+                                            {comment.replies.map((nestedReply, nidx) => (
+                                              <div key={nestedReply.id || nidx} className="comment-thread">
+                                                <div className="comment-collapse-line" />
+                                                <div className="comment-item">
+                                                  <div className="comment-header">
+                                                    {nestedReply.authorPhoto ? (
+                                                      <img src={nestedReply.authorPhoto} alt="" className="w-5 h-5 rounded-full" />
+                                                    ) : (
+                                                      <div className="w-5 h-5 rounded-full bg-gray-400 flex items-center justify-center text-white text-xs font-bold">
+                                                        {nestedReply.authorName?.charAt(0)}
+                                                      </div>
+                                                    )}
+                                                    <span className="comment-author">{nestedReply.authorName}</span>
+                                                    <span>•</span>
+                                                    <span>{nestedReply.createdAt ? new Date(nestedReply.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}</span>
+                                                  </div>
+                                                  <div className="comment-body text-sm break-words">{nestedReply.content}</div>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            
+                            {post.comments.length > 3 && !expandedReplies[post.id] && (
+                              <button 
+                                onClick={() => setExpandedReplies({...expandedReplies, [post.id]: true})}
+                                className="text-sm text-blue-600 font-medium hover:text-blue-800 ml-4"
+                              >
+                                View all {post.comments.length} comments
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Add comment input */}
+                        {replyingTo === post.id && (
+                          <div className="mt-4 border-t border-gray-200 pt-4">
+                            <div className="flex gap-3">
+                              {currentUser.profilePhoto ? (
+                                <img src={currentUser.profilePhoto} alt="" className="w-8 h-8 rounded-full flex-shrink-0" />
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-300 to-purple-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                                  {reply.authorName?.charAt(0)}
+                                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-sm font-bold flex-shrink-0">
+                                  {currentUser.name?.charAt(0)}
                                 </div>
                               )}
                               <div className="flex-1">
-                                <div className="bg-gray-50 rounded-2xl px-3 py-2">
-                                  <span className="font-semibold text-sm">{reply.authorName}</span>
-                                  <span className="text-gray-700 text-sm ml-1">
-                                    {/* Render content with mentions highlighted */}
-                                    {reply.content?.split(/(@\w+(?:\s\w+)?)/g).map((part, i) => 
-                                      part.startsWith('@') ? (
-                                        <span key={i} className="mention-tag">{part}</span>
-                                      ) : part
-                                    )}
-                                  </span>
-                                  {reply.imageUrl && (
-                                    <img src={reply.imageUrl} alt="" className="mt-2 max-h-32 rounded-lg" />
-                                  )}
+                                <textarea
+                                  value={replyContent}
+                                  onChange={(e) => setReplyContent(e.target.value)}
+                                  placeholder="What are your thoughts?"
+                                  className="w-full p-3 border border-gray-300 rounded resize-none focus:ring-2 focus:ring-blue-500"
+                                  rows={3}
+                                  autoFocus
+                                />
+                                {replyImagePreview && (
+                                  <div className="relative inline-block mt-2">
+                                    <img src={replyImagePreview} alt="Preview" className="max-h-20 rounded" />
+                                    <button
+                                      onClick={() => { setReplyImage(null); setReplyImagePreview(null); }}
+                                      className="absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-xs"
+                                    >✕</button>
+                                  </div>
+                                )}
+                                <div className="flex justify-between items-center mt-2">
+                                  <div className="flex gap-2">
+                                    <label className="cursor-pointer text-gray-500 hover:text-gray-700 p-1">
+                                      📷
+                                      <input type="file" accept="image/*" onChange={handleReplyImageSelect} className="hidden" />
+                                    </label>
+                                    <button
+                                      onClick={() => setShowGifPicker(showGifPicker === post.id ? null : post.id)}
+                                      className="text-gray-500 hover:text-gray-700 p-1"
+                                    >GIF</button>
+                                  </div>
+                                  <button
+                                    onClick={() => handleReply(post.id)}
+                                    disabled={!replyContent.trim() && !replyImagePreview}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded font-medium disabled:opacity-50 hover:bg-blue-700"
+                                  >Comment</button>
                                 </div>
-                                
-                                {/* Comment reactions row */}
-                                <div className="flex items-center gap-1 mt-1 ml-2">
-                                  <span className="text-xs text-gray-400">
-                                    {reply.createdAt ? new Date(reply.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
-                                  </span>
-                                  <span className="text-gray-300 mx-1">•</span>
-                                  
-                                  {/* Comment reaction buttons */}
-                                  {commentEmojis.map(emoji => {
-                                    const reactedBy = Object.entries(reply.reactions || {})
-                                      .filter(([uid, reaction]) => reaction === emoji)
-                                      .map(([uid]) => uid);
-                                    
-                                    return (
-                                      <ReactionButton
-                                        key={emoji}
-                                        emoji={emoji}
-                                        count={commentReactionCounts[emoji]}
-                                        isActive={myCommentReaction === emoji}
-                                        onClick={() => handleCommentReaction(post.id, reply.id, emoji)}
-                                        reactedBy={reactedBy}
-                                        allMembers={allMembers}
-                                      />
-                                    );
-                                  })}
-                                </div>
+                                {showGifPicker === post.id && (
+                                  <div className="mt-2 p-2 bg-gray-100 rounded-lg">
+                                    <div className="grid grid-cols-4 gap-2">
+                                      {popularGifs.map((gif, i) => (
+                                        <img
+                                          key={i}
+                                          src={gif}
+                                          alt="GIF"
+                                          className="w-full h-16 object-cover rounded cursor-pointer hover:opacity-80"
+                                          onClick={() => selectGif(gif)}
+                                        />
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          );
-                        })}
-                        {post.comments.length > 2 && !expandedReplies[post.id] && (
-                          <button 
-                            onClick={() => setExpandedReplies({...expandedReplies, [post.id]: true})}
-                            className="text-sm text-gray-500 font-medium hover:text-gray-700 ml-10"
-                          >
-                            View all {post.comments.length} comments
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Instagram-style Add a comment with @mention support */}
-                    <div className="border-t border-gray-100 pt-3 mt-2">
-                      <div className="flex items-center gap-3">
-                        {currentUser.profilePhoto ? (
-                          <img src={currentUser.profilePhoto} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                            {currentUser.name?.charAt(0)}
                           </div>
                         )}
-                        <div className="flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2 border border-gray-200 focus-within:border-purple-400 focus-within:bg-white transition-all">
-                          <MentionInput
-                            value={replyingTo === post.id ? replyContent : ''}
-                            onChange={(val) => { setReplyingTo(post.id); setReplyContent(val); }}
-                            placeholder="Add a comment... (type @ to mention)"
-                            allMembers={allMembers}
-                            className="flex-1 bg-transparent border-none outline-none text-sm"
-                            onSubmit={() => { if (replyContent.trim()) handleReply(post.id); }}
-                          />
-                          {/* Attachment button */}
-                          <label className="cursor-pointer text-gray-400 hover:text-gray-600 p-1 ml-1">
-                            <span className="text-lg">📎</span>
-                            <input
-                              type="file"
-                              accept="image/*,video/*"
-                              onChange={(e) => { setReplyingTo(post.id); handleReplyImageSelect(e); }}
-                              className="hidden"
-                            />
-                          </label>
-                          {/* Post button - only show when there's content */}
-                          {(replyingTo === post.id && (replyContent.trim() || replyImagePreview)) && (
-                            <button
-                              onClick={() => handleReply(post.id)}
-                              className="text-purple-600 font-semibold text-sm ml-2 hover:text-purple-800"
-                            >
-                              Post
-                            </button>
-                          )}
-                        </div>
                       </div>
-                      
-                      {/* Reply image preview */}
-                      {replyingTo === post.id && replyImagePreview && (
-                        <div className="relative inline-block ml-11 mt-2">
-                          <img src={replyImagePreview} alt="Preview" className="max-h-20 rounded-lg" />
-                          <button
-                            onClick={() => { setReplyImage(null); setReplyImagePreview(null); }}
-                            className="absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-xs"
-                          >✕</button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 );
@@ -23020,21 +22962,11 @@ function SocialWall({ teachers, currentUser }) {
       {/* Birthday Popup */}
       {showBirthdayPopup && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-bounce-in">
-            <style>{`
-              @keyframes bounce-in {
-                0% { transform: scale(0.5); opacity: 0; }
-                70% { transform: scale(1.05); }
-                100% { transform: scale(1); opacity: 1; }
-              }
-              .animate-bounce-in { animation: bounce-in 0.5s ease-out; }
-            `}</style>
-            
+          <div className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl">
             <div className="bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 p-6 text-white text-center">
               <div className="text-6xl mb-2">🎂</div>
               <h3 className="text-2xl font-bold">Happy Birthday!</h3>
             </div>
-            
             <div className="p-6 text-center">
               {showBirthdayPopup.profilePhoto ? (
                 <img src={showBirthdayPopup.profilePhoto} alt="" className="w-24 h-24 rounded-full mx-auto mb-4 object-cover border-4 border-pink-300" />
@@ -23046,7 +22978,6 @@ function SocialWall({ teachers, currentUser }) {
               <h4 className="text-2xl font-bold text-gray-800">{showBirthdayPopup.name}</h4>
               <p className="text-gray-500">{showBirthdayPopup.role || showBirthdayPopup.subject}</p>
               <p className="text-pink-600 mt-2 font-medium">🎈 Wishing you a wonderful day! 🎈</p>
-              
               <button
                 onClick={dismissBirthdayPopup}
                 className="mt-6 px-8 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-full font-semibold hover:shadow-lg transition-all"
@@ -23060,6 +22991,7 @@ function SocialWall({ teachers, currentUser }) {
     </div>
   );
 }
+
 
 // ========================================
 // ROADMAP & FEATURE REQUESTS
