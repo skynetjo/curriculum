@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -944,6 +946,27 @@
 .bell-ringing {
   animation: bellRing 0.5s ease-in-out;
 }
+
+/* Comment reaction buttons - smaller size */
+.comment-reactions .reaction-btn-wrapper .emoji-btn {
+  padding: 2px 6px;
+  font-size: 12px;
+  background: transparent;
+  min-height: auto;
+}
+
+.comment-reactions .reaction-btn-wrapper .emoji-btn:hover {
+  background: #f3e8ff;
+}
+
+.comment-reactions .reaction-btn-wrapper .emoji-btn.active {
+  background: #ede9fe;
+}
+
+.comment-reactions .reaction-tooltip {
+  font-size: 10px;
+  padding: 4px 8px;
+}
   </style>
 </head>
 <body>
@@ -1054,14 +1077,22 @@ const SUBJECTS=['Physics','Chemistry','Maths','Biology'];
 // ========================================
 const PresenceSystem = {
   userId: null,
+  userName: null,
   presenceRef: null,
   heartbeatInterval: null,
   onlineUsers: {},
+  allPresence: {}, // Store all presence data (including offline)
   listeners: [],
+  initialized: false,
   
-  init: function(userId) {
-    if (!userId) return;
-    this.userId = userId;
+  init: function(userId, userName) {
+    if (!userId || this.initialized) return;
+    this.userId = String(userId);
+    this.userName = userName || '';
+    this.initialized = true;
+    
+    console.log('[Presence] Initializing for:', this.userId, this.userName);
+    
     this.updatePresence('online');
     
     // Heartbeat every 30 seconds
@@ -1079,18 +1110,22 @@ const PresenceSystem = {
       this.updatePresence('offline');
     });
     
-    // Listen for presence changes
+    // Listen for ALL presence changes (not just online)
     this.listenToPresence();
   },
   
   updatePresence: async function(status) {
     if (!this.userId || typeof firebase === 'undefined') return;
     try {
-      await db.collection('user_presence').doc(this.userId).set({
+      const docId = this.userId.replace(/[^a-zA-Z0-9]/g, '_'); // Sanitize for Firestore doc ID
+      await db.collection('user_presence').doc(docId).set({
         status: status,
         lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
-        userId: this.userId
+        userId: this.userId,
+        userName: this.userName,
+        updatedAt: new Date().toISOString()
       }, { merge: true });
+      console.log('[Presence] Updated:', status);
     } catch (e) {
       console.log('[Presence] Update error:', e);
     }
@@ -1098,18 +1133,33 @@ const PresenceSystem = {
   
   listenToPresence: function() {
     try {
+      // Listen to ALL presence documents
       db.collection('user_presence')
-        .where('status', 'in', ['online', 'away'])
         .onSnapshot(snap => {
-          const users = {};
+          const online = {};
+          const all = {};
+          
           snap.docs.forEach(doc => {
-            users[doc.id] = doc.data();
+            const data = doc.data();
+            all[doc.id] = data;
+            
+            // Also index by userId and userName for flexible lookup
+            if (data.userId) all[data.userId] = data;
+            if (data.userName) all[data.userName.toLowerCase()] = data;
+            
+            if (data.status === 'online' || data.status === 'away') {
+              online[doc.id] = data;
+            }
           });
-          this.onlineUsers = users;
+          
+          this.onlineUsers = online;
+          this.allPresence = all;
           this.notifyListeners();
+        }, err => {
+          console.log('[Presence] Listen error:', err);
         });
     } catch (e) {
-      console.log('[Presence] Listen error:', e);
+      console.log('[Presence] Listen setup error:', e);
     }
   },
   
@@ -1117,15 +1167,47 @@ const PresenceSystem = {
     return Object.keys(this.onlineUsers).length;
   },
   
+  // Flexible lookup for presence data
+  findPresence: function(userId) {
+    if (!userId) return null;
+    
+    const searchKey = String(userId).toLowerCase();
+    const sanitizedKey = searchKey.replace(/[^a-zA-Z0-9]/g, '_');
+    
+    // Try direct matches first
+    if (this.allPresence[userId]) return this.allPresence[userId];
+    if (this.allPresence[sanitizedKey]) return this.allPresence[sanitizedKey];
+    if (this.allPresence[searchKey]) return this.allPresence[searchKey];
+    
+    // Try to find by partial match
+    for (const [key, data] of Object.entries(this.allPresence)) {
+      if (data.userId && String(data.userId).toLowerCase().includes(searchKey)) return data;
+      if (data.userName && String(data.userName).toLowerCase().includes(searchKey)) return data;
+      if (key.toLowerCase().includes(searchKey)) return data;
+    }
+    
+    return null;
+  },
+  
   isOnline: function(userId) {
-    return this.onlineUsers[userId]?.status === 'online';
+    const presence = this.findPresence(userId);
+    return presence?.status === 'online' || presence?.status === 'away';
   },
   
   getLastSeen: function(userId) {
-    const presence = this.onlineUsers[userId];
+    const presence = this.findPresence(userId);
     if (!presence?.lastSeen) return null;
-    const lastSeen = presence.lastSeen.toDate ? presence.lastSeen.toDate() : new Date(presence.lastSeen);
-    return lastSeen;
+    
+    try {
+      const lastSeen = presence.lastSeen.toDate ? presence.lastSeen.toDate() : new Date(presence.lastSeen);
+      return lastSeen;
+    } catch (e) {
+      // Try parsing updatedAt as fallback
+      if (presence.updatedAt) {
+        return new Date(presence.updatedAt);
+      }
+      return null;
+    }
   },
   
   formatLastSeen: function(userId) {
@@ -7337,9 +7419,11 @@ function OnlineStatusCard({ currentUser }) {
   useEffect(() => {
     if (!currentUser) return;
     
-    // Initialize presence system
-    const userId = currentUser.afid || currentUser.uid || currentUser.email;
-    PresenceSystem.init(userId);
+    // Initialize presence system with userId AND userName for better tracking
+    const userId = currentUser.afid || currentUser.uid || currentUser.email || currentUser.name;
+    const userName = currentUser.name || '';
+    
+    PresenceSystem.init(userId, userName);
     
     // Subscribe to presence updates
     const unsubscribe = PresenceSystem.subscribe((users) => {
@@ -7695,15 +7779,34 @@ function MentionTextarea({ value, onChange, placeholder, allMembers, className, 
 function ReactionButton({ emoji, count, isActive, onClick, reactedBy, allMembers }) {
   const [showTooltip, setShowTooltip] = useState(false);
   
-  // Get names of people who reacted
+  // Get names of people who reacted - improved lookup
   const getReactorNames = () => {
     if (!reactedBy || reactedBy.length === 0) return '';
     
     const names = reactedBy.map(userId => {
-      const member = (allMembers || []).find(m => 
-        m.afid === userId || m.uid === userId || m.id === userId || m.email === userId
-      );
-      return member?.name || 'Someone';
+      if (!userId) return 'Someone';
+      
+      const userIdLower = String(userId).toLowerCase();
+      
+      // Try multiple matching strategies
+      const member = (allMembers || []).find(m => {
+        // Direct matches
+        if (m.afid && String(m.afid).toLowerCase() === userIdLower) return true;
+        if (m.uid && String(m.uid).toLowerCase() === userIdLower) return true;
+        if (m.id && String(m.id).toLowerCase() === userIdLower) return true;
+        if (m.email && String(m.email).toLowerCase() === userIdLower) return true;
+        
+        // Partial matches (in case ID is stored differently)
+        if (m.afid && userIdLower.includes(String(m.afid).toLowerCase())) return true;
+        if (m.email && userIdLower.includes(String(m.email).toLowerCase().split('@')[0])) return true;
+        
+        // Match by name if userId looks like a name
+        if (m.name && String(m.name).toLowerCase() === userIdLower) return true;
+        
+        return false;
+      });
+      
+      return member?.name || userId.split('@')[0] || 'Someone';
     }).slice(0, 5);
     
     if (reactedBy.length > 5) {
@@ -7738,12 +7841,37 @@ function ReactionButton({ emoji, count, isActive, onClick, reactedBy, allMembers
 // LAST ACTIVE BADGE COMPONENT
 // ========================================
 function LastActiveBadge({ userId }) {
-  const isOnline = PresenceSystem.isOnline(userId);
-  const lastSeen = PresenceSystem.formatLastSeen(userId);
+  const [isOnline, setIsOnline] = useState(false);
+  const [lastSeen, setLastSeen] = useState('Never');
+  
+  useEffect(() => {
+    if (!userId) return;
+    
+    // Initial check
+    const checkPresence = () => {
+      setIsOnline(PresenceSystem.isOnline(userId));
+      setLastSeen(PresenceSystem.formatLastSeen(userId));
+    };
+    
+    checkPresence();
+    
+    // Subscribe to presence updates
+    const unsubscribe = PresenceSystem.subscribe(() => {
+      checkPresence();
+    });
+    
+    // Also poll every 10 seconds for updates
+    const interval = setInterval(checkPresence, 10000);
+    
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
+  }, [userId]);
   
   return (
     <span className={`last-active-badge ${isOnline ? 'online' : ''}`}>
-      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isOnline ? '#10b981' : '#9ca3af' }}></span>
+      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isOnline ? '#10b981' : '#9ca3af', display: 'inline-block' }}></span>
       {isOnline ? 'Online' : lastSeen}
     </span>
   );
@@ -21621,6 +21749,7 @@ function SocialWall({ teachers, currentUser }) {
         authorPhoto: currentUser.profilePhoto || '',
         content: replyContent.trim(),
         imageUrl: replyImageUrl,
+        reactions: {}, // Initialize empty reactions for the comment
         createdAt: new Date().toISOString()
       };
       
@@ -21629,6 +21758,39 @@ function SocialWall({ teachers, currentUser }) {
       await db.collection('socialPosts').doc(postId).update({ 
         comments: updatedComments 
       });
+      
+      // Process mentions in comment and send notifications
+      const commentContent = replyContent.trim();
+      const mentionRegex = /@(\w+(?:\s\w+)?)/g;
+      let match;
+      
+      // Check for @everyone first
+      if (commentContent.toLowerCase().includes('@everyone')) {
+        MentionNotificationSystem.sendEveryoneNotification(
+          commentContent,
+          currentUser.name,
+          currentUser.afid || currentUser.uid
+        );
+      } else {
+        // Process individual mentions
+        while ((match = mentionRegex.exec(commentContent)) !== null) {
+          const mentionedName = match[1];
+          const mentionedMember = allMembers.find(m => 
+            m.name?.toLowerCase() === mentionedName.toLowerCase()
+          );
+          
+          if (mentionedMember) {
+            const mentionedUserId = mentionedMember.afid || mentionedMember.uid || mentionedMember.id;
+            MentionNotificationSystem.sendMentionNotification(
+              mentionedUserId,
+              mentionedMember.name,
+              commentContent,
+              currentUser.name,
+              currentUser.afid || currentUser.uid
+            );
+          }
+        }
+      }
       
       setPosts(posts.map(p => p.id === postId ? { ...p, comments: updatedComments } : p));
       setReplyContent('');
@@ -21666,6 +21828,35 @@ function SocialWall({ teachers, currentUser }) {
       setPosts(posts.map(p => p.id === postId ? { ...p, reactions: newReactions } : p));
     } catch (error) {
       console.error('Error:', error);
+    }
+  };
+
+  // Handle comment/reply reactions
+  const handleCommentReaction = async (postId, commentId, emoji) => {
+    const userId = currentUser.afid || currentUser.uid;
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    const comments = [...(post.comments || [])];
+    const commentIndex = comments.findIndex(c => c.id === commentId);
+    if (commentIndex === -1) return;
+
+    const comment = comments[commentIndex];
+    let newReactions = { ...(comment.reactions || {}) };
+    
+    if (newReactions[userId] === emoji) {
+      delete newReactions[userId];
+    } else {
+      newReactions[userId] = emoji;
+    }
+
+    comments[commentIndex] = { ...comment, reactions: newReactions };
+
+    try {
+      await db.collection('socialPosts').doc(postId).update({ comments: comments });
+      setPosts(posts.map(p => p.id === postId ? { ...p, comments: comments } : p));
+    } catch (error) {
+      console.error('Comment reaction error:', error);
     }
   };
 
@@ -22403,27 +22594,70 @@ function SocialWall({ teachers, currentUser }) {
                     {/* Comments Section */}
                     {post.comments?.length > 0 && (
                       <div className="space-y-3 mb-3">
-                        {post.comments.slice(0, expandedReplies[post.id] ? post.comments.length : 2).map((reply, idx) => (
-                          <div key={reply.id || idx} className="flex gap-2">
-                            {reply.authorPhoto ? (
-                              <img src={reply.authorPhoto} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                            ) : (
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-300 to-purple-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                                {reply.authorName?.charAt(0)}
-                              </div>
-                            )}
-                            <div className="flex-1 bg-gray-50 rounded-2xl px-3 py-2">
-                              <span className="font-semibold text-sm">{reply.authorName}</span>
-                              <span className="text-gray-700 text-sm ml-1">{reply.content}</span>
-                              {reply.imageUrl && (
-                                <img src={reply.imageUrl} alt="" className="mt-2 max-h-32 rounded-lg" />
+                        {post.comments.slice(0, expandedReplies[post.id] ? post.comments.length : 2).map((reply, idx) => {
+                          // Calculate comment reaction counts
+                          const commentReactionCounts = {};
+                          Object.values(reply.reactions || {}).forEach(e => {
+                            commentReactionCounts[e] = (commentReactionCounts[e] || 0) + 1;
+                          });
+                          const myCommentReaction = reply.reactions?.[currentUser.afid || currentUser.uid];
+                          const commentEmojis = ['👍', '❤️', '😊'];
+                          
+                          return (
+                            <div key={reply.id || idx} className="flex gap-2">
+                              {reply.authorPhoto ? (
+                                <img src={reply.authorPhoto} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-300 to-purple-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                                  {reply.authorName?.charAt(0)}
+                                </div>
                               )}
-                              <div className="text-xs text-gray-400 mt-1">
-                                {reply.createdAt ? new Date(reply.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
+                              <div className="flex-1">
+                                <div className="bg-gray-50 rounded-2xl px-3 py-2">
+                                  <span className="font-semibold text-sm">{reply.authorName}</span>
+                                  <span className="text-gray-700 text-sm ml-1">
+                                    {/* Render content with mentions highlighted */}
+                                    {reply.content?.split(/(@\w+(?:\s\w+)?)/g).map((part, i) => 
+                                      part.startsWith('@') ? (
+                                        <span key={i} className="mention-tag">{part}</span>
+                                      ) : part
+                                    )}
+                                  </span>
+                                  {reply.imageUrl && (
+                                    <img src={reply.imageUrl} alt="" className="mt-2 max-h-32 rounded-lg" />
+                                  )}
+                                </div>
+                                
+                                {/* Comment reactions row */}
+                                <div className="flex items-center gap-1 mt-1 ml-2">
+                                  <span className="text-xs text-gray-400">
+                                    {reply.createdAt ? new Date(reply.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
+                                  </span>
+                                  <span className="text-gray-300 mx-1">•</span>
+                                  
+                                  {/* Comment reaction buttons */}
+                                  {commentEmojis.map(emoji => {
+                                    const reactedBy = Object.entries(reply.reactions || {})
+                                      .filter(([uid, reaction]) => reaction === emoji)
+                                      .map(([uid]) => uid);
+                                    
+                                    return (
+                                      <ReactionButton
+                                        key={emoji}
+                                        emoji={emoji}
+                                        count={commentReactionCounts[emoji]}
+                                        isActive={myCommentReaction === emoji}
+                                        onClick={() => handleCommentReaction(post.id, reply.id, emoji)}
+                                        reactedBy={reactedBy}
+                                        allMembers={allMembers}
+                                      />
+                                    );
+                                  })}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                         {post.comments.length > 2 && !expandedReplies[post.id] && (
                           <button 
                             onClick={() => setExpandedReplies({...expandedReplies, [post.id]: true})}
@@ -22435,7 +22669,7 @@ function SocialWall({ teachers, currentUser }) {
                       </div>
                     )}
                     
-                    {/* Instagram-style Add a comment - Always visible */}
+                    {/* Instagram-style Add a comment with @mention support */}
                     <div className="border-t border-gray-100 pt-3 mt-2">
                       <div className="flex items-center gap-3">
                         {currentUser.profilePhoto ? (
@@ -22446,14 +22680,13 @@ function SocialWall({ teachers, currentUser }) {
                           </div>
                         )}
                         <div className="flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2 border border-gray-200 focus-within:border-purple-400 focus-within:bg-white transition-all">
-                          <input
-                            type="text"
+                          <MentionInput
                             value={replyingTo === post.id ? replyContent : ''}
-                            onChange={(e) => { setReplyingTo(post.id); setReplyContent(e.target.value); }}
-                            onFocus={() => setReplyingTo(post.id)}
-                            placeholder="Add a comment..."
+                            onChange={(val) => { setReplyingTo(post.id); setReplyContent(val); }}
+                            placeholder="Add a comment... (type @ to mention)"
+                            allMembers={allMembers}
                             className="flex-1 bg-transparent border-none outline-none text-sm"
-                            onKeyPress={(e) => { if (e.key === 'Enter' && replyContent.trim()) handleReply(post.id); }}
+                            onSubmit={() => { if (replyContent.trim()) handleReply(post.id); }}
                           />
                           {/* Attachment button */}
                           <label className="cursor-pointer text-gray-400 hover:text-gray-600 p-1 ml-1">
