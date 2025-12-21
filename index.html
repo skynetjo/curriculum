@@ -7877,6 +7877,276 @@ function LastActiveBadge({ userId }) {
   );
 }
 
+// ========================================
+// PROFILE COMPLETION BANNER COMPONENT
+// ========================================
+function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
+  const [isDismissed, setIsDismissed] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  
+  // Required fields for teacher/manager profile
+  const requiredFields = [
+    { key: 'name', label: 'Full Name' },
+    { key: 'email', label: 'Email Address' },
+    { key: 'phone', label: 'Phone Number' },
+    { key: 'whatsapp', label: 'WhatsApp Number' },
+    { key: 'dob', label: 'Date of Birth' },
+    { key: 'dateOfBirth', label: 'Date of Birth' }, // Alternative field name
+    { key: 'school', label: 'School/Centre' },
+    { key: 'subject', label: 'Subject' },
+    { key: 'profilePhoto', label: 'Profile Photo' },
+    { key: 'joiningDate', label: 'Joining Date' },
+    { key: 'qualification', label: 'Qualification' },
+    { key: 'address', label: 'Address' },
+    { key: 'emergencyContact', label: 'Emergency Contact' },
+    { key: 'bloodGroup', label: 'Blood Group' }
+  ];
+  
+  // Calculate completion
+  const calculateCompletion = () => {
+    if (!currentUser) return { percentage: 0, filled: [], missing: [] };
+    
+    const filled = [];
+    const missing = [];
+    const checkedKeys = new Set(); // Avoid duplicate field counting
+    
+    requiredFields.forEach(field => {
+      // Skip if we already counted this field (e.g., dob vs dateOfBirth)
+      if (field.key === 'dateOfBirth' && checkedKeys.has('dob')) return;
+      if (field.key === 'dob' && checkedKeys.has('dateOfBirth')) return;
+      
+      const value = currentUser[field.key];
+      const hasValue = value && String(value).trim() !== '' && value !== 'null' && value !== 'undefined';
+      
+      if (hasValue) {
+        filled.push(field);
+        checkedKeys.add(field.key);
+      } else if (!checkedKeys.has(field.key)) {
+        // Only add to missing if alternative field wasn't filled
+        if (field.key === 'dob' || field.key === 'dateOfBirth') {
+          const altValue = currentUser[field.key === 'dob' ? 'dateOfBirth' : 'dob'];
+          if (!altValue || String(altValue).trim() === '') {
+            missing.push(field);
+          }
+        } else {
+          missing.push(field);
+        }
+        checkedKeys.add(field.key);
+      }
+    });
+    
+    // Normalize - count dob/dateOfBirth as one field
+    const totalFields = 13; // Actual unique fields
+    const filledCount = Math.min(filled.length, totalFields);
+    const percentage = Math.round((filledCount / totalFields) * 100);
+    
+    return { percentage, filled, missing };
+  };
+  
+  const { percentage, filled, missing } = calculateCompletion();
+  
+  // Don't show if 100% complete or dismissed for today
+  const dismissKey = `profileBannerDismissed_${currentUser?.afid || currentUser?.uid}_${new Date().toDateString()}`;
+  
+  useEffect(() => {
+    const wasDismissed = localStorage.getItem(dismissKey);
+    if (wasDismissed) {
+      setIsDismissed(true);
+    }
+  }, [dismissKey]);
+  
+  const handleDismiss = () => {
+    localStorage.setItem(dismissKey, 'true');
+    setIsDismissed(true);
+  };
+  
+  // Don't show if complete or dismissed
+  if (percentage >= 100 || isDismissed) return null;
+  
+  // Determine urgency color
+  const getUrgencyColor = () => {
+    if (percentage < 30) return 'from-red-500 to-red-600';
+    if (percentage < 60) return 'from-orange-500 to-amber-500';
+    if (percentage < 80) return 'from-yellow-500 to-amber-400';
+    return 'from-blue-500 to-indigo-500';
+  };
+  
+  const getProgressColor = () => {
+    if (percentage < 30) return 'bg-red-500';
+    if (percentage < 60) return 'bg-orange-500';
+    if (percentage < 80) return 'bg-yellow-500';
+    return 'bg-blue-500';
+  };
+  
+  return (
+    <div className={`mb-4 bg-gradient-to-r ${getUrgencyColor()} rounded-2xl p-4 shadow-lg text-white relative overflow-hidden`}>
+      {/* Background decoration */}
+      <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-16 -mt-16"></div>
+      <div className="absolute bottom-0 left-0 w-24 h-24 bg-white opacity-10 rounded-full -ml-12 -mb-12"></div>
+      
+      {/* Close button */}
+      <button 
+        onClick={handleDismiss}
+        className="absolute top-2 right-2 w-6 h-6 bg-white bg-opacity-20 rounded-full flex items-center justify-center hover:bg-opacity-30 transition-all text-sm"
+        title="Dismiss for today"
+      >
+        ✕
+      </button>
+      
+      <div className="relative z-10">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="text-3xl">
+            {percentage < 30 ? '⚠️' : percentage < 60 ? '📝' : percentage < 80 ? '📋' : '✨'}
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-lg">Complete Your Profile</h3>
+            <p className="text-sm opacity-90">
+              Your profile is {percentage}% complete. {missing.length} field{missing.length !== 1 ? 's' : ''} remaining.
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-3xl font-bold">{percentage}%</div>
+          </div>
+        </div>
+        
+        {/* Progress bar */}
+        <div className="bg-white bg-opacity-30 rounded-full h-3 mb-3 overflow-hidden">
+          <div 
+            className={`h-full ${getProgressColor()} rounded-full transition-all duration-500`}
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+        
+        {/* Missing fields - collapsible */}
+        <div className="flex items-center justify-between">
+          <button 
+            onClick={() => setShowDetails(!showDetails)}
+            className="text-sm bg-white bg-opacity-20 px-3 py-1 rounded-lg hover:bg-opacity-30 transition-all"
+          >
+            {showDetails ? '▲ Hide Details' : '▼ Show Missing Fields'}
+          </button>
+          
+          <button 
+            onClick={() => onNavigateToProfile && onNavigateToProfile()}
+            className="bg-white text-gray-800 px-4 py-2 rounded-xl font-bold hover:bg-opacity-90 transition-all shadow-lg flex items-center gap-2"
+          >
+            <span>Complete Now</span>
+            <span>→</span>
+          </button>
+        </div>
+        
+        {/* Expandable missing fields list */}
+        {showDetails && missing.length > 0 && (
+          <div className="mt-3 bg-white bg-opacity-20 rounded-xl p-3">
+            <p className="text-sm font-semibold mb-2">Missing Information:</p>
+            <div className="flex flex-wrap gap-2">
+              {missing.map((field, idx) => (
+                <span 
+                  key={idx}
+                  className="bg-white bg-opacity-30 px-2 py-1 rounded-lg text-xs font-medium"
+                >
+                  {field.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// PROFILE COMPLETION CARD (For Dashboard)
+// ========================================
+function ProfileCompletionCard({ currentUser, onNavigateToProfile }) {
+  // Required fields for teacher/manager profile
+  const requiredFields = [
+    'name', 'email', 'phone', 'whatsapp', 'dob', 'dateOfBirth', 'school', 
+    'subject', 'profilePhoto', 'joiningDate', 'qualification', 'address', 
+    'emergencyContact', 'bloodGroup'
+  ];
+  
+  // Calculate completion
+  const calculateCompletion = () => {
+    if (!currentUser) return 0;
+    
+    let filled = 0;
+    const checkedDob = currentUser.dob || currentUser.dateOfBirth;
+    
+    if (currentUser.name) filled++;
+    if (currentUser.email) filled++;
+    if (currentUser.phone) filled++;
+    if (currentUser.whatsapp) filled++;
+    if (checkedDob) filled++;
+    if (currentUser.school) filled++;
+    if (currentUser.subject) filled++;
+    if (currentUser.profilePhoto) filled++;
+    if (currentUser.joiningDate) filled++;
+    if (currentUser.qualification) filled++;
+    if (currentUser.address) filled++;
+    if (currentUser.emergencyContact) filled++;
+    if (currentUser.bloodGroup) filled++;
+    
+    return Math.round((filled / 13) * 100);
+  };
+  
+  const percentage = calculateCompletion();
+  
+  // If complete, show success card
+  if (percentage >= 100) {
+    return (
+      <div className="bg-gradient-to-br from-green-50 to-emerald-100 border-2 border-green-200 rounded-2xl p-4 shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white text-2xl">
+            ✓
+          </div>
+          <div>
+            <h3 className="font-bold text-green-800">Profile Complete!</h3>
+            <p className="text-sm text-green-600">Your profile is 100% complete</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Determine color based on completion
+  const getColor = () => {
+    if (percentage < 30) return { bg: 'from-red-50 to-red-100', border: 'border-red-200', text: 'text-red-700', progress: 'bg-red-500' };
+    if (percentage < 60) return { bg: 'from-orange-50 to-amber-100', border: 'border-orange-200', text: 'text-orange-700', progress: 'bg-orange-500' };
+    if (percentage < 80) return { bg: 'from-yellow-50 to-amber-100', border: 'border-yellow-200', text: 'text-yellow-700', progress: 'bg-yellow-500' };
+    return { bg: 'from-blue-50 to-indigo-100', border: 'border-blue-200', text: 'text-blue-700', progress: 'bg-blue-500' };
+  };
+  
+  const colors = getColor();
+  
+  return (
+    <div className={`bg-gradient-to-br ${colors.bg} border-2 ${colors.border} rounded-2xl p-4 shadow-lg cursor-pointer hover:shadow-xl transition-all`}
+         onClick={() => onNavigateToProfile && onNavigateToProfile()}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className={`w-12 h-12 ${colors.progress} rounded-full flex items-center justify-center text-white font-bold`}>
+            {percentage}%
+          </div>
+          <div>
+            <h3 className={`font-bold ${colors.text}`}>Profile Completion</h3>
+            <p className={`text-sm ${colors.text} opacity-80`}>Click to complete your profile</p>
+          </div>
+        </div>
+        <span className="text-2xl">→</span>
+      </div>
+      
+      {/* Progress bar */}
+      <div className="bg-white rounded-full h-2 overflow-hidden">
+        <div 
+          className={`h-full ${colors.progress} rounded-full transition-all duration-500`}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[isSuperAdmin,setIsSuperAdmin]=useState(false);const[managerProfile,setManagerProfile]=useState(null);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:'',studentId:'',loginType:'teacher'});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);const[managers,setManagers]=useState([]);const[accessibleSchools,setAccessibleSchools]=useState([]);const[academicYearSettings,setAcademicYearSettings]=useState(null);
 const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);
@@ -9839,6 +10109,12 @@ function TeacherView({
         )}
 
         <div className="px-4 py-6">
+        
+        {/* Profile Completion Banner - Shows when profile is incomplete */}
+        <ProfileCompletionBanner 
+          currentUser={currentUser} 
+          onNavigateToProfile={() => setActiveTab('myprofile')} 
+        />
 
         {/* Tab content */}
         {activeTab === 'overview' && (
@@ -9851,6 +10127,7 @@ function TeacherView({
             studentAttendance={studentAttendance}
             teacherAttendance={teacherAttendance}
             schoolInfo={schoolInfo}
+            onNavigateToProfile={() => setActiveTab('myprofile')}
           />
         )}
 
@@ -12391,6 +12668,12 @@ function AdminView({
       {/* Main content */}
       <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
         <div className="px-4 py-6">
+        
+        {/* Profile Completion Banner for Managers - Shows when profile incomplete */}
+        <ProfileCompletionBanner 
+          currentUser={currentUser} 
+          onNavigateToProfile={() => alert('Please update your profile from Settings or contact Super Admin')} 
+        />
 
         {/* Tab Content */}
         {activeTab === 'managers' && isSuperAdmin && (
@@ -12499,7 +12782,7 @@ function AdminView({
     </div>
   );
 }
-function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teacherAttendance,studentAttendance}){const mySchool=currentUser.school;const mySubject=currentUser.subject;const schoolRankings=useMemo(()=>{
+function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teacherAttendance,studentAttendance,onNavigateToProfile}){const mySchool=currentUser.school;const mySubject=currentUser.subject;const schoolRankings=useMemo(()=>{
   const rankings=SCHOOLS.map(school=>{
     let total=0,completed=0,testsCompleted=0,testsPending=0;
     SUBJECTS.forEach(subject=>{
@@ -12549,7 +12832,12 @@ function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teache
   .filter(rank=>rank.total>0);
   rankings.sort((a,b)=>b.percentage-a.percentage);
   return rankings
-},[curriculum,chapterProgress,mySchool]);const mySchoolRank=schoolRankings.findIndex(r=>r.school===mySchool)+1;const laggingSubject=subjectRankings[subjectRankings.length-1];return(<div className="space-y-6"><h2 className="text-3xl font-bold">Dashboard Overview</h2><div className="grid md:grid-cols-4 gap-4"><div className="stat-card avanti-gradient text-white"><div className="text-sm opacity-90">Your School Rank</div><div className="text-5xl font-bold">#{mySchoolRank}</div><div className="text-sm mt-2">Out of {SCHOOLS.length} schools</div></div><div className="stat-card bg-gradient-to-br from-green-500 to-emerald-600 text-white"><div className="text-sm opacity-90">Best Performing School</div><div className="text-2xl font-bold mt-2">{schoolRankings[0]?.school}</div><div className="text-sm mt-2">{schoolRankings[0]?.percentage}% completed</div></div><div className="stat-card bg-gradient-to-br from-orange-500 to-red-600 text-white"><div className="text-sm opacity-90">Lagging Subject (Your School)</div><div className="text-2xl font-bold mt-2">{laggingSubject?.subject}</div><div className="text-sm mt-2">{laggingSubject?.percentage}% completed</div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">🏆 School Rankings</h3><div className="space-y-3">{schoolRankings.map((rank,index)=><div key={rank.school} className={`ranking-card ${index===0?'ranking-1':index===1?'ranking-2':index===2?'ranking-3':''} ${rank.school===mySchool?'bg-yellow-50':''}`}><div className="flex justify-between items-center"><div className="flex items-center gap-4"><div className="text-2xl font-bold text-gray-400">#{index+1}</div><div><div className="font-bold text-lg">{rank.school} {rank.school===mySchool&&'⭐'}</div><div className="text-sm text-gray-600">{rank.completed} / {rank.total} chapters completed</div></div></div><div className="text-3xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div></div>)}</div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">📚 Subject Performance in {mySchool}</h3><div className="grid md:grid-cols-2 gap-4">{subjectRankings.map(rank=><div key={rank.subject} className="border-2 rounded-xl p-4"><div className="flex justify-between items-center mb-2"><div className="font-bold text-lg">{rank.subject}</div><div className="text-2xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div><div className="h-2 bg-gray-200 rounded-full"><div className="h-2 avanti-gradient rounded-full" style={{width:`${rank.percentage}%`}}/></div><div className="text-sm text-gray-600 mt-2">{rank.completed} / {rank.total} chapters</div></div>)}</div></div><div className="stat-card bg-gradient-to-br from-purple-500 to-pink-600 text-white">
+},[curriculum,chapterProgress,mySchool]);const mySchoolRank=schoolRankings.findIndex(r=>r.school===mySchool)+1;const laggingSubject=subjectRankings[subjectRankings.length-1];return(<div className="space-y-6"><h2 className="text-3xl font-bold">Dashboard Overview</h2>
+
+{/* Profile Completion Card - Shows when profile incomplete */}
+<ProfileCompletionCard currentUser={currentUser} onNavigateToProfile={onNavigateToProfile} />
+
+<div className="grid md:grid-cols-4 gap-4"><div className="stat-card avanti-gradient text-white"><div className="text-sm opacity-90">Your School Rank</div><div className="text-5xl font-bold">#{mySchoolRank}</div><div className="text-sm mt-2">Out of {SCHOOLS.length} schools</div></div><div className="stat-card bg-gradient-to-br from-green-500 to-emerald-600 text-white"><div className="text-sm opacity-90">Best Performing School</div><div className="text-2xl font-bold mt-2">{schoolRankings[0]?.school}</div><div className="text-sm mt-2">{schoolRankings[0]?.percentage}% completed</div></div><div className="stat-card bg-gradient-to-br from-orange-500 to-red-600 text-white"><div className="text-sm opacity-90">Lagging Subject (Your School)</div><div className="text-2xl font-bold mt-2">{laggingSubject?.subject}</div><div className="text-sm mt-2">{laggingSubject?.percentage}% completed</div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">🏆 School Rankings</h3><div className="space-y-3">{schoolRankings.map((rank,index)=><div key={rank.school} className={`ranking-card ${index===0?'ranking-1':index===1?'ranking-2':index===2?'ranking-3':''} ${rank.school===mySchool?'bg-yellow-50':''}`}><div className="flex justify-between items-center"><div className="flex items-center gap-4"><div className="text-2xl font-bold text-gray-400">#{index+1}</div><div><div className="font-bold text-lg">{rank.school} {rank.school===mySchool&&'⭐'}</div><div className="text-sm text-gray-600">{rank.completed} / {rank.total} chapters completed</div></div></div><div className="text-3xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div></div>)}</div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">📚 Subject Performance in {mySchool}</h3><div className="grid md:grid-cols-2 gap-4">{subjectRankings.map(rank=><div key={rank.subject} className="border-2 rounded-xl p-4"><div className="flex justify-between items-center mb-2"><div className="font-bold text-lg">{rank.subject}</div><div className="text-2xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div><div className="h-2 bg-gray-200 rounded-full"><div className="h-2 avanti-gradient rounded-full" style={{width:`${rank.percentage}%`}}/></div><div className="text-sm text-gray-600 mt-2">{rank.completed} / {rank.total} chapters</div></div>)}</div></div><div className="stat-card bg-gradient-to-br from-purple-500 to-pink-600 text-white">
   <div className="text-sm opacity-90">My Attendance (This Month)</div>
   <div className="text-2xl font-bold mt-2">
     {teacherAttendance.filter(a=>a.teacherId===currentUser.afid&&getMonthYear(a.date)===getMonthYear(getTodayDate())).length} days
@@ -24074,7 +24362,12 @@ function TeacherSelfProfile({ currentUser, teachers }) {
     whatsapp: '',
     profilePhoto: '',
     driveLink: '',
-    bio: ''
+    bio: '',
+    dob: '',
+    address: '',
+    bloodGroup: '',
+    emergencyContact: '',
+    emergencyContactName: ''
   });
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
@@ -24096,7 +24389,12 @@ function TeacherSelfProfile({ currentUser, teachers }) {
       whatsapp: teacher.whatsapp || '',
       profilePhoto: teacher.profilePhoto || '',
       driveLink: teacher.driveLink || '',
-      bio: teacher.bio || ''
+      bio: teacher.bio || '',
+      dob: teacher.dob || teacher.dateOfBirth || '',
+      address: teacher.address || '',
+      bloodGroup: teacher.bloodGroup || '',
+      emergencyContact: teacher.emergencyContact || '',
+      emergencyContactName: teacher.emergencyContactName || ''
     });
   }, [teachers, currentUser]);
 
@@ -24184,6 +24482,12 @@ function TeacherSelfProfile({ currentUser, teachers }) {
         profilePhoto: editForm.profilePhoto,
         driveLink: editForm.driveLink,
         bio: editForm.bio,
+        dob: editForm.dob,
+        dateOfBirth: editForm.dob, // Also save as dateOfBirth for compatibility
+        address: editForm.address,
+        bloodGroup: editForm.bloodGroup,
+        emergencyContact: editForm.emergencyContact,
+        emergencyContactName: editForm.emergencyContactName,
         updatedAt: new Date().toISOString()
       });
       
@@ -24333,6 +24637,46 @@ function TeacherSelfProfile({ currentUser, teachers }) {
     };
   }, [observations]);
 
+  // Calculate profile completion
+  const calculateProfileCompletion = () => {
+    if (!teacherData) return { percentage: 0, missing: [] };
+    
+    const fields = [
+      { key: 'name', label: 'Full Name' },
+      { key: 'email', label: 'Email' },
+      { key: 'phone', label: 'Phone Number' },
+      { key: 'whatsapp', label: 'WhatsApp Number' },
+      { key: 'dob', label: 'Date of Birth', alt: 'dateOfBirth' },
+      { key: 'school', label: 'School' },
+      { key: 'subject', label: 'Subject' },
+      { key: 'profilePhoto', label: 'Profile Photo' },
+      { key: 'joiningDate', label: 'Joining Date' },
+      { key: 'qualification', label: 'Qualification' },
+      { key: 'address', label: 'Address' },
+      { key: 'emergencyContact', label: 'Emergency Contact' },
+      { key: 'bloodGroup', label: 'Blood Group' }
+    ];
+    
+    let filled = 0;
+    const missing = [];
+    
+    fields.forEach(field => {
+      const value = teacherData[field.key] || (field.alt ? teacherData[field.alt] : null);
+      if (value && String(value).trim() !== '') {
+        filled++;
+      } else {
+        missing.push(field.label);
+      }
+    });
+    
+    return {
+      percentage: Math.round((filled / fields.length) * 100),
+      missing
+    };
+  };
+  
+  const profileCompletion = calculateProfileCompletion();
+
   if (loading || !teacherData) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -24346,6 +24690,67 @@ function TeacherSelfProfile({ currentUser, teachers }) {
 
   return (
     <div className="space-y-6">
+      {/* Profile Completion Alert */}
+      {profileCompletion.percentage < 100 && (
+        <div className={`p-4 rounded-2xl border-2 ${
+          profileCompletion.percentage < 50 ? 'bg-red-50 border-red-200' :
+          profileCompletion.percentage < 80 ? 'bg-orange-50 border-orange-200' :
+          'bg-blue-50 border-blue-200'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`text-3xl ${
+                profileCompletion.percentage < 50 ? 'text-red-500' :
+                profileCompletion.percentage < 80 ? 'text-orange-500' :
+                'text-blue-500'
+              }`}>
+                {profileCompletion.percentage < 50 ? '⚠️' : profileCompletion.percentage < 80 ? '📝' : '✨'}
+              </div>
+              <div>
+                <div className="font-bold text-gray-800">
+                  Profile {profileCompletion.percentage}% Complete
+                </div>
+                <div className="text-sm text-gray-600">
+                  {profileCompletion.missing.length} field{profileCompletion.missing.length !== 1 ? 's' : ''} remaining: {profileCompletion.missing.slice(0, 3).join(', ')}{profileCompletion.missing.length > 3 ? '...' : ''}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowEditModal(true)}
+              className={`px-4 py-2 rounded-xl font-semibold text-white ${
+                profileCompletion.percentage < 50 ? 'bg-red-500 hover:bg-red-600' :
+                profileCompletion.percentage < 80 ? 'bg-orange-500 hover:bg-orange-600' :
+                'bg-blue-500 hover:bg-blue-600'
+              }`}
+            >
+              Complete Now →
+            </button>
+          </div>
+          {/* Progress bar */}
+          <div className="mt-3 bg-white rounded-full h-2 overflow-hidden">
+            <div 
+              className={`h-full rounded-full transition-all ${
+                profileCompletion.percentage < 50 ? 'bg-red-500' :
+                profileCompletion.percentage < 80 ? 'bg-orange-500' :
+                'bg-blue-500'
+              }`}
+              style={{ width: `${profileCompletion.percentage}%` }}
+            />
+          </div>
+        </div>
+      )}
+      
+      {/* 100% Complete Badge */}
+      {profileCompletion.percentage >= 100 && (
+        <div className="bg-green-50 border-2 border-green-200 p-4 rounded-2xl flex items-center gap-3">
+          <div className="text-3xl">✅</div>
+          <div>
+            <div className="font-bold text-green-800">Profile 100% Complete!</div>
+            <div className="text-sm text-green-600">Your profile is complete. Thank you!</div>
+          </div>
+        </div>
+      )}
+
       {/* Header with Edit Button */}
       <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-6 rounded-2xl">
         <div className="flex justify-between items-start">
@@ -24409,10 +24814,44 @@ function TeacherSelfProfile({ currentUser, teachers }) {
             <div className="font-semibold">{teacherData.email || 'Not specified'}</div>
           </div>
           <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">🎂 Date of Birth</div>
+            <div className="font-semibold">{teacherData.dob || teacherData.dateOfBirth || 'Not specified'}</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">🩸 Blood Group</div>
+            <div className="font-semibold">{teacherData.bloodGroup || 'Not specified'}</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <div className="text-sm text-gray-500">📅 Joining Date</div>
+            <div className="font-semibold">{teacherData.joiningDate || 'Not specified'}</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
             <div className="text-sm text-gray-500">Average Rating</div>
             <div className="font-semibold text-yellow-600">{overallRating || 'N/A'}/5</div>
           </div>
         </div>
+        
+        {/* Address - Full width */}
+        <div className="mt-4 bg-gray-50 p-4 rounded-lg">
+          <div className="text-sm text-gray-500">🏠 Address</div>
+          <div className="font-semibold">{teacherData.address || 'Not specified'}</div>
+        </div>
+        
+        {/* Emergency Contact */}
+        <div className="mt-4 bg-red-50 p-4 rounded-lg border border-red-100">
+          <div className="text-sm text-red-600 font-semibold mb-2">🆘 Emergency Contact</div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm text-gray-500">Contact Name</div>
+              <div className="font-semibold">{teacherData.emergencyContactName || 'Not specified'}</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-500">Contact Number</div>
+              <div className="font-semibold">{teacherData.emergencyContact || 'Not specified'}</div>
+            </div>
+          </div>
+        </div>
+        
         {teacherData.driveLink && (
           <div className="mt-4 bg-blue-50 p-4 rounded-lg">
             <div className="text-sm text-gray-500">📁 Google Drive Folder</div>
@@ -24744,6 +25183,68 @@ function TeacherSelfProfile({ currentUser, teachers }) {
                     type="tel"
                     value={editForm.whatsapp}
                     onChange={e => setEditForm({...editForm, whatsapp: e.target.value})}
+                    placeholder="e.g., 9876543210"
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">🎂 Date of Birth</label>
+                  <input
+                    type="date"
+                    value={editForm.dob}
+                    onChange={e => setEditForm({...editForm, dob: e.target.value})}
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">🩸 Blood Group</label>
+                  <select
+                    value={editForm.bloodGroup}
+                    onChange={e => setEditForm({...editForm, bloodGroup: e.target.value})}
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  >
+                    <option value="">Select Blood Group</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">🏠 Address</label>
+                  <textarea
+                    value={editForm.address}
+                    onChange={e => setEditForm({...editForm, address: e.target.value})}
+                    placeholder="Your full address..."
+                    rows="2"
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">🆘 Emergency Contact Name</label>
+                  <input
+                    type="text"
+                    value={editForm.emergencyContactName}
+                    onChange={e => setEditForm({...editForm, emergencyContactName: e.target.value})}
+                    placeholder="e.g., Father, Mother, Spouse"
+                    className="w-full border-2 px-4 py-3 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold mb-2">📞 Emergency Contact Number</label>
+                  <input
+                    type="tel"
+                    value={editForm.emergencyContact}
+                    onChange={e => setEditForm({...editForm, emergencyContact: e.target.value})}
                     placeholder="e.g., 9876543210"
                     className="w-full border-2 px-4 py-3 rounded-xl"
                   />
