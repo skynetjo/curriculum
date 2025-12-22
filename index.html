@@ -1,6 +1,3 @@
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -968,6 +965,155 @@
   font-size: 10px;
   padding: 4px 8px;
 }
+
+/* ========================================
+   HIDDEN EMOJI REACTIONS - Show on hover/tap
+   ======================================== */
+.comment-emoji-container {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Hide emoji buttons by default - only show counts if any */
+.comment-emoji-container .emoji-btn:not(.has-reactions) {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+}
+
+/* Show on hover (desktop) */
+.comment-wrapper:hover .comment-emoji-container .emoji-btn {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Touch device: show emoji picker button instead */
+.comment-emoji-toggle {
+  display: none;
+  padding: 2px 8px;
+  font-size: 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 12px;
+  min-height: auto;
+}
+
+.comment-emoji-toggle:hover {
+  background: #f3e8ff;
+}
+
+/* Always show toggle on mobile */
+@media (hover: none) {
+  .comment-emoji-container .emoji-btn:not(.has-reactions) {
+    display: none;
+  }
+  
+  .comment-emoji-toggle {
+    display: inline-flex;
+  }
+  
+  .comment-emoji-container.emoji-picker-open .emoji-btn {
+    display: inline-flex;
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* ========================================
+   REDDIT-STYLE THREADED COMMENTS
+   ======================================== */
+.reddit-comment-thread {
+  position: relative;
+  margin-left: 0;
+}
+
+.reddit-comment {
+  position: relative;
+  display: flex;
+  gap: 8px;
+}
+
+.reddit-comment-thread .reddit-comment {
+  margin-left: 32px;
+  padding-left: 16px;
+}
+
+/* Vertical connecting line */
+.reddit-comment-thread::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  bottom: 16px;
+  width: 2px;
+  background: #e5e7eb;
+  border-radius: 1px;
+}
+
+/* Collapse button */
+.reddit-collapse-btn {
+  position: absolute;
+  left: 6px;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #d1d5db;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  z-index: 5;
+  color: #6b7280;
+  transition: all 0.2s;
+  min-height: auto;
+  padding: 0;
+}
+
+.reddit-collapse-btn:hover {
+  border-color: #9333ea;
+  color: #9333ea;
+  background: #faf5ff;
+}
+
+/* Collapsed thread */
+.reddit-comment-thread.collapsed > .reddit-comment:not(:first-child) {
+  display: none;
+}
+
+.reddit-comment-thread.collapsed::before {
+  display: none;
+}
+
+/* Reply input */
+.reddit-reply-input {
+  margin-left: 48px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.reddit-reply-btn {
+  font-size: 12px;
+  color: #6b7280;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  min-height: auto;
+}
+
+.reddit-reply-btn:hover {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
   </style>
 </head>
 <body>
@@ -1085,6 +1231,7 @@ const PresenceSystem = {
   allPresence: {}, // Store all presence data (including offline)
   listeners: [],
   initialized: false,
+  OFFLINE_TIMEOUT: 60000, // 60 seconds - mark offline if no heartbeat
   
   init: function(userId, userName) {
     if (!userId || this.initialized) return;
@@ -1106,8 +1253,18 @@ const PresenceSystem = {
       this.updatePresence(document.hidden ? 'away' : 'online');
     });
     
-    // Handle page unload
+    // Handle page unload - try to mark offline
     window.addEventListener('beforeunload', () => {
+      this.updatePresence('offline');
+    });
+    
+    // Handle page hide (more reliable on mobile)
+    window.addEventListener('pagehide', () => {
+      this.updatePresence('offline');
+    });
+    
+    // Handle when page loses focus (additional safety)
+    document.addEventListener('freeze', () => {
       this.updatePresence('offline');
     });
     
@@ -1124,7 +1281,8 @@ const PresenceSystem = {
         lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
         userId: this.userId,
         userName: this.userName,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        heartbeatAt: Date.now() // Client timestamp for quick offline check
       }, { merge: true });
       console.log('[Presence] Updated:', status);
     } catch (e) {
@@ -1139,17 +1297,31 @@ const PresenceSystem = {
         .onSnapshot(snap => {
           const online = {};
           const all = {};
+          const now = Date.now();
           
           snap.docs.forEach(doc => {
             const data = doc.data();
-            all[doc.id] = data;
+            
+            // Check if user should be marked offline based on heartbeat timeout
+            const heartbeatAt = data.heartbeatAt || 0;
+            const timeSinceHeartbeat = now - heartbeatAt;
+            
+            // Auto-mark as offline if no heartbeat for OFFLINE_TIMEOUT
+            let effectiveStatus = data.status;
+            if (effectiveStatus === 'online' || effectiveStatus === 'away') {
+              if (timeSinceHeartbeat > this.OFFLINE_TIMEOUT) {
+                effectiveStatus = 'offline';
+              }
+            }
+            
+            all[doc.id] = { ...data, status: effectiveStatus, originalStatus: data.status };
             
             // Also index by userId and userName for flexible lookup
-            if (data.userId) all[data.userId] = data;
-            if (data.userName) all[data.userName.toLowerCase()] = data;
+            if (data.userId) all[data.userId] = { ...data, status: effectiveStatus };
+            if (data.userName) all[data.userName.toLowerCase()] = { ...data, status: effectiveStatus };
             
-            if (data.status === 'online' || data.status === 'away') {
-              online[doc.id] = data;
+            if (effectiveStatus === 'online' || effectiveStatus === 'away') {
+              online[doc.id] = { ...data, status: effectiveStatus };
             }
           });
           
@@ -1192,6 +1364,18 @@ const PresenceSystem = {
   
   isOnline: function(userId) {
     const presence = this.findPresence(userId);
+    if (!presence) return false;
+    
+    // Check heartbeat timeout
+    const now = Date.now();
+    const heartbeatAt = presence.heartbeatAt || 0;
+    const timeSinceHeartbeat = now - heartbeatAt;
+    
+    // If heartbeat is stale (>60s), consider offline
+    if (timeSinceHeartbeat > this.OFFLINE_TIMEOUT) {
+      return false;
+    }
+    
     return presence?.status === 'online' || presence?.status === 'away';
   },
   
@@ -7885,6 +8069,15 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
   const [isDismissed, setIsDismissed] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   
+  // List of roles that don't need profile completion (managers/admins)
+  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin'];
+  
+  // Check if current user is a manager/admin
+  const isManager = currentUser?.role && managerRoles.some(role => 
+    currentUser.role.toLowerCase().includes(role.toLowerCase()) ||
+    role.toLowerCase().includes(currentUser.role.toLowerCase())
+  );
+  
   // Required fields for teacher/manager profile
   const requiredFields = [
     { key: 'name', label: 'Full Name' },
@@ -7963,6 +8156,10 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
   
   // Don't show if complete or dismissed
   if (percentage >= 100 || isDismissed) return null;
+  
+  // Don't show profile completion banner for managers/admins
+  // They don't have a dedicated profile page - only teachers need to complete profiles
+  if (isManager) return null;
   
   // Determine urgency color
   const getUrgencyColor = () => {
@@ -8061,6 +8258,18 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
 // PROFILE COMPLETION CARD (For Dashboard)
 // ========================================
 function ProfileCompletionCard({ currentUser, onNavigateToProfile }) {
+  // List of roles that don't need profile completion (managers/admins)
+  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin'];
+  
+  // Check if current user is a manager/admin
+  const isManager = currentUser?.role && managerRoles.some(role => 
+    currentUser.role.toLowerCase().includes(role.toLowerCase()) ||
+    role.toLowerCase().includes(currentUser.role.toLowerCase())
+  );
+  
+  // Don't show profile completion card for managers/admins
+  if (isManager) return null;
+  
   // Required fields for teacher/manager profile
   const requiredFields = [
     'name', 'email', 'phone', 'whatsapp', 'dob', 'dateOfBirth', 'school', 
@@ -22149,6 +22358,63 @@ function SocialWall({ teachers, currentUser }) {
     }
   };
 
+  // Handle nested reply (reply to a comment)
+  const handleNestedReply = async (postId, parentCommentId, replyText) => {
+    if (!replyText.trim()) return;
+    
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    
+    const comments = [...(post.comments || [])];
+    const commentIndex = comments.findIndex(c => c.id === parentCommentId);
+    if (commentIndex === -1) return;
+    
+    const parentComment = comments[commentIndex];
+    
+    const newNestedReply = {
+      id: Date.now().toString(),
+      authorId: currentUser.afid || currentUser.uid,
+      authorName: currentUser.name,
+      authorPhoto: currentUser.profilePhoto || '',
+      content: replyText.trim(),
+      reactions: {},
+      createdAt: new Date().toISOString()
+    };
+    
+    // Add nested reply to parent comment
+    const updatedReplies = [...(parentComment.replies || []), newNestedReply];
+    comments[commentIndex] = { ...parentComment, replies: updatedReplies };
+    
+    try {
+      await db.collection('socialPosts').doc(postId).update({ comments: comments });
+      setPosts(posts.map(p => p.id === postId ? { ...p, comments: comments } : p));
+      
+      // Send mention notifications if any
+      const mentionRegex = /@(\w+(?:\s\w+)?)/g;
+      let match;
+      while ((match = mentionRegex.exec(replyText)) !== null) {
+        const mentionedName = match[1];
+        const mentionedMember = allMembers.find(m => 
+          m.name?.toLowerCase() === mentionedName.toLowerCase()
+        );
+        
+        if (mentionedMember) {
+          const mentionedUserId = mentionedMember.afid || mentionedMember.uid || mentionedMember.id;
+          MentionNotificationSystem.sendMentionNotification(
+            mentionedUserId,
+            mentionedMember.name,
+            replyText,
+            currentUser.name,
+            currentUser.afid || currentUser.uid
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Nested reply error:', error);
+      alert('Failed to post reply');
+    }
+  };
+
   const dismissBirthdayPopup = () => {
     localStorage.setItem('birthdayDismissed_' + new Date().toDateString(), 'true');
     setShowBirthdayPopup(null);
@@ -22880,9 +23146,9 @@ function SocialWall({ teachers, currentUser }) {
                       )}
                     </div>
                     
-                    {/* Comments Section */}
+                    {/* Comments Section - Reddit Style */}
                     {post.comments?.length > 0 && (
-                      <div className="space-y-3 mb-3">
+                      <div className="space-y-2 mb-3">
                         {post.comments.slice(0, expandedReplies[post.id] ? post.comments.length : 2).map((reply, idx) => {
                           // Calculate comment reaction counts
                           const commentReactionCounts = {};
@@ -22891,57 +23157,178 @@ function SocialWall({ teachers, currentUser }) {
                           });
                           const myCommentReaction = reply.reactions?.[currentUser.afid || currentUser.uid];
                           const commentEmojis = ['👍', '❤️', '😊'];
+                          const isCollapsed = expandedReplies[`collapse_${post.id}_${reply.id}`];
+                          const showEmojiPicker = expandedReplies[`emoji_${post.id}_${reply.id}`];
+                          const hasAnyReactions = Object.keys(reply.reactions || {}).length > 0;
                           
                           return (
-                            <div key={reply.id || idx} className="flex gap-2">
-                              {reply.authorPhoto ? (
-                                <img src={reply.authorPhoto} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                              ) : (
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-300 to-purple-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                                  {reply.authorName?.charAt(0)}
-                                </div>
+                            <div key={reply.id || idx} className="reddit-comment-thread">
+                              {/* Collapse button */}
+                              {(reply.replies?.length > 0) && (
+                                <button 
+                                  className="reddit-collapse-btn"
+                                  onClick={() => setExpandedReplies({...expandedReplies, [`collapse_${post.id}_${reply.id}`]: !isCollapsed})}
+                                  title={isCollapsed ? 'Expand' : 'Collapse'}
+                                >
+                                  {isCollapsed ? '+' : '−'}
+                                </button>
                               )}
-                              <div className="flex-1">
-                                <div className="bg-gray-50 rounded-2xl px-3 py-2">
-                                  <span className="font-semibold text-sm">{reply.authorName}</span>
-                                  <span className="text-gray-700 text-sm ml-1">
-                                    {/* Render content with mentions highlighted */}
-                                    {reply.content?.split(/(@\w+(?:\s\w+)?)/g).map((part, i) => 
-                                      part.startsWith('@') ? (
-                                        <span key={i} className="mention-tag">{part}</span>
-                                      ) : part
+                              
+                              {/* Main comment */}
+                              <div className="comment-wrapper flex gap-2 ml-0">
+                                {reply.authorPhoto ? (
+                                  <img src={reply.authorPhoto} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                                ) : (
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-300 to-purple-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                                    {reply.authorName?.charAt(0)}
+                                  </div>
+                                )}
+                                <div className="flex-1">
+                                  <div className="bg-gray-50 rounded-2xl px-3 py-2">
+                                    <span className="font-semibold text-sm">{reply.authorName}</span>
+                                    <span className="text-gray-700 text-sm ml-1">
+                                      {/* Render content with mentions highlighted */}
+                                      {reply.content?.split(/(@\w+(?:\s\w+)?)/g).map((part, i) => 
+                                        part.startsWith('@') ? (
+                                          <span key={i} className="mention-tag">{part}</span>
+                                        ) : part
+                                      )}
+                                    </span>
+                                    {reply.imageUrl && (
+                                      <img src={reply.imageUrl} alt="" className="mt-2 max-h-32 rounded-lg" />
                                     )}
-                                  </span>
-                                  {reply.imageUrl && (
-                                    <img src={reply.imageUrl} alt="" className="mt-2 max-h-32 rounded-lg" />
-                                  )}
-                                </div>
-                                
-                                {/* Comment reactions row */}
-                                <div className="flex items-center gap-1 mt-1 ml-2">
-                                  <span className="text-xs text-gray-400">
-                                    {reply.createdAt ? new Date(reply.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
-                                  </span>
-                                  <span className="text-gray-300 mx-1">•</span>
+                                  </div>
                                   
-                                  {/* Comment reaction buttons */}
-                                  {commentEmojis.map(emoji => {
-                                    const reactedBy = Object.entries(reply.reactions || {})
-                                      .filter(([uid, reaction]) => reaction === emoji)
-                                      .map(([uid]) => uid);
+                                  {/* Comment reactions row */}
+                                  <div className="flex items-center gap-1 mt-1 ml-2">
+                                    <span className="text-xs text-gray-400">
+                                      {reply.createdAt ? new Date(reply.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
+                                    </span>
+                                    <span className="text-gray-300 mx-1">•</span>
                                     
-                                    return (
-                                      <ReactionButton
-                                        key={emoji}
-                                        emoji={emoji}
-                                        count={commentReactionCounts[emoji]}
-                                        isActive={myCommentReaction === emoji}
-                                        onClick={() => handleCommentReaction(post.id, reply.id, emoji)}
-                                        reactedBy={reactedBy}
-                                        allMembers={allMembers}
-                                      />
-                                    );
-                                  })}
+                                    {/* Reply button */}
+                                    <button 
+                                      className="reddit-reply-btn"
+                                      onClick={() => setExpandedReplies({...expandedReplies, [`reply_${post.id}_${reply.id}`]: !expandedReplies[`reply_${post.id}_${reply.id}`]})}
+                                    >
+                                      ↩ Reply
+                                    </button>
+                                    
+                                    <span className="text-gray-300 mx-1">•</span>
+                                    
+                                    {/* Comment emoji container with hover reveal */}
+                                    <div className={`comment-emoji-container ${showEmojiPicker ? 'emoji-picker-open' : ''}`}>
+                                      {/* Toggle button for mobile */}
+                                      <button 
+                                        className="comment-emoji-toggle"
+                                        onClick={() => setExpandedReplies({...expandedReplies, [`emoji_${post.id}_${reply.id}`]: !showEmojiPicker})}
+                                      >
+                                        😊
+                                      </button>
+                                      
+                                      {/* Emoji buttons */}
+                                      {commentEmojis.map(emoji => {
+                                        const count = commentReactionCounts[emoji] || 0;
+                                        const reactedBy = Object.entries(reply.reactions || {})
+                                          .filter(([uid, reaction]) => reaction === emoji)
+                                          .map(([uid]) => uid);
+                                        
+                                        return (
+                                          <ReactionButton
+                                            key={emoji}
+                                            emoji={emoji}
+                                            count={count}
+                                            isActive={myCommentReaction === emoji}
+                                            onClick={() => handleCommentReaction(post.id, reply.id, emoji)}
+                                            reactedBy={reactedBy}
+                                            allMembers={allMembers}
+                                          />
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Reply input for this comment */}
+                                  {expandedReplies[`reply_${post.id}_${reply.id}`] && (
+                                    <div className="reddit-reply-input mt-2">
+                                      <div className="flex items-center gap-2">
+                                        <MentionInput
+                                          value={expandedReplies[`replyText_${post.id}_${reply.id}`] || ''}
+                                          onChange={(val) => setExpandedReplies({...expandedReplies, [`replyText_${post.id}_${reply.id}`]: val})}
+                                          placeholder={`Reply to ${reply.authorName}...`}
+                                          allMembers={allMembers}
+                                          className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-400"
+                                          onSubmit={() => {
+                                            const replyText = expandedReplies[`replyText_${post.id}_${reply.id}`];
+                                            if (replyText?.trim()) {
+                                              handleNestedReply(post.id, reply.id, replyText.trim());
+                                              setExpandedReplies({
+                                                ...expandedReplies, 
+                                                [`replyText_${post.id}_${reply.id}`]: '',
+                                                [`reply_${post.id}_${reply.id}`]: false
+                                              });
+                                            }
+                                          }}
+                                        />
+                                        <button
+                                          onClick={() => {
+                                            const replyText = expandedReplies[`replyText_${post.id}_${reply.id}`];
+                                            if (replyText?.trim()) {
+                                              handleNestedReply(post.id, reply.id, replyText.trim());
+                                              setExpandedReplies({
+                                                ...expandedReplies, 
+                                                [`replyText_${post.id}_${reply.id}`]: '',
+                                                [`reply_${post.id}_${reply.id}`]: false
+                                              });
+                                            }
+                                          }}
+                                          className="text-purple-600 font-semibold text-sm hover:text-purple-800 px-3 py-2"
+                                        >
+                                          Post
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Nested replies */}
+                                  {!isCollapsed && reply.replies?.length > 0 && (
+                                    <div className="mt-2 space-y-2 ml-4 pl-4 border-l-2 border-gray-200">
+                                      {reply.replies.map((nestedReply, nidx) => {
+                                        const nestedReactionCounts = {};
+                                        Object.values(nestedReply.reactions || {}).forEach(e => {
+                                          nestedReactionCounts[e] = (nestedReactionCounts[e] || 0) + 1;
+                                        });
+                                        const myNestedReaction = nestedReply.reactions?.[currentUser.afid || currentUser.uid];
+                                        
+                                        return (
+                                          <div key={nestedReply.id || nidx} className="comment-wrapper flex gap-2">
+                                            {nestedReply.authorPhoto ? (
+                                              <img src={nestedReply.authorPhoto} alt="" className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                                            ) : (
+                                              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-300 to-indigo-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                                {nestedReply.authorName?.charAt(0)}
+                                              </div>
+                                            )}
+                                            <div className="flex-1">
+                                              <div className="bg-gray-50 rounded-xl px-3 py-1.5">
+                                                <span className="font-semibold text-xs">{nestedReply.authorName}</span>
+                                                <span className="text-gray-700 text-xs ml-1">
+                                                  {nestedReply.content?.split(/(@\w+(?:\s\w+)?)/g).map((part, i) => 
+                                                    part.startsWith('@') ? (
+                                                      <span key={i} className="mention-tag">{part}</span>
+                                                    ) : part
+                                                  )}
+                                                </span>
+                                              </div>
+                                              <div className="flex items-center gap-1 mt-0.5 ml-2 text-xs text-gray-400">
+                                                {nestedReply.createdAt && new Date(nestedReply.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -29595,6 +29982,35 @@ const NotificationManager = {
             console.log('[NotificationManager] Birthdays found:', birthdays.length);
             console.log('[NotificationManager] Anniversaries found:', anniversaries.length);
             
+            // Store celebration notifications in Firestore for background delivery
+            // This allows a Cloud Function to send push notifications to all users
+            if (birthdays.length > 0 || anniversaries.length > 0) {
+                const celebrationNotification = {
+                    type: 'celebration',
+                    date: todayStr,
+                    birthdays: birthdays.map(b => ({ name: b.name, id: b.id })),
+                    anniversaries: anniversaries.map(a => ({ 
+                        name: a.name, 
+                        id: a.id, 
+                        years: today.getFullYear() - new Date(a.joiningDate).getFullYear() 
+                    })),
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    processed: false
+                };
+                
+                // Store in app_notifications for all users to see
+                await firebase.firestore().collection('app_notifications').add({
+                    title: birthdays.length > 0 ? '🎂 Birthday Today!' : '🎉 Work Anniversary!',
+                    message: birthdays.length > 0 
+                        ? `Wish ${birthdays.map(b => b.name).slice(0, 2).join(', ')}${birthdays.length > 2 ? ` and ${birthdays.length - 2} more` : ''} a Happy Birthday!`
+                        : `Congratulate ${anniversaries.map(a => a.name).slice(0, 2).join(', ')}${anniversaries.length > 2 ? ` and ${anniversaries.length - 2} more` : ''} on their work anniversary!`,
+                    type: 'celebration',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                console.log('[NotificationManager] Stored celebration notification in Firestore');
+            }
+            
             // Request notification permission if not granted
             if (Notification.permission === 'default') {
                 console.log('[NotificationManager] Requesting notification permission...');
@@ -29750,8 +30166,84 @@ const NotificationManager = {
                 // Reload notifications
                 this.loadNotifications();
             });
+            
+            // Check for pending celebration notifications from background
+            this.checkPendingCelebrations();
         } catch (e) {
             console.log('[NotificationManager] Messaging init error:', e);
+        }
+    },
+    
+    // Check if there are pending celebration notifications from when the app was closed
+    checkPendingCelebrations: async function() {
+        try {
+            // Check IndexedDB for pending check flag
+            if ('indexedDB' in window) {
+                const db = await this.openIndexedDB();
+                const pending = await this.getFromIndexedDB(db, 'pendingCelebrationCheck');
+                if (pending) {
+                    console.log('[NotificationManager] Pending celebration check from background');
+                    await this.setInIndexedDB(db, 'pendingCelebrationCheck', false);
+                    // Trigger immediate check
+                    setTimeout(() => this.checkForCelebrations(), 1000);
+                }
+            }
+        } catch (e) {
+            console.log('[NotificationManager] IndexedDB check error:', e);
+        }
+    },
+    
+    // IndexedDB helpers
+    openIndexedDB: function() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('AvantiNotifications', 1);
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('data')) {
+                    db.createObjectStore('data');
+                }
+            };
+        });
+    },
+    
+    getFromIndexedDB: function(db, key) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('data', 'readonly');
+            const store = tx.objectStore('data');
+            const request = store.get(key);
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+        });
+    },
+    
+    setInIndexedDB: function(db, key, value) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('data', 'readwrite');
+            const store = tx.objectStore('data');
+            const request = store.put(value, key);
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve();
+        });
+    },
+    
+    // Schedule a celebration notification to be sent later (stored in Firestore for Cloud Function)
+    scheduleCelebrationNotification: async function(type, personName, personId, scheduledTime) {
+        if (typeof firebase === 'undefined') return;
+        
+        try {
+            await firebase.firestore().collection('scheduled_notifications').add({
+                type: type, // 'birthday' or 'anniversary'
+                personName: personName,
+                personId: personId,
+                scheduledTime: scheduledTime,
+                sent: false,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            console.log('[NotificationManager] Scheduled notification for:', personName, type);
+        } catch (e) {
+            console.error('[NotificationManager] Schedule error:', e);
         }
     },
     
