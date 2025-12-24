@@ -5,24 +5,80 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
   
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+  <!-- ✅ PERFORMANCE FIX: Resource hints for faster connections -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="dns-prefetch" href="https://firestore.googleapis.com">
+  <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com">
   
-  <!-- React -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- ✅ FIX: Chart.js v3.9.1 (specific stable version) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  <!-- ✅ PERFORMANCE FIX: Critical CSS inline for instant loading screen -->
+  <style id="critical-css">
+    /* Instant loading screen - shows before any JS loads */
+    .instant-loader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #F4B41A 0%, #E8B039 50%, #C8342E 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+    }
+    .instant-loader-logo {
+      width: 80px;
+      height: 80px;
+      background: white;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      animation: pulse 1.5s ease-in-out infinite;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    .instant-loader-text {
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 24px;
+      font-weight: bold;
+      margin-top: 20px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .instant-loader-sub {
+      color: rgba(255,255,255,0.9);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      margin-top: 8px;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    .loader-dots {
+      display: flex;
+      gap: 8px;
+      margin-top: 30px;
+    }
+    .loader-dot {
+      width: 12px;
+      height: 12px;
+      background: white;
+      border-radius: 50%;
+      animation: bounce 1.4s ease-in-out infinite;
+    }
+    .loader-dot:nth-child(1) { animation-delay: 0s; }
+    .loader-dot:nth-child(2) { animation-delay: 0.2s; }
+    .loader-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+  </style>
   
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
@@ -32,18 +88,43 @@
   <meta name="apple-mobile-web-app-title" content="Curriculum Tracker">
   <link rel="apple-touch-icon" href="/icon-192.png">
 
-  <!-- CSV & Excel -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+  <!-- ✅ PERFORMANCE FIX: Load critical scripts first, defer others -->
+  <!-- Firebase Core (required for auth) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   
-  <!-- 2FA Libraries -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/otpauth/9.2.2/otpauth.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- React (required for app) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- Barcode Scanner Library for Asset Management -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- ✅ PERFORMANCE FIX: Defer non-critical scripts -->
+  <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script defer src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/otpauth/9.2.2/otpauth.umd.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script defer src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   
   <style>
+    /* ✅ PERFORMANCE: GPU acceleration for smooth animations */
+    .avanti-gradient, .stat-card, .chapter-card, .modal-content {
+      transform: translateZ(0);
+      backface-visibility: hidden;
+    }
+    
+    /* ✅ PERFORMANCE: Reduce paint areas */
+    #root {
+      contain: layout style;
+    }
+    
     /* Priority Badge Gradients */
 .priority-badge {
   display: inline-block;
@@ -1117,7 +1198,33 @@
   </style>
 </head>
 <body>
+  <!-- ✅ PERFORMANCE FIX: Instant loading screen - shows before ANY JavaScript loads -->
+  <!-- This dramatically improves First Contentful Paint (FCP) -->
+  <div id="instant-loader" class="instant-loader">
+    <div class="instant-loader-logo">📚</div>
+    <div class="instant-loader-text">Curriculum Tracker</div>
+    <div class="instant-loader-sub">Avanti Fellows</div>
+    <div class="loader-dots">
+      <div class="loader-dot"></div>
+      <div class="loader-dot"></div>
+      <div class="loader-dot"></div>
+    </div>
+  </div>
+  
   <div id="root"></div>
+  
+  <script>
+  // ✅ PERFORMANCE FIX: Hide instant loader once React app renders
+  window.hideInstantLoader = function() {
+    const loader = document.getElementById('instant-loader');
+    if (loader) {
+      loader.style.transition = 'opacity 0.3s ease';
+      loader.style.opacity = '0';
+      setTimeout(() => loader.remove(), 300);
+    }
+  };
+  </script>
+  
   <script>
   // Register Chart.js datalabels plugin safely
 if (typeof ChartDataLabels !== 'undefined' && typeof Chart !== 'undefined') {
@@ -8772,6 +8879,17 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
   }
 }}else{// Check for student session in localStorage
 const studentSession=localStorage.getItem('studentSession');if(studentSession){try{const studentData=JSON.parse(studentSession);console.log('✅ Restored student session:',studentData);setCurrentUser(studentData);setIsAdmin(false);setActiveTab('dashboard')}catch(e){console.error('Failed to restore student session:',e);localStorage.removeItem('studentSession')}}else{setCurrentUser(null);setIsAdmin(false)}}setLoading(false)});return()=>unsubscribe()},[getAccessibleSchools]);
+
+// ✅ PERFORMANCE FIX: Hide instant HTML loader once React takes over
+useEffect(() => {
+  // Small delay to ensure smooth transition
+  const timer = setTimeout(() => {
+    if (typeof window.hideInstantLoader === 'function') {
+      window.hideInstantLoader();
+    }
+  }, 100);
+  return () => clearTimeout(timer);
+}, []);
 
 // ✅ FIX: Safety timeout - Force stop loading after 30 seconds (prevents infinite loading on slow JNV networks)
 useEffect(() => {
