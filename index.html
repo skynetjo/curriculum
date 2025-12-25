@@ -315,6 +315,154 @@
       border: 1px solid var(--border-color);
     }
     
+    /* ========================================
+       COMPREHENSIVE DARK MODE TEXT FIXES
+       ======================================== */
+    
+    /* Fix ALL text that might be dark/black */
+    [data-theme="dark"] .text-black,
+    [data-theme="dark"] [class*="text-gray-9"],
+    [data-theme="dark"] [class*="text-gray-8"],
+    [data-theme="dark"] [class*="text-gray-7"] {
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix any inline style with dark colors */
+    [data-theme="dark"] [style*="color: #000"],
+    [data-theme="dark"] [style*="color:#000"],
+    [data-theme="dark"] [style*="color: black"],
+    [data-theme="dark"] [style*="color:black"],
+    [data-theme="dark"] [style*="color: rgb(0"],
+    [data-theme="dark"] [style*="color:rgb(0"] {
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix sidebar text in dark mode - ensure visibility */
+    [data-theme="dark"] .sidebar .text-gray-400,
+    [data-theme="dark"] .sidebar-footer .text-gray-400 {
+      color: #9ca3af !important;
+    }
+    
+    [data-theme="dark"] .sidebar p,
+    [data-theme="dark"] .sidebar span:not(.sidebar-icon),
+    [data-theme="dark"] .sidebar-footer p,
+    [data-theme="dark"] .sidebar-footer span {
+      color: rgba(255, 255, 255, 0.8) !important;
+    }
+    
+    [data-theme="dark"] .sidebar .font-semibold,
+    [data-theme="dark"] .sidebar-footer .font-semibold {
+      color: white !important;
+    }
+    
+    /* Fix theme toggle container text */
+    [data-theme="dark"] .theme-toggle-container span {
+      color: rgba(255,255,255,0.6) !important;
+    }
+    
+    /* Fix cards and containers */
+    [data-theme="dark"] .chapter-card,
+    [data-theme="dark"] .stat-card,
+    [data-theme="dark"] .ranking-card {
+      background: var(--bg-card) !important;
+      color: var(--text-primary) !important;
+    }
+    
+    [data-theme="dark"] .chapter-card h3,
+    [data-theme="dark"] .chapter-card p,
+    [data-theme="dark"] .stat-card h3,
+    [data-theme="dark"] .stat-card p {
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix table text */
+    [data-theme="dark"] table,
+    [data-theme="dark"] table td,
+    [data-theme="dark"] table th,
+    [data-theme="dark"] table tr {
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix badges and status indicators */
+    [data-theme="dark"] .badge,
+    [data-theme="dark"] [class*="badge"] {
+      color: inherit;
+    }
+    
+    /* Fix feedback content and forms */
+    [data-theme="dark"] .feedback-content {
+      background: var(--bg-card) !important;
+      color: var(--text-primary) !important;
+    }
+    
+    [data-theme="dark"] .feedback-content h2,
+    [data-theme="dark"] .feedback-content h3,
+    [data-theme="dark"] .feedback-content p,
+    [data-theme="dark"] .feedback-content label {
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix teacher cards */
+    [data-theme="dark"] .teacher-card {
+      background: var(--bg-card) !important;
+      color: var(--text-primary) !important;
+    }
+    
+    [data-theme="dark"] .teacher-card p,
+    [data-theme="dark"] .teacher-card h3,
+    [data-theme="dark"] .teacher-card span {
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix dropdown menus */
+    [data-theme="dark"] .dropdown-menu,
+    [data-theme="dark"] [class*="dropdown"] {
+      background: var(--bg-secondary) !important;
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix tooltips */
+    [data-theme="dark"] .tooltip,
+    [data-theme="dark"] [class*="tooltip"] {
+      background: var(--bg-secondary) !important;
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix notification popups */
+    [data-theme="dark"] .notification-expansion-popup {
+      background: var(--bg-card) !important;
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix any remaining gray backgrounds */
+    [data-theme="dark"] .bg-gray-200,
+    [data-theme="dark"] .bg-gray-300 {
+      background: var(--bg-secondary) !important;
+    }
+    
+    /* Fix border colors */
+    [data-theme="dark"] .border-gray-100,
+    [data-theme="dark"] .border-gray-200,
+    [data-theme="dark"] .border-gray-300 {
+      border-color: var(--border-color) !important;
+    }
+    
+    /* Fix completed/delayed/pending chapter cards - preserve their colors but fix text */
+    [data-theme="dark"] .chapter-card.completed,
+    [data-theme="dark"] .chapter-card.delayed,
+    [data-theme="dark"] .chapter-card.pending {
+      color: #1f2937 !important; /* Dark text for colored backgrounds */
+    }
+    
+    [data-theme="dark"] .chapter-card.completed h3,
+    [data-theme="dark"] .chapter-card.completed p,
+    [data-theme="dark"] .chapter-card.delayed h3,
+    [data-theme="dark"] .chapter-card.delayed p,
+    [data-theme="dark"] .chapter-card.pending h3,
+    [data-theme="dark"] .chapter-card.pending p {
+      color: #1f2937 !important;
+    }
+    
     [data-theme="dark"] .shadow-lg,
     [data-theme="dark"] .shadow-md,
     [data-theme="dark"] .shadow {
@@ -832,25 +980,9 @@
   box-shadow: 4px 0 15px rgba(0,0,0,0.15);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000 !important;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden; /* Changed from overflow-y: auto - sidebar itself doesn't scroll */
   display: flex;
   flex-direction: column;
-}
-
-/* Custom scrollbar for sidebar */
-.sidebar::-webkit-scrollbar {
-  width: 6px;
-}
-.sidebar::-webkit-scrollbar-track {
-  background: rgba(255,255,255,0.05);
-}
-.sidebar::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.2);
-  border-radius: 3px;
-}
-.sidebar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.3);
 }
 
 .sidebar.collapsed {
@@ -919,9 +1051,7 @@
   justify-content: space-between;
   min-height: 70px;
   background: rgba(244, 180, 26, 0.1);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .sidebar-logo {
@@ -983,6 +1113,24 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow-y: auto; /* Only nav section scrolls */
+  overflow-x: hidden;
+  min-height: 0; /* Important for flex scroll containers */
+}
+
+/* Custom scrollbar for sidebar nav */
+.sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar-nav::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.05);
+}
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+}
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.3);
 }
 
 .sidebar-item {
@@ -1055,11 +1203,12 @@
   display: none;
 }
 
-/* Sidebar footer */
+/* Sidebar footer - always visible at bottom */
 .sidebar-footer {
   padding: 1rem;
   border-top: 1px solid rgba(255,255,255,0.08);
-  margin-top: auto;
+  flex-shrink: 0; /* Prevent footer from shrinking */
+  background: #1a1a2e; /* Ensure solid background */
 }
 
 .sidebar-logout {
@@ -1359,24 +1508,6 @@
 .sidebar.collapsed .sidebar-item:hover::after {
   opacity: 1;
   left: calc(100% + 5px);
-}
-
-/* Scrollbar styling for sidebar */
-.sidebar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.sidebar::-webkit-scrollbar-track {
-  background: rgba(255,255,255,0.1);
-}
-
-.sidebar::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.3);
-  border-radius: 3px;
-}
-
-.sidebar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.5);
 }
 
 /* ========================================
