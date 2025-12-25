@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -960,52 +959,177 @@
 }
 
 /* ========================================
-   FLOATING TOGGLE BUTTON - Always Visible
+   FLOATING TOGGLE BUTTON - HIDDEN (User Request)
    ======================================== */
 .sidebar-float-toggle {
-  position: fixed !important;
-  bottom: 24px !important;
-  width: 56px;
-  height: 56px;
-  background: linear-gradient(135deg, #F4B41A 0%, #E8B039 100%);
-  border: none;
-  border-radius: 16px;
-  color: white;
-  font-size: 22px;
-  cursor: pointer;
-  z-index: 1002 !important;
-  display: flex !important;
+  display: none !important;
+}
+
+/* ========================================
+   INSTALL APP BANNER - Top of Page
+   ======================================== */
+.install-app-banner {
+  display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 20px rgba(244, 180, 26, 0.5);
-  transition: left 0.3s ease, transform 0.2s ease;
+  gap: 12px;
+  padding: 10px 20px;
+  background: #1a1a2e;
+  color: white;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1005;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  font-size: 14px;
+  font-weight: 500;
 }
 
-.sidebar-float-toggle:hover {
-  transform: scale(1.08);
-  box-shadow: 0 6px 25px rgba(244, 180, 26, 0.6);
+.install-app-banner.hidden {
+  display: none !important;
 }
 
-.sidebar-float-toggle:active {
-  transform: scale(0.95);
+.install-app-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-/* Position based on sidebar state */
-.sidebar-float-toggle.sidebar-expanded {
-  left: 272px !important;
+.install-app-banner-text i {
+  font-size: 18px;
+  color: #F4B41A;
 }
 
-.sidebar-float-toggle.sidebar-collapsed {
-  left: 84px !important;
+.install-app-banner-btn {
+  background: linear-gradient(135deg, #F4B41A 0%, #E8B039 100%);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-/* Mobile: Always at fixed position */
+.install-app-banner-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(244, 180, 26, 0.4);
+}
+
+.install-app-banner-close {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: rgba(255,255,255,0.7);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  margin-left: 8px;
+  transition: all 0.2s;
+}
+
+.install-app-banner-close:hover {
+  background: rgba(255,255,255,0.2);
+  color: white;
+}
+
+/* Adjust page layout when banner is visible */
+body.has-install-banner .mobile-fixed-header {
+  top: 44px !important;
+}
+
+body.has-install-banner .main-content {
+  padding-top: 114px !important;
+}
+
+body.has-install-banner .sidebar {
+  top: 44px !important;
+  height: calc(100vh - 44px) !important;
+  height: calc(100dvh - 44px) !important;
+}
+
 @media (max-width: 768px) {
-  .sidebar-float-toggle,
-  .sidebar-float-toggle.sidebar-expanded,
-  .sidebar-float-toggle.sidebar-collapsed {
-    left: 20px !important;
-    bottom: 20px !important;
+  .install-app-banner {
+    padding: 8px 12px;
+    font-size: 12px;
+    gap: 8px;
+  }
+  
+  .install-app-banner-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .install-app-banner-text span {
+    display: none;
+  }
+  
+  body.has-install-banner .main-content.sidebar-expanded,
+  body.has-install-banner .main-content.sidebar-collapsed {
+    padding-top: 114px !important;
+  }
+}
+
+/* ========================================
+   HOVER-TO-OPEN SIDEBAR (Desktop Only)
+   ======================================== */
+@media (min-width: 769px) {
+  /* Hover detection zone */
+  .sidebar-hover-zone {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 20px;
+    height: 100vh;
+    z-index: 999;
+    background: transparent;
+  }
+  
+  /* When sidebar is collapsed, expand on hover */
+  .sidebar.collapsed.hovering {
+    width: 260px !important;
+  }
+  
+  .sidebar.collapsed.hovering .sidebar-label {
+    opacity: 1 !important;
+    width: auto !important;
+    display: inline !important;
+  }
+  
+  .sidebar.collapsed.hovering .sidebar-logo-text {
+    opacity: 1 !important;
+    width: auto !important;
+  }
+  
+  .sidebar.collapsed.hovering .sidebar-item {
+    justify-content: flex-start !important;
+    padding: 0.75rem 1rem !important;
+  }
+  
+  .sidebar.collapsed.hovering .sidebar-item.active::before {
+    display: block !important;
+  }
+  
+  .sidebar.collapsed.hovering .sidebar-logout span {
+    display: inline !important;
+  }
+  
+  .sidebar.collapsed.hovering .theme-toggle-container {
+    display: flex !important;
+  }
+  
+  /* Hide collapsed dark mode toggle when hovering */
+  .sidebar.collapsed.hovering > .sidebar-footer > .sidebar-item[data-tooltip] {
+    display: none !important;
   }
 }
 
@@ -1257,10 +1381,6 @@
   
   .sidebar-toggle {
     display: none;
-  }
-  
-  .sidebar-float-toggle {
-    display: none !important; /* Hide on mobile - using bottom nav instead */
   }
   
   .main-content.sidebar-expanded,
@@ -4920,66 +5040,105 @@ const getChapterStatus=(chapter,progress)=>{
 function InstallPrompt(){
   const[deferredPrompt,setDeferredPrompt]=useState(null);
   const[showInstall,setShowInstall]=useState(false);
+  const[isInstalled,setIsInstalled]=useState(false);
 
   useEffect(()=>{
+    // Check if running as installed PWA
+    const checkInstalled = () => {
+      const standalone = window.matchMedia('(display-mode: standalone)').matches;
+      const fromHomeScreen = window.navigator.standalone === true;
+      return standalone || fromHomeScreen;
+    };
+    
+    if(checkInstalled()){
+      setIsInstalled(true);
+      setShowInstall(false);
+      document.body.classList.remove('has-install-banner');
+      return;
+    }
+    
+    // Check if user dismissed the banner before
+    const dismissed = localStorage.getItem('installBannerDismissed');
+    const dismissedTime = localStorage.getItem('installBannerDismissedTime');
+    
+    // Show again after 7 days if dismissed
+    if(dismissed === 'true' && dismissedTime){
+      const daysSinceDismissed = (Date.now() - parseInt(dismissedTime)) / (1000 * 60 * 60 * 24);
+      if(daysSinceDismissed < 7){
+        document.body.classList.remove('has-install-banner');
+        return;
+      }
+    }
+    
     const handler=(e)=>{
       e.preventDefault();
       setDeferredPrompt(e);
       setShowInstall(true);
+      document.body.classList.add('has-install-banner');
     };
     window.addEventListener('beforeinstallprompt',handler);
     
-    // Check if already installed
-    if(window.matchMedia('(display-mode: standalone)').matches){
-      setShowInstall(false);
-    }
+    // For browsers that don't support beforeinstallprompt, show manual install guide
+    const timer = setTimeout(() => {
+      if(!deferredPrompt && !checkInstalled()){
+        setShowInstall(true);
+        document.body.classList.add('has-install-banner');
+      }
+    }, 2000);
     
-    return()=>window.removeEventListener('beforeinstallprompt',handler);
-  },[]);
+    return()=>{
+      window.removeEventListener('beforeinstallprompt',handler);
+      clearTimeout(timer);
+    };
+  },[deferredPrompt]);
 
   const handleInstall=async()=>{
-    if(!deferredPrompt)return;
-    deferredPrompt.prompt();
-    const{outcome}=await deferredPrompt.userChoice;
-    setDeferredPrompt(null);
-    setShowInstall(false);
+    if(deferredPrompt){
+      deferredPrompt.prompt();
+      const{outcome}=await deferredPrompt.userChoice;
+      if(outcome === 'accepted'){
+        setShowInstall(false);
+        document.body.classList.remove('has-install-banner');
+      }
+      setDeferredPrompt(null);
+    } else {
+      // Show manual install instructions
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if(isMobile){
+        if(/iPhone|iPad|iPod/i.test(navigator.userAgent)){
+          alert('📱 To install on iOS:\n\n1. Tap the Share button (📤) at the bottom\n2. Scroll down and tap "Add to Home Screen"\n3. Tap "Add" to confirm');
+        } else {
+          alert('📱 To install on Android:\n\n1. Tap the menu (⋮) at the top right\n2. Tap "Add to Home Screen" or "Install app"\n3. Tap "Install" to confirm');
+        }
+      } else {
+        alert('💻 To install on Desktop:\n\n1. Look for the install icon (⊕ or 📥) in the address bar\n2. Or click the menu (⋮) and select "Install Curriculum Tracker"');
+      }
+    }
   };
 
   const handleDismiss=()=>{
     setShowInstall(false);
-    localStorage.setItem('installDismissed','true');
+    document.body.classList.remove('has-install-banner');
+    localStorage.setItem('installBannerDismissed','true');
+    localStorage.setItem('installBannerDismissedTime',Date.now().toString());
   };
 
-  // Don't show if dismissed
-  if(localStorage.getItem('installDismissed')==='true')return null;
-  if(!showInstall)return null;
+  // Don't show if installed or dismissed
+  if(isInstalled || !showInstall) return null;
 
   return(
-    <div className="fixed bottom-4 left-4 right-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-2xl shadow-2xl z-[9999] animate-bounce">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex-1">
-          <p className="font-bold text-lg flex items-center gap-2">
-            📱 Install Mobile App
-          </p>
-          <p className="text-sm opacity-90 mt-1">
-            Use like a mobile app - faster & works offline!
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button 
-            onClick={handleInstall}
-            className="px-6 py-3 bg-white text-blue-600 rounded-xl font-bold hover:bg-gray-100 transition-all"
-          >
-            Install
-          </button>
-          <button 
-            onClick={handleDismiss}
-            className="px-3 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30 transition-all"
-          >
-            ✕
-          </button>
-        </div>
+    <div className="install-app-banner">
+      <div className="install-app-banner-text">
+        <i className="fa-solid fa-mobile-screen-button"></i>
+        <span>Install curriculum tracker app</span>
       </div>
+      <button onClick={handleInstall} className="install-app-banner-btn">
+        <i className="fa-solid fa-download"></i>
+        Install
+      </button>
+      <button onClick={handleDismiss} className="install-app-banner-close" title="Dismiss">
+        <i className="fa-solid fa-times"></i>
+      </button>
     </div>
   );
 }
@@ -10965,6 +11124,7 @@ function TeacherView({
   ];
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarHovering, setSidebarHovering] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isMobileMoreOpen, setIsMobileMoreOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -11363,67 +11523,13 @@ function TeacherView({
         </div>
       )}
 
-      {/* Manual Install Button - Smart visibility */}
-      {(() => {
-        // Check if already installed
-        const isInstalled = typeof window !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches;
-        // Get usage count
-        const usageCount = parseInt(localStorage.getItem('appUsageCount') || '0');
-        // Increment usage count on first render
-        if (typeof window !== 'undefined' && !window.__usageCountIncremented) {
-          window.__usageCountIncremented = true;
-          localStorage.setItem('appUsageCount', String(usageCount + 1));
-        }
-        // Hide if installed or used more than 5 times
-        const shouldHide = isInstalled || usageCount > 5;
-        
-        if (shouldHide) return null;
-        
-        return (
-          <div className="fixed bottom-24 md:bottom-20 right-4 z-[998]">
-            <button
-              onClick={() => {
-                if (window.matchMedia('(display-mode: standalone)').matches) {
-                  alert('App is already installed! ✓');
-                  localStorage.setItem('appUsageCount', '999'); // Hide forever
-                } else {
-                  alert(
-                    'To install:\n\n' +
-                      '📱 Mobile: Tap browser menu → "Add to Home Screen"\n\n' +
-                      '💻 Desktop: Look for install icon in address bar (⊕ or 📥)'
-                  );
-                }
-              }}
-              className="bg-blue-600 text-white px-4 py-3 rounded-full shadow-2xl font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
-            >
-              📱 Install App
-            </button>
-            <button
-              onClick={() => localStorage.setItem('appUsageCount', '999')}
-              className="absolute -top-2 -right-2 bg-gray-700 text-white w-6 h-6 rounded-full text-xs hover:bg-gray-600"
-              title="Don't show again"
-            >
-              ✕
-            </button>
-          </div>
-        );
-      })()}
-      
-      {/* Floating Sidebar Toggle Button - Always Visible */}
-      <button 
-        className={`sidebar-float-toggle ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}
-        onClick={() => {
-          if (window.innerWidth < 768) {
-            setIsMobileSidebarOpen(!isMobileSidebarOpen);
-          } else {
-            setSidebarCollapsed(!sidebarCollapsed);
-          }
-        }}
-        title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-        style={{display: 'flex'}}
-      >
-        <i className={`fa-solid ${sidebarCollapsed ? 'fa-angles-right' : 'fa-angles-left'}`}></i>
-      </button>
+      {/* Sidebar Hover Zone (for auto-expand on desktop) */}
+      {!isMobile && sidebarCollapsed && (
+        <div 
+          className="sidebar-hover-zone"
+          onMouseEnter={() => setSidebarHovering(true)}
+        />
+      )}
       
       {/* Mobile Sidebar Overlay */}
       <div 
@@ -11432,7 +11538,11 @@ function TeacherView({
       />
 
       {/* Modern Vertical Sidebar */}
-      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
+      <div 
+        className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} ${isMobileSidebarOpen ? 'mobile-open' : ''} ${sidebarHovering ? 'hovering' : ''}`}
+        onMouseEnter={() => !isMobile && sidebarCollapsed && setSidebarHovering(true)}
+        onMouseLeave={() => !isMobile && setSidebarHovering(false)}
+      >
         <div className="sidebar-header">
           <div className="sidebar-logo">
             <div className="sidebar-logo-icon">📚</div>
@@ -13875,11 +13985,21 @@ function AdminView({
 }) {
   const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'managers' : 'analytics');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarHovering, setSidebarHovering] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('darkMode');
     return saved === 'true';
   });
+  
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   // Apply dark mode to document
   useEffect(() => {
@@ -13977,6 +14097,52 @@ function AdminView({
     <div className="min-h-screen bg-gray-50">
       <InstallPrompt />
       
+      {/* ========== MOBILE FIXED HEADER ========== */}
+      {isMobile && (
+        <header 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '56px',
+            background: '#1a1a2e',
+            zIndex: 1001,
+            padding: '0 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+          }}
+        >
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            style={{
+              width: '44px',
+              height: '44px',
+              background: 'linear-gradient(135deg, #F4B41A 0%, #E8B039 100%)',
+              border: 'none',
+              borderRadius: '10px',
+              color: 'white',
+              fontSize: '20px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <i className={`fa-solid ${isMobileSidebarOpen ? 'fa-times' : 'fa-bars'}`}></i>
+          </button>
+          <div style={{color: 'white', fontWeight: 600, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+            <div style={{width: '32px', height: '32px', background: 'linear-gradient(135deg, #F4B41A 0%, #E8B039 100%)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px'}}>
+              {isSuperAdmin ? '👑' : '🛡️'}
+            </div>
+            <span>{isSuperAdmin ? 'Admin Panel' : 'Manager'}</span>
+          </div>
+          <div style={{width: '44px'}}></div>
+        </header>
+      )}
+      
       {/* Floating Celebration Card for Admin */}
       {floatingCelebration && (
         <div className={`floating-celebration-card ${floatingCelebration.type === 'anniversary' ? 'anniversary' : ''}`}>
@@ -14016,21 +14182,13 @@ function AdminView({
         </div>
       )}
       
-      {/* Floating Sidebar Toggle Button - Always Visible */}
-      <button 
-        className={`sidebar-float-toggle ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}
-        onClick={() => {
-          if (window.innerWidth < 768) {
-            setIsMobileSidebarOpen(!isMobileSidebarOpen);
-          } else {
-            setSidebarCollapsed(!sidebarCollapsed);
-          }
-        }}
-        title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-        style={{display: 'flex'}}
-      >
-        <i className={`fa-solid ${sidebarCollapsed ? 'fa-angles-right' : 'fa-angles-left'}`}></i>
-      </button>
+      {/* Sidebar Hover Zone (for auto-expand on desktop) */}
+      {!isMobile && sidebarCollapsed && (
+        <div 
+          className="sidebar-hover-zone"
+          onMouseEnter={() => setSidebarHovering(true)}
+        />
+      )}
       
       {/* Mobile Sidebar Overlay */}
       <div 
@@ -14039,7 +14197,11 @@ function AdminView({
       />
 
       {/* Modern Vertical Sidebar */}
-      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
+      <div 
+        className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} ${isMobileSidebarOpen ? 'mobile-open' : ''} ${sidebarHovering ? 'hovering' : ''}`}
+        onMouseEnter={() => !isMobile && sidebarCollapsed && setSidebarHovering(true)}
+        onMouseLeave={() => !isMobile && setSidebarHovering(false)}
+      >
         <div className="sidebar-header">
           <div className="sidebar-logo">
             <div className="sidebar-logo-icon">
@@ -14113,7 +14275,10 @@ function AdminView({
       </div>
 
       {/* Main content */}
-      <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
+      <div 
+        className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}
+        style={isMobile ? {marginLeft: 0, paddingTop: '70px', paddingBottom: '20px'} : {}}
+      >
         <div className="px-4 py-6">
         
         {/* Profile Completion Banner for Managers - Shows when profile incomplete */}
