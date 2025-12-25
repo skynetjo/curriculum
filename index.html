@@ -156,7 +156,134 @@
 .priority-low {
   background: linear-gradient(90deg, #EF4444 0%, #F87171 100%);
 }
-    :root{--avanti-yellow:#F4B41A;--avanti-orange:#E8B039;--avanti-red:#C8342E}
+    :root{
+      --avanti-yellow:#F4B41A;
+      --avanti-orange:#E8B039;
+      --avanti-red:#C8342E;
+      /* Light theme (default) */
+      --bg-primary: #f8fafc;
+      --bg-secondary: #ffffff;
+      --bg-card: #ffffff;
+      --text-primary: #1f2937;
+      --text-secondary: #6b7280;
+      --border-color: #e5e7eb;
+    }
+    
+    /* Dark Theme */
+    [data-theme="dark"] {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-card: #1e293b;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --border-color: #334155;
+    }
+    
+    [data-theme="dark"] .main-content {
+      background: var(--bg-primary) !important;
+    }
+    
+    [data-theme="dark"] .bg-white {
+      background: var(--bg-card) !important;
+    }
+    
+    [data-theme="dark"] .bg-gray-50,
+    [data-theme="dark"] .bg-gray-100 {
+      background: var(--bg-secondary) !important;
+    }
+    
+    [data-theme="dark"] .text-gray-900,
+    [data-theme="dark"] .text-gray-800,
+    [data-theme="dark"] .text-gray-700 {
+      color: var(--text-primary) !important;
+    }
+    
+    [data-theme="dark"] .text-gray-600,
+    [data-theme="dark"] .text-gray-500 {
+      color: var(--text-secondary) !important;
+    }
+    
+    [data-theme="dark"] .border-gray-200,
+    [data-theme="dark"] .border-gray-300 {
+      border-color: var(--border-color) !important;
+    }
+    
+    [data-theme="dark"] .shadow-lg,
+    [data-theme="dark"] .shadow-md,
+    [data-theme="dark"] .shadow {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2) !important;
+    }
+    
+    [data-theme="dark"] input,
+    [data-theme="dark"] select,
+    [data-theme="dark"] textarea {
+      background: var(--bg-secondary) !important;
+      color: var(--text-primary) !important;
+      border-color: var(--border-color) !important;
+    }
+    
+    [data-theme="dark"] table {
+      background: var(--bg-card);
+    }
+    
+    [data-theme="dark"] th {
+      background: var(--bg-secondary) !important;
+      color: var(--text-primary) !important;
+    }
+    
+    [data-theme="dark"] td {
+      border-color: var(--border-color) !important;
+      color: var(--text-primary) !important;
+    }
+    
+    [data-theme="dark"] tr:hover {
+      background: rgba(255,255,255,0.05) !important;
+    }
+    
+    /* Theme Toggle Switch */
+    .theme-toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      margin: 8px;
+    }
+    
+    .theme-toggle {
+      position: relative;
+      width: 50px;
+      height: 26px;
+      background: #374151;
+      border-radius: 13px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    
+    .theme-toggle.dark {
+      background: #F4B41A;
+    }
+    
+    .theme-toggle-slider {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+    
+    .theme-toggle.dark .theme-toggle-slider {
+      transform: translateX(24px);
+    }
+    
     *{box-sizing:border-box}
     
     /* Smooth scrolling for the entire app */
@@ -586,7 +713,7 @@
 }
 
 /* ========================================
-   MODERN SIDEBAR STYLES - Redesigned
+   MODERN SIDEBAR STYLES - Fixed & Scrollable
    ======================================== */
 .sidebar {
   position: fixed;
@@ -595,12 +722,27 @@
   height: 100vh;
   background: #1a1a2e;
   box-shadow: 4px 0 15px rgba(0,0,0,0.15);
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s ease;
   z-index: 1000;
   overflow-x: hidden;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+}
+
+/* Custom scrollbar for sidebar */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.05);
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.3);
 }
 
 .sidebar.collapsed {
@@ -611,6 +753,49 @@
   width: 260px;
 }
 
+/* Floating Toggle Button - Like the reference image */
+.sidebar-float-toggle {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #F4B41A 0%, #E8B039 100%);
+  border: none;
+  border-radius: 14px;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(244, 180, 26, 0.4);
+  transition: all 0.3s ease;
+}
+
+.sidebar-float-toggle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(244, 180, 26, 0.5);
+}
+
+.sidebar-float-toggle.sidebar-open {
+  left: 270px;
+}
+
+.sidebar-float-toggle.sidebar-collapsed {
+  left: 82px;
+}
+
+@media (max-width: 768px) {
+  .sidebar-float-toggle {
+    left: 20px !important;
+  }
+  .sidebar-float-toggle.sidebar-open {
+    left: 20px !important;
+  }
+}
+
 .sidebar-header {
   padding: 1.25rem;
   border-bottom: 1px solid rgba(255,255,255,0.08);
@@ -619,6 +804,9 @@
   justify-content: space-between;
   min-height: 70px;
   background: rgba(244, 180, 26, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .sidebar-logo {
@@ -10584,6 +10772,17 @@ function TeacherView({
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    // Check localStorage for saved preference
+    const saved = localStorage.getItem('darkMode');
+    return saved === 'true';
+  });
+  
+  // Apply dark mode to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+    localStorage.setItem('darkMode', darkMode);
+  }, [darkMode]);
   
   // Handle navigation and auto-close on mobile
   const handleTabClick = (tabId) => {
@@ -10728,20 +10927,20 @@ function TeacherView({
         );
       })()}
       
-      {/* Mobile Header with Hamburger */}
-      <div className="mobile-header">
-        <button 
-          className="hamburger-btn"
-          onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-        >
-          <i className={`fa-solid ${isMobileSidebarOpen ? 'fa-xmark' : 'fa-bars'}`}></i>
-        </button>
-        <div className="mobile-logo">
-          <img src={AVANTI_LOGO} alt="Avanti" className="w-8 h-8" />
-          <span>Curriculum Tracker</span>
-        </div>
-        <div style={{width: '40px'}}></div>
-      </div>
+      {/* Floating Sidebar Toggle Button */}
+      <button 
+        className={`sidebar-float-toggle ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-open'} ${isMobileSidebarOpen ? '' : ''}`}
+        onClick={() => {
+          if (window.innerWidth < 768) {
+            setIsMobileSidebarOpen(!isMobileSidebarOpen);
+          } else {
+            setSidebarCollapsed(!sidebarCollapsed);
+          }
+        }}
+        title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+      >
+        <i className={`fa-solid ${sidebarCollapsed || !isMobileSidebarOpen && window.innerWidth < 768 ? 'fa-bars' : 'fa-xmark'}`}></i>
+      </button>
       
       {/* Mobile Sidebar Overlay */}
       <div 
@@ -10779,8 +10978,34 @@ function TeacherView({
         </div>
 
         <div className="sidebar-footer">
+          {/* Dark Mode Toggle */}
           {!sidebarCollapsed && (
-            <div className="text-gray-400 text-sm mb-3 px-1">
+            <div className="theme-toggle-container">
+              <i className={`fa-solid ${darkMode ? 'fa-moon' : 'fa-sun'}`} style={{color: darkMode ? '#F4B41A' : '#6b7280'}}></i>
+              <div 
+                className={`theme-toggle ${darkMode ? 'dark' : ''}`}
+                onClick={() => setDarkMode(!darkMode)}
+              >
+                <div className="theme-toggle-slider">
+                  {darkMode ? '🌙' : '☀️'}
+                </div>
+              </div>
+              <span style={{color: 'rgba(255,255,255,0.6)', fontSize: '12px'}}>{darkMode ? 'Dark' : 'Light'}</span>
+            </div>
+          )}
+          {sidebarCollapsed && (
+            <div 
+              className="sidebar-item" 
+              onClick={() => setDarkMode(!darkMode)}
+              style={{justifyContent: 'center', cursor: 'pointer'}}
+              data-tooltip={darkMode ? 'Light Mode' : 'Dark Mode'}
+            >
+              <i className={`fa-solid ${darkMode ? 'fa-sun' : 'fa-moon'}`} style={{color: '#F4B41A'}}></i>
+            </div>
+          )}
+          
+          {!sidebarCollapsed && (
+            <div className="text-gray-400 text-sm mb-3 px-1 mt-2">
               <p className="font-semibold text-white">{currentUser.name}</p>
               <p className="text-xs">{currentUser.school}</p>
               {isAPC && (
@@ -13165,6 +13390,16 @@ function AdminView({
   const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'managers' : 'analytics');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved === 'true';
+  });
+  
+  // Apply dark mode to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+    localStorage.setItem('darkMode', darkMode);
+  }, [darkMode]);
 
   // Filter data based on accessible schools for managers/APMs
   const filteredTeachers = isSuperAdmin ? teachers : teachers.filter(t => accessibleSchools.includes(t.school));
@@ -13295,20 +13530,20 @@ function AdminView({
         </div>
       )}
       
-      {/* Mobile Header with Hamburger */}
-      <div className="mobile-header">
-        <button 
-          className="hamburger-btn"
-          onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-        >
-          <i className={`fa-solid ${isMobileSidebarOpen ? 'fa-xmark' : 'fa-bars'}`}></i>
-        </button>
-        <div className="mobile-logo">
-          <img src={AVANTI_LOGO} alt="Avanti" className="w-8 h-8" />
-          <span>{isSuperAdmin ? 'Super Admin' : 'Admin Panel'}</span>
-        </div>
-        <div style={{width: '40px'}}></div>
-      </div>
+      {/* Floating Sidebar Toggle Button */}
+      <button 
+        className={`sidebar-float-toggle ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-open'}`}
+        onClick={() => {
+          if (window.innerWidth < 768) {
+            setIsMobileSidebarOpen(!isMobileSidebarOpen);
+          } else {
+            setSidebarCollapsed(!sidebarCollapsed);
+          }
+        }}
+        title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+      >
+        <i className={`fa-solid ${sidebarCollapsed ? 'fa-bars' : 'fa-xmark'}`}></i>
+      </button>
       
       {/* Mobile Sidebar Overlay */}
       <div 
@@ -13351,8 +13586,34 @@ function AdminView({
         </div>
 
         <div className="sidebar-footer">
+          {/* Dark Mode Toggle */}
+          {!sidebarCollapsed && (
+            <div className="theme-toggle-container">
+              <i className={`fa-solid ${darkMode ? 'fa-moon' : 'fa-sun'}`} style={{color: darkMode ? '#F4B41A' : '#6b7280'}}></i>
+              <div 
+                className={`theme-toggle ${darkMode ? 'dark' : ''}`}
+                onClick={() => setDarkMode(!darkMode)}
+              >
+                <div className="theme-toggle-slider">
+                  {darkMode ? '🌙' : '☀️'}
+                </div>
+              </div>
+              <span style={{color: 'rgba(255,255,255,0.6)', fontSize: '12px'}}>{darkMode ? 'Dark' : 'Light'}</span>
+            </div>
+          )}
+          {sidebarCollapsed && (
+            <div 
+              className="sidebar-item" 
+              onClick={() => setDarkMode(!darkMode)}
+              style={{justifyContent: 'center', cursor: 'pointer'}}
+              data-tooltip={darkMode ? 'Light Mode' : 'Dark Mode'}
+            >
+              <i className={`fa-solid ${darkMode ? 'fa-sun' : 'fa-moon'}`} style={{color: '#F4B41A'}}></i>
+            </div>
+          )}
+          
           {!sidebarCollapsed && !isSuperAdmin && (
-            <div className="text-gray-400 text-xs mb-2 px-1">
+            <div className="text-gray-400 text-xs mb-2 px-1 mt-2">
               <i className="fa-solid fa-school mr-1"></i> 
               Access: {availableSchools.length} Schools
             </div>
