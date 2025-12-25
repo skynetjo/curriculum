@@ -716,14 +716,15 @@
    MODERN SIDEBAR STYLES - Fixed & Scrollable
    ======================================== */
 .sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  height: 100vh;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  height: 100vh !important;
+  height: 100dvh !important;
   background: #1a1a2e;
   box-shadow: 4px 0 15px rgba(0,0,0,0.15);
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s ease;
-  z-index: 1000;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1000 !important;
   overflow-x: hidden;
   overflow-y: auto;
   display: flex;
@@ -753,46 +754,53 @@
   width: 260px;
 }
 
-/* Floating Toggle Button - Like the reference image */
+/* ========================================
+   FLOATING TOGGLE BUTTON - Always Visible
+   ======================================== */
 .sidebar-float-toggle {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  width: 50px;
-  height: 50px;
+  position: fixed !important;
+  bottom: 24px !important;
+  width: 56px;
+  height: 56px;
   background: linear-gradient(135deg, #F4B41A 0%, #E8B039 100%);
   border: none;
-  border-radius: 14px;
+  border-radius: 16px;
   color: white;
-  font-size: 20px;
+  font-size: 22px;
   cursor: pointer;
-  z-index: 1001;
-  display: flex;
+  z-index: 1002 !important;
+  display: flex !important;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 15px rgba(244, 180, 26, 0.4);
-  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(244, 180, 26, 0.5);
+  transition: left 0.3s ease, transform 0.2s ease;
 }
 
 .sidebar-float-toggle:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(244, 180, 26, 0.5);
+  transform: scale(1.08);
+  box-shadow: 0 6px 25px rgba(244, 180, 26, 0.6);
 }
 
-.sidebar-float-toggle.sidebar-open {
-  left: 270px;
+.sidebar-float-toggle:active {
+  transform: scale(0.95);
+}
+
+/* Position based on sidebar state */
+.sidebar-float-toggle.sidebar-expanded {
+  left: 272px !important;
 }
 
 .sidebar-float-toggle.sidebar-collapsed {
-  left: 82px;
+  left: 84px !important;
 }
 
+/* Mobile: Always at fixed position */
 @media (max-width: 768px) {
-  .sidebar-float-toggle {
+  .sidebar-float-toggle,
+  .sidebar-float-toggle.sidebar-expanded,
+  .sidebar-float-toggle.sidebar-collapsed {
     left: 20px !important;
-  }
-  .sidebar-float-toggle.sidebar-open {
-    left: 20px !important;
+    bottom: 20px !important;
   }
 }
 
@@ -1092,30 +1100,6 @@
 .sidebar.collapsed .sidebar-item:hover::after {
   opacity: 1;
   left: calc(100% + 5px);
-}
-  transition: margin-left 0.3s ease;
-}
-
-.main-content.sidebar-expanded {
-  margin-left: 260px;
-}
-
-.main-content.sidebar-collapsed {
-  margin-left: 70px;
-}
-
-/* Mobile responsive */
-@media (max-width: 768px) {
-  .main-content.sidebar-expanded,
-  .main-content.sidebar-collapsed {
-    margin-left: 0 !important;
-    padding-top: 70px;
-    width: 100%;
-  }
-  
-  .sidebar-toggle {
-    display: none;
-  }
 }
 
 /* Scrollbar styling for sidebar */
@@ -10927,9 +10911,9 @@ function TeacherView({
         );
       })()}
       
-      {/* Floating Sidebar Toggle Button */}
+      {/* Floating Sidebar Toggle Button - Always Visible */}
       <button 
-        className={`sidebar-float-toggle ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-open'} ${isMobileSidebarOpen ? '' : ''}`}
+        className={`sidebar-float-toggle ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}
         onClick={() => {
           if (window.innerWidth < 768) {
             setIsMobileSidebarOpen(!isMobileSidebarOpen);
@@ -10938,8 +10922,9 @@ function TeacherView({
           }
         }}
         title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+        style={{display: 'flex'}}
       >
-        <i className={`fa-solid ${sidebarCollapsed || !isMobileSidebarOpen && window.innerWidth < 768 ? 'fa-bars' : 'fa-xmark'}`}></i>
+        <i className={`fa-solid ${sidebarCollapsed ? 'fa-angles-right' : 'fa-angles-left'}`}></i>
       </button>
       
       {/* Mobile Sidebar Overlay */}
@@ -13530,9 +13515,9 @@ function AdminView({
         </div>
       )}
       
-      {/* Floating Sidebar Toggle Button */}
+      {/* Floating Sidebar Toggle Button - Always Visible */}
       <button 
-        className={`sidebar-float-toggle ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-open'}`}
+        className={`sidebar-float-toggle ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}
         onClick={() => {
           if (window.innerWidth < 768) {
             setIsMobileSidebarOpen(!isMobileSidebarOpen);
@@ -13541,8 +13526,9 @@ function AdminView({
           }
         }}
         title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+        style={{display: 'flex'}}
       >
-        <i className={`fa-solid ${sidebarCollapsed ? 'fa-bars' : 'fa-xmark'}`}></i>
+        <i className={`fa-solid ${sidebarCollapsed ? 'fa-angles-right' : 'fa-angles-left'}`}></i>
       </button>
       
       {/* Mobile Sidebar Overlay */}
