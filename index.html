@@ -87,6 +87,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Curriculum Tracker">
   <link rel="apple-touch-icon" href="/icon-192.png">
+  
+  <!-- FontAwesome Icons for Modern Sidebar -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" />
 
   <!-- ✅ PERFORMANCE FIX: Load critical scripts first, defer others -->
   <!-- Firebase Core (required for auth) -->
@@ -583,22 +586,25 @@
 }
 
 /* ========================================
-   VERTICAL SIDEBAR STYLES
+   MODERN SIDEBAR STYLES - Redesigned
    ======================================== */
 .sidebar {
   position: fixed;
   top: 0;
   left: 0;
   height: 100vh;
-  background: linear-gradient(180deg, #F4B41A 0%, #E8B039 50%, #C8342E 100%);
-  box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-  transition: all 0.3s ease;
+  background: #1a1a2e;
+  box-shadow: 4px 0 15px rgba(0,0,0,0.15);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000;
+  overflow-x: hidden;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar.collapsed {
-  width: 70px;
+  width: 72px;
 }
 
 .sidebar.expanded {
@@ -606,78 +612,299 @@
 }
 
 .sidebar-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid rgba(255,255,255,0.2);
+  padding: 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 70px;
+  background: rgba(244, 180, 26, 0.1);
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar-logo-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #F4B41A 0%, #E8B039 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.sidebar-logo-text {
+  color: white;
+  font-weight: 700;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.2s, width 0.2s;
+}
+
+.sidebar.collapsed .sidebar-logo-text {
+  opacity: 0;
+  width: 0;
 }
 
 .sidebar-toggle {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08);
   border: none;
-  color: white;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
+  color: rgba(255,255,255,0.7);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.3s;
-  font-size: 1.25rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .sidebar-toggle:hover {
-  background: rgba(255,255,255,0.3);
+  background: rgba(244, 180, 26, 0.3);
+  color: #F4B41A;
 }
 
 .sidebar-nav {
-  padding: 1rem 0;
+  padding: 1rem 0.75rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .sidebar-item {
   display: flex;
   align-items: center;
-  padding: 1rem 1.5rem;
-  color: white;
+  padding: 0.75rem 1rem;
+  color: rgba(255,255,255,0.65);
   cursor: pointer;
-  transition: all 0.2s;
-  border-left: 4px solid transparent;
-  gap: 1rem;
+  transition: all 0.2s ease;
+  border-radius: 10px;
+  gap: 12px;
   text-decoration: none;
+  position: relative;
+  margin: 0 4px;
 }
 
 .sidebar-item:hover {
-  background: rgba(255,255,255,0.1);
-  border-left-color: white;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.9);
 }
 
 .sidebar-item.active {
-  background: rgba(255,255,255,0.2);
-  border-left-color: white;
-  font-weight: bold;
+  background: linear-gradient(135deg, rgba(244, 180, 26, 0.2) 0%, rgba(232, 176, 57, 0.15) 100%);
+  color: #F4B41A;
+  font-weight: 600;
+}
+
+.sidebar-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: #F4B41A;
+  border-radius: 0 3px 3px 0;
 }
 
 .sidebar-icon {
-  font-size: 1.5rem;
-  min-width: 1.5rem;
+  font-size: 1.2rem;
+  min-width: 24px;
   text-align: center;
+  transition: transform 0.2s;
+}
+
+.sidebar-item:hover .sidebar-icon {
+  transform: scale(1.1);
 }
 
 .sidebar-label {
   white-space: nowrap;
   overflow: hidden;
-  transition: opacity 0.3s;
+  font-size: 0.9rem;
+  transition: opacity 0.2s, width 0.2s;
 }
 
 .sidebar.collapsed .sidebar-label {
   opacity: 0;
   width: 0;
+  display: none;
 }
 
-.sidebar.collapsed .sidebar-header h1 {
-  opacity: 0;
-  width: 0;
+.sidebar.collapsed .sidebar-item {
+  justify-content: center;
+  padding: 0.85rem;
 }
 
+.sidebar.collapsed .sidebar-item.active::before {
+  display: none;
+}
+
+/* Sidebar footer */
+.sidebar-footer {
+  padding: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin-top: auto;
+}
+
+.sidebar-logout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.sidebar-logout:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+.sidebar.collapsed .sidebar-logout span {
+  display: none;
+}
+
+/* Mobile hamburger */
+.mobile-header {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: #1a1a2e;
+  z-index: 999;
+  padding: 0 1rem;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.hamburger-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.hamburger-btn:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.mobile-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: white;
+  font-weight: 600;
+}
+
+/* Main content adjustments */
 .main-content {
+  min-height: 100vh;
+  background: #f8fafc;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.main-content.sidebar-expanded {
+  margin-left: 260px;
+}
+
+.main-content.sidebar-collapsed {
+  margin-left: 72px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .mobile-header {
+    display: flex;
+  }
+  
+  .sidebar {
+    transform: translateX(-100%);
+    width: 280px !important;
+  }
+  
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  
+  .sidebar-toggle {
+    display: none;
+  }
+  
+  .main-content.sidebar-expanded,
+  .main-content.sidebar-collapsed {
+    margin-left: 0 !important;
+    padding-top: 70px;
+    width: 100%;
+  }
+  
+  .mobile-sidebar-overlay.active {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 998;
+  }
+}
+
+/* Tooltip for collapsed sidebar */
+.sidebar.collapsed .sidebar-item {
+  position: relative;
+}
+
+.sidebar.collapsed .sidebar-item::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1a1a2e;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, left 0.2s;
+  margin-left: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  z-index: 1001;
+}
+
+.sidebar.collapsed .sidebar-item:hover::after {
+  opacity: 1;
+  left: calc(100% + 5px);
+}
   transition: margin-left 0.3s ease;
 }
 
@@ -1240,19 +1467,20 @@ if (typeof ChartDataLabels !== 'undefined' && typeof Chart !== 'undefined') {
     
     if (Chart.defaults && Chart.defaults.plugins) {
       Chart.defaults.plugins.datalabels = {
-        anchor: 'end',
-        align: 'end',
-        offset: 4,
+        anchor: 'center',
+        align: 'center',
+        offset: 0,
         formatter: (value, ctx) => {
           const type = ctx.chart.config.type;
           if (type === 'pie' || type === 'doughnut') {
-            const sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0) || 1;
-            return Math.round((value / sum) * 100) + '%';
+            // Show the actual number inside the slice
+            return value > 0 ? value : '';
           }
           return value;
         },
-        color: '#333',
-        font: { weight: '600', size: 11 }
+        color: '#fff',
+        font: { weight: '700', size: 14 },
+        textShadow: true
       };
     }
   } catch (e) {
@@ -1265,7 +1493,7 @@ if (typeof Chart !== 'undefined' && Chart.overrides) {
   Chart.overrides.bar = Chart.overrides.bar || {};
   Chart.overrides.bar.plugins = Chart.overrides.bar.plugins || {};
   Chart.overrides.bar.plugins.datalabels = {
-    color: '#007bff',
+    color: '#374151',
     font: { weight: '700', size: 12 },
     align: 'end',
     anchor: 'end'
@@ -1275,9 +1503,39 @@ if (typeof Chart !== 'undefined' && Chart.overrides) {
   Chart.overrides.pie.plugins = Chart.overrides.pie.plugins || {};
   Chart.overrides.pie.plugins.datalabels = {
     color: '#fff',
-    font: { weight: '600', size: 14 }
+    font: { weight: '700', size: 14 },
+    textStrokeColor: 'rgba(0,0,0,0.3)',
+    textStrokeWidth: 2
+  };
+  
+  Chart.overrides.doughnut = Chart.overrides.doughnut || {};
+  Chart.overrides.doughnut.plugins = Chart.overrides.doughnut.plugins || {};
+  Chart.overrides.doughnut.plugins.datalabels = {
+    color: '#fff',
+    font: { weight: '700', size: 14 }
   };
 }
+
+// ✅ Define consistent chart color palette (muted teal/gray like sample)
+const CHART_COLORS = {
+  // Primary palette - muted teal/slate tones
+  primary: ['#5B8A8A', '#7BA3A3', '#3D6B6B', '#9CBFBF', '#2D5454', '#B5D4D4'],
+  // For completion/status charts
+  status: {
+    completed: '#5B8A8A',
+    pending: '#D4A574',
+    delayed: '#C17A6E'
+  },
+  // For subject charts
+  subjects: {
+    physics: '#D4A574',
+    chemistry: '#5B8A8A',
+    maths: '#7BA3A3',
+    biology: '#C17A6E'
+  },
+  // General purpose
+  general: ['#5B8A8A', '#D4A574', '#7BA3A3', '#C17A6E', '#3D6B6B', '#9CBFBF']
+};
 </script>
   <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
@@ -10291,37 +10549,37 @@ function TeacherView({
   // Check if user is an APC
   const isAPC = currentUser.userType === 'apc' || currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC;
   
-  // Different tabs for APC vs Teacher
+  // Different tabs for APC vs Teacher - with FontAwesome icons
   const teacherTabs = isAPC ? [
-    { id: 'overview', label: 'Dashboard', icon: '📊' },
-    { id: 'analytics', label: 'Analytics', icon: '📈' },
-    { id: 'syllabus11', label: 'Class 11 Syllabus', icon: '📚' },
-    { id: 'syllabus12', label: 'Class 12 Syllabus', icon: '📕' },
-    { id: 'directory', label: 'Directory', icon: '🏛️' },
-    { id: 'socialwall', label: 'Social Wall', icon: '🎉' },
-    { id: 'attendance', label: 'Student Attendance', icon: '✅' },
-    { id: 'attendancedash', label: 'Attendance Dashboard', icon: '📊' },
-    { id: 'myattendance', label: 'My Attendance', icon: '🕒' },
-    { id: 'teacherattview', label: 'Teacher Attendance', icon: '👨‍🏫' },
-    { id: 'assets', label: 'Asset Management', icon: '📦' },
-    { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
-    { id: 'examstats', label: 'Exam Stats', icon: '📊' },
-    { id: 'roadmap', label: 'Roadmap', icon: '🗺️' }
+    { id: 'overview', label: 'Dashboard', icon: <i className="fa-solid fa-chart-line"></i> },
+    { id: 'analytics', label: 'Analytics', icon: <i className="fa-solid fa-chart-pie"></i> },
+    { id: 'syllabus11', label: 'Class 11 Syllabus', icon: <i className="fa-solid fa-book"></i> },
+    { id: 'syllabus12', label: 'Class 12 Syllabus', icon: <i className="fa-solid fa-book-open"></i> },
+    { id: 'directory', label: 'Directory', icon: <i className="fa-solid fa-address-book"></i> },
+    { id: 'socialwall', label: 'Social Wall', icon: <i className="fa-solid fa-comments"></i> },
+    { id: 'attendance', label: 'Student Attendance', icon: <i className="fa-solid fa-clipboard-check"></i> },
+    { id: 'attendancedash', label: 'Attendance Dashboard', icon: <i className="fa-solid fa-calendar-check"></i> },
+    { id: 'myattendance', label: 'My Attendance', icon: <i className="fa-solid fa-clock"></i> },
+    { id: 'teacherattview', label: 'Teacher Attendance', icon: <i className="fa-solid fa-chalkboard-user"></i> },
+    { id: 'assets', label: 'Asset Management', icon: <i className="fa-solid fa-boxes-stacked"></i> },
+    { id: 'schoolinfo', label: 'School Info', icon: <i className="fa-solid fa-school"></i> },
+    { id: 'examstats', label: 'Exam Stats', icon: <i className="fa-solid fa-graduation-cap"></i> },
+    { id: 'roadmap', label: 'Roadmap', icon: <i className="fa-solid fa-map"></i> }
   ] : [
-    { id: 'overview', label: 'Dashboard', icon: '📊' },
-    { id: 'analytics', label: 'Analytics', icon: '📈' },
-    { id: 'class11', label: 'Class 11', icon: '📚' },
-    { id: 'class12', label: 'Class 12', icon: '📕' },
-    { id: 'directory', label: 'Directory', icon: '🏛️' },
-    { id: 'socialwall', label: 'Social Wall', icon: '🎉' },
-    { id: 'attendance', label: 'Student Attendance', icon: '✅' },
-    { id: 'attendancedash', label: 'Attendance Dashboard', icon: '📊' },
-    { id: 'myattendance', label: 'My Attendance', icon: '🕒' },
-    { id: 'assets', label: 'Asset Management', icon: '📦' },
-    { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
-    { id: 'examstats', label: 'Exam Stats', icon: '📊' },
-    { id: 'myprofile', label: 'My Profile', icon: '👤' },
-    { id: 'roadmap', label: 'Roadmap', icon: '🗺️' }
+    { id: 'overview', label: 'Dashboard', icon: <i className="fa-solid fa-chart-line"></i> },
+    { id: 'analytics', label: 'Analytics', icon: <i className="fa-solid fa-chart-pie"></i> },
+    { id: 'class11', label: 'Class 11', icon: <i className="fa-solid fa-book"></i> },
+    { id: 'class12', label: 'Class 12', icon: <i className="fa-solid fa-book-open"></i> },
+    { id: 'directory', label: 'Directory', icon: <i className="fa-solid fa-address-book"></i> },
+    { id: 'socialwall', label: 'Social Wall', icon: <i className="fa-solid fa-comments"></i> },
+    { id: 'attendance', label: 'Student Attendance', icon: <i className="fa-solid fa-clipboard-check"></i> },
+    { id: 'attendancedash', label: 'Attendance Dashboard', icon: <i className="fa-solid fa-calendar-check"></i> },
+    { id: 'myattendance', label: 'My Attendance', icon: <i className="fa-solid fa-clock"></i> },
+    { id: 'assets', label: 'Asset Management', icon: <i className="fa-solid fa-boxes-stacked"></i> },
+    { id: 'schoolinfo', label: 'School Info', icon: <i className="fa-solid fa-school"></i> },
+    { id: 'examstats', label: 'Exam Stats', icon: <i className="fa-solid fa-graduation-cap"></i> },
+    { id: 'myprofile', label: 'My Profile', icon: <i className="fa-solid fa-user"></i> },
+    { id: 'roadmap', label: 'Roadmap', icon: <i className="fa-solid fa-map"></i> }
   ];
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -10470,24 +10728,39 @@ function TeacherView({
         );
       })()}
       
+      {/* Mobile Header with Hamburger */}
+      <div className="mobile-header">
+        <button 
+          className="hamburger-btn"
+          onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+        >
+          <i className={`fa-solid ${isMobileSidebarOpen ? 'fa-xmark' : 'fa-bars'}`}></i>
+        </button>
+        <div className="mobile-logo">
+          <img src={AVANTI_LOGO} alt="Avanti" className="w-8 h-8" />
+          <span>Curriculum Tracker</span>
+        </div>
+        <div style={{width: '40px'}}></div>
+      </div>
+      
       {/* Mobile Sidebar Overlay */}
       <div 
         className={`mobile-sidebar-overlay ${isMobileSidebarOpen ? 'active' : ''}`}
         onClick={() => setIsMobileSidebarOpen(false)}
       />
 
-      {/* Vertical Sidebar */}
-      <div className={`sidebar mobile-sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} ${isMobileSidebarOpen ? 'active' : ''}`}>
+      {/* Modern Vertical Sidebar */}
+      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
-          <div className="flex items-center gap-3">
-            <img src={AVANTI_LOGO} alt="Avanti" className="w-10 h-10" />
-            <h1 className="text-lg font-bold text-white sidebar-label">Curriculum Tracker</h1>
+          <div className="sidebar-logo">
+            <div className="sidebar-logo-icon">📚</div>
+            <span className="sidebar-logo-text">Curriculum Tracker</span>
           </div>
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="sidebar-toggle hidden md:block"
+            className="sidebar-toggle"
           >
-            {sidebarCollapsed ? '→' : '←'}
+            <i className={`fa-solid ${sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'}`}></i>
           </button>
         </div>
 
@@ -10497,6 +10770,7 @@ function TeacherView({
               key={tab.id}
               onClick={() => handleTabClick(tab.id)}
               className={`sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
+              data-tooltip={tab.label}
             >
               <span className="sidebar-icon">{tab.icon}</span>
               <span className="sidebar-label">{tab.label}</span>
@@ -10504,25 +10778,23 @@ function TeacherView({
           ))}
         </div>
 
-        {!sidebarCollapsed && (
-          <div className="px-4 py-3 border-t border-white border-opacity-20 mt-auto">
-            <div className="text-white text-sm mb-2">
-              <p className="font-semibold">{currentUser.name}</p>
-              <p className="text-xs opacity-90">{currentUser.school}</p>
+        <div className="sidebar-footer">
+          {!sidebarCollapsed && (
+            <div className="text-gray-400 text-sm mb-3 px-1">
+              <p className="font-semibold text-white">{currentUser.name}</p>
+              <p className="text-xs">{currentUser.school}</p>
               {isAPC && (
-                <span className="inline-block mt-1 px-2 py-0.5 bg-white bg-opacity-20 rounded text-xs font-semibold">
-                  📋 APC
+                <span className="inline-block mt-1 px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs font-semibold">
+                  <i className="fa-solid fa-clipboard-list mr-1"></i> APC
                 </span>
               )}
             </div>
-            <button
-              onClick={handleLogout}
-              className="w-full px-3 py-2 bg-white bg-opacity-20 text-white rounded-lg font-semibold hover:bg-opacity-30 transition"
-            >
-              Logout
-            </button>
-          </div>
-        )}
+          )}
+          <button onClick={handleLogout} className="sidebar-logout">
+            <i className="fa-solid fa-right-from-bracket"></i>
+            <span>Logout</span>
+          </button>
+        </div>
       </div>
 
       {/* Main content */}
@@ -12906,35 +13178,35 @@ function AdminView({
 
   const adminTabs = [
     ...(isSuperAdmin ? [
-      { id: 'managers', label: 'Managers', icon: '👔' },
-      { id: 'academicyear', label: 'Academic Year', icon: '📅' },
-      { id: '2fa-management', label: '2FA Management', icon: '🔐' },
-      { id: 'settings', label: 'Settings', icon: '⚙️' },
+      { id: 'managers', label: 'Managers', icon: <i className="fa-solid fa-user-tie"></i> },
+      { id: 'academicyear', label: 'Academic Year', icon: <i className="fa-solid fa-calendar"></i> },
+      { id: '2fa-management', label: '2FA Management', icon: <i className="fa-solid fa-shield-halved"></i> },
+      { id: 'settings', label: 'Settings', icon: <i className="fa-solid fa-gear"></i> },
     ] : []),
-    { id: 'teachers', label: 'Teachers', icon: '👥' },
-    { id: 'teacherhistory', label: 'Teacher History', icon: '📈' },
+    { id: 'teachers', label: 'Teachers', icon: <i className="fa-solid fa-users"></i> },
+    { id: 'teacherhistory', label: 'Teacher History', icon: <i className="fa-solid fa-chart-line"></i> },
     // Students tab - Super Admin has full access, Managers have view-only access
-    { id: 'students', label: 'Students', icon: '👨‍🎓' },
-    { id: 'directory', label: 'Directory', icon: '🏛️' },
-    { id: 'socialwall', label: 'Social Wall', icon: '🎉' },
-    { id: 'observations', label: 'Class Observations', icon: '📋' },
+    { id: 'students', label: 'Students', icon: <i className="fa-solid fa-user-graduate"></i> },
+    { id: 'directory', label: 'Directory', icon: <i className="fa-solid fa-address-book"></i> },
+    { id: 'socialwall', label: 'Social Wall', icon: <i className="fa-solid fa-comments"></i> },
+    { id: 'observations', label: 'Class Observations', icon: <i className="fa-solid fa-eye"></i> },
     // Curriculum Management - only for Super Admin (contains add/edit/delete chapters)
     ...(isSuperAdmin ? [
-      { id: 'curriculum', label: 'Curriculum', icon: '📚' },
+      { id: 'curriculum', label: 'Curriculum', icon: <i className="fa-solid fa-book"></i> },
     ] : []),
-    { id: 'analytics', label: 'Analytics', icon: '📊' },
+    { id: 'analytics', label: 'Analytics', icon: <i className="fa-solid fa-chart-pie"></i> },
     // Chapter Details - removed for non-Super Admin as requested
     ...(isSuperAdmin ? [
-      { id: 'chapter-details', label: 'Chapter Details', icon: '📋' },
+      { id: 'chapter-details', label: 'Chapter Details', icon: <i className="fa-solid fa-list-check"></i> },
     ] : []),
-    { id: 'attendance', label: 'Attendance Analytics', icon: '📊' },
-    { id: 'assets', label: 'Asset Management', icon: '📦' },
-    { id: 'schoolinfo', label: 'School Info', icon: '🏫' },
+    { id: 'attendance', label: 'Attendance Analytics', icon: <i className="fa-solid fa-calendar-check"></i> },
+    { id: 'assets', label: 'Asset Management', icon: <i className="fa-solid fa-boxes-stacked"></i> },
+    { id: 'schoolinfo', label: 'School Info', icon: <i className="fa-solid fa-school"></i> },
     // Student Profiles - for viewing student demographics with graphs
-    { id: 'studentprofiles', label: 'Student Profiles', icon: '👨‍🎓' },
-    { id: 'examstats', label: 'Exam Statistics', icon: '📊' },
-    { id: 'studentfeedback', label: 'Student Feedback', icon: '💬' },
-    { id: 'roadmap', label: 'Roadmap', icon: '🗺️' }
+    { id: 'studentprofiles', label: 'Student Profiles', icon: <i className="fa-solid fa-id-card"></i> },
+    { id: 'examstats', label: 'Exam Statistics', icon: <i className="fa-solid fa-graduation-cap"></i> },
+    { id: 'studentfeedback', label: 'Student Feedback', icon: <i className="fa-solid fa-message"></i> },
+    { id: 'roadmap', label: 'Roadmap', icon: <i className="fa-solid fa-map"></i> }
   ];
   
   // Handle navigation and auto-close on mobile
@@ -13023,13 +13295,20 @@ function AdminView({
         </div>
       )}
       
-      {/* Mobile Menu Button */}
-      <button
-        onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-        className="md:hidden fixed top-4 left-4 z-[1000] bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-3 rounded-lg shadow-lg"
-      >
-        {isMobileSidebarOpen ? '✕' : '☰'}
-      </button>
+      {/* Mobile Header with Hamburger */}
+      <div className="mobile-header">
+        <button 
+          className="hamburger-btn"
+          onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+        >
+          <i className={`fa-solid ${isMobileSidebarOpen ? 'fa-xmark' : 'fa-bars'}`}></i>
+        </button>
+        <div className="mobile-logo">
+          <img src={AVANTI_LOGO} alt="Avanti" className="w-8 h-8" />
+          <span>{isSuperAdmin ? 'Super Admin' : 'Admin Panel'}</span>
+        </div>
+        <div style={{width: '40px'}}></div>
+      </div>
       
       {/* Mobile Sidebar Overlay */}
       <div 
@@ -13037,23 +13316,23 @@ function AdminView({
         onClick={() => setIsMobileSidebarOpen(false)}
       />
 
-      {/* Vertical Sidebar */}
-      <div className={`sidebar mobile-sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} ${isMobileSidebarOpen ? 'active' : ''}`}>
+      {/* Modern Vertical Sidebar */}
+      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : 'expanded'} ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
-          <div className="flex items-center gap-3">
-            <img src={AVANTI_LOGO} alt="Avanti" className="w-10 h-10" />
-            <div className="sidebar-label">
-              <h1 className="text-lg font-bold text-white">
-                {isSuperAdmin ? 'Super Admin' : ROLE_LABELS[currentUser.role] || 'Admin'}
-              </h1>
-              <p className="text-xs text-white opacity-75">{currentUser.name}</p>
+          <div className="sidebar-logo">
+            <div className="sidebar-logo-icon">
+              {isSuperAdmin ? '👑' : '🛡️'}
+            </div>
+            <div className="sidebar-logo-text">
+              <div style={{fontWeight: 700}}>{isSuperAdmin ? 'Super Admin' : ROLE_LABELS[currentUser.role] || 'Admin'}</div>
+              <div style={{fontSize: '0.7rem', opacity: 0.7}}>{currentUser.name}</div>
             </div>
           </div>
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="sidebar-toggle hidden md:block"
+            className="sidebar-toggle"
           >
-            {sidebarCollapsed ? '→' : '←'}
+            <i className={`fa-solid ${sidebarCollapsed ? 'fa-chevron-right' : 'fa-chevron-left'}`}></i>
           </button>
         </div>
 
@@ -13063,6 +13342,7 @@ function AdminView({
               key={tab.id}
               onClick={() => handleTabClick(tab.id)}
               className={`sidebar-item ${activeTab === tab.id ? 'active' : ''}`}
+              data-tooltip={tab.label}
             >
               <span className="sidebar-icon">{tab.icon}</span>
               <span className="sidebar-label">{tab.label}</span>
@@ -13070,24 +13350,18 @@ function AdminView({
           ))}
         </div>
 
-        {!sidebarCollapsed && !isSuperAdmin && (
-          <div className="px-4 py-2 border-t border-white border-opacity-20">
-            <div className="text-xs text-white opacity-75">
-              <span className="font-bold">🏫 Access: {availableSchools.length} Schools</span>
+        <div className="sidebar-footer">
+          {!sidebarCollapsed && !isSuperAdmin && (
+            <div className="text-gray-400 text-xs mb-2 px-1">
+              <i className="fa-solid fa-school mr-1"></i> 
+              Access: {availableSchools.length} Schools
             </div>
-          </div>
-        )}
-
-        {!sidebarCollapsed && (
-          <div className="px-4 py-3 border-t border-white border-opacity-20 mt-auto">
-            <button
-              onClick={handleLogout}
-              className="w-full px-3 py-2 bg-white bg-opacity-20 text-white rounded-lg font-semibold hover:bg-opacity-30 transition"
-            >
-              Logout
-            </button>
-          </div>
-        )}
+          )}
+          <button onClick={handleLogout} className="sidebar-logout">
+            <i className="fa-solid fa-right-from-bracket"></i>
+            <span>Logout</span>
+          </button>
+        </div>
       </div>
 
       {/* Main content */}
@@ -15905,8 +16179,9 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
           labels:subjects,
           datasets:[{
             data:subjects.map(s=>filteredData.subjectData[s].completed),
-            backgroundColor:['#F4B41A','#3B82F6','#10B981','#EF4444'],
-            borderWidth:2
+            backgroundColor:['#D4A574','#5B8A8A','#7BA3A3','#C17A6E'],
+            borderWidth:2,
+            borderColor:'#fff'
           }]
         },
         options:{
@@ -15931,12 +16206,12 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
             {
               label:'Completed',
               data:grades.map(g=>filteredData.gradeData[g].completed),
-              backgroundColor:'#10B981'
+              backgroundColor:'#5B8A8A'
             },
             {
               label:'Pending',
               data:grades.map(g=>filteredData.gradeData[g].total-filteredData.gradeData[g].completed),
-              backgroundColor:'#F59E0B'
+              backgroundColor:'#D4A574'
             }
           ]
         },
@@ -15964,8 +16239,9 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
               filteredData.totalChapters-filteredData.completedChapters-filteredData.delayedChapters,
               filteredData.delayedChapters
             ],
-            backgroundColor:['#10B981','#F59E0B','#EF4444'],
-            borderWidth:0
+            backgroundColor:['#5B8A8A','#D4A574','#C17A6E'],
+            borderWidth:2,
+            borderColor:'#fff'
           }]
         },
         options:{
@@ -15987,8 +16263,9 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
           labels:['Tests Completed','Tests Pending'],
           datasets:[{
             data:[filteredData.testsCompleted,filteredData.testsPending],
-            backgroundColor:['#3B82F6','#F97316'],
-            borderWidth:2
+            backgroundColor:['#5B8A8A','#D4A574'],
+            borderWidth:2,
+            borderColor:'#fff'
           }]
         },
         options:{
@@ -16016,7 +16293,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
               filteredData.statusData.delayed,
               filteredData.statusData.pending
             ],
-            backgroundColor:['#10B981','#3B82F6','#F97316','#EF4444'],
+            backgroundColor:['#5B8A8A','#7BA3A3','#D4A574','#C17A6E'],
             borderRadius:8
           }]
         },
@@ -16042,7 +16319,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
           datasets:[{
             label:'Delayed Chapters',
             data:schools.map(s=>filteredData.schoolData[s].delayed),
-            backgroundColor:'#EF4444',
+            backgroundColor:'#C17A6E',
             borderRadius:6
           }]
         },
@@ -16068,8 +16345,9 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
           labels:subjects.map(s=>`${s} - ${filteredData.subjectData[s].total?Math.round((filteredData.subjectData[s].completed/filteredData.subjectData[s].total)*100):0}%`),
           datasets:[{
             data:subjects.map(s=>filteredData.subjectData[s].completed),
-            backgroundColor:['#F4B41A','#3B82F6','#10B981','#EF4444'],
-            borderWidth:2
+            backgroundColor:['#D4A574','#5B8A8A','#7BA3A3','#C17A6E'],
+            borderWidth:2,
+            borderColor:'#fff'
           }]
         },
         options:{
@@ -17908,8 +18186,9 @@ function TeacherAttendanceDashboard({currentUser,students,teachers,studentAttend
           labels:['Present','On Leave'],
           datasets:[{
             data:[teacherStats.present,teacherStats.onLeave],
-            backgroundColor:['#10B981','#F59E0B'],
-            borderWidth:2
+            backgroundColor:['#5B8A8A','#D4A574'],
+            borderWidth:2,
+            borderColor:'#fff'
           }]
         },
         options:{
@@ -19217,8 +19496,9 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
           labels:['Present','On Leave'],
           datasets:[{
             data:[present,onLeave],
-            backgroundColor:['#10B981','#F59E0B'],
-            borderWidth:2
+            backgroundColor:['#5B8A8A','#D4A574'],
+            borderWidth:2,
+            borderColor:'#fff'
           }]
         },
         options:{
@@ -19243,8 +19523,9 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
           labels:['Present','Absent'],
           datasets:[{
             data:[present,absent],
-            backgroundColor:['#3B82F6','#EF4444'],
-            borderWidth:0
+            backgroundColor:['#5B8A8A','#C17A6E'],
+            borderWidth:2,
+            borderColor:'#fff'
           }]
         },
         options:{
