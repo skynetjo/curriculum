@@ -105,8 +105,11 @@
   <!-- ✅ PERFORMANCE FIX: Defer non-critical scripts -->
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  
+  <!-- Chart.js - NOT deferred because datalabels registration needs it immediately -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script defer src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/otpauth/9.2.2/otpauth.umd.min.js"></script>
@@ -207,12 +210,16 @@
     /* Desktop sidebar adjustments */
     @media (min-width: 768px) {
       .mobile-sidebar {
-        position: relative;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
         transform: translateX(0) !important;
-        width: 16rem;
         max-width: none;
         box-shadow: none;
       }
+      
+      /* Width is controlled by .sidebar.collapsed/expanded classes */
       
       .mobile-sidebar-overlay {
         display: none;
