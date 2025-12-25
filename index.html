@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -203,264 +204,9 @@
       color: var(--text-secondary) !important;
     }
     
-    /* Fix: Additional dark mode text color fixes */
-    [data-theme="dark"] .text-gray-400 {
-      color: #9ca3af !important;
-    }
-    
-    [data-theme="dark"] .text-gray-300 {
-      color: #d1d5db !important;
-    }
-    
-    [data-theme="dark"] .text-black {
-      color: var(--text-primary) !important;
-    }
-    
-    /* Dark mode for text inside colored backgrounds */
-    [data-theme="dark"] .bg-yellow-500 .text-black,
-    [data-theme="dark"] .bg-yellow-100 .text-yellow-700 {
-      color: #1f2937 !important;
-    }
-    
-    /* Fix for modal and popup text in dark mode */
-    [data-theme="dark"] p,
-    [data-theme="dark"] span,
-    [data-theme="dark"] label,
-    [data-theme="dark"] div:not([class*="bg-"]):not(.sidebar):not(.sidebar-nav):not(.sidebar-header):not(.sidebar-footer) {
-      color: inherit;
-    }
-    
-    /* Ensure stat cards text is visible */
-    [data-theme="dark"] .stat-card p,
-    [data-theme="dark"] .stat-card span,
-    [data-theme="dark"] .stat-card div {
-      color: var(--text-primary);
-    }
-    
-    [data-theme="dark"] .stat-card .text-gray-500,
-    [data-theme="dark"] .stat-card .text-gray-600 {
-      color: var(--text-secondary) !important;
-    }
-    
-    /* Fix dropdown and select options */
-    [data-theme="dark"] option {
-      background: var(--bg-secondary) !important;
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix placeholder text */
-    [data-theme="dark"] ::placeholder {
-      color: var(--text-secondary) !important;
-      opacity: 0.7;
-    }
-    
-    /* Fix chart labels and tooltips */
-    [data-theme="dark"] .chartjs-tooltip {
-      background: var(--bg-secondary) !important;
-      color: var(--text-primary) !important;
-    }
-    
     [data-theme="dark"] .border-gray-200,
     [data-theme="dark"] .border-gray-300 {
       border-color: var(--border-color) !important;
-    }
-    
-    /* Additional dark mode fixes for modals and popups */
-    [data-theme="dark"] .modal-content,
-    [data-theme="dark"] [class*="rounded-xl"][class*="bg-white"],
-    [data-theme="dark"] [class*="rounded-2xl"][class*="bg-white"],
-    [data-theme="dark"] [class*="rounded-lg"][class*="bg-white"] {
-      background: var(--bg-card) !important;
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix filter cards and dropdowns */
-    [data-theme="dark"] .filter-card,
-    [data-theme="dark"] [class*="filter"] {
-      background: var(--bg-secondary) !important;
-    }
-    
-    /* Fix headings that might be dark */
-    [data-theme="dark"] h1, 
-    [data-theme="dark"] h2, 
-    [data-theme="dark"] h3, 
-    [data-theme="dark"] h4, 
-    [data-theme="dark"] h5, 
-    [data-theme="dark"] h6 {
-      color: var(--text-primary);
-    }
-    
-    /* Fix specific gray text classes comprehensively */
-    [data-theme="dark"] .text-gray-700,
-    [data-theme="dark"] .text-gray-800,
-    [data-theme="dark"] .text-gray-900 {
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix buttons text in dark mode */
-    [data-theme="dark"] button.bg-gray-200,
-    [data-theme="dark"] button.bg-gray-300 {
-      background: var(--bg-secondary) !important;
-      color: var(--text-primary) !important;
-    }
-    
-    /* Mobile bottom nav dark mode */
-    [data-theme="dark"] .mobile-bottom-nav {
-      background: #0f172a;
-      border-top: 1px solid var(--border-color);
-    }
-    
-    [data-theme="dark"] .mobile-nav-more-menu {
-      background: #0f172a;
-      border: 1px solid var(--border-color);
-    }
-    
-    /* ========================================
-       COMPREHENSIVE DARK MODE TEXT FIXES
-       ======================================== */
-    
-    /* Fix ALL text that might be dark/black */
-    [data-theme="dark"] .text-black,
-    [data-theme="dark"] [class*="text-gray-9"],
-    [data-theme="dark"] [class*="text-gray-8"],
-    [data-theme="dark"] [class*="text-gray-7"] {
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix any inline style with dark colors */
-    [data-theme="dark"] [style*="color: #000"],
-    [data-theme="dark"] [style*="color:#000"],
-    [data-theme="dark"] [style*="color: black"],
-    [data-theme="dark"] [style*="color:black"],
-    [data-theme="dark"] [style*="color: rgb(0"],
-    [data-theme="dark"] [style*="color:rgb(0"] {
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix sidebar text in dark mode - ensure visibility */
-    [data-theme="dark"] .sidebar .text-gray-400,
-    [data-theme="dark"] .sidebar-footer .text-gray-400 {
-      color: #9ca3af !important;
-    }
-    
-    [data-theme="dark"] .sidebar p,
-    [data-theme="dark"] .sidebar span:not(.sidebar-icon),
-    [data-theme="dark"] .sidebar-footer p,
-    [data-theme="dark"] .sidebar-footer span {
-      color: rgba(255, 255, 255, 0.8) !important;
-    }
-    
-    [data-theme="dark"] .sidebar .font-semibold,
-    [data-theme="dark"] .sidebar-footer .font-semibold {
-      color: white !important;
-    }
-    
-    /* Fix theme toggle container text */
-    [data-theme="dark"] .theme-toggle-container span {
-      color: rgba(255,255,255,0.6) !important;
-    }
-    
-    /* Fix cards and containers */
-    [data-theme="dark"] .chapter-card,
-    [data-theme="dark"] .stat-card,
-    [data-theme="dark"] .ranking-card {
-      background: var(--bg-card) !important;
-      color: var(--text-primary) !important;
-    }
-    
-    [data-theme="dark"] .chapter-card h3,
-    [data-theme="dark"] .chapter-card p,
-    [data-theme="dark"] .stat-card h3,
-    [data-theme="dark"] .stat-card p {
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix table text */
-    [data-theme="dark"] table,
-    [data-theme="dark"] table td,
-    [data-theme="dark"] table th,
-    [data-theme="dark"] table tr {
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix badges and status indicators */
-    [data-theme="dark"] .badge,
-    [data-theme="dark"] [class*="badge"] {
-      color: inherit;
-    }
-    
-    /* Fix feedback content and forms */
-    [data-theme="dark"] .feedback-content {
-      background: var(--bg-card) !important;
-      color: var(--text-primary) !important;
-    }
-    
-    [data-theme="dark"] .feedback-content h2,
-    [data-theme="dark"] .feedback-content h3,
-    [data-theme="dark"] .feedback-content p,
-    [data-theme="dark"] .feedback-content label {
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix teacher cards */
-    [data-theme="dark"] .teacher-card {
-      background: var(--bg-card) !important;
-      color: var(--text-primary) !important;
-    }
-    
-    [data-theme="dark"] .teacher-card p,
-    [data-theme="dark"] .teacher-card h3,
-    [data-theme="dark"] .teacher-card span {
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix dropdown menus */
-    [data-theme="dark"] .dropdown-menu,
-    [data-theme="dark"] [class*="dropdown"] {
-      background: var(--bg-secondary) !important;
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix tooltips */
-    [data-theme="dark"] .tooltip,
-    [data-theme="dark"] [class*="tooltip"] {
-      background: var(--bg-secondary) !important;
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix notification popups */
-    [data-theme="dark"] .notification-expansion-popup {
-      background: var(--bg-card) !important;
-      color: var(--text-primary) !important;
-    }
-    
-    /* Fix any remaining gray backgrounds */
-    [data-theme="dark"] .bg-gray-200,
-    [data-theme="dark"] .bg-gray-300 {
-      background: var(--bg-secondary) !important;
-    }
-    
-    /* Fix border colors */
-    [data-theme="dark"] .border-gray-100,
-    [data-theme="dark"] .border-gray-200,
-    [data-theme="dark"] .border-gray-300 {
-      border-color: var(--border-color) !important;
-    }
-    
-    /* Fix completed/delayed/pending chapter cards - preserve their colors but fix text */
-    [data-theme="dark"] .chapter-card.completed,
-    [data-theme="dark"] .chapter-card.delayed,
-    [data-theme="dark"] .chapter-card.pending {
-      color: #1f2937 !important; /* Dark text for colored backgrounds */
-    }
-    
-    [data-theme="dark"] .chapter-card.completed h3,
-    [data-theme="dark"] .chapter-card.completed p,
-    [data-theme="dark"] .chapter-card.delayed h3,
-    [data-theme="dark"] .chapter-card.delayed p,
-    [data-theme="dark"] .chapter-card.pending h3,
-    [data-theme="dark"] .chapter-card.pending p {
-      color: #1f2937 !important;
     }
     
     [data-theme="dark"] .shadow-lg,
@@ -544,7 +290,6 @@
     /* Smooth scrolling for the entire app */
     html {
       scroll-behavior: smooth;
-      height: 100%;
     }
     
     /* Better font rendering */
@@ -552,18 +297,6 @@
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       text-rendering: optimizeLegibility;
-      min-height: 100%;
-      margin: 0;
-      padding: 0;
-      /* Ensure body scrolls, not any container */
-      overflow-x: hidden;
-    }
-    
-    /* App wrapper - should NOT prevent fixed positioning */
-    .min-h-screen {
-      min-height: 100vh;
-      position: relative;
-      /* Do NOT use transform, filter, or perspective here */
     }
     
     /* Enhanced Mobile Sidebar Styles */
@@ -987,37 +720,31 @@
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
-  bottom: 0 !important;
   height: 100vh !important;
   height: 100dvh !important;
   background: #1a1a2e;
   box-shadow: 4px 0 15px rgba(0,0,0,0.15);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000 !important;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  will-change: auto;
-  contain: layout;
 }
 
-/* Desktop - sidebar always visible and fixed */
-@media (min-width: 769px) {
-  .sidebar {
-    position: fixed !important;
-    transform: none !important; /* No transform on desktop - keeps it truly fixed */
-    left: 0 !important;
-    top: 0 !important;
-    bottom: 0 !important;
-  }
-  
-  .sidebar.collapsed {
-    width: 72px !important;
-  }
-  
-  .sidebar.expanded {
-    width: 260px !important;
-  }
+/* Custom scrollbar for sidebar */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.05);
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.3);
 }
 
 .sidebar.collapsed {
@@ -1026,6 +753,206 @@
 
 .sidebar.expanded {
   width: 260px;
+}
+
+/* ========================================
+   MOBILE FIXED HEADER WITH HAMBURGER
+   ======================================== */
+.mobile-fixed-header {
+  display: none;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 56px;
+  background: #1a1a2e;
+  z-index: 1001 !important;
+  padding: 0 16px;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+@media (max-width: 768px) {
+  .mobile-fixed-header {
+    display: flex !important;
+  }
+}
+
+.mobile-hamburger {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, #F4B41A 0%, #E8B039 100%);
+  border: none;
+  border-radius: 10px;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-header-title {
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-header-logo {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #F4B41A 0%, #E8B039 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+/* ========================================
+   MOBILE BOTTOM NAVIGATION - Always Visible
+   ======================================== */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 65px;
+  background: #1a1a2e;
+  z-index: 1001 !important;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+  padding: 0 8px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-top: 1px solid rgba(255,255,255,0.1);
+  align-items: center;
+  justify-content: space-around;
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex !important;
+  }
+}
+
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 10px;
+  min-width: 55px;
+  text-decoration: none;
+  background: none;
+  border: none;
+  font-family: inherit;
+}
+
+.mobile-nav-item:hover,
+.mobile-nav-item:active {
+  color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.05);
+}
+
+.mobile-nav-item.active {
+  color: #F4B41A;
+  background: rgba(244, 180, 26, 0.15);
+}
+
+.mobile-nav-icon {
+  font-size: 1.3rem;
+  margin-bottom: 2px;
+}
+
+.mobile-nav-label {
+  font-size: 0.6rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* More menu popup */
+.mobile-more-menu {
+  position: fixed !important;
+  bottom: 75px !important;
+  right: 10px !important;
+  background: #1a1a2e;
+  border-radius: 16px;
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.4);
+  padding: 12px;
+  min-width: 220px;
+  max-height: 60vh;
+  overflow-y: auto;
+  z-index: 1002 !important;
+  border: 1px solid rgba(255,255,255,0.1);
+  transform: translateY(20px);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.mobile-more-menu.open {
+  transform: translateY(0);
+  opacity: 1;
+  visibility: visible;
+}
+
+.mobile-more-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 0.2s;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.mobile-more-item:hover {
+  background: rgba(255,255,255,0.08);
+  color: white;
+}
+
+.mobile-more-item.active {
+  background: rgba(244, 180, 26, 0.2);
+  color: #F4B41A;
+}
+
+.mobile-more-item-icon {
+  font-size: 1.1rem;
+  width: 24px;
+  text-align: center;
+}
+
+.mobile-more-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 65px !important;
+  background: rgba(0,0,0,0.4);
+  z-index: 1001 !important;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.mobile-more-overlay.open {
+  opacity: 1;
+  visibility: visible;
 }
 
 /* ========================================
@@ -1086,7 +1013,9 @@
   justify-content: space-between;
   min-height: 70px;
   background: rgba(244, 180, 26, 0.1);
-  flex-shrink: 0; /* Prevent header from shrinking */
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .sidebar-logo {
@@ -1148,24 +1077,6 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  overflow-y: auto; /* Only nav section scrolls */
-  overflow-x: hidden;
-  min-height: 0; /* Important for flex scroll containers */
-}
-
-/* Custom scrollbar for sidebar nav */
-.sidebar-nav::-webkit-scrollbar {
-  width: 6px;
-}
-.sidebar-nav::-webkit-scrollbar-track {
-  background: rgba(255,255,255,0.05);
-}
-.sidebar-nav::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.2);
-  border-radius: 3px;
-}
-.sidebar-nav::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.3);
 }
 
 .sidebar-item {
@@ -1238,12 +1149,11 @@
   display: none;
 }
 
-/* Sidebar footer - always visible at bottom */
+/* Sidebar footer */
 .sidebar-footer {
   padding: 1rem;
   border-top: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0; /* Prevent footer from shrinking */
-  background: #1a1a2e; /* Ensure solid background */
+  margin-top: auto;
 }
 
 .sidebar-logout {
@@ -1316,8 +1226,6 @@
   min-height: 100vh;
   background: #f8fafc;
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  /* Main content scrolls, sidebar stays fixed */
 }
 
 .main-content.sidebar-expanded {
@@ -1331,18 +1239,12 @@
 /* Mobile responsive */
 @media (max-width: 768px) {
   .mobile-header {
-    display: flex;
+    display: none; /* Hide old mobile header */
   }
   
   .sidebar {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    bottom: 0 !important;
-    width: 280px !important;
     transform: translateX(-100%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 1000 !important;
+    width: 280px !important;
   }
   
   .sidebar.mobile-open {
@@ -1353,11 +1255,15 @@
     display: none;
   }
   
+  .sidebar-float-toggle {
+    display: none !important; /* Hide on mobile - using bottom nav instead */
+  }
+  
   .main-content.sidebar-expanded,
   .main-content.sidebar-collapsed {
     margin-left: 0 !important;
-    padding-top: 20px;
-    padding-bottom: 90px; /* Space for bottom nav */
+    padding-top: 70px; /* Space for mobile header */
+    padding-bottom: 80px; /* Space for bottom nav */
     width: 100%;
   }
   
@@ -1369,158 +1275,6 @@
     bottom: 0;
     background: rgba(0,0,0,0.5);
     z-index: 998;
-  }
-}
-
-/* ========================================
-   MOBILE BOTTOM NAVIGATION BAR - Always Visible
-   ======================================== */
-.mobile-bottom-nav {
-  display: none;
-  position: fixed !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  height: 70px;
-  background: #1a1a2e;
-  z-index: 1001 !important;
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
-  padding: 0 4px;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  border-top: 1px solid rgba(255,255,255,0.1);
-}
-
-@media (max-width: 768px) {
-  .mobile-bottom-nav {
-    display: flex !important;
-    align-items: center;
-    justify-content: space-around;
-  }
-  
-  /* Hide floating toggle on mobile when bottom nav is shown */
-  .sidebar-float-toggle {
-    display: none !important;
-  }
-}
-
-.mobile-nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 12px;
-  color: rgba(255,255,255,0.5);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border-radius: 12px;
-  min-width: 60px;
-  text-decoration: none;
-}
-
-.mobile-nav-item:hover {
-  color: rgba(255,255,255,0.8);
-  background: rgba(255,255,255,0.05);
-}
-
-.mobile-nav-item.active {
-  color: #F4B41A;
-  background: rgba(244, 180, 26, 0.15);
-}
-
-.mobile-nav-icon {
-  font-size: 1.4rem;
-  margin-bottom: 4px;
-}
-
-.mobile-nav-label {
-  font-size: 0.65rem;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 60px;
-  text-align: center;
-}
-
-/* More menu button in bottom nav */
-.mobile-nav-more {
-  position: relative;
-}
-
-.mobile-nav-more-menu {
-  position: absolute;
-  bottom: 75px;
-  right: 0;
-  background: #1a1a2e;
-  border-radius: 16px;
-  box-shadow: 0 -8px 30px rgba(0,0,0,0.3);
-  padding: 12px;
-  min-width: 200px;
-  max-height: 60vh;
-  overflow-y: auto;
-  transform: translateY(20px);
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.3s ease;
-  z-index: 1002;
-}
-
-.mobile-nav-more-menu.open {
-  transform: translateY(0);
-  opacity: 1;
-  visibility: visible;
-}
-
-.mobile-nav-more-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  color: rgba(255,255,255,0.7);
-  cursor: pointer;
-  border-radius: 10px;
-  transition: all 0.2s;
-}
-
-.mobile-nav-more-item:hover {
-  background: rgba(255,255,255,0.08);
-  color: white;
-}
-
-.mobile-nav-more-item.active {
-  background: rgba(244, 180, 26, 0.2);
-  color: #F4B41A;
-}
-
-.mobile-nav-more-item span:first-child {
-  font-size: 1.2rem;
-  min-width: 28px;
-  text-align: center;
-}
-
-/* Dark mode overlay for more menu */
-.mobile-more-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 70px;
-  background: rgba(0,0,0,0.4);
-  z-index: 1001;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.3s ease;
-}
-
-.mobile-more-overlay.open {
-  opacity: 1;
-  visibility: visible;
-}
-
-/* Install button mobile positioning */
-@media (max-width: 768px) {
-  .fixed.bottom-20 {
-    bottom: 90px !important; /* Above the bottom nav */
   }
 }
 
@@ -1552,6 +1306,24 @@
 .sidebar.collapsed .sidebar-item:hover::after {
   opacity: 1;
   left: calc(100% + 5px);
+}
+
+/* Scrollbar styling for sidebar */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.1);
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.3);
+  border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.5);
 }
 
 /* ========================================
@@ -11191,11 +10963,20 @@ function TeacherView({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isMobileMoreOpen, setIsMobileMoreOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [darkMode, setDarkMode] = useState(() => {
     // Check localStorage for saved preference
     const saved = localStorage.getItem('darkMode');
     return saved === 'true';
   });
+  
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   // Apply dark mode to document
   useEffect(() => {
@@ -11293,13 +11074,290 @@ function TeacherView({
       {/* PWA install helper */}
       <InstallPrompt />
       
-      {/* Mobile Menu Button - Hidden when bottom nav is visible */}
-      <button
-        onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-        className="hidden fixed top-4 left-4 z-[1000] bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-3 rounded-lg shadow-lg"
-      >
-        {isMobileSidebarOpen ? '✕' : '☰'}
-      </button>
+      {/* ========== MOBILE FIXED HEADER ========== */}
+      {isMobile && (
+        <header 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '56px',
+            background: '#1a1a2e',
+            zIndex: 1001,
+            padding: '0 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+          }}
+        >
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            style={{
+              width: '44px',
+              height: '44px',
+              background: 'linear-gradient(135deg, #F4B41A 0%, #E8B039 100%)',
+              border: 'none',
+              borderRadius: '10px',
+              color: 'white',
+              fontSize: '20px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <i className={`fa-solid ${isMobileSidebarOpen ? 'fa-times' : 'fa-bars'}`}></i>
+          </button>
+          <div style={{color: 'white', fontWeight: 600, fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+            <div style={{width: '32px', height: '32px', background: 'linear-gradient(135deg, #F4B41A 0%, #E8B039 100%)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px'}}>📚</div>
+            <span>Curriculum Tracker</span>
+          </div>
+          <div style={{width: '44px'}}></div>
+        </header>
+      )}
+
+      {/* ========== MOBILE BOTTOM NAVIGATION ========== */}
+      {isMobile && (
+        <nav style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '65px',
+          background: '#1a1a2e',
+          zIndex: 1001,
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
+          padding: '0 8px',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          borderTop: '1px solid rgba(255,255,255,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-around'
+        }}>
+          {/* Home/Overview */}
+          <button
+            onClick={() => handleTabClick('overview')}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '6px 10px',
+              color: activeTab === 'overview' ? '#F4B41A' : 'rgba(255,255,255,0.5)',
+              cursor: 'pointer',
+              borderRadius: '10px',
+              minWidth: '55px',
+              background: activeTab === 'overview' ? 'rgba(244, 180, 26, 0.15)' : 'none',
+              border: 'none',
+              fontFamily: 'inherit'
+            }}
+          >
+            <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>🏠</span>
+            <span style={{fontSize: '0.6rem', fontWeight: 500}}>Home</span>
+          </button>
+          
+          {/* Teachers */}
+          <button
+            onClick={() => handleTabClick('teachers')}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '6px 10px',
+              color: activeTab === 'teachers' ? '#F4B41A' : 'rgba(255,255,255,0.5)',
+              cursor: 'pointer',
+              borderRadius: '10px',
+              minWidth: '55px',
+              background: activeTab === 'teachers' ? 'rgba(244, 180, 26, 0.15)' : 'none',
+              border: 'none',
+              fontFamily: 'inherit'
+            }}
+          >
+            <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>👨‍🏫</span>
+            <span style={{fontSize: '0.6rem', fontWeight: 500}}>Teachers</span>
+          </button>
+          
+          {/* Students */}
+          <button
+            onClick={() => handleTabClick('students')}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '6px 10px',
+              color: activeTab === 'students' ? '#F4B41A' : 'rgba(255,255,255,0.5)',
+              cursor: 'pointer',
+              borderRadius: '10px',
+              minWidth: '55px',
+              background: activeTab === 'students' ? 'rgba(244, 180, 26, 0.15)' : 'none',
+              border: 'none',
+              fontFamily: 'inherit'
+            }}
+          >
+            <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>👨‍🎓</span>
+            <span style={{fontSize: '0.6rem', fontWeight: 500}}>Students</span>
+          </button>
+          
+          {/* Analytics */}
+          <button
+            onClick={() => handleTabClick('analytics')}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '6px 10px',
+              color: activeTab === 'analytics' ? '#F4B41A' : 'rgba(255,255,255,0.5)',
+              cursor: 'pointer',
+              borderRadius: '10px',
+              minWidth: '55px',
+              background: activeTab === 'analytics' ? 'rgba(244, 180, 26, 0.15)' : 'none',
+              border: 'none',
+              fontFamily: 'inherit'
+            }}
+          >
+            <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>📊</span>
+            <span style={{fontSize: '0.6rem', fontWeight: 500}}>Analytics</span>
+          </button>
+          
+          {/* More */}
+          <button
+            onClick={() => setIsMobileMoreOpen(!isMobileMoreOpen)}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '6px 10px',
+              color: isMobileMoreOpen ? '#F4B41A' : 'rgba(255,255,255,0.5)',
+              cursor: 'pointer',
+              borderRadius: '10px',
+              minWidth: '55px',
+              background: isMobileMoreOpen ? 'rgba(244, 180, 26, 0.15)' : 'none',
+              border: 'none',
+              fontFamily: 'inherit'
+            }}
+          >
+            <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>
+              <i className={`fa-solid ${isMobileMoreOpen ? 'fa-times' : 'fa-ellipsis'}`}></i>
+            </span>
+            <span style={{fontSize: '0.6rem', fontWeight: 500}}>More</span>
+          </button>
+        </nav>
+      )}
+
+      {/* More Menu Overlay */}
+      {isMobile && isMobileMoreOpen && (
+        <div 
+          onClick={() => setIsMobileMoreOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: '65px',
+            background: 'rgba(0,0,0,0.4)',
+            zIndex: 1001
+          }}
+        />
+      )}
+
+      {/* More Menu Popup */}
+      {isMobile && isMobileMoreOpen && (
+        <div style={{
+          position: 'fixed',
+          bottom: '75px',
+          right: '10px',
+          background: '#1a1a2e',
+          borderRadius: '16px',
+          boxShadow: '0 -8px 30px rgba(0,0,0,0.4)',
+          padding: '12px',
+          minWidth: '220px',
+          maxHeight: '60vh',
+          overflowY: 'auto',
+          zIndex: 1002,
+          border: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          {teacherTabs.filter(tab => !['overview', 'teachers', 'students', 'analytics'].includes(tab.id)).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => handleTabClick(tab.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 16px',
+                color: activeTab === tab.id ? '#F4B41A' : 'rgba(255,255,255,0.8)',
+                cursor: 'pointer',
+                borderRadius: '10px',
+                border: 'none',
+                background: activeTab === tab.id ? 'rgba(244, 180, 26, 0.2)' : 'none',
+                width: '100%',
+                textAlign: 'left',
+                fontFamily: 'inherit',
+                fontSize: '14px'
+              }}
+            >
+              <span style={{fontSize: '1.1rem', width: '24px', textAlign: 'center'}}>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+          
+          {/* Dark Mode Toggle */}
+          <button 
+            onClick={() => setDarkMode(!darkMode)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 16px',
+              color: 'rgba(255,255,255,0.8)',
+              cursor: 'pointer',
+              borderRadius: '10px',
+              border: 'none',
+              background: 'none',
+              width: '100%',
+              textAlign: 'left',
+              fontFamily: 'inherit',
+              fontSize: '14px'
+            }}
+          >
+            <span style={{fontSize: '1.1rem', width: '24px', textAlign: 'center'}}>
+              <i className={`fa-solid ${darkMode ? 'fa-sun' : 'fa-moon'}`}></i>
+            </span>
+            <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
+          </button>
+          
+          {/* Logout */}
+          <button 
+            onClick={handleLogout}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '12px 16px',
+              color: '#f87171',
+              cursor: 'pointer',
+              borderRadius: '10px',
+              border: 'none',
+              background: 'none',
+              width: '100%',
+              textAlign: 'left',
+              fontFamily: 'inherit',
+              fontSize: '14px'
+            }}
+          >
+            <span style={{fontSize: '1.1rem', width: '24px', textAlign: 'center'}}>
+              <i className="fa-solid fa-right-from-bracket"></i>
+            </span>
+            <span>Logout</span>
+          </button>
+        </div>
+      )}
 
       {/* Manual Install Button - Smart visibility */}
       {(() => {
@@ -11318,7 +11376,7 @@ function TeacherView({
         if (shouldHide) return null;
         
         return (
-          <div className="fixed bottom-20 right-4 z-[9998]">
+          <div className="fixed bottom-24 md:bottom-20 right-4 z-[998]">
             <button
               onClick={() => {
                 if (window.matchMedia('(display-mode: standalone)').matches) {
@@ -11443,90 +11501,11 @@ function TeacherView({
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation - Always Visible on Mobile */}
-      {(() => {
-        // Define primary tabs for bottom nav (first 4 most used)
-        const primaryTabs = teacherTabs.slice(0, 4);
-        const moreTabs = teacherTabs.slice(4);
-        
-        return (
-          <>
-            {/* Overlay when more menu is open */}
-            <div 
-              className={`mobile-more-overlay ${isMobileMoreOpen ? 'open' : ''}`}
-              onClick={() => setIsMobileMoreOpen(false)}
-            />
-            
-            <nav className="mobile-bottom-nav">
-              {/* Menu button to open full sidebar */}
-              <div
-                onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-                className={`mobile-nav-item ${isMobileSidebarOpen ? 'active' : ''}`}
-              >
-                <span className="mobile-nav-icon">
-                  <i className={`fa-solid ${isMobileSidebarOpen ? 'fa-times' : 'fa-bars'}`}></i>
-                </span>
-                <span className="mobile-nav-label">Menu</span>
-              </div>
-              
-              {primaryTabs.slice(0, 3).map((tab) => (
-                <div
-                  key={tab.id}
-                  onClick={() => handleTabClick(tab.id)}
-                  className={`mobile-nav-item ${activeTab === tab.id ? 'active' : ''}`}
-                >
-                  <span className="mobile-nav-icon">{tab.icon}</span>
-                  <span className="mobile-nav-label">{tab.label.split(' ')[0]}</span>
-                </div>
-              ))}
-              
-              {/* More button */}
-              <div className="mobile-nav-item mobile-nav-more" onClick={() => setIsMobileMoreOpen(!isMobileMoreOpen)}>
-                <span className="mobile-nav-icon">
-                  <i className={`fa-solid ${isMobileMoreOpen ? 'fa-times' : 'fa-ellipsis'}`}></i>
-                </span>
-                <span className="mobile-nav-label">More</span>
-                
-                {/* More menu popup */}
-                <div className={`mobile-nav-more-menu ${isMobileMoreOpen ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
-                  {moreTabs.map((tab) => (
-                    <div
-                      key={tab.id}
-                      onClick={() => handleTabClick(tab.id)}
-                      className={`mobile-nav-more-item ${activeTab === tab.id ? 'active' : ''}`}
-                    >
-                      <span>{tab.icon}</span>
-                      <span>{tab.label}</span>
-                    </div>
-                  ))}
-                  
-                  {/* Dark mode toggle in more menu */}
-                  <div 
-                    className="mobile-nav-more-item"
-                    onClick={() => setDarkMode(!darkMode)}
-                  >
-                    <span><i className={`fa-solid ${darkMode ? 'fa-sun' : 'fa-moon'}`}></i></span>
-                    <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
-                  </div>
-                  
-                  {/* Logout in more menu */}
-                  <div 
-                    className="mobile-nav-more-item"
-                    onClick={handleLogout}
-                    style={{color: '#f87171'}}
-                  >
-                    <span><i className="fa-solid fa-right-from-bracket"></i></span>
-                    <span>Logout</span>
-                  </div>
-                </div>
-              </div>
-            </nav>
-          </>
-        );
-      })()}
-
       {/* Main content */}
-      <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
+      <div 
+        className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}
+        style={isMobile ? {marginLeft: 0, paddingTop: '70px', paddingBottom: '80px'} : {}}
+      >
         {celebrationMessage && (
           <div className="avanti-gradient text-white text-center py-4 text-xl font-bold">
             {celebrationMessage}
@@ -27855,7 +27834,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
     cursor: pointer;
     box-shadow: 0 4px 20px rgba(244, 180, 26, 0.4);
     z-index: 99999;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, bottom 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -27864,6 +27843,16 @@ ReactDOM.render(<App/>,document.getElementById('root'));
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
     will-change: transform;
+}
+
+/* Position chatbot button above bottom nav on mobile */
+@media (max-width: 768px) {
+    .avanti-help-btn {
+        bottom: 85px !important;
+        right: 20px;
+        width: 50px;
+        height: 50px;
+    }
 }
 
 .avanti-help-btn:hover {
