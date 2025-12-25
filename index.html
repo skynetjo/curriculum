@@ -203,9 +203,116 @@
       color: var(--text-secondary) !important;
     }
     
+    /* Fix: Additional dark mode text color fixes */
+    [data-theme="dark"] .text-gray-400 {
+      color: #9ca3af !important;
+    }
+    
+    [data-theme="dark"] .text-gray-300 {
+      color: #d1d5db !important;
+    }
+    
+    [data-theme="dark"] .text-black {
+      color: var(--text-primary) !important;
+    }
+    
+    /* Dark mode for text inside colored backgrounds */
+    [data-theme="dark"] .bg-yellow-500 .text-black,
+    [data-theme="dark"] .bg-yellow-100 .text-yellow-700 {
+      color: #1f2937 !important;
+    }
+    
+    /* Fix for modal and popup text in dark mode */
+    [data-theme="dark"] p,
+    [data-theme="dark"] span,
+    [data-theme="dark"] label,
+    [data-theme="dark"] div:not([class*="bg-"]):not(.sidebar):not(.sidebar-nav):not(.sidebar-header):not(.sidebar-footer) {
+      color: inherit;
+    }
+    
+    /* Ensure stat cards text is visible */
+    [data-theme="dark"] .stat-card p,
+    [data-theme="dark"] .stat-card span,
+    [data-theme="dark"] .stat-card div {
+      color: var(--text-primary);
+    }
+    
+    [data-theme="dark"] .stat-card .text-gray-500,
+    [data-theme="dark"] .stat-card .text-gray-600 {
+      color: var(--text-secondary) !important;
+    }
+    
+    /* Fix dropdown and select options */
+    [data-theme="dark"] option {
+      background: var(--bg-secondary) !important;
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix placeholder text */
+    [data-theme="dark"] ::placeholder {
+      color: var(--text-secondary) !important;
+      opacity: 0.7;
+    }
+    
+    /* Fix chart labels and tooltips */
+    [data-theme="dark"] .chartjs-tooltip {
+      background: var(--bg-secondary) !important;
+      color: var(--text-primary) !important;
+    }
+    
     [data-theme="dark"] .border-gray-200,
     [data-theme="dark"] .border-gray-300 {
       border-color: var(--border-color) !important;
+    }
+    
+    /* Additional dark mode fixes for modals and popups */
+    [data-theme="dark"] .modal-content,
+    [data-theme="dark"] [class*="rounded-xl"][class*="bg-white"],
+    [data-theme="dark"] [class*="rounded-2xl"][class*="bg-white"],
+    [data-theme="dark"] [class*="rounded-lg"][class*="bg-white"] {
+      background: var(--bg-card) !important;
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix filter cards and dropdowns */
+    [data-theme="dark"] .filter-card,
+    [data-theme="dark"] [class*="filter"] {
+      background: var(--bg-secondary) !important;
+    }
+    
+    /* Fix headings that might be dark */
+    [data-theme="dark"] h1, 
+    [data-theme="dark"] h2, 
+    [data-theme="dark"] h3, 
+    [data-theme="dark"] h4, 
+    [data-theme="dark"] h5, 
+    [data-theme="dark"] h6 {
+      color: var(--text-primary);
+    }
+    
+    /* Fix specific gray text classes comprehensively */
+    [data-theme="dark"] .text-gray-700,
+    [data-theme="dark"] .text-gray-800,
+    [data-theme="dark"] .text-gray-900 {
+      color: var(--text-primary) !important;
+    }
+    
+    /* Fix buttons text in dark mode */
+    [data-theme="dark"] button.bg-gray-200,
+    [data-theme="dark"] button.bg-gray-300 {
+      background: var(--bg-secondary) !important;
+      color: var(--text-primary) !important;
+    }
+    
+    /* Mobile bottom nav dark mode */
+    [data-theme="dark"] .mobile-bottom-nav {
+      background: #0f172a;
+      border-top: 1px solid var(--border-color);
+    }
+    
+    [data-theme="dark"] .mobile-nav-more-menu {
+      background: #0f172a;
+      border: 1px solid var(--border-color);
     }
     
     [data-theme="dark"] .shadow-lg,
@@ -1058,6 +1165,7 @@
   .main-content.sidebar-collapsed {
     margin-left: 0 !important;
     padding-top: 70px;
+    padding-bottom: 80px; /* Space for bottom nav */
     width: 100%;
   }
   
@@ -1069,6 +1177,157 @@
     bottom: 0;
     background: rgba(0,0,0,0.5);
     z-index: 998;
+  }
+}
+
+/* ========================================
+   MOBILE BOTTOM NAVIGATION BAR - Always Visible
+   ======================================== */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 70px;
+  background: #1a1a2e;
+  z-index: 1001;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+  padding: 0 8px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+  }
+  
+  /* Hide floating toggle on mobile when bottom nav is shown */
+  .sidebar-float-toggle {
+    display: none !important;
+  }
+}
+
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 12px;
+  min-width: 60px;
+  text-decoration: none;
+}
+
+.mobile-nav-item:hover {
+  color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.05);
+}
+
+.mobile-nav-item.active {
+  color: #F4B41A;
+  background: rgba(244, 180, 26, 0.15);
+}
+
+.mobile-nav-icon {
+  font-size: 1.4rem;
+  margin-bottom: 4px;
+}
+
+.mobile-nav-label {
+  font-size: 0.65rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60px;
+  text-align: center;
+}
+
+/* More menu button in bottom nav */
+.mobile-nav-more {
+  position: relative;
+}
+
+.mobile-nav-more-menu {
+  position: absolute;
+  bottom: 75px;
+  right: 0;
+  background: #1a1a2e;
+  border-radius: 16px;
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.3);
+  padding: 12px;
+  min-width: 200px;
+  max-height: 60vh;
+  overflow-y: auto;
+  transform: translateY(20px);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  z-index: 1002;
+}
+
+.mobile-nav-more-menu.open {
+  transform: translateY(0);
+  opacity: 1;
+  visibility: visible;
+}
+
+.mobile-nav-more-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+.mobile-nav-more-item:hover {
+  background: rgba(255,255,255,0.08);
+  color: white;
+}
+
+.mobile-nav-more-item.active {
+  background: rgba(244, 180, 26, 0.2);
+  color: #F4B41A;
+}
+
+.mobile-nav-more-item span:first-child {
+  font-size: 1.2rem;
+  min-width: 28px;
+  text-align: center;
+}
+
+/* Dark mode overlay for more menu */
+.mobile-more-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 70px;
+  background: rgba(0,0,0,0.4);
+  z-index: 1001;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.mobile-more-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Install button mobile positioning */
+@media (max-width: 768px) {
+  .fixed.bottom-20 {
+    bottom: 90px !important; /* Above the bottom nav */
   }
 }
 
@@ -1602,21 +1861,6 @@
   color: #7c3aed;
 }
   </style>
-  <style>
-.sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 260px;
-  height: 100vh;
-  overflow-y: auto;
-  background: #111;
-  z-index: 1000;
-}
-.main-content {
-  margin-left: 260px;
-}
-</style>
 </head>
 <body>
   <!-- ✅ PERFORMANCE FIX: Instant loading screen - shows before ANY JavaScript loads -->
@@ -10771,6 +11015,7 @@ function TeacherView({
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isMobileMoreOpen, setIsMobileMoreOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     // Check localStorage for saved preference
     const saved = localStorage.getItem('darkMode');
@@ -10786,9 +11031,10 @@ function TeacherView({
   // Handle navigation and auto-close on mobile
   const handleTabClick = (tabId) => {
     setActiveTab(tabId);
-    // Close sidebar on mobile after navigation
+    // Close sidebar and more menu on mobile after navigation
     if (window.innerWidth < 768) {
       setIsMobileSidebarOpen(false);
+      setIsMobileMoreOpen(false);
     }
   };
   
@@ -10872,10 +11118,10 @@ function TeacherView({
       {/* PWA install helper */}
       <InstallPrompt />
       
-      {/* Mobile Menu Button */}
+      {/* Mobile Menu Button - Hidden when bottom nav is visible */}
       <button
         onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-        className="md:hidden fixed top-4 left-4 z-[1000] bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-3 rounded-lg shadow-lg"
+        className="hidden fixed top-4 left-4 z-[1000] bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-3 rounded-lg shadow-lg"
       >
         {isMobileSidebarOpen ? '✕' : '☰'}
       </button>
@@ -11021,6 +11267,77 @@ function TeacherView({
           </button>
         </div>
       </div>
+
+      {/* Mobile Bottom Navigation - Always Visible on Mobile */}
+      {(() => {
+        // Define primary tabs for bottom nav (first 4 most used)
+        const primaryTabs = teacherTabs.slice(0, 4);
+        const moreTabs = teacherTabs.slice(4);
+        
+        return (
+          <>
+            {/* Overlay when more menu is open */}
+            <div 
+              className={`mobile-more-overlay ${isMobileMoreOpen ? 'open' : ''}`}
+              onClick={() => setIsMobileMoreOpen(false)}
+            />
+            
+            <nav className="mobile-bottom-nav">
+              {primaryTabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  onClick={() => handleTabClick(tab.id)}
+                  className={`mobile-nav-item ${activeTab === tab.id ? 'active' : ''}`}
+                >
+                  <span className="mobile-nav-icon">{tab.icon}</span>
+                  <span className="mobile-nav-label">{tab.label.split(' ')[0]}</span>
+                </div>
+              ))}
+              
+              {/* More button */}
+              <div className="mobile-nav-item mobile-nav-more" onClick={() => setIsMobileMoreOpen(!isMobileMoreOpen)}>
+                <span className="mobile-nav-icon">
+                  <i className={`fa-solid ${isMobileMoreOpen ? 'fa-times' : 'fa-ellipsis'}`}></i>
+                </span>
+                <span className="mobile-nav-label">More</span>
+                
+                {/* More menu popup */}
+                <div className={`mobile-nav-more-menu ${isMobileMoreOpen ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
+                  {moreTabs.map((tab) => (
+                    <div
+                      key={tab.id}
+                      onClick={() => handleTabClick(tab.id)}
+                      className={`mobile-nav-more-item ${activeTab === tab.id ? 'active' : ''}`}
+                    >
+                      <span>{tab.icon}</span>
+                      <span>{tab.label}</span>
+                    </div>
+                  ))}
+                  
+                  {/* Dark mode toggle in more menu */}
+                  <div 
+                    className="mobile-nav-more-item"
+                    onClick={() => setDarkMode(!darkMode)}
+                  >
+                    <span><i className={`fa-solid ${darkMode ? 'fa-sun' : 'fa-moon'}`}></i></span>
+                    <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
+                  </div>
+                  
+                  {/* Logout in more menu */}
+                  <div 
+                    className="mobile-nav-more-item"
+                    onClick={handleLogout}
+                    style={{color: '#f87171'}}
+                  >
+                    <span><i className="fa-solid fa-right-from-bracket"></i></span>
+                    <span>Logout</span>
+                  </div>
+                </div>
+              </div>
+            </nav>
+          </>
+        );
+      })()}
 
       {/* Main content */}
       <div className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
