@@ -129,8 +129,8 @@
     
     /* ✅ PERFORMANCE: Reduce paint areas */
     #root {
-      contain: layout style;
-    }
+  min-height: 100vh;
+}
     
     /* Priority Badge Gradients */
 .priority-badge {
@@ -1230,7 +1230,6 @@
   min-height: 100vh;
   background: #f8fafc;
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow-y: auto;
 }
 
 .main-content.sidebar-expanded {
