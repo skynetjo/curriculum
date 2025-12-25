@@ -294,10 +294,14 @@
     
     /* Better font rendering */
     body {
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      text-rendering: optimizeLegibility;
-    }
+  margin: 0;
+  overflow-x: hidden;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
     
     /* Enhanced Mobile Sidebar Styles */
     .mobile-sidebar-overlay {
@@ -1226,6 +1230,7 @@
   min-height: 100vh;
   background: #f8fafc;
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-y: auto;
 }
 
 .main-content.sidebar-expanded {
