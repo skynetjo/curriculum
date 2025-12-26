@@ -6910,7 +6910,7 @@ function AssetManagement({ currentUser, students }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="stat-card bg-gradient-to-br from-blue-500 to-blue-600 text-white"><div className="text-sm opacity-90">Total</div><div className="text-3xl font-bold">{stats.total}</div></div>
         <div className="stat-card bg-gradient-to-br from-green-500 to-green-600 text-white"><div className="text-sm opacity-90">Available</div><div className="text-3xl font-bold">{stats.available}</div></div>
         <div className="stat-card bg-gradient-to-br from-yellow-500 to-yellow-600 text-white"><div className="text-sm opacity-90">Assigned</div><div className="text-3xl font-bold">{stats.assigned}</div></div>
@@ -20835,6 +20835,7 @@ function SchoolInfoView({currentUser,schoolInfo,setSchoolInfo}){
   const mySchool=currentUser.school;
   const existingInfo=schoolInfo.find(info=>info.school===mySchool);
   const[isEditing,setIsEditing]=useState(false);
+  const[isSaving,setIsSaving]=useState(false);
   
   const[formData,setFormData]=useState({
     // Principal Info
@@ -20898,9 +20899,18 @@ function SchoolInfoView({currentUser,schoolInfo,setSchoolInfo}){
     meetingMinutes:[]
   });
 
+  // ✅ FIX: Properly merge existing data with defaults to prevent undefined errors
   useEffect(()=>{
     if(existingInfo){
-      setFormData({...existingInfo});
+      // Merge existing data with default values to handle missing fields
+      setFormData(prev => ({
+        ...prev,  // Keep default values
+        ...existingInfo,  // Override with existing values
+        // Ensure arrays are always arrays
+        referenceBooks: existingInfo.referenceBooks || [],
+        otherAssets: existingInfo.otherAssets || [],
+        meetingMinutes: existingInfo.meetingMinutes || []
+      }));
       setIsEditing(false);
     }else{
       setIsEditing(true);
@@ -21055,6 +21065,7 @@ function SchoolInfoView({currentUser,schoolInfo,setSchoolInfo}){
     return;
   }
   
+  setIsSaving(true);
   try {
     const docId = mySchool.replace(/\s+/g, '_');
     const now = new Date().toISOString();
@@ -21099,9 +21110,11 @@ function SchoolInfoView({currentUser,schoolInfo,setSchoolInfo}){
     });
 
     setIsEditing(false);
+    setIsSaving(false);
     alert('✅ School information saved successfully!');
   } catch (e) {
     console.error('Save error:', e);
+    setIsSaving(false);
     alert('❌ Failed to save: ' + e.message);
   }
 };
@@ -21725,8 +21738,8 @@ function SchoolInfoView({currentUser,schoolInfo,setSchoolInfo}){
         </div>
 
         {isEditing && (
-        <button onClick={handleSubmit} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-xl">
-          💾 Save School Information
+        <button onClick={handleSubmit} disabled={isSaving} className={`w-full text-white py-4 rounded-xl font-bold text-xl ${isSaving ? 'bg-gray-400 cursor-not-allowed' : 'avanti-gradient hover:opacity-90'}`}>
+          {isSaving ? '⏳ Saving...' : '💾 Save School Information'}
         </button>
       )}
       </div>
