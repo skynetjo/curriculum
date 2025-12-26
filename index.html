@@ -2166,6 +2166,15 @@ const CHART_COLORS = {
 </script>
   <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
+    const firestoreCache = new Map();
+
+async function cachedQuery(key, queryFn, ttl = 120000) {
+  if (firestoreCache.has(key)) return firestoreCache.get(key);
+  const data = await queryFn();
+  firestoreCache.set(key, data);
+  setTimeout(() => firestoreCache.delete(key), ttl);
+  return data;
+}
 
 // ========================================
 // DEBOUNCE UTILITY - Prevents page refresh while typing
@@ -2296,9 +2305,8 @@ const PresenceSystem = {
     this.updatePresence('online');
     
     // Heartbeat every 30 seconds
-    this.heartbeatInterval = setInterval(() => {
-      this.updatePresence('online');
-    }, 30000);
+    // Update presence only once on load
+this.updatePresence('online');
     
     // Handle tab visibility
     document.addEventListener('visibilitychange', () => {
@@ -2347,7 +2355,10 @@ const PresenceSystem = {
   listenToPresence: function() {
     const fetchPresence = async () => {
       try {
-        const snap = await db.collection('user_presence').get();
+        const snap = await db.collection('user_presence')
+  .where('status', 'in', ['online', 'away'])
+  .limit(30)
+  .get();
         const online = {};
         const all = {};
         const now = Date.now();
@@ -2385,7 +2396,7 @@ const PresenceSystem = {
     fetchPresence();
     
     // ✅ Refresh every 60 seconds instead of realtime (saves ~₹4,800/month)
-    this.presenceInterval = setInterval(fetchPresence, 60000);
+    this.presenceInterval = setInterval(fetchPresence, 180000);
   },
   
   getOnlineCount: function() {
@@ -9872,7 +9883,7 @@ useEffect(() => {
         db.collection('chapterProgress').get(),
         db.collection('teachers').get(),
         db.collection('curriculum').get(),
-        db.collection('students').get(),
+        db.collection('students').limit(50).get();,
         db.collection('studentAttendance')
           .where('date', '>=', new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0])
           .get(),
@@ -9974,13 +9985,19 @@ const handleLogin=async()=>{
       
       try {
         // ✅ Get all students and search for matching ID
-        const allStudentsSnap = await db.collection('students').get();
-        let foundStudent = null;
-        
-        allStudentsSnap.docs.forEach(doc => {
-          const data = doc.data();
-          if(data.id === studentId) {
-            foundStudent = { ...data, docId: doc.id };
+        const snap = await db.collection('students')
+  .where('id', '==', studentId)
+  .limit(1)
+  .get();
+
+if (snap.empty) {
+  alert('Student ID not found. Please contact your teacher.');
+  setAuthLoading(false);
+  return;
+}
+
+const doc = snap.docs[0];
+const foundStudent = { ...doc.data(), docId: doc.id };
             console.log('✅ Found student:', foundStudent);
           }
         });
@@ -11941,7 +11958,7 @@ function AdminExamStats({ accessibleSchools = [], isSuperAdmin = false }) {
       const regsSnap = await db.collection('studentExamRegistrations').get();
       setExamRegistrations(regsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
-      const stuSnap = await db.collection('students').get();
+      const stuSnap = await db.collection('students')   .limit(50)   .get();
       const studentsData = stuSnap.docs.map(d => {
         const data = d.data();
         let studentId = data.id;
@@ -13702,7 +13719,7 @@ function AcademicYearManagement({ teachers, students, curriculum, chapterProgres
 
       // Step 7: Promote 11th → 12th (70%)
       addLog('🎓 Step 7: Promoting 11th grade to 12th...');
-      const studentsSnap = await db.collection('students').get();
+      const studentsSnap = await db.collection('students')   .limit(50)   .get();
       const batch7 = db.batch();
       let promoted11to12 = 0;
       
@@ -25823,7 +25840,7 @@ const feedbackData = feedbackSnap.docs.map(doc => {
 
         
         // Fetch students
-        const studentsSnap = await db.collection('students').get();
+        const studentsSnap = await db.collection('students')   .limit(50)   .get();
         const studentsData = studentsSnap.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
