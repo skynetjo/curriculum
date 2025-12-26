@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9627,6 +9626,31 @@ const getAccessibleSchools = useCallback((managerData, allManagers) => {
 }, []);
 
 useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
+  // ✅ CHECK FOR STUDENT FIRST (anonymous auth users)
+  // Students use anonymous auth, so check localStorage for student session
+  if (user.isAnonymous) {
+    const studentSession = localStorage.getItem('studentSession');
+    if (studentSession) {
+      try {
+        const studentData = JSON.parse(studentSession);
+        console.log('✅ Student detected via anonymous auth:', studentData.name);
+        setCurrentUser(studentData);
+        setIsAdmin(false);
+        setActiveTab('dashboard');
+        setLoading(false);
+        return; // Exit early - don't check for teacher/manager
+      } catch(e) {
+        console.error('Failed to parse student session:', e);
+        localStorage.removeItem('studentSession');
+      }
+    }
+    // No student session but anonymous user - sign out
+    console.log('Anonymous user without student session - signing out');
+    await auth.signOut();
+    setLoading(false);
+    return;
+  }
+  
   // Check for Super Admin first
   if(user.email==='admin@avantifellows.org'){
     // Check 2FA for Super Admin
