@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9798,8 +9799,31 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
       }
     }else{alert('User profile not found. Please contact admin.');await auth.signOut()}
   }
-}}else{// Check for student session in localStorage
-const studentSession=localStorage.getItem('studentSession');if(studentSession){try{const studentData=JSON.parse(studentSession);console.log('✅ Restored student session:',studentData);setCurrentUser(studentData);setIsAdmin(false);setActiveTab('dashboard')}catch(e){console.error('Failed to restore student session:',e);localStorage.removeItem('studentSession')}}else{setCurrentUser(null);setIsAdmin(false)}}setLoading(false)});return()=>unsubscribe()},[getAccessibleSchools]);
+}}else{
+  // Check for student session in localStorage
+  const studentSession=localStorage.getItem('studentSession');
+  if(studentSession){
+    try{
+      const studentData=JSON.parse(studentSession);
+      console.log('✅ Restored student session:',studentData);
+      // ✅ Sign in anonymously to restore Firebase Auth for students
+      if (!auth.currentUser) {
+        await auth.signInAnonymously();
+        console.log('✅ Anonymous auth restored for student');
+      }
+      setCurrentUser(studentData);
+      setIsAdmin(false);
+      setActiveTab('dashboard');
+    }catch(e){
+      console.error('Failed to restore student session:',e);
+      localStorage.removeItem('studentSession');
+    }
+  }else{
+    setCurrentUser(null);
+    setIsAdmin(false);
+  }
+}
+setLoading(false)});return()=>unsubscribe()},[getAccessibleSchools]);
 
 // ✅ PERFORMANCE FIX: Hide instant HTML loader once React takes over
 useEffect(() => {
@@ -9934,7 +9958,12 @@ const handleLogin=async()=>{
       }
       
       try {
-        // ✅ Get all students and search for matching ID
+        // ✅ STEP 1: Sign in anonymously to get Firebase Auth credentials
+        // This allows students to access Firestore collections
+        await auth.signInAnonymously();
+        console.log('✅ Anonymous auth successful');
+        
+        // ✅ STEP 2: Now query students collection (with auth)
         const snap = await db.collection('students')
   .where('id', '==', studentId)
   .limit(1)
@@ -9942,6 +9971,7 @@ const handleLogin=async()=>{
 
 if (snap.empty) {
   alert('Student ID not found. Please contact your teacher.');
+  await auth.signOut(); // Sign out anonymous user
   setAuthLoading(false);
   return;
 }
