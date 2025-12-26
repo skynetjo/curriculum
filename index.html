@@ -9909,46 +9909,56 @@ useEffect(() => {
       curriculumSnap.docs.forEach(doc => { currMap[doc.id] = doc.data() });
       setCurriculum(currMap);
 
-      // ✅ OPTIMIZED: Fetch students only for relevant school(s) to save Firebase costs
-      // For teachers: fetch only their school's students
-      // For admins: fetch students in batches by school (not all at once)
+      // ✅ FIXED: Fetch students based on user type
+      // For admins: fetch ALL students (they need to see everything)
+      // For teachers: fetch only their school's students (cost savings)
       let studentsData = [];
+      
+      // Check if user is admin/manager (isAdmin state) or teacher
+      const userIsAdmin = currentUser && (
+        currentUser.email === 'admin@avantifellows.org' ||
+        currentUser.role === 'super_admin' ||
+        currentUser.role === 'program_head' ||
+        currentUser.role === 'program_manager' ||
+        currentUser.role === 'associate_program_manager' ||
+        currentUser.role === 'aph' ||
+        currentUser.role === 'pm' ||
+        currentUser.role === 'apm'
+      );
+      
       if (currentUser && currentUser.userType !== 'student') {
-        const userSchool = currentUser.school;
-        const userRole = currentUser.role;
-        
-        // Determine which schools to fetch students for
-        let schoolsToFetch = [];
-        if (userRole === 'super_admin' || userRole === 'program_head') {
-          // Super admin/Program head: fetch all schools but with limits
-          schoolsToFetch = SCHOOLS;
-        } else if (userRole === 'program_manager' || userRole === 'associate_program_manager') {
-          // Managers: fetch only their accessible schools
-          schoolsToFetch = currentUser.directSchools || [userSchool];
-        } else {
-          // Teachers/APCs: fetch only their school
-          schoolsToFetch = [userSchool];
-        }
-        
-        // ✅ Fetch students for each school (much more efficient)
-        console.log('📊 Fetching students for schools:', schoolsToFetch);
-        const studentPromises = schoolsToFetch.map(school => 
-          db.collection('students').where('school', '==', school).get()
-        );
-        const studentSnapshots = await Promise.all(studentPromises);
-        
-        studentSnapshots.forEach(snap => {
-          snap.docs.forEach(d => {
+        if (userIsAdmin) {
+          // ✅ ADMIN: Fetch ALL students (they need full visibility)
+          console.log('📊 Admin detected - fetching ALL students');
+          const allStudentsSnap = await db.collection('students').get();
+          studentsData = allStudentsSnap.docs.map(d => {
             const data = d.data();
             let studentId = data.id;
             if (!studentId) {
               const parts = d.id.split('_');
               studentId = parts[parts.length - 1];
             }
-            studentsData.push({ ...data, id: studentId, docId: d.id });
+            return { ...data, id: studentId, docId: d.id };
           });
-        });
-        console.log('✅ Loaded', studentsData.length, 'students (cost-optimized)');
+          console.log('✅ Admin loaded ALL', studentsData.length, 'students');
+        } else {
+          // ✅ TEACHER: Fetch only their school's students (cost savings)
+          const userSchool = currentUser.school;
+          console.log('📊 Teacher detected - fetching students for:', userSchool);
+          const schoolStudentsSnap = await db.collection('students')
+            .where('school', '==', userSchool)
+            .get();
+          studentsData = schoolStudentsSnap.docs.map(d => {
+            const data = d.data();
+            let studentId = data.id;
+            if (!studentId) {
+              const parts = d.id.split('_');
+              studentId = parts[parts.length - 1];
+            }
+            return { ...data, id: studentId, docId: d.id };
+          });
+          console.log('✅ Teacher loaded', studentsData.length, 'students for', userSchool);
+        }
       }
       setStudents(studentsData);
 
@@ -11990,32 +12000,23 @@ function AdminExamStats({ accessibleSchools = [], isSuperAdmin = false }) {
       const regsSnap = await db.collection('studentExamRegistrations').get();
       setExamRegistrations(regsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
-      // ✅ OPTIMIZED: Fetch students only for accessible schools
-      const schoolsToFetch = isSuperAdmin ? SCHOOLS : accessibleSchools;
-      console.log('📊 [ExamStats] Fetching students for:', schoolsToFetch.length, 'schools');
-      
-      const studentPromises = schoolsToFetch.map(school => 
-        db.collection('students').where('school', '==', school).get()
-      );
-      const studentSnapshots = await Promise.all(studentPromises);
-      
-      const studentsData = [];
-      studentSnapshots.forEach(snap => {
-        snap.docs.forEach(d => {
-          const data = d.data();
-          let studentId = data.id;
-          if (!studentId) {
-            const parts = d.id.split('_');
-            studentId = parts[parts.length - 1];
-          }
-          studentsData.push({ ...data, id: studentId, docId: d.id });
-        });
+      // ✅ FIXED: Fetch ALL students for admins
+      console.log('📊 [ExamStats] Fetching students, isSuperAdmin:', isSuperAdmin);
+      const studentsSnap = await db.collection('students').get();
+      const studentsData = studentsSnap.docs.map(d => {
+        const data = d.data();
+        let studentId = data.id;
+        if (!studentId) {
+          const parts = d.id.split('_');
+          studentId = parts[parts.length - 1];
+        }
+        return { ...data, id: studentId, docId: d.id };
       });
-      console.log('✅ [ExamStats] Loaded', studentsData.length, 'students (cost-optimized)');
+      console.log('✅ [ExamStats] Loaded', studentsData.length, 'students');
       setStudents(studentsData);
     };
     fetchData();
-  }, [accessibleSchools, isSuperAdmin]);
+  }, [isSuperAdmin]);
 
   // Use only accessible schools for dropdown
   const schoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
@@ -25874,22 +25875,14 @@ const feedbackData = feedbackSnap.docs.map(doc => {
 
 
         
-        // ✅ OPTIMIZED: Fetch students only for accessible schools
-        const schoolsToFetch = isSuperAdmin ? SCHOOLS : accessibleSchools;
-        console.log('📊 [Feedback] Fetching students for:', schoolsToFetch.length, 'schools');
-        
-        const studentPromises = schoolsToFetch.map(school => 
-          db.collection('students').where('school', '==', school).get()
-        );
-        const studentSnapshots = await Promise.all(studentPromises);
-        
-        const studentsData = [];
-        studentSnapshots.forEach(snap => {
-          snap.docs.forEach(doc => {
-            studentsData.push({ id: doc.id, ...doc.data() });
-          });
-        });
-        console.log('✅ [Feedback] Loaded', studentsData.length, 'students (cost-optimized)');
+        // ✅ FIXED: Fetch ALL students for admin views
+        console.log('📊 [Feedback] Fetching ALL students');
+        const studentsSnap = await db.collection('students').get();
+        const studentsData = studentsSnap.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('✅ [Feedback] Loaded', studentsData.length, 'students');
         
         // Fetch teachers
         const teachersSnap = await db.collection('teachers').get();
