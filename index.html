@@ -1916,20 +1916,145 @@ body.has-install-banner .sidebar {
   border: 1px solid #e5e7eb;
 }
 
+/* ✅ IMPROVED: Reddit-style action button row */
+.reddit-action-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  margin-left: 2px;
+}
+
 .reddit-reply-btn {
   font-size: 12px;
-  color: #6b7280;
-  background: none;
+  font-weight: 600;
+  color: #878a8c;
+  background: transparent;
   border: none;
   cursor: pointer;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border-radius: 4px;
   min-height: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
 }
 
 .reddit-reply-btn:hover {
-  background: #f3e8ff;
-  color: #7c3aed;
+  background: #f0f0f0;
+  color: #1a1a1b;
+}
+
+.reddit-reply-btn:active {
+  transform: scale(0.98);
+}
+
+/* Reddit-style vote/action buttons */
+.reddit-action-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: #878a8c;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  min-height: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.reddit-action-btn:hover {
+  background: #f0f0f0;
+  color: #1a1a1b;
+}
+
+.reddit-action-btn.active {
+  color: #ff4500;
+}
+
+.reddit-action-btn .icon {
+  font-size: 14px;
+}
+
+/* Reddit-style separator dot */
+.reddit-separator {
+  color: #d1d5db;
+  font-size: 3px;
+  margin: 0 2px;
+}
+
+/* Reddit timestamp styling */
+.reddit-timestamp {
+  font-size: 12px;
+  color: #787c7e;
+}
+
+/* Reddit author styling */
+.reddit-author {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1c1c1c;
+}
+
+.reddit-author:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Reddit comment body */
+.reddit-comment-body {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1c1c1c;
+  word-break: break-word;
+}
+
+/* Reddit reactions */
+.reddit-reactions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  background: #f6f7f8;
+  border-radius: 12px;
+  margin-left: 4px;
+}
+
+.reddit-reactions .emoji-btn {
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  min-height: auto;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.reddit-reactions .emoji-btn:hover {
+  transform: scale(1.2);
+  background: #e8e9ea;
+}
+
+.reddit-reactions .emoji-btn.active {
+  background: #ffe4d4;
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .reddit-reply-btn, .reddit-action-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  
+  .reddit-action-row {
+    flex-wrap: wrap;
+    gap: 2px;
+  }
 }
   </style>
 </head>
@@ -2088,8 +2213,37 @@ const useDebouncedState = (initialValue, delay = 300) => {
   return [value, setValueDebounced, debouncedValue];
 };
 const firebaseConfig={apiKey:"AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",authDomain:"curriculum-dbb10.firebaseapp.com",projectId:"curriculum-dbb10",storageBucket:"curriculum-dbb10.firebasestorage.app",messagingSenderId:"706387632109",appId:"1:706387632109:web:06c78a304fdbdc12f391e4"};
-if(!firebase.apps.length){firebase.initializeApp(firebaseConfig)}
-const db=firebase.firestore();
+
+// ✅ FIX: Safer Firebase initialization with error handling
+let firebaseInitialized = false;
+try {
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+  firebaseInitialized = true;
+} catch (e) {
+  console.error('Firebase initialization error:', e);
+  // Retry initialization
+  try {
+    firebase.initializeApp(firebaseConfig);
+    firebaseInitialized = true;
+  } catch (retryError) {
+    console.error('Firebase retry failed:', retryError);
+  }
+}
+
+// ✅ FIX: Helper to safely get Firestore instance
+const getFirestore = () => {
+  if (!firebaseInitialized || !firebase.apps.length) {
+    console.warn('Firebase not initialized, attempting to initialize...');
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+  }
+  return firebase.firestore();
+};
+
+const db = getFirestore();
 
 // ========================================
 // ✅ FIX: FIREBASE TIMEOUT HELPER
@@ -23301,9 +23455,10 @@ function SocialWall({ teachers, currentUser }) {
   };
 
   // Handle celebration reaction
+  // ✅ FIX: Handle undefined values to prevent Firebase errors
   const handleCelebrationReaction = async (person, emoji) => {
-    const personId = person.afid || person.id || person.email;
-    const userId = currentUser.afid || currentUser.uid || currentUser.email;
+    const personId = person.afid || person.id || person.email || String(Date.now());
+    const userId = currentUser.afid || currentUser.uid || currentUser.email || 'anonymous';
     const today = new Date().toISOString().split('T')[0];
     const docId = `${today}_${personId}`;
     
@@ -23320,8 +23475,8 @@ function SocialWall({ teachers, currentUser }) {
       }
       
       await db.collection('celebrationReactions').doc(docId).set({
-        personId,
-        personName: person.name,
+        personId: personId,
+        personName: person.name || 'Unknown',
         date: today,
         reactions: newReactions,
         wishes: currentReactions.wishes || [],
@@ -23339,30 +23494,40 @@ function SocialWall({ teachers, currentUser }) {
   };
 
   // Send birthday/anniversary wish
+  // ✅ FIX: Handle undefined values to prevent Firebase arrayUnion errors
   const sendWish = async (person) => {
     if (!wishMessage.trim()) return;
     
-    const personId = person.afid || person.id || person.email;
-    const userId = currentUser.afid || currentUser.uid || currentUser.email;
+    const personId = person.afid || person.id || person.email || String(Date.now());
+    const userId = currentUser.afid || currentUser.uid || currentUser.email || 'anonymous';
     const today = new Date().toISOString().split('T')[0];
     const docId = `${today}_${personId}`;
     
     try {
       const currentReactions = celebrationReactions[personId] || { reactions: {}, wishes: [] };
+      
+      // ✅ FIX: Create wish object WITHOUT undefined values (Firebase doesn't allow undefined in arrayUnion)
       const newWish = {
-        userId,
-        userName: currentUser.name,
-        userPhoto: currentUser.profilePhoto,
+        odId: `wish_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Unique ID for wish
+        userId: userId,
+        userName: currentUser.name || currentUser.email?.split('@')[0] || 'Anonymous',
+        userPhoto: currentUser.profilePhoto || '', // Empty string instead of undefined
         message: wishMessage.trim(),
         timestamp: new Date().toISOString()
       };
       
-      await db.collection('celebrationReactions').doc(docId).set({
-        personId,
-        personName: person.name,
+      // ✅ FIX: First get current wishes, then add new one (avoid arrayUnion with complex objects)
+      const docRef = db.collection('celebrationReactions').doc(docId);
+      const docSnap = await docRef.get();
+      const existingData = docSnap.exists ? docSnap.data() : {};
+      const existingWishes = existingData.wishes || [];
+      
+      await docRef.set({
+        personId: personId,
+        personName: person.name || 'Unknown',
         date: today,
         reactions: currentReactions.reactions || {},
-        wishes: firebase.firestore.FieldValue.arrayUnion(newWish),
+        wishes: [...existingWishes, newWish],
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
       
@@ -23380,7 +23545,7 @@ function SocialWall({ teachers, currentUser }) {
       alert('🎉 Your wish has been sent!');
     } catch (e) {
       console.error('Wish error:', e);
-      alert('Failed to send wish');
+      alert('Failed to send wish. Please check your connection and try again.');
     }
   };
 
@@ -24608,34 +24773,24 @@ function SocialWall({ teachers, currentUser }) {
                                     )}
                                   </div>
                                   
-                                  {/* Comment reactions row */}
-                                  <div className="flex items-center gap-1 mt-1 ml-2">
-                                    <span className="text-xs text-gray-400">
+                                  {/* ✅ IMPROVED: Reddit-style comment actions row */}
+                                  <div className="reddit-action-row">
+                                    {/* Timestamp */}
+                                    <span className="reddit-timestamp">
                                       {reply.createdAt ? new Date(reply.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
                                     </span>
-                                    <span className="text-gray-300 mx-1">•</span>
                                     
-                                    {/* Reply button */}
+                                    {/* Reply button - Reddit style */}
                                     <button 
-                                      className="reddit-reply-btn"
+                                      className="reddit-action-btn"
                                       onClick={() => setExpandedReplies({...expandedReplies, [`reply_${post.id}_${reply.id}`]: !expandedReplies[`reply_${post.id}_${reply.id}`]})}
                                     >
-                                      ↩ Reply
+                                      <span className="icon">💬</span>
+                                      <span>Reply</span>
                                     </button>
                                     
-                                    <span className="text-gray-300 mx-1">•</span>
-                                    
-                                    {/* Comment emoji container with hover reveal */}
-                                    <div className={`comment-emoji-container ${showEmojiPicker ? 'emoji-picker-open' : ''}`}>
-                                      {/* Toggle button for mobile */}
-                                      <button 
-                                        className="comment-emoji-toggle"
-                                        onClick={() => setExpandedReplies({...expandedReplies, [`emoji_${post.id}_${reply.id}`]: !showEmojiPicker})}
-                                      >
-                                        😊
-                                      </button>
-                                      
-                                      {/* Emoji buttons */}
+                                    {/* Reactions - Reddit style */}
+                                    <div className="reddit-reactions">
                                       {commentEmojis.map(emoji => {
                                         const count = commentReactionCounts[emoji] || 0;
                                         const reactedBy = Object.entries(reply.reactions || {})
@@ -24643,18 +24798,24 @@ function SocialWall({ teachers, currentUser }) {
                                           .map(([uid]) => uid);
                                         
                                         return (
-                                          <ReactionButton
+                                          <button
                                             key={emoji}
-                                            emoji={emoji}
-                                            count={count}
-                                            isActive={myCommentReaction === emoji}
+                                            className={`emoji-btn ${myCommentReaction === emoji ? 'active' : ''}`}
                                             onClick={() => handleCommentReaction(post.id, reply.id, emoji)}
-                                            reactedBy={reactedBy}
-                                            allMembers={allMembers}
-                                          />
+                                            title={reactedBy.length > 0 ? `${reactedBy.length} reaction${reactedBy.length > 1 ? 's' : ''}` : 'React'}
+                                          >
+                                            {emoji}{count > 0 && <span style={{fontSize: '10px', marginLeft: '2px'}}>{count}</span>}
+                                          </button>
                                         );
                                       })}
                                     </div>
+                                    
+                                    {/* Show nested reply count if any */}
+                                    {reply.replies?.length > 0 && (
+                                      <span className="reddit-timestamp" style={{marginLeft: '4px'}}>
+                                        • {reply.replies.length} {reply.replies.length === 1 ? 'reply' : 'replies'}
+                                      </span>
+                                    )}
                                   </div>
                                   
                                   {/* Reply input for this comment */}
@@ -31552,38 +31713,125 @@ const NotificationManager = {
     },
     
     initMessaging: function() {
-        if (typeof firebase === 'undefined' || !firebase.messaging) {
-            console.log('[NotificationManager] Firebase Messaging not available');
-            return;
+        // ✅ FIX: Wait for firebase.messaging to be fully loaded (deferred script)
+        const initWithRetry = (retries = 5) => {
+            if (typeof firebase === 'undefined' || !firebase.messaging) {
+                if (retries > 0) {
+                    console.log('[NotificationManager] Waiting for Firebase Messaging... retries left:', retries);
+                    setTimeout(() => initWithRetry(retries - 1), 1000);
+                    return;
+                }
+                console.log('[NotificationManager] Firebase Messaging not available after retries');
+                return;
+            }
+            
+            try {
+                this.messaging = firebase.messaging();
+                console.log('[NotificationManager] Messaging ready');
+                
+                // Handle foreground messages
+                this.messaging.onMessage((payload) => {
+                    console.log('[NotificationManager] Message received:', payload);
+                    
+                    // Play notification sound
+                    this.playSound();
+                    
+                    // Show browser notification
+                    if (Notification.permission === 'granted') {
+                        new Notification(payload.notification?.title || 'Avanti Fellows', {
+                            body: payload.notification?.body,
+                            icon: '/icon-192.png'
+                        });
+                    }
+                    
+                    // Reload notifications
+                    this.loadNotifications();
+                });
+                
+                // Auto-request permission and get token if not already done
+                this.autoRequestPermission();
+                
+                // Check for pending celebration notifications from background
+                this.checkPendingCelebrations();
+            } catch (e) {
+                console.log('[NotificationManager] Messaging init error:', e);
+            }
+        };
+        
+        initWithRetry();
+    },
+    
+    // ✅ NEW: Auto-request permission silently if possible
+    autoRequestPermission: async function() {
+        try {
+            // Check if we already have a token stored
+            const storedToken = localStorage.getItem('fcmToken_' + (this.userId || 'guest'));
+            if (storedToken) {
+                this.fcmToken = storedToken;
+                console.log('[NotificationManager] Using stored FCM token');
+                return;
+            }
+            
+            // If permission is already granted, get token
+            if (Notification.permission === 'granted') {
+                await this.getAndStoreFCMToken();
+            } else if (Notification.permission === 'default') {
+                // Show a subtle prompt after some delay
+                setTimeout(() => {
+                    this.showPermissionPrompt();
+                }, 10000); // Wait 10 seconds before showing prompt
+            }
+        } catch (e) {
+            console.log('[NotificationManager] Auto permission error:', e);
+        }
+    },
+    
+    // ✅ NEW: Show a subtle permission prompt
+    showPermissionPrompt: function() {
+        // Don't show if user already dismissed recently
+        const dismissed = localStorage.getItem('notifPromptDismissed');
+        if (dismissed) {
+            const dismissedDate = new Date(dismissed);
+            const daysSince = (Date.now() - dismissedDate) / (1000 * 60 * 60 * 24);
+            if (daysSince < 7) return; // Don't show again for 7 days
         }
         
+        console.log('[NotificationManager] Would show permission prompt (user has not enabled notifications)');
+    },
+    
+    // ✅ NEW: Get and store FCM token
+    getAndStoreFCMToken: async function() {
+        if (!this.messaging) return;
+        
         try {
-            this.messaging = firebase.messaging();
-            console.log('[NotificationManager] Messaging ready');
+            // Register service worker if not already
+            let sw = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+            if (!sw) {
+                sw = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+            }
             
-            // Handle foreground messages
-            this.messaging.onMessage((payload) => {
-                console.log('[NotificationManager] Message received:', payload);
-                
-                // Play notification sound
-                this.playSound();
-                
-                // Show browser notification
-                if (Notification.permission === 'granted') {
-                    new Notification(payload.notification?.title || 'Avanti Fellows', {
-                        body: payload.notification?.body,
-                        icon: '/icon-192.png'
-                    });
-                }
-                
-                // Reload notifications
-                this.loadNotifications();
+            const token = await this.messaging.getToken({
+                vapidKey: 'BFnwbBYnYYQKp-y2L3hGAJqD1BAwTcvNKuZyqOJU4FLiK9CnMuXgT9vZC7Dw1jQ5aQzNMsR6dGJOQVnQ5wQ3_Sk',
+                serviceWorkerRegistration: sw
             });
             
-            // Check for pending celebration notifications from background
-            this.checkPendingCelebrations();
+            if (token) {
+                this.fcmToken = token;
+                localStorage.setItem('fcmToken_' + (this.userId || 'guest'), token);
+                console.log('[NotificationManager] FCM Token obtained and stored');
+                
+                // Save token to Firestore for this user
+                if (this.userId) {
+                    await firebase.firestore().collection('fcm_tokens').doc(this.userId).set({
+                        token: token,
+                        userId: this.userId,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        platform: navigator.userAgent.includes('Mobile') ? 'mobile' : 'web'
+                    }, { merge: true });
+                }
+            }
         } catch (e) {
-            console.log('[NotificationManager] Messaging init error:', e);
+            console.log('[NotificationManager] FCM token error:', e);
         }
     },
     
