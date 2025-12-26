@@ -9883,7 +9883,7 @@ useEffect(() => {
         db.collection('chapterProgress').get(),
         db.collection('teachers').get(),
         db.collection('curriculum').get(),
-        db.collection('students').limit(50).get();,
+        db.collection('students').limit(50).get(),
         db.collection('studentAttendance')
           .where('date', '>=', new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0])
           .get(),
