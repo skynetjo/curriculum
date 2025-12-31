@@ -24182,18 +24182,82 @@ function SocialWall({ teachers, currentUser }) {
     }
   };
 
-  // Upload image to Firebase Storage
+  // Upload image to Firebase Storage with base64 fallback for CORS issues
   const uploadImage = async (file, path) => {
     if (!file || typeof firebase === 'undefined') return null;
+    
     try {
+      // First try Firebase Storage
       const storageRef = firebase.storage().ref();
       const fileRef = storageRef.child(path + '/' + Date.now() + '_' + file.name);
       await fileRef.put(file);
-      return await fileRef.getDownloadURL();
+      const url = await fileRef.getDownloadURL();
+      console.log('[SocialWall] Image uploaded to Storage successfully');
+      return url;
     } catch (e) {
-      console.error('Upload error:', e);
-      return null;
+      console.warn('[SocialWall] Storage upload failed (CORS?), trying base64 fallback:', e.message);
+      
+      // Fallback: Convert to base64 and store directly in Firestore
+      try {
+        const compressedFile = await compressImageForBase64(file);
+        const base64 = await fileToBase64(compressedFile);
+        
+        // Check size - Firestore has 1MB document limit
+        if (base64.length > 750000) {
+          throw new Error('Image too large even after compression');
+        }
+        
+        console.log('[SocialWall] Using base64 fallback, size:', Math.round(base64.length / 1024) + 'KB');
+        return base64;
+      } catch (fallbackError) {
+        console.error('[SocialWall] Base64 fallback also failed:', fallbackError);
+        alert('⚠️ Image upload failed. Please try:\\n\\n1. Use a smaller image\\n2. Check your internet connection\\n3. Try again');
+        return null;
+      }
     }
+  };
+  
+  // Helper: Compress image more aggressively for base64 storage
+  const compressImageForBase64 = async (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxSize = 600;
+          let { width, height } = img;
+          
+          if (width > maxSize || height > maxSize) {
+            if (width > height) {
+              height = (height / width) * maxSize;
+              width = maxSize;
+            } else {
+              width = (width / height) * maxSize;
+              height = maxSize;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(resolve, 'image/jpeg', 0.5);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+  
+  // Helper: Convert file to base64 string
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   };
 
   // Popular GIFs (predefined list to avoid API calls)
@@ -24604,6 +24668,18 @@ function SocialWall({ teachers, currentUser }) {
       let imageUrl = null;
       if (postImage) {
         imageUrl = await uploadImage(postImage, 'social_posts');
+        
+        // If upload failed, ask user if they want to post without image
+        if (!imageUrl) {
+          const continueWithoutImage = confirm(
+            '⚠️ Could not upload image.\\n\\nWould you like to post without the image?'
+          );
+          if (!continueWithoutImage) {
+            setPosting(false);
+            setUploadingImage(false);
+            return;
+          }
+        }
       }
       
       const postData = {
@@ -24615,7 +24691,8 @@ function SocialWall({ teachers, currentUser }) {
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         reactions: {},
         comments: [],
-        imageUrl: imageUrl || null
+        imageUrl: imageUrl || null,
+        imageType: imageUrl?.startsWith('data:') ? 'base64' : 'url'
       };
       
       const docRef = await db.collection('socialPosts').add(postData);
@@ -24659,7 +24736,8 @@ function SocialWall({ teachers, currentUser }) {
       setPostImagePreview(null);
       setShowNewPost(false);
     } catch (error) {
-      alert('Failed to create post');
+      console.error('[SocialWall] Failed to create post:', error);
+      alert('❌ Failed to create post. Please check your connection and try again.');
     } finally {
       setPosting(false);
       setUploadingImage(false);
