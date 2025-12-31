@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26079,8 +26080,15 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
   const [otherChapterText, setOtherChapterText] = useState(''); // For "Others" chapter
   const [testType, setTestType] = useState('');
   const [notes, setNotes] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
+  
+  // ✅ NEW: Time picker state with dropdowns
+  const [startHour, setStartHour] = useState('');
+  const [startMinute, setStartMinute] = useState('');
+  const [startPeriod, setStartPeriod] = useState('AM');
+  const [endHour, setEndHour] = useState('');
+  const [endMinute, setEndMinute] = useState('');
+  const [endPeriod, setEndPeriod] = useState('PM');
+  
   const [submitting, setSubmitting] = useState(false);
   
   // State for data
@@ -26113,6 +26121,26 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                             currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC ||
                             (!currentUser.role && currentUser.subject)); // Teachers don't always have role set
   
+  // Time dropdown options
+  const HOURS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
+  const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+  const PERIODS = ['AM', 'PM'];
+  
+  // Convert 12-hour to 24-hour format for calculations
+  const to24Hour = (hour, period) => {
+    let h = parseInt(hour);
+    if (period === 'AM' && h === 12) h = 0;
+    if (period === 'PM' && h !== 12) h += 12;
+    return h;
+  };
+  
+  // Get formatted time string for display/storage
+  const getTimeString = (hour, minute, period) => {
+    if (!hour || !minute) return '';
+    const h24 = to24Hour(hour, period);
+    return `${h24.toString().padStart(2, '0')}:${minute}`;
+  };
+  
   // Activity types
   const ACTIVITY_TYPES = [
     { id: 'teaching', label: '📚 Teaching', icon: '📚' },
@@ -26128,24 +26156,50 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
     { id: 'aiet', label: 'AIET' }
   ];
   
-  // ✅ FIXED: Get chapters for teacher's subject - properly filter by grade
+  // ✅ FIXED: Get subject initial from subject name
+  const getSubjectInitial = () => {
+    const subject = mySubject?.toLowerCase()?.trim();
+    if (!subject) return '';
+    
+    if (subject.includes('physics')) return 'p';
+    if (subject.includes('chemistry')) return 'c';
+    if (subject.includes('math') || subject.includes('maths') || subject.includes('mathematics')) return 'm';
+    if (subject.includes('biology') || subject.includes('bio')) return 'b';
+    
+    // Fallback: use first letter
+    return subject.charAt(0);
+  };
+  
+  // ✅ FIXED: Get chapters for teacher's subject - filter by grade AND subject
   const getChaptersForSubject = (grade) => {
     if (!grade) return [];
     
     const chapters = [];
     const subjectKey = mySubject?.toLowerCase()?.trim();
     const gradeStr = String(grade);
+    const subjectInitial = getSubjectInitial();
     
-    // Helper to check if a chapter name starts with grade indicator
-    const chapterMatchesGrade = (chapterName) => {
+    // Helper to check if chapter matches grade AND subject
+    const chapterMatchesGradeAndSubject = (chapterName) => {
       if (!chapterName) return false;
       const name = chapterName.toLowerCase();
-      // Check patterns like "11M2", "12C35", "11P", "12B" etc.
-      const startsWithGrade = name.match(/^(\d{2})/);
-      if (startsWithGrade) {
-        return startsWithGrade[1] === gradeStr;
+      
+      // Check patterns like "11B1", "12C35", "11M2", "11P3" etc.
+      // Format: [grade][subject_initial][chapter_number]
+      const match = name.match(/^(\d{2})([a-z])(\d+)/i);
+      if (match) {
+        const chapterGrade = match[1];
+        const chapterSubject = match[2].toLowerCase();
+        
+        // Must match both grade AND subject initial
+        if (chapterGrade !== gradeStr) return false;
+        if (subjectInitial && chapterSubject !== subjectInitial) return false;
+        
+        return true;
       }
-      return true; // If no grade prefix, include it
+      
+      // If no standard prefix, include if it seems to match subject
+      return name.includes(subjectKey);
     };
     
     Object.entries(curriculum).forEach(([key, data]) => {
@@ -26155,24 +26209,13 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       const matchesSubject = subjectKey && keyLower.includes(subjectKey);
       const matchesSchool = keyLower.includes(mySchool?.toLowerCase() || '');
       
-      // Check if key contains grade
-      const keyHasGrade11 = keyLower.includes('11') || keyLower.includes('_11') || keyLower.includes('-11');
-      const keyHasGrade12 = keyLower.includes('12') || keyLower.includes('_12') || keyLower.includes('-12');
-      
       // Only process if subject matches
       if (matchesSubject || matchesSchool) {
-        // If key has explicit grade, check it matches
-        if (keyHasGrade11 || keyHasGrade12) {
-          if ((gradeStr === '11' && !keyHasGrade11) || (gradeStr === '12' && !keyHasGrade12)) {
-            return; // Skip if grade doesn't match
-          }
-        }
-        
         if (data.chapters && Array.isArray(data.chapters)) {
           data.chapters.forEach(ch => {
             if (ch.name) {
-              // Filter chapters by grade prefix in chapter name
-              if (chapterMatchesGrade(ch.name)) {
+              // Filter chapters by grade AND subject
+              if (chapterMatchesGradeAndSubject(ch.name)) {
                 if (!chapters.find(c => c.name === ch.name)) {
                   chapters.push({
                     name: ch.name,
@@ -26200,19 +26243,16 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
     return chapter?.topics || [];
   };
   
-  // ✅ FIXED: Calculate hours from start and end time
+  // ✅ FIXED: Calculate hours from dropdown time values
   const calculateHours = () => {
-    if (!startTime || !endTime) return 0;
+    if (!startHour || !startMinute || !endHour || !endMinute) return 0;
     
     try {
-      // Parse time strings (format: "HH:MM")
-      const [startH, startM] = startTime.split(':').map(Number);
-      const [endH, endM] = endTime.split(':').map(Number);
+      const startH24 = to24Hour(startHour, startPeriod);
+      const endH24 = to24Hour(endHour, endPeriod);
       
-      if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 0;
-      
-      const startMinutes = startH * 60 + startM;
-      const endMinutes = endH * 60 + endM;
+      const startMinutes = startH24 * 60 + parseInt(startMinute);
+      const endMinutes = endH24 * 60 + parseInt(endMinute);
       
       let diffMinutes = endMinutes - startMinutes;
       
@@ -26230,6 +26270,10 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
   };
   
   const hoursWorked = calculateHours();
+  
+  // Get formatted start/end time for storage
+  const startTime = getTimeString(startHour, startMinute, startPeriod);
+  const endTime = getTimeString(endHour, endMinute, endPeriod);
   
   // Fetch timesheet entries
   useEffect(() => {
@@ -26303,12 +26347,12 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       return;
     }
     
-    if (!startTime || !endTime) {
-      alert('Please enter start and end time');
+    if (!startHour || !startMinute || !endHour || !endMinute) {
+      alert('Please select start and end time');
       return;
     }
     
-    if (hoursWorked <= 0) {
+    if (parseFloat(hoursWorked) <= 0) {
       alert('End time must be after start time');
       return;
     }
@@ -26395,8 +26439,12 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       setOtherChapterText('');
       setTestType('');
       setNotes('');
-      setStartTime('');
-      setEndTime('');
+      setStartHour('');
+      setStartMinute('');
+      setStartPeriod('AM');
+      setEndHour('');
+      setEndMinute('');
+      setEndPeriod('PM');
       
       alert('✅ Timesheet entry submitted for approval!');
       
@@ -26604,28 +26652,28 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       {activeView === 'entry' && canEnterTimesheet && (
         <div className="grid md:grid-cols-3 gap-6">
           {/* Entry Form */}
-          <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-lg">
-            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <span className="text-2xl">📝</span> Log Activity
+          <div className="md:col-span-2 bg-white p-8 rounded-2xl shadow-lg">
+            <h2 className="text-2xl font-bold mb-8 flex items-center gap-3">
+              <span className="text-3xl">📝</span> Log Activity
             </h2>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
               {/* Date Selection */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">📅 Date</label>
+                <label className="block text-base font-semibold text-gray-700 mb-3">📅 Date</label>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={e => setSelectedDate(e.target.value)}
                   max={new Date().toISOString().split('T')[0]}
-                  className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200"
+                  className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 transition-all"
                   required
                 />
               </div>
               
               {/* Activity Type Selection */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">🎯 Activity Type</label>
+                <label className="block text-base font-semibold text-gray-700 mb-3">🎯 Activity Type</label>
                 <select
                   value={activityType}
                   onChange={e => {
@@ -26635,7 +26683,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                     setSelectedTopic('');
                     setTestType('');
                   }}
-                  className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200"
+                  className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 transition-all appearance-none bg-white cursor-pointer"
                   required
                 >
                   <option value="">-- Select Activity --</option>
@@ -26648,9 +26696,9 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               {/* TEACHING FIELDS */}
               {activityType === 'teaching' && (
                 <>
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid md:grid-cols-2 gap-5">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">🎓 Class</label>
+                      <label className="block text-base font-semibold text-gray-700 mb-3">🎓 Class</label>
                       <select
                         value={selectedClass}
                         onChange={e => {
@@ -26660,7 +26708,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                           setOtherChapterText('');
                           setOtherTopicText('');
                         }}
-                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
                         required
                       >
                         <option value="">-- Select Class --</option>
@@ -26670,7 +26718,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">📖 Chapter</label>
+                      <label className="block text-base font-semibold text-gray-700 mb-3">📖 Chapter</label>
                       <select
                         value={selectedChapter}
                         onChange={e => {
@@ -26679,7 +26727,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                           setOtherTopicText('');
                           if (e.target.value !== 'Others') setOtherChapterText('');
                         }}
-                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
                         required
                         disabled={!selectedClass}
                       >
@@ -26695,27 +26743,27 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                   {/* Show text input if "Others" is selected for chapter */}
                   {selectedChapter === 'Others' && (
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">✏️ Enter Chapter Name</label>
+                      <label className="block text-base font-semibold text-gray-700 mb-3">✏️ Enter Chapter Name</label>
                       <input
                         type="text"
                         value={otherChapterText}
                         onChange={e => setOtherChapterText(e.target.value)}
                         placeholder="Enter the chapter name..."
-                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
                         required
                       />
                     </div>
                   )}
                   
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">📑 Topic</label>
+                    <label className="block text-base font-semibold text-gray-700 mb-3">📑 Topic</label>
                     <select
                       value={selectedTopic}
                       onChange={e => {
                         setSelectedTopic(e.target.value);
                         if (e.target.value !== 'Others') setOtherTopicText('');
                       }}
-                      className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                      className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
                       disabled={!selectedChapter}
                     >
                       <option value="">-- Select Topic (Optional) --</option>
@@ -26731,13 +26779,13 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                   {/* Show text input if "Others" is selected for topic */}
                   {selectedTopic === 'Others' && (
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">✏️ Enter Topic Name</label>
+                      <label className="block text-base font-semibold text-gray-700 mb-3">✏️ Enter Topic Name</label>
                       <input
                         type="text"
                         value={otherTopicText}
                         onChange={e => setOtherTopicText(e.target.value)}
                         placeholder="Enter the topic name..."
-                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
                         required
                       />
                     </div>
@@ -26749,11 +26797,11 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               {activityType === 'tests' && (
                 <>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Test Type</label>
+                    <label className="block text-base font-semibold text-gray-700 mb-3">📝 Test Type</label>
                     <select
                       value={testType}
                       onChange={e => setTestType(e.target.value)}
-                      className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                      className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
                       required
                     >
                       <option value="">-- Select Test Type --</option>
@@ -26763,16 +26811,16 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                     </select>
                   </div>
                   
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid md:grid-cols-2 gap-5">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">🎓 Class</label>
+                      <label className="block text-base font-semibold text-gray-700 mb-3">🎓 Class</label>
                       <select
                         value={selectedClass}
                         onChange={e => {
                           setSelectedClass(e.target.value);
                           setSelectedChapter('');
                         }}
-                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
                         required
                       >
                         <option value="">-- Select Class --</option>
@@ -26782,11 +26830,11 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                     </div>
                     
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">📖 Chapter</label>
+                      <label className="block text-base font-semibold text-gray-700 mb-3">📖 Chapter</label>
                       <select
                         value={selectedChapter}
                         onChange={e => setSelectedChapter(e.target.value)}
-                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
                         required
                         disabled={!selectedClass}
                       >
@@ -26800,12 +26848,12 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Notes</label>
+                    <label className="block text-base font-semibold text-gray-700 mb-3">📝 Notes</label>
                     <textarea
                       value={notes}
                       onChange={e => setNotes(e.target.value)}
                       placeholder="Add any notes about the test..."
-                      className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 min-h-[80px]"
+                      className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all min-h-[100px] resize-y"
                     />
                   </div>
                 </>
@@ -26815,11 +26863,11 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               {activityType === 'mentoring' && (
                 <>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">🎓 Class</label>
+                    <label className="block text-base font-semibold text-gray-700 mb-3">🎓 Class</label>
                     <select
                       value={selectedClass}
                       onChange={e => setSelectedClass(e.target.value)}
-                      className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                      className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
                       required
                     >
                       <option value="">-- Select Class --</option>
@@ -26829,12 +26877,12 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Notes</label>
+                    <label className="block text-base font-semibold text-gray-700 mb-3">📝 Notes</label>
                     <textarea
                       value={notes}
                       onChange={e => setNotes(e.target.value)}
                       placeholder="What did you discuss during mentoring?"
-                      className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 min-h-[80px]"
+                      className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all min-h-[100px] resize-y"
                     />
                   </div>
                 </>
@@ -26843,94 +26891,133 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               {/* DATA ENTRY / WEEKLY CHECKIN / OTHERS FIELDS */}
               {(activityType === 'data_entry' || activityType === 'weekly_checkin' || activityType === 'others') && (
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Notes / Description</label>
+                  <label className="block text-base font-semibold text-gray-700 mb-3">📝 Notes / Description</label>
                   <textarea
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
                     placeholder="Describe what you worked on..."
-                    className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 min-h-[100px]"
+                    className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all min-h-[120px] resize-y"
                     required
                   />
                 </div>
               )}
               
-              {/* Time Entry */}
-              <div className="bg-gradient-to-r from-gray-50 to-yellow-50 p-4 rounded-xl border-2 border-gray-200">
-                <div className="text-sm font-semibold text-gray-600 mb-3 flex items-center gap-2">
-                  <span>⏰</span> Work Duration
+              {/* ✅ NEW: Time Entry with Dropdown Selectors */}
+              <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-6 rounded-2xl border-2 border-yellow-200">
+                <div className="text-base font-bold text-gray-700 mb-5 flex items-center gap-2">
+                  <span className="text-xl">⏰</span> Work Duration
                 </div>
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      <i className="fa-regular fa-clock mr-1"></i> Start Time
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="time"
-                        value={startTime}
-                        onChange={e => setStartTime(e.target.value)}
-                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 text-lg font-medium"
-                        required
-                      />
-                      {startTime && (
-                        <div className="text-xs text-gray-500 mt-1 text-center">
-                          {(() => {
-                            const [h, m] = startTime.split(':').map(Number);
-                            const ampm = h >= 12 ? 'PM' : 'AM';
-                            const hour12 = h % 12 || 12;
-                            return `${hour12}:${m.toString().padStart(2, '0')} ${ampm}`;
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      <i className="fa-regular fa-clock mr-1"></i> End Time
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="time"
-                        value={endTime}
-                        onChange={e => setEndTime(e.target.value)}
-                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 text-lg font-medium"
-                        required
-                      />
-                      {endTime && (
-                        <div className="text-xs text-gray-500 mt-1 text-center">
-                          {(() => {
-                            const [h, m] = endTime.split(':').map(Number);
-                            const ampm = h >= 12 ? 'PM' : 'AM';
-                            const hour12 = h % 12 || 12;
-                            return `${hour12}:${m.toString().padStart(2, '0')} ${ampm}`;
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">⏱️ Total Hours</label>
-                    <div className={`border-2 px-4 py-3 rounded-xl text-center ${
-                      parseFloat(hoursWorked) > 0 
-                        ? 'bg-green-100 border-green-300' 
-                        : 'bg-yellow-100 border-yellow-300'
-                    }`}>
-                      <span className={`text-2xl font-bold ${
-                        parseFloat(hoursWorked) > 0 ? 'text-green-700' : 'text-yellow-700'
-                      }`}>{hoursWorked}</span>
-                      <span className={`ml-1 ${
-                        parseFloat(hoursWorked) > 0 ? 'text-green-600' : 'text-yellow-600'
-                      }`}>hrs</span>
-                    </div>
-                    {parseFloat(hoursWorked) > 0 && (
-                      <div className="text-xs text-gray-500 mt-1 text-center">
-                        {Math.floor(parseFloat(hoursWorked))}h {Math.round((parseFloat(hoursWorked) % 1) * 60)}m
-                      </div>
+                
+                {/* Start Time */}
+                <div className="mb-6">
+                  <label className="block text-base font-semibold text-gray-600 mb-3">
+                    🟢 Start Time
+                  </label>
+                  <div className="flex gap-3 items-center flex-wrap">
+                    <select
+                      value={startHour}
+                      onChange={e => setStartHour(e.target.value)}
+                      className="border-2 border-gray-200 px-4 py-4 rounded-xl text-lg font-medium focus:border-yellow-500 transition-all min-w-[90px] text-center"
+                    >
+                      <option value="">Hour</option>
+                      {HOURS.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                    <span className="text-2xl font-bold text-gray-400">:</span>
+                    <select
+                      value={startMinute}
+                      onChange={e => setStartMinute(e.target.value)}
+                      className="border-2 border-gray-200 px-4 py-4 rounded-xl text-lg font-medium focus:border-yellow-500 transition-all min-w-[90px] text-center"
+                    >
+                      <option value="">Min</option>
+                      {MINUTES.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={startPeriod}
+                      onChange={e => setStartPeriod(e.target.value)}
+                      className="border-2 border-yellow-300 bg-yellow-100 px-4 py-4 rounded-xl text-lg font-bold focus:border-yellow-500 transition-all min-w-[80px] text-center"
+                    >
+                      {PERIODS.map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                    {startHour && startMinute && (
+                      <span className="text-gray-600 font-medium ml-2">
+                        ({startHour}:{startMinute} {startPeriod})
+                      </span>
                     )}
                   </div>
                 </div>
-                {parseFloat(hoursWorked) <= 0 && startTime && endTime && (
-                  <div className="mt-2 text-sm text-red-500 text-center">
+                
+                {/* End Time */}
+                <div className="mb-6">
+                  <label className="block text-base font-semibold text-gray-600 mb-3">
+                    🔴 End Time
+                  </label>
+                  <div className="flex gap-3 items-center flex-wrap">
+                    <select
+                      value={endHour}
+                      onChange={e => setEndHour(e.target.value)}
+                      className="border-2 border-gray-200 px-4 py-4 rounded-xl text-lg font-medium focus:border-yellow-500 transition-all min-w-[90px] text-center"
+                    >
+                      <option value="">Hour</option>
+                      {HOURS.map(h => (
+                        <option key={h} value={h}>{h}</option>
+                      ))}
+                    </select>
+                    <span className="text-2xl font-bold text-gray-400">:</span>
+                    <select
+                      value={endMinute}
+                      onChange={e => setEndMinute(e.target.value)}
+                      className="border-2 border-gray-200 px-4 py-4 rounded-xl text-lg font-medium focus:border-yellow-500 transition-all min-w-[90px] text-center"
+                    >
+                      <option value="">Min</option>
+                      {MINUTES.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={endPeriod}
+                      onChange={e => setEndPeriod(e.target.value)}
+                      className="border-2 border-orange-300 bg-orange-100 px-4 py-4 rounded-xl text-lg font-bold focus:border-orange-500 transition-all min-w-[80px] text-center"
+                    >
+                      {PERIODS.map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                    {endHour && endMinute && (
+                      <span className="text-gray-600 font-medium ml-2">
+                        ({endHour}:{endMinute} {endPeriod})
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Total Hours Display */}
+                <div className={`p-5 rounded-xl text-center ${
+                  parseFloat(hoursWorked) > 0 
+                    ? 'bg-green-100 border-2 border-green-300' 
+                    : 'bg-white border-2 border-gray-200'
+                }`}>
+                  <div className="text-sm font-semibold text-gray-600 mb-2">⏱️ Total Hours</div>
+                  <div className={`text-4xl font-bold ${
+                    parseFloat(hoursWorked) > 0 ? 'text-green-600' : 'text-gray-400'
+                  }`}>
+                    {hoursWorked || '0.00'}
+                    <span className="text-lg font-medium ml-1">hrs</span>
+                  </div>
+                  {parseFloat(hoursWorked) > 0 && (
+                    <div className="text-sm text-green-600 mt-1">
+                      ({Math.floor(parseFloat(hoursWorked))} hours {Math.round((parseFloat(hoursWorked) % 1) * 60)} minutes)
+                    </div>
+                  )}
+                </div>
+                
+                {parseFloat(hoursWorked) <= 0 && startHour && startMinute && endHour && endMinute && (
+                  <div className="mt-3 text-sm text-red-500 text-center font-medium">
                     ⚠️ End time must be after start time
                   </div>
                 )}
@@ -26940,7 +27027,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               <button
                 type="submit"
                 disabled={submitting || !activityType}
-                className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg hover:shadow-lg transition-all disabled:opacity-50"
+                className="w-full avanti-gradient text-white py-5 rounded-xl font-bold text-xl hover:shadow-xl transition-all disabled:opacity-50 transform hover:scale-[1.02] active:scale-[0.98]"
               >
                 {submitting ? '⏳ Submitting...' : '✅ Submit for Approval'}
               </button>
