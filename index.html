@@ -78,7 +78,111 @@
       0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
       40% { transform: scale(1); opacity: 1; }
     }
+    
+    /* ✅ NEW: Login button spinner animation */
+    .login-spinner {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    .login-spinner-icon {
+      width: 24px;
+      height: 24px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: login-spin 0.8s linear infinite;
+    }
+    @keyframes login-spin {
+      to { transform: rotate(360deg); }
+    }
+    .login-progress-text {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    
+    /* ✅ NEW: iOS fix - prevent stuck loading */
+    .loader-timeout-msg {
+      color: rgba(255,255,255,0.9);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      margin-top: 20px;
+      text-align: center;
+      max-width: 280px;
+      line-height: 1.5;
+      display: none;
+    }
+    .instant-loader.slow-loading .loader-timeout-msg {
+      display: block;
+    }
+    .retry-btn {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: 2px solid white;
+      padding: 10px 24px;
+      border-radius: 25px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 12px;
+      transition: all 0.2s;
+    }
+    .retry-btn:hover, .retry-btn:active {
+      background: white;
+      color: #C8342E;
+    }
   </style>
+  
+  <!-- ✅ iOS FIX: Force loader timeout after 15 seconds for iOS -->
+  <script>
+    // iOS detection and early timeout setup
+    (function() {
+      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      var isAndroid = /Android/.test(navigator.userAgent);
+      var isMobile = isIOS || isAndroid;
+      
+      // ✅ FIX: Set aggressive timeout for mobile devices (especially iOS)
+      var loaderTimeout = isMobile ? 12000 : 20000; // 12s mobile, 20s desktop
+      
+      window._loaderTimeoutId = setTimeout(function() {
+        var loader = document.getElementById('instant-loader');
+        if (loader) {
+          loader.classList.add('slow-loading');
+        }
+      }, loaderTimeout - 5000); // Show "slow loading" message 5s before force hide
+      
+      // ✅ FIX: Force hide loader after timeout (prevents infinite loading on iOS)
+      window._forceHideTimeout = setTimeout(function() {
+        var loader = document.getElementById('instant-loader');
+        if (loader && loader.parentNode) {
+          console.warn('[iOS Fix] Force hiding stuck loader after ' + loaderTimeout + 'ms');
+          loader.style.transition = 'opacity 0.3s';
+          loader.style.opacity = '0';
+          setTimeout(function() { 
+            if (loader.parentNode) loader.parentNode.removeChild(loader); 
+          }, 300);
+        }
+      }, loaderTimeout);
+      
+      // ✅ FIX: Safe localStorage wrapper for iOS private mode
+      window.safeStorage = {
+        getItem: function(key) {
+          try { return localStorage.getItem(key); } 
+          catch(e) { return null; }
+        },
+        setItem: function(key, value) {
+          try { localStorage.setItem(key, value); return true; } 
+          catch(e) { return false; }
+        },
+        removeItem: function(key) {
+          try { localStorage.removeItem(key); return true; } 
+          catch(e) { return false; }
+        }
+      };
+    })();
+  </script>
   
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json">
@@ -2070,6 +2174,13 @@ body.has-install-banner .sidebar {
       <div class="loader-dot"></div>
       <div class="loader-dot"></div>
     </div>
+    <!-- ✅ NEW: Slow connection message for iOS/low connectivity -->
+    <div class="loader-timeout-msg">
+      Loading is taking longer than usual.<br/>
+      This may be due to slow network.
+      <br/>
+      <button class="retry-btn" onclick="location.reload()">↻ Tap to Retry</button>
+    </div>
   </div>
   
   <div id="root"></div>
@@ -2077,11 +2188,19 @@ body.has-install-banner .sidebar {
   <script>
   // ✅ PERFORMANCE FIX: Hide instant loader once React app renders
   window.hideInstantLoader = function() {
+    // ✅ iOS FIX: Clear timeout handlers
+    if (window._loaderTimeoutId) clearTimeout(window._loaderTimeoutId);
+    if (window._forceHideTimeout) clearTimeout(window._forceHideTimeout);
+    
     const loader = document.getElementById('instant-loader');
     if (loader) {
       loader.style.transition = 'opacity 0.3s ease';
       loader.style.opacity = '0';
-      setTimeout(() => loader.remove(), 300);
+      setTimeout(() => {
+        if (loader && loader.parentNode) {
+          loader.parentNode.removeChild(loader);
+        }
+      }, 300);
     }
   };
   </script>
@@ -9462,7 +9581,7 @@ function ProfileCompletionCard({ currentUser, onNavigateToProfile }) {
   );
 }
 
-function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[isSuperAdmin,setIsSuperAdmin]=useState(false);const[managerProfile,setManagerProfile]=useState(null);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:'',studentId:'',loginType:'teacher'});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);const[managers,setManagers]=useState([]);const[accessibleSchools,setAccessibleSchools]=useState([]);const[academicYearSettings,setAcademicYearSettings]=useState(null);
+function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[isSuperAdmin,setIsSuperAdmin]=useState(false);const[managerProfile,setManagerProfile]=useState(null);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:'',studentId:'',loginType:'teacher'});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[loginProgress,setLoginProgress]=useState('');const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);const[managers,setManagers]=useState([]);const[accessibleSchools,setAccessibleSchools]=useState([]);const[academicYearSettings,setAcademicYearSettings]=useState(null);
 const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);
 const[leaveAdjustments,setLeaveAdjustments]=useState({});
@@ -9629,7 +9748,10 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
   // ✅ CHECK FOR STUDENT FIRST (anonymous auth users)
   // Students use anonymous auth, so check localStorage for student session
   if (user.isAnonymous) {
-    const studentSession = localStorage.getItem('studentSession');
+    // ✅ iOS FIX: Use safe storage wrapper
+    const studentSession = typeof window.safeStorage !== 'undefined' 
+      ? window.safeStorage.getItem('studentSession')
+      : (function() { try { return localStorage.getItem('studentSession'); } catch(e) { return null; } })();
     if (studentSession) {
       try {
         const studentData = JSON.parse(studentSession);
@@ -9638,10 +9760,16 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
         setIsAdmin(false);
         setActiveTab('dashboard');
         setLoading(false);
+        setAuthLoading(false);
+        setLoginProgress('');
         return; // Exit early - don't check for teacher/manager
       } catch(e) {
         console.error('Failed to parse student session:', e);
-        localStorage.removeItem('studentSession');
+        if (typeof window.safeStorage !== 'undefined') {
+          window.safeStorage.removeItem('studentSession');
+        } else {
+          try { localStorage.removeItem('studentSession'); } catch(e) {}
+        }
       }
     }
     // No student session but anonymous user - sign out
@@ -9672,6 +9800,8 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
         setCurrentUser({name:'Super Administrator',email:user.email,afid:'SUPER_ADMIN',school:'Admin',role:MANAGER_ROLES.SUPER_ADMIN});
         setActiveTab('managers');
         setLoading(false);
+        setAuthLoading(false);
+        setLoginProgress('');
         return;
       }
       // Device not trusted, need to verify 2FA
@@ -9686,6 +9816,8 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
       });
       setShow2FAVerify(true);
       setLoading(false);
+      setAuthLoading(false);
+      setLoginProgress('');
       return;
     } else {
       // 2FA not set up yet - require setup
@@ -9701,6 +9833,8 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
       setShow2FASetup(true);
       setNeeds2FASetup(true);
       setLoading(false);
+      setAuthLoading(false);
+      setLoginProgress('');
       return;
     }
   }else{
@@ -9738,6 +9872,8 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
         });
         setActiveTab('analytics');
         setLoading(false);
+        setAuthLoading(false);
+        setLoginProgress('');
         return;
       }
       // Device not trusted, need to verify 2FA
@@ -9747,6 +9883,8 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
       });
       setShow2FAVerify(true);
       setLoading(false);
+      setAuthLoading(false);
+      setLoginProgress('');
       return;
     } else {
       // 2FA not set up yet - require setup for managers
@@ -9757,6 +9895,8 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
       setShow2FASetup(true);
       setNeeds2FASetup(true);
       setLoading(false);
+      setAuthLoading(false);
+      setLoginProgress('');
       return;
     }
   } else {
@@ -9800,6 +9940,8 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
             }
           }
           setLoading(false);
+          setAuthLoading(false);
+          setLoginProgress('');
           return;
         }
         // Device not trusted, need to verify 2FA
@@ -9809,6 +9951,8 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
         });
         setShow2FAVerify(true);
         setLoading(false);
+        setAuthLoading(false);
+        setLoginProgress('');
         return;
       } else {
         // 2FA not set up yet - require setup for teachers/APCs
@@ -9819,13 +9963,18 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
         setShow2FASetup(true);
         setNeeds2FASetup(true);
         setLoading(false);
+        setAuthLoading(false);
+        setLoginProgress('');
         return;
       }
-    }else{alert('User profile not found. Please contact admin.');await auth.signOut()}
+    }else{alert('User profile not found. Please contact admin.');await auth.signOut();setAuthLoading(false);setLoginProgress('')}
   }
 }}else{
   // Check for student session in localStorage
-  const studentSession=localStorage.getItem('studentSession');
+  // ✅ iOS FIX: Use safe storage wrapper
+  const studentSession = typeof window.safeStorage !== 'undefined' 
+    ? window.safeStorage.getItem('studentSession')
+    : (function() { try { return localStorage.getItem('studentSession'); } catch(e) { return null; } })();
   if(studentSession){
     try{
       const studentData=JSON.parse(studentSession);
@@ -9840,7 +9989,11 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
       setActiveTab('dashboard');
     }catch(e){
       console.error('Failed to restore student session:',e);
-      localStorage.removeItem('studentSession');
+      if (typeof window.safeStorage !== 'undefined') {
+        window.safeStorage.removeItem('studentSession');
+      } else {
+        try { localStorage.removeItem('studentSession'); } catch(e) {}
+      }
     }
   }else{
     setCurrentUser(null);
@@ -9860,14 +10013,17 @@ useEffect(() => {
   return () => clearTimeout(timer);
 }, []);
 
-// ✅ FIX: Safety timeout - Force stop loading after 30 seconds (prevents infinite loading on slow JNV networks)
+// ✅ FIX: Safety timeout - Force stop loading after 20 seconds (prevents infinite loading on slow JNV networks)
+// Reduced from 30s to 20s for better mobile experience
 useEffect(() => {
   if (loading) {
     const safetyTimeout = setTimeout(() => {
-      console.warn('[Safety] Force stopping infinite loading after 30 seconds');
+      console.warn('[Safety] Force stopping infinite loading after 20 seconds');
       setLoading(false);
+      setAuthLoading(false);
+      setLoginProgress('');
       // Don't show alert immediately - user might just have slow connection
-    }, 30000);
+    }, 20000);
     return () => clearTimeout(safetyTimeout);
   }
 }, [loading]);
@@ -10002,6 +10158,7 @@ useEffect(() => {
 }, [currentUser]); // Re-run when user changes to fetch correct school's students
 const handleLogin=async()=>{
   setAuthLoading(true);
+  setLoginProgress('Connecting...');
   try{
     const email=(loginForm.email||'').trim().toLowerCase();
     const password=loginForm.password;
@@ -10013,20 +10170,29 @@ const handleLogin=async()=>{
       if(!studentId||!password){
         alert('Please enter Student ID and password');
         setAuthLoading(false);
+        setLoginProgress('');
         return;
       }
       if(password!=='pass123'){
         alert('Invalid password. Default password is: pass123');
         setAuthLoading(false);
+        setLoginProgress('');
         return;
       }
       
       try {
+        setLoginProgress('Authenticating...');
         // ✅ STEP 1: Sign in anonymously to get Firebase Auth credentials
         // This allows students to access Firestore collections
-        await auth.signInAnonymously();
+        // ✅ iOS FIX: Add timeout for auth
+        const authPromise = auth.signInAnonymously();
+        const authResult = await Promise.race([
+          authPromise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout. Please check your internet.')), 15000))
+        ]);
         console.log('✅ Anonymous auth successful');
         
+        setLoginProgress('Finding student...');
         // ✅ STEP 2: Now query students collection (with auth)
         const snap = await db.collection('students')
   .where('id', '==', studentId)
@@ -10037,6 +10203,7 @@ if (snap.empty) {
   alert('Student ID not found. Please contact your teacher.');
   await auth.signOut(); // Sign out anonymous user
   setAuthLoading(false);
+  setLoginProgress('');
   return;
 }
 
@@ -10045,26 +10212,34 @@ const foundStudent = { ...doc.data(), docId: doc.id };
         console.log('✅ Found student:', foundStudent);
         
         if(foundStudent){
+          setLoginProgress('Loading dashboard...');
           const studentUser = {
             ...foundStudent,
             userType:'student',
             studentId:studentId
           };
-          // ✅ Save to localStorage for session persistence
-          localStorage.setItem('studentSession', JSON.stringify(studentUser));
+          // ✅ iOS FIX: Use safe storage wrapper
+          if (typeof window.safeStorage !== 'undefined') {
+            window.safeStorage.setItem('studentSession', JSON.stringify(studentUser));
+          } else {
+            try { localStorage.setItem('studentSession', JSON.stringify(studentUser)); } catch(e) {}
+          }
           setCurrentUser(studentUser);
           setIsAdmin(false);
           setActiveTab('dashboard');
-          setAuthLoading(false); // ⬅️ ADD THIS
+          setAuthLoading(false);
+          setLoginProgress('');
         }else{
           alert('Student ID not found. Please contact your teacher.');
           setAuthLoading(false);
+          setLoginProgress('');
           return;
         }
       } catch(e) {
         console.error('Student login error:', e);
-        alert('Login failed: ' + e.message);
+        alert('Login failed: ' + (e.message || 'Please check your internet connection'));
         setAuthLoading(false);
+        setLoginProgress('');
         return;
       }
     }else{
@@ -10072,26 +10247,46 @@ const foundStudent = { ...doc.data(), docId: doc.id };
       if(!email||!password){
         alert('Please enter email and password');
         setAuthLoading(false);
+        setLoginProgress('');
         return;
       }
-      await auth.signInWithEmailAndPassword(email,password);
-      setAuthLoading(false); // ⬅️ ADD THIS
+      setLoginProgress('Authenticating...');
+      // ✅ iOS FIX: Add timeout for Firebase auth
+      const authPromise = auth.signInWithEmailAndPassword(email,password);
+      await Promise.race([
+        authPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout. Please check your internet.')), 15000))
+      ]);
+      setLoginProgress('Loading profile...');
+      // Note: setAuthLoading(false) will be called by onAuthStateChanged
     }
   }catch(e){
     console.error('login error',e);
-    alert('Login failed: '+e.message);
-    setAuthLoading(false); // ⬅️ MAKE SURE THIS EXISTS
+    const errorMsg = e.code === 'auth/wrong-password' ? 'Incorrect password' :
+                     e.code === 'auth/user-not-found' ? 'User not found' :
+                     e.code === 'auth/too-many-requests' ? 'Too many attempts. Try again later.' :
+                     e.message || 'Login failed. Please try again.';
+    alert(errorMsg);
+    setAuthLoading(false);
+    setLoginProgress('');
   }
 };
 const handleLogout=async()=>{
   try{
     // Clear student session from localStorage
-    localStorage.removeItem('studentSession');
+    // ✅ iOS FIX: Use safe storage wrapper
+    if (typeof window.safeStorage !== 'undefined') {
+      window.safeStorage.removeItem('studentSession');
+    } else {
+      try { localStorage.removeItem('studentSession'); } catch(e) {}
+    }
     // Clear 2FA states
     setPending2FAUser(null);
     setShow2FAVerify(false);
     setShow2FASetup(false);
     setNeeds2FASetup(false);
+    // Clear login progress
+    setLoginProgress('');
     // For teachers/admins who use Firebase Auth
     if(auth.currentUser){
       await auth.signOut();
@@ -10373,8 +10568,13 @@ if(!currentUser){
               <input type="password" className="w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg" value={loginForm.password} onChange={e=>setLoginForm({...loginForm,password:e.target.value})} placeholder="Password" onKeyPress={e=>e.key==='Enter'&&handleLogin()}/>
             </>
           )}
-          <button onClick={handleLogin} disabled={authLoading} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-50">
-            {authLoading?'Logging in...':'Login'}
+          <button onClick={handleLogin} disabled={authLoading} className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-70 transition-all">
+            {authLoading ? (
+              <span className="login-spinner">
+                <span className="login-spinner-icon"></span>
+                <span className="login-progress-text">{loginProgress || 'Please wait...'}</span>
+              </span>
+            ) : 'Login'}
           </button>
         </div>
       </div>
