@@ -6487,44 +6487,165 @@ function BarcodeScanner({ onScanSuccess, onClose }) {
 // ========================================
 // ISBN LOOKUP UTILITY
 // ========================================
+// ========================================
+// INDIAN EDUCATIONAL BOOKS DATABASE
+// Common JEE/NEET books not found in Google Books API
+// ========================================
+const INDIAN_BOOKS_DB = {
+  '9789368024552': { title: 'Advanced Problems in Mathematics for JEE', author: 'Vikas Gupta, Pankaj Joshi', publisher: 'Shree Balaji Publications', category: 'JEE Preparation' },
+  '9788193975800': { title: 'Problems in Physics', author: 'S.S. Krotov', publisher: 'CBS Publishers', category: 'Physics' },
+  '9789384934002': { title: 'Cengage Physics', author: 'B.M. Sharma', publisher: 'Cengage Learning', category: 'JEE Physics' },
+  '9789354491719': { title: 'HC Verma Concepts of Physics Vol 1', author: 'H.C. Verma', publisher: 'Bharati Bhawan', category: 'Physics' },
+  '9789354491726': { title: 'HC Verma Concepts of Physics Vol 2', author: 'H.C. Verma', publisher: 'Bharati Bhawan', category: 'Physics' },
+  '9789311123394': { title: 'Organic Chemistry Morrison Boyd', author: 'Morrison & Boyd', publisher: 'Pearson', category: 'Organic Chemistry' },
+  '9788120349858': { title: 'Concise Inorganic Chemistry', author: 'J.D. Lee', publisher: 'Wiley', category: 'Inorganic Chemistry' },
+  '9789332519008': { title: 'Physical Chemistry', author: 'OP Tandon', publisher: 'G.R. Bathla Publications', category: 'Physical Chemistry' },
+  '9788183486934': { title: 'Problems in General Physics', author: 'I.E. Irodov', publisher: 'Arihant', category: 'Physics' },
+  '9789325793729': { title: 'Coordinate Geometry for JEE', author: 'S.K. Goyal', publisher: 'Arihant', category: 'Mathematics' },
+  '9789325798625': { title: 'Differential Calculus for JEE', author: 'Amit M Agarwal', publisher: 'Arihant', category: 'Mathematics' },
+  '9789325798618': { title: 'Integral Calculus for JEE', author: 'Amit M Agarwal', publisher: 'Arihant', category: 'Mathematics' },
+  '9788177091878': { title: 'IIT Mathematics', author: 'M.L. Khanna', publisher: 'Jai Prakash Nath', category: 'Mathematics' },
+  '9789388241755': { title: 'Objective NCERT Xtract Physics', author: 'MTG Editorial Board', publisher: 'MTG Learning', category: 'NEET Physics' },
+  '9789388241762': { title: 'Objective NCERT Xtract Chemistry', author: 'MTG Editorial Board', publisher: 'MTG Learning', category: 'NEET Chemistry' },
+  '9789388241779': { title: 'Objective NCERT Xtract Biology', author: 'MTG Editorial Board', publisher: 'MTG Learning', category: 'NEET Biology' },
+  '9789389167542': { title: 'NCERT Fingertips Biology', author: 'MTG Editorial Board', publisher: 'MTG Learning', category: 'NEET Biology' },
+  '9789312146712': { title: 'Pradeep Chemistry Class 11', author: 'S.C. Kheterpal', publisher: 'Pradeep Publications', category: 'Chemistry' },
+  '9789312146729': { title: 'Pradeep Chemistry Class 12', author: 'S.C. Kheterpal', publisher: 'Pradeep Publications', category: 'Chemistry' },
+  '9789388127820': { title: 'Cengage Chemistry', author: 'K.S. Verma', publisher: 'Cengage Learning', category: 'JEE Chemistry' },
+  '9789332586949': { title: 'RD Sharma Mathematics Class 11', author: 'R.D. Sharma', publisher: 'Dhanpat Rai', category: 'Mathematics' },
+  '9789332586956': { title: 'RD Sharma Mathematics Class 12', author: 'R.D. Sharma', publisher: 'Dhanpat Rai', category: 'Mathematics' },
+  // Add more as needed
+};
+
+// ========================================
+// ISBN LOOKUP - Multi-source with Indian DB
+// ========================================
 async function lookupISBN(isbn) {
   try {
     const cleanISBN = isbn.replace(/[-\s]/g, '');
+    console.log('[ISBN] Looking up:', cleanISBN);
     
-    // Try Open Library API first (free, no API key needed)
-    const response = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${cleanISBN}&jscmd=data&format=json`);
-    const data = await response.json();
-    const bookData = data[`ISBN:${cleanISBN}`];
-    
-    if (bookData) {
+    // ✅ FIRST: Check local Indian books database
+    if (INDIAN_BOOKS_DB[cleanISBN]) {
+      console.log('[ISBN] Found in Indian Books DB!');
+      const book = INDIAN_BOOKS_DB[cleanISBN];
       return {
         found: true,
-        title: bookData.title || '',
-        author: bookData.authors ? bookData.authors.map(a => a.name).join(', ') : '',
-        publisher: bookData.publishers ? bookData.publishers.map(p => p.name).join(', ') : '',
-        isbn: cleanISBN
+        title: book.title,
+        author: book.author,
+        publisher: book.publisher,
+        category: book.category,
+        isbn: cleanISBN,
+        source: 'Indian Books Database'
       };
+    }
+    
+    // Try Open Library API first (free, no API key needed)
+    try {
+      const response = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${cleanISBN}&jscmd=data&format=json`);
+      const data = await response.json();
+      const bookData = data[`ISBN:${cleanISBN}`];
+      
+      if (bookData) {
+        console.log('[ISBN] Found in Open Library!');
+        return {
+          found: true,
+          title: bookData.title || '',
+          author: bookData.authors ? bookData.authors.map(a => a.name).join(', ') : '',
+          publisher: bookData.publishers ? bookData.publishers.map(p => p.name).join(', ') : '',
+          isbn: cleanISBN,
+          source: 'Open Library'
+        };
+      }
+    } catch (e) {
+      console.log('[ISBN] Open Library error:', e);
     }
     
     // Try Google Books API as fallback
-    const googleResponse = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanISBN}`);
-    const googleData = await googleResponse.json();
-    
-    if (googleData.items && googleData.items.length > 0) {
-      const book = googleData.items[0].volumeInfo;
-      return {
-        found: true,
-        title: book.title || '',
-        author: book.authors ? book.authors.join(', ') : '',
-        publisher: book.publisher || '',
-        isbn: cleanISBN
-      };
+    try {
+      const googleResponse = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanISBN}`);
+      const googleData = await googleResponse.json();
+      
+      if (googleData.items && googleData.items.length > 0) {
+        const book = googleData.items[0].volumeInfo;
+        console.log('[ISBN] Found in Google Books!');
+        return {
+          found: true,
+          title: book.title || '',
+          author: book.authors ? book.authors.join(', ') : '',
+          publisher: book.publisher || '',
+          isbn: cleanISBN,
+          source: 'Google Books'
+        };
+      }
+    } catch (e) {
+      console.log('[ISBN] Google Books error:', e);
     }
     
+    // ✅ Try with ISBN-10 format if ISBN-13 failed
+    if (cleanISBN.length === 13 && cleanISBN.startsWith('978')) {
+      const isbn10 = convertISBN13to10(cleanISBN);
+      if (isbn10) {
+        console.log('[ISBN] Trying ISBN-10 format:', isbn10);
+        
+        // Check Indian DB with ISBN-10
+        for (const [key, value] of Object.entries(INDIAN_BOOKS_DB)) {
+          if (key.includes(isbn10) || convertISBN13to10(key) === isbn10) {
+            console.log('[ISBN] Found via ISBN-10 conversion!');
+            return {
+              found: true,
+              title: value.title,
+              author: value.author,
+              publisher: value.publisher,
+              category: value.category,
+              isbn: cleanISBN,
+              source: 'Indian Books Database (ISBN-10)'
+            };
+          }
+        }
+        
+        // Try Open Library with ISBN-10
+        try {
+          const response = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn10}&jscmd=data&format=json`);
+          const data = await response.json();
+          const bookData = data[`ISBN:${isbn10}`];
+          
+          if (bookData) {
+            console.log('[ISBN] Found via ISBN-10 in Open Library!');
+            return {
+              found: true,
+              title: bookData.title || '',
+              author: bookData.authors ? bookData.authors.map(a => a.name).join(', ') : '',
+              publisher: bookData.publishers ? bookData.publishers.map(p => p.name).join(', ') : '',
+              isbn: cleanISBN,
+              source: 'Open Library (ISBN-10)'
+            };
+          }
+        } catch (e) {}
+      }
+    }
+    
+    console.log('[ISBN] Not found in any database');
     return { found: false, isbn: cleanISBN };
   } catch (error) {
     console.error('ISBN lookup error:', error);
     return { found: false, isbn: isbn };
+  }
+}
+
+// Convert ISBN-13 to ISBN-10
+function convertISBN13to10(isbn13) {
+  try {
+    if (isbn13.length !== 13 || !isbn13.startsWith('978')) return null;
+    const isbn9 = isbn13.substring(3, 12);
+    let sum = 0;
+    for (let i = 0; i < 9; i++) {
+      sum += parseInt(isbn9[i]) * (10 - i);
+    }
+    const checkDigit = (11 - (sum % 11)) % 11;
+    return isbn9 + (checkDigit === 10 ? 'X' : checkDigit.toString());
+  } catch (e) {
+    return null;
   }
 }
 
@@ -6614,7 +6735,12 @@ function AddAssetModal({ barcode, lookupResult, lookingUp, onSave, onClose }) {
                   <p className="text-sm text-blue-600 mt-1 font-semibold">📚 Adding Copy #{copyNumber} of this book</p>
                 )}
                 {lookupResult?.found && !isAdditionalCopy && <p className="text-sm text-green-600 mt-1">✓ Book details found!</p>}
-                {lookupResult && !lookupResult.found && !isAdditionalCopy && <p className="text-sm text-orange-600 mt-1">Book not found in database. Please enter manually.</p>}
+                {lookupResult && !lookupResult.found && !isAdditionalCopy && (
+                  <div className="text-sm text-orange-600 mt-1">
+                    <p className="font-semibold">📚 Book not found in database.</p>
+                    <p className="text-xs mt-1">Please enter details manually. For multiple copies of same book, add one copy first then use the "📋 Copy" button.</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -7083,6 +7209,33 @@ function AssetManagement({ currentUser, students }) {
     }
   };
 
+  // ✅ NEW: Handle duplicate/copy asset
+  const handleDuplicateAsset = async (asset) => {
+    // Find all existing copies of this book
+    const baseISBN = asset.isbn || asset.barcode.split('-copy-')[0];
+    const existingCopies = assets.filter(a => 
+      a.isbn === baseISBN || 
+      a.barcode === baseISBN || 
+      a.barcode.startsWith(baseISBN + '-copy-')
+    );
+    
+    const nextCopyNum = existingCopies.length + 1;
+    
+    // Pre-fill the add modal with existing book details
+    setScannedBarcode(baseISBN);
+    setBookLookupResult({
+      found: true,
+      title: asset.title,
+      author: asset.author || '',
+      publisher: asset.publisher || '',
+      category: asset.category || 'Other',
+      isbn: baseISBN,
+      copyNumber: nextCopyNum,
+      isAdditionalCopy: true
+    });
+    setShowAddModal(true);
+  };
+
   const filteredAssets = useMemo(() => {
     return assets.filter(asset => {
       if (filterType !== 'all' && asset.assetType !== filterType) return false;
@@ -7176,11 +7329,21 @@ function AssetManagement({ currentUser, students }) {
                     <p className="text-xs text-gray-600">Since: {new Date(asset.currentAssignee.assignedDate).toLocaleDateString()}</p>
                   </div>
                 )}
-                <div className="mt-3">
+                <div className="mt-3 flex gap-2">
                   {asset.status === 'available' ? (
-                    <button onClick={() => { setSelectedAsset(asset); setShowAssignModal(true); }} className="w-full px-3 py-2 bg-green-500 text-white rounded-lg text-sm font-semibold">Assign</button>
+                    <button onClick={() => { setSelectedAsset(asset); setShowAssignModal(true); }} className="flex-1 px-3 py-2 bg-green-500 text-white rounded-lg text-sm font-semibold">Assign</button>
                   ) : (
-                    <button onClick={() => handleReturnAsset(asset)} className="w-full px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold">Return</button>
+                    <button onClick={() => handleReturnAsset(asset)} className="flex-1 px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold">Return</button>
+                  )}
+                  {/* ✅ NEW: Duplicate button */}
+                  {asset.assetType === 'book' && (
+                    <button 
+                      onClick={() => handleDuplicateAsset(asset)} 
+                      className="px-3 py-2 bg-blue-500 text-white rounded-lg text-sm font-semibold"
+                      title="Add another copy of this book"
+                    >
+                      📋 Copy
+                    </button>
                   )}
                 </div>
               </div>
