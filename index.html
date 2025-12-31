@@ -344,6 +344,80 @@
       background: rgba(255,255,255,0.05) !important;
     }
     
+    /* ✅ FIX: Dark mode Social Wall text visibility */
+    [data-theme="dark"] .post-card {
+      background: var(--bg-card) !important;
+      border-color: var(--border-color) !important;
+    }
+    
+    [data-theme="dark"] .post-card .text-gray-700,
+    [data-theme="dark"] .post-card .text-gray-800,
+    [data-theme="dark"] .post-card p {
+      color: #e2e8f0 !important;
+    }
+    
+    [data-theme="dark"] .post-card .text-gray-500,
+    [data-theme="dark"] .post-card .text-gray-400 {
+      color: #94a3b8 !important;
+    }
+    
+    [data-theme="dark"] .post-card .bg-gray-50,
+    [data-theme="dark"] .post-card .bg-gray-100 {
+      background: #334155 !important;
+    }
+    
+    [data-theme="dark"] .reddit-action-row .reddit-timestamp,
+    [data-theme="dark"] .reddit-action-row .reddit-action-btn {
+      color: #94a3b8 !important;
+    }
+    
+    [data-theme="dark"] .reddit-action-row .reddit-action-btn:hover {
+      background: rgba(255,255,255,0.1) !important;
+      color: #e2e8f0 !important;
+    }
+    
+    [data-theme="dark"] .emoji-btn {
+      background: #334155 !important;
+    }
+    
+    [data-theme="dark"] .emoji-btn:hover {
+      background: #475569 !important;
+    }
+    
+    [data-theme="dark"] .mention-tag {
+      color: #60a5fa !important;
+      background: rgba(96, 165, 250, 0.15) !important;
+    }
+    
+    [data-theme="dark"] .tab-inactive {
+      background: var(--bg-card) !important;
+      color: #94a3b8 !important;
+    }
+    
+    [data-theme="dark"] .celebration-card {
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%) !important;
+      border-color: #6366f1 !important;
+    }
+    
+    [data-theme="dark"] .celebration-card h3 {
+      color: #f9a8d4 !important;
+    }
+    
+    /* ✅ FIX: Profile photo in comments - remove vertical line */
+    .comment-wrapper img,
+    .comment-wrapper > div:first-child {
+      border: none !important;
+      box-shadow: none !important;
+      position: relative;
+      z-index: 2;
+    }
+    
+    /* ✅ FIX: Ensure thread line doesn't overlap avatar */
+    .reddit-comment-thread::before {
+      left: 12px;
+      z-index: 1;
+    }
+    
     /* Theme Toggle Switch */
     .theme-toggle-container {
       display: flex;
@@ -821,6 +895,17 @@
   to {
     transform: translateX(0);
     opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(400px);
+    opacity: 0;
   }
 }
 
@@ -23637,6 +23722,18 @@ function SocialWall({ teachers, currentUser }) {
   const [replyImagePreview, setReplyImagePreview] = useState(null);
   const [showGifPicker, setShowGifPicker] = useState(null);
   const [expandedReplies, setExpandedReplies] = useState({});
+  
+  // ✅ NEW: Edit state for posts and comments
+  const [editingPost, setEditingPost] = useState(null);
+  const [editPostContent, setEditPostContent] = useState('');
+  const [editingComment, setEditingComment] = useState(null); // {postId, commentId}
+  const [editCommentContent, setEditCommentContent] = useState('');
+  
+  // ✅ Check if user is admin/moderator
+  const isAdminOrModerator = currentUser?.role === 'super_admin' || 
+                             currentUser?.role === 'aph' || 
+                             currentUser?.role === 'pm' ||
+                             currentUser?.isSuperAdmin === true;
 
   // Compress image for faster uploads
   // ✅ FIX: Added error handling and timeout to prevent infinite loading on iOS
@@ -24355,6 +24452,79 @@ function SocialWall({ teachers, currentUser }) {
     }
   };
 
+  // ✅ NEW: Edit post handler
+  const handleEditPost = async (postId) => {
+    if (!editPostContent.trim()) return;
+    try {
+      await db.collection('socialPosts').doc(postId).update({
+        content: editPostContent.trim(),
+        editedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      setPosts(posts.map(p => p.id === postId ? { ...p, content: editPostContent.trim(), editedAt: new Date() } : p));
+      setEditingPost(null);
+      setEditPostContent('');
+    } catch (error) {
+      console.error('Edit post error:', error);
+      alert('Failed to edit post');
+    }
+  };
+  
+  // ✅ NEW: Delete post handler
+  const handleDeletePost = async (postId) => {
+    if (!confirm('Are you sure you want to delete this post?')) return;
+    try {
+      await db.collection('socialPosts').doc(postId).delete();
+      setPosts(posts.filter(p => p.id !== postId));
+    } catch (error) {
+      console.error('Delete post error:', error);
+      alert('Failed to delete post');
+    }
+  };
+  
+  // ✅ NEW: Edit comment handler
+  const handleEditComment = async (postId, commentId) => {
+    if (!editCommentContent.trim()) return;
+    try {
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+      
+      const updatedComments = post.comments.map(c => 
+        c.id === commentId ? { ...c, content: editCommentContent.trim(), editedAt: new Date().toISOString() } : c
+      );
+      
+      await db.collection('socialPosts').doc(postId).update({ comments: updatedComments });
+      setPosts(posts.map(p => p.id === postId ? { ...p, comments: updatedComments } : p));
+      setEditingComment(null);
+      setEditCommentContent('');
+    } catch (error) {
+      console.error('Edit comment error:', error);
+      alert('Failed to edit comment');
+    }
+  };
+  
+  // ✅ NEW: Delete comment handler  
+  const handleDeleteComment = async (postId, commentId) => {
+    if (!confirm('Are you sure you want to delete this comment?')) return;
+    try {
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+      
+      const updatedComments = post.comments.filter(c => c.id !== commentId);
+      
+      await db.collection('socialPosts').doc(postId).update({ comments: updatedComments });
+      setPosts(posts.map(p => p.id === postId ? { ...p, comments: updatedComments } : p));
+    } catch (error) {
+      console.error('Delete comment error:', error);
+      alert('Failed to delete comment');
+    }
+  };
+  
+  // ✅ Check if user can edit/delete a post or comment
+  const canModify = (authorId) => {
+    const currentUserId = currentUser.afid || currentUser.uid;
+    return authorId === currentUserId || isAdminOrModerator;
+  };
+
   const dismissBirthdayPopup = () => {
     localStorage.setItem('birthdayDismissed_' + new Date().toDateString(), 'true');
     setShowBirthdayPopup(null);
@@ -25028,25 +25198,74 @@ function SocialWall({ teachers, currentUser }) {
 
                 return (
                   <div key={post.id} className="post-card p-5">
-                    {/* Author */}
-                    <div className="flex items-center gap-3 mb-4">
-                      {post.authorPhoto ? (
-                        <img src={post.authorPhoto} alt="" className="w-12 h-12 rounded-full object-cover" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
-                          {post.authorName?.charAt(0)}
-                        </div>
-                      )}
-                      <div>
-                        <div className="font-bold text-gray-800">{post.authorName}</div>
-                        <div className="text-xs text-gray-500">
-                          {post.authorSchool} • {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Just now'}
+                    {/* Author + Actions */}
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        {post.authorPhoto ? (
+                          <img src={post.authorPhoto} alt="" className="w-12 h-12 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                            {post.authorName?.charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-bold text-gray-800">{post.authorName}</div>
+                          <div className="text-xs text-gray-500">
+                            {post.authorSchool} • {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'Just now'}
+                            {post.editedAt && <span className="ml-1 text-gray-400">(edited)</span>}
+                          </div>
                         </div>
                       </div>
+                      
+                      {/* ✅ Edit/Delete Actions */}
+                      {canModify(post.authorId) && (
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => { setEditingPost(post.id); setEditPostContent(post.content); }}
+                            className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                            title="Edit post"
+                          >
+                            ✏️
+                          </button>
+                          <button 
+                            onClick={() => handleDeletePost(post.id)}
+                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            title={isAdminOrModerator && post.authorId !== (currentUser.afid || currentUser.uid) ? 'Delete as moderator' : 'Delete post'}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Content */}
-                    <p className="text-gray-700 mb-4 whitespace-pre-wrap">{post.content}</p>
+                    {/* Content - Editable or Display */}
+                    {editingPost === post.id ? (
+                      <div className="mb-4">
+                        <textarea
+                          value={editPostContent}
+                          onChange={(e) => setEditPostContent(e.target.value)}
+                          className="w-full p-3 border-2 border-purple-200 rounded-xl focus:border-purple-400 focus:ring-0 resize-none"
+                          rows={3}
+                          autoFocus
+                        />
+                        <div className="flex gap-2 mt-2">
+                          <button 
+                            onClick={() => handleEditPost(post.id)}
+                            className="px-4 py-2 bg-purple-500 text-white rounded-lg font-semibold hover:bg-purple-600"
+                          >
+                            Save
+                          </button>
+                          <button 
+                            onClick={() => { setEditingPost(null); setEditPostContent(''); }}
+                            className="px-4 py-2 bg-gray-200 rounded-lg font-semibold hover:bg-gray-300"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-gray-700 mb-4 whitespace-pre-wrap">{post.content}</p>
+                    )}
                     
                     {/* Post Image */}
                     {post.imageUrl && (
@@ -25117,27 +25336,55 @@ function SocialWall({ teachers, currentUser }) {
                               {/* Main comment */}
                               <div className="comment-wrapper flex gap-2 ml-0">
                                 {reply.authorPhoto ? (
-                                  <img src={reply.authorPhoto} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                                  <img src={reply.authorPhoto} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0 border-0" style={{border: 'none'}} />
                                 ) : (
                                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-300 to-purple-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
                                     {reply.authorName?.charAt(0)}
                                   </div>
                                 )}
                                 <div className="flex-1">
-                                  <div className="bg-gray-50 rounded-2xl px-3 py-2">
-                                    <span className="font-semibold text-sm">{reply.authorName}</span>
-                                    <span className="text-gray-700 text-sm ml-1">
-                                      {/* Render content with mentions highlighted */}
-                                      {reply.content?.split(/(@\w+(?:\s\w+)?)/g).map((part, i) => 
-                                        part.startsWith('@') ? (
-                                          <span key={i} className="mention-tag">{part}</span>
-                                        ) : part
+                                  {/* ✅ Comment content - editable or display */}
+                                  {editingComment?.postId === post.id && editingComment?.commentId === reply.id ? (
+                                    <div className="mb-2">
+                                      <textarea
+                                        value={editCommentContent}
+                                        onChange={(e) => setEditCommentContent(e.target.value)}
+                                        className="w-full p-2 border-2 border-purple-200 rounded-xl focus:border-purple-400 focus:ring-0 resize-none text-sm"
+                                        rows={2}
+                                        autoFocus
+                                      />
+                                      <div className="flex gap-2 mt-1">
+                                        <button 
+                                          onClick={() => handleEditComment(post.id, reply.id)}
+                                          className="px-3 py-1 bg-purple-500 text-white rounded-lg text-xs font-semibold hover:bg-purple-600"
+                                        >
+                                          Save
+                                        </button>
+                                        <button 
+                                          onClick={() => { setEditingComment(null); setEditCommentContent(''); }}
+                                          className="px-3 py-1 bg-gray-200 rounded-lg text-xs font-semibold hover:bg-gray-300"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="bg-gray-50 rounded-2xl px-3 py-2">
+                                      <span className="font-semibold text-sm">{reply.authorName}</span>
+                                      {reply.editedAt && <span className="text-xs text-gray-400 ml-1">(edited)</span>}
+                                      <span className="text-gray-700 text-sm ml-1">
+                                        {/* Render content with mentions highlighted */}
+                                        {reply.content?.split(/(@\w+(?:\s\w+)?)/g).map((part, i) => 
+                                          part.startsWith('@') ? (
+                                            <span key={i} className="mention-tag">{part}</span>
+                                          ) : part
+                                        )}
+                                      </span>
+                                      {reply.imageUrl && (
+                                        <img src={reply.imageUrl} alt="" className="mt-2 max-h-32 rounded-lg" />
                                       )}
-                                    </span>
-                                    {reply.imageUrl && (
-                                      <img src={reply.imageUrl} alt="" className="mt-2 max-h-32 rounded-lg" />
-                                    )}
-                                  </div>
+                                    </div>
+                                  )}
                                   
                                   {/* ✅ IMPROVED: Reddit-style comment actions row */}
                                   <div className="reddit-action-row">
@@ -25154,6 +25401,26 @@ function SocialWall({ teachers, currentUser }) {
                                       <span className="icon">💬</span>
                                       <span>Reply</span>
                                     </button>
+                                    
+                                    {/* ✅ NEW: Edit button for comments */}
+                                    {canModify(reply.authorId) && (
+                                      <>
+                                        <button 
+                                          className="reddit-action-btn"
+                                          onClick={() => { setEditingComment({postId: post.id, commentId: reply.id}); setEditCommentContent(reply.content); }}
+                                        >
+                                          <span className="icon">✏️</span>
+                                          <span>Edit</span>
+                                        </button>
+                                        <button 
+                                          className="reddit-action-btn text-red-500"
+                                          onClick={() => handleDeleteComment(post.id, reply.id)}
+                                        >
+                                          <span className="icon">🗑️</span>
+                                          <span>Delete</span>
+                                        </button>
+                                      </>
+                                    )}
                                     
                                     {/* Reactions - Reddit style */}
                                     <div className="reddit-reactions">
@@ -32164,43 +32431,145 @@ const NotificationManager = {
             if (daysSince < 7) return; // Don't show again for 7 days
         }
         
-        console.log('[NotificationManager] Would show permission prompt (user has not enabled notifications)');
+        // ✅ FIX: Actually show a prompt UI
+        const promptDiv = document.createElement('div');
+        promptDiv.id = 'notification-prompt';
+        promptDiv.innerHTML = `
+          <div style="position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:16px 20px;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,0.3);z-index:9999;max-width:320px;font-family:system-ui,sans-serif;">
+            <div style="display:flex;align-items:flex-start;gap:12px;">
+              <div style="font-size:28px;">🔔</div>
+              <div style="flex:1;">
+                <div style="font-weight:600;font-size:14px;margin-bottom:4px;">Enable Notifications?</div>
+                <div style="font-size:12px;opacity:0.9;line-height:1.4;">Get alerts for birthdays, mentions, and important updates even when you're not on this page.</div>
+                <div style="display:flex;gap:8px;margin-top:12px;">
+                  <button id="notif-enable-btn" style="flex:1;padding:8px 12px;background:white;color:#667eea;border:none;border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;">Enable</button>
+                  <button id="notif-later-btn" style="padding:8px 12px;background:rgba(255,255,255,0.2);color:white;border:none;border-radius:8px;font-size:12px;cursor:pointer;">Later</button>
+                </div>
+              </div>
+              <button id="notif-close-btn" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;padding:0;line-height:1;">×</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(promptDiv);
+        
+        const self = this;
+        
+        document.getElementById('notif-enable-btn').onclick = async function() {
+            promptDiv.remove();
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    console.log('[NotificationManager] Permission granted!');
+                    await self.getAndStoreFCMToken();
+                    // Show success toast
+                    self.showToast('🔔 Notifications enabled!', 'success');
+                }
+            } catch (e) {
+                console.log('[NotificationManager] Permission error:', e);
+            }
+        };
+        
+        document.getElementById('notif-later-btn').onclick = function() {
+            localStorage.setItem('notifPromptDismissed', new Date().toISOString());
+            promptDiv.remove();
+        };
+        
+        document.getElementById('notif-close-btn').onclick = function() {
+            localStorage.setItem('notifPromptDismissed', new Date().toISOString());
+            promptDiv.remove();
+        };
+        
+        console.log('[NotificationManager] Permission prompt shown');
+    },
+    
+    // ✅ NEW: Show toast notification
+    showToast: function(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.style.cssText = `position:fixed;bottom:80px;right:20px;padding:12px 20px;border-radius:12px;color:white;font-size:14px;font-weight:500;z-index:9999;animation:slideIn 0.3s ease;`;
+        toast.style.background = type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
     },
     
     // ✅ NEW: Get and store FCM token
     getAndStoreFCMToken: async function() {
-        if (!this.messaging) return;
+        if (!this.messaging) {
+            console.log('[NotificationManager] Messaging not initialized');
+            return;
+        }
         
         try {
             // Register service worker if not already
-            let sw = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
-            if (!sw) {
-                sw = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+            let sw = null;
+            try {
+                sw = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+                if (!sw) {
+                    console.log('[NotificationManager] Registering service worker...');
+                    sw = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                    console.log('[NotificationManager] Service worker registered');
+                }
+            } catch (swError) {
+                console.log('[NotificationManager] Service worker error (will try without):', swError);
             }
             
-            const token = await this.messaging.getToken({
-                vapidKey: 'BFnwbBYnYYQKp-y2L3hGAJqD1BAwTcvNKuZyqOJU4FLiK9CnMuXgT9vZC7Dw1jQ5aQzNMsR6dGJOQVnQ5wQ3_Sk',
-                serviceWorkerRegistration: sw
-            });
+            // ✅ FIX: Try to get token - first without VAPID key (works for many Firebase configs)
+            let token = null;
+            try {
+                // Try with service worker if available
+                if (sw) {
+                    token = await this.messaging.getToken({
+                        serviceWorkerRegistration: sw
+                    });
+                } else {
+                    // Try without service worker
+                    token = await this.messaging.getToken();
+                }
+            } catch (tokenError) {
+                console.log('[NotificationManager] Token error (will retry):', tokenError.message);
+                // Some errors are expected on first try, retry after a moment
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                try {
+                    token = await this.messaging.getToken();
+                } catch (retryError) {
+                    console.log('[NotificationManager] Token retry failed:', retryError.message);
+                }
+            }
             
             if (token) {
                 this.fcmToken = token;
-                localStorage.setItem('fcmToken_' + (this.userId || 'guest'), token);
-                console.log('[NotificationManager] FCM Token obtained and stored');
+                try {
+                    localStorage.setItem('fcmToken_' + (this.userId || 'guest'), token);
+                } catch(e) {}
+                console.log('[NotificationManager] ✅ FCM Token obtained:', token.substring(0, 20) + '...');
                 
                 // Save token to Firestore for this user
-                if (this.userId) {
-                    await firebase.firestore().collection('fcm_tokens').doc(this.userId).set({
-                        token: token,
-                        userId: this.userId,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        platform: navigator.userAgent.includes('Mobile') ? 'mobile' : 'web'
-                    }, { merge: true });
+                if (this.userId && typeof firebase !== 'undefined') {
+                    try {
+                        await firebase.firestore().collection('fcm_tokens').doc(this.userId).set({
+                            token: token,
+                            userId: this.userId,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            platform: /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'mobile' : 'web',
+                            userAgent: navigator.userAgent.substring(0, 200)
+                        }, { merge: true });
+                        console.log('[NotificationManager] ✅ Token saved to Firestore');
+                    } catch (firestoreError) {
+                        console.log('[NotificationManager] Could not save token to Firestore:', firestoreError);
+                    }
                 }
+                
+                return token;
+            } else {
+                console.log('[NotificationManager] No token received');
             }
         } catch (e) {
             console.log('[NotificationManager] FCM token error:', e);
         }
+        return null;
     },
     
     // Check if there are pending celebration notifications from when the app was closed
