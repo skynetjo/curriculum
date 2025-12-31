@@ -11781,6 +11781,7 @@ function TeacherView({
     { id: 'assets', label: 'Asset Management', icon: <i className="fa-solid fa-boxes-stacked"></i> },
     { id: 'schoolinfo', label: 'School Info', icon: <i className="fa-solid fa-school"></i> },
     { id: 'examstats', label: 'Exam Stats', icon: <i className="fa-solid fa-graduation-cap"></i> },
+    { id: 'timesheet', label: 'Timesheet', icon: <i className="fa-solid fa-clock"></i> },
     { id: 'roadmap', label: 'Roadmap', icon: <i className="fa-solid fa-map"></i> }
   ] : [
     { id: 'overview', label: 'Dashboard', icon: <i className="fa-solid fa-chart-line"></i> },
@@ -11796,6 +11797,7 @@ function TeacherView({
     { id: 'schoolinfo', label: 'School Info', icon: <i className="fa-solid fa-school"></i> },
     { id: 'examstats', label: 'Exam Stats', icon: <i className="fa-solid fa-graduation-cap"></i> },
     { id: 'myprofile', label: 'My Profile', icon: <i className="fa-solid fa-user"></i> },
+    { id: 'timesheet', label: 'Timesheet', icon: <i className="fa-solid fa-clock"></i> },
     { id: 'roadmap', label: 'Roadmap', icon: <i className="fa-solid fa-map"></i> }
   ];
 
@@ -12434,6 +12436,16 @@ function TeacherView({
 
         {activeTab === 'roadmap' && (
           <RoadmapPage currentUser={currentUser} />
+        )}
+
+        {activeTab === 'timesheet' && (
+          <TimesheetPage 
+            currentUser={currentUser} 
+            teachers={teachers} 
+            curriculum={curriculum}
+            isAdmin={false}
+            accessibleSchools={[currentUser.school]}
+          />
         )}
         </div>
       </div>
@@ -14774,6 +14786,7 @@ function AdminView({
     { id: 'studentprofiles', label: 'Student Profiles', icon: <i className="fa-solid fa-id-card"></i> },
     { id: 'examstats', label: 'Exam Statistics', icon: <i className="fa-solid fa-graduation-cap"></i> },
     { id: 'studentfeedback', label: 'Student Feedback', icon: <i className="fa-solid fa-message"></i> },
+    { id: 'timesheet', label: 'Timesheet', icon: <i className="fa-solid fa-clock"></i> },
     { id: 'roadmap', label: 'Roadmap', icon: <i className="fa-solid fa-map"></i> }
   ];
   
@@ -15051,6 +15064,18 @@ function AdminView({
 
         {activeTab === 'roadmap' && (
           <RoadmapPage currentUser={currentUser} />
+        )}
+
+        {activeTab === 'timesheet' && (
+          <TimesheetPage 
+            currentUser={currentUser} 
+            teachers={filteredTeachers} 
+            curriculum={curriculum}
+            isAdmin={true}
+            isSuperAdmin={isSuperAdmin}
+            accessibleSchools={availableSchools}
+            managers={managers}
+          />
         )}
 
         {activeTab === 'observations' && (
@@ -25807,6 +25832,1223 @@ function SocialWall({ teachers, currentUser }) {
               >
                 Send Wishes! 🎉
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========================================
+// TIMESHEET - Daily Activity Logging
+// ========================================
+function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isSuperAdmin = false, accessibleSchools = [], managers = [] }) {
+  // State for form
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [activityType, setActivityType] = useState('');
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedChapter, setSelectedChapter] = useState('');
+  const [selectedTopic, setSelectedTopic] = useState('');
+  const [testType, setTestType] = useState('');
+  const [notes, setNotes] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  
+  // State for data
+  const [timesheetEntries, setTimesheetEntries] = useState([]);
+  const [pendingApprovals, setPendingApprovals] = useState([]);
+  const [educatorOfMonth, setEducatorOfMonth] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState('entry'); // 'entry', 'myLogs', 'approvals', 'analytics', 'recognition'
+  
+  // Filters
+  const [filterSchool, setFilterSchool] = useState('All');
+  const [filterTeacher, setFilterTeacher] = useState('All');
+  const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
+  
+  // Chart ref
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+
+  const mySubject = currentUser.subject;
+  const mySchool = currentUser.school;
+  const myAfid = currentUser.afid || currentUser.uid || currentUser.id;
+  
+  // Activity types
+  const ACTIVITY_TYPES = [
+    { id: 'teaching', label: '📚 Teaching', icon: '📚' },
+    { id: 'tests', label: '📝 Tests', icon: '📝' },
+    { id: 'mentoring', label: '👥 Mentoring', icon: '👥' },
+    { id: 'data_entry', label: '💻 Data Entry', icon: '💻' },
+    { id: 'weekly_checkin', label: '🗓️ Weekly Check-in Meetings', icon: '🗓️' },
+    { id: 'others', label: '📋 Others', icon: '📋' }
+  ];
+  
+  const TEST_TYPES = [
+    { id: 'chapter_test', label: 'Chapter Test' },
+    { id: 'aiet', label: 'AIET' }
+  ];
+  
+  // Get chapters for teacher's subject
+  const getChaptersForSubject = (grade) => {
+    const chapters = [];
+    const subjectKey = mySubject?.toLowerCase();
+    
+    Object.entries(curriculum).forEach(([key, data]) => {
+      // Match format: school_subject_grade (e.g., "JNV Bharuch_physics_11")
+      const keyLower = key.toLowerCase();
+      if (keyLower.includes(subjectKey) && keyLower.includes(grade)) {
+        if (data.chapters && Array.isArray(data.chapters)) {
+          data.chapters.forEach(ch => {
+            if (ch.name && !chapters.find(c => c.name === ch.name)) {
+              chapters.push({
+                name: ch.name,
+                topics: ch.topics || []
+              });
+            }
+          });
+        }
+      }
+    });
+    
+    // Also check for simpler key formats
+    Object.entries(curriculum).forEach(([key, data]) => {
+      if (key.includes(mySchool) && key.includes(subjectKey) && key.includes(grade)) {
+        if (data.chapters && Array.isArray(data.chapters)) {
+          data.chapters.forEach(ch => {
+            if (ch.name && !chapters.find(c => c.name === ch.name)) {
+              chapters.push({
+                name: ch.name,
+                topics: ch.topics || []
+              });
+            }
+          });
+        }
+      }
+    });
+    
+    // Fallback - try to find any matching curriculum
+    if (chapters.length === 0) {
+      Object.entries(curriculum).forEach(([key, data]) => {
+        if (data.chapters && Array.isArray(data.chapters)) {
+          if (key.toLowerCase().includes(subjectKey)) {
+            const hasGrade = key.includes('11') || key.includes('12');
+            if ((grade === '11' && key.includes('11')) || (grade === '12' && key.includes('12')) || !hasGrade) {
+              data.chapters.forEach(ch => {
+                if (ch.name && !chapters.find(c => c.name === ch.name)) {
+                  chapters.push({
+                    name: ch.name,
+                    topics: ch.topics || []
+                  });
+                }
+              });
+            }
+          }
+        }
+      });
+    }
+    
+    return chapters;
+  };
+  
+  // Get topics for selected chapter
+  const getTopicsForChapter = () => {
+    const chapters = getChaptersForSubject(selectedClass);
+    const chapter = chapters.find(ch => ch.name === selectedChapter);
+    return chapter?.topics || [];
+  };
+  
+  // Calculate hours from start and end time
+  const calculateHours = () => {
+    if (!startTime || !endTime) return 0;
+    const [startH, startM] = startTime.split(':').map(Number);
+    const [endH, endM] = endTime.split(':').map(Number);
+    const start = startH * 60 + startM;
+    const end = endH * 60 + endM;
+    const diff = end - start;
+    return diff > 0 ? (diff / 60).toFixed(2) : 0;
+  };
+  
+  const hoursWorked = calculateHours();
+  
+  // Fetch timesheet entries
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch entries based on role
+        let entriesQuery;
+        if (isAdmin) {
+          if (isSuperAdmin) {
+            // Super admin sees all
+            entriesQuery = db.collection('timesheetEntries')
+              .orderBy('date', 'desc')
+              .limit(500);
+          } else {
+            // Manager sees accessible schools
+            entriesQuery = db.collection('timesheetEntries')
+              .where('school', 'in', accessibleSchools.length > 0 ? accessibleSchools.slice(0, 10) : ['none'])
+              .orderBy('date', 'desc')
+              .limit(500);
+          }
+        } else {
+          // Teacher sees own entries
+          entriesQuery = db.collection('timesheetEntries')
+            .where('teacherAfid', '==', myAfid)
+            .orderBy('date', 'desc')
+            .limit(100);
+        }
+        
+        const entriesSnap = await entriesQuery.get();
+        const entries = entriesSnap.docs.map(d => ({
+          ...d.data(),
+          id: d.id,
+          date: d.data().date || '',
+          createdAt: d.data().createdAt?.toDate?.() || new Date()
+        }));
+        setTimesheetEntries(entries);
+        
+        // Fetch pending approvals for managers
+        if (isAdmin) {
+          const pendingQuery = isSuperAdmin 
+            ? db.collection('timesheetEntries').where('status', '==', 'pending')
+            : db.collection('timesheetEntries')
+                .where('school', 'in', accessibleSchools.length > 0 ? accessibleSchools.slice(0, 10) : ['none'])
+                .where('status', '==', 'pending');
+          
+          const pendingSnap = await pendingQuery.get();
+          setPendingApprovals(pendingSnap.docs.map(d => ({
+            ...d.data(),
+            id: d.id
+          })));
+        }
+        
+        // Calculate Educator of the Month
+        await calculateEducatorOfMonth();
+        
+      } catch (error) {
+        console.error('Error fetching timesheet data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [isAdmin, isSuperAdmin, accessibleSchools, myAfid]);
+  
+  // Calculate Educator of the Month
+  const calculateEducatorOfMonth = async () => {
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const startOfMonth = currentMonth + '-01';
+      const endOfMonth = currentMonth + '-31';
+      
+      const monthEntriesSnap = await db.collection('timesheetEntries')
+        .where('date', '>=', startOfMonth)
+        .where('date', '<=', endOfMonth)
+        .where('status', '==', 'approved')
+        .get();
+      
+      // Aggregate hours by teacher
+      const teacherHours = {};
+      monthEntriesSnap.docs.forEach(doc => {
+        const data = doc.data();
+        const key = data.teacherAfid;
+        if (!teacherHours[key]) {
+          teacherHours[key] = {
+            afid: data.teacherAfid,
+            name: data.teacherName,
+            school: data.school,
+            subject: data.subject,
+            totalHours: 0,
+            entries: 0
+          };
+        }
+        teacherHours[key].totalHours += parseFloat(data.hours) || 0;
+        teacherHours[key].entries += 1;
+      });
+      
+      // Find top performer
+      const sorted = Object.values(teacherHours).sort((a, b) => b.totalHours - a.totalHours);
+      if (sorted.length > 0) {
+        setEducatorOfMonth(sorted[0]);
+      }
+    } catch (e) {
+      console.error('Error calculating educator of month:', e);
+    }
+  };
+  
+  // Submit timesheet entry
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!activityType) {
+      alert('Please select an activity type');
+      return;
+    }
+    
+    if (!startTime || !endTime) {
+      alert('Please enter start and end time');
+      return;
+    }
+    
+    if (hoursWorked <= 0) {
+      alert('End time must be after start time');
+      return;
+    }
+    
+    // Validate based on activity type
+    if (activityType === 'teaching' && (!selectedClass || !selectedChapter)) {
+      alert('Please select class and chapter for teaching');
+      return;
+    }
+    
+    if (activityType === 'tests' && (!testType || !selectedClass || !selectedChapter)) {
+      alert('Please fill all required fields for tests');
+      return;
+    }
+    
+    if (activityType === 'mentoring' && !selectedClass) {
+      alert('Please select class for mentoring');
+      return;
+    }
+    
+    try {
+      setSubmitting(true);
+      
+      // Find line manager
+      let lineManagerId = null;
+      let lineManagerName = null;
+      
+      // Try to find manager from teachers collection first
+      const teacherData = teachers.find(t => t.afid === myAfid);
+      if (teacherData?.reportsTo) {
+        lineManagerId = teacherData.reportsTo;
+        const manager = managers.find(m => m.id === lineManagerId);
+        lineManagerName = manager?.name || 'Manager';
+      } else {
+        // Fallback: Find APM for the school
+        const apm = managers.find(m => 
+          (m.role === 'apm' || m.role === MANAGER_ROLES.APM) && 
+          m.directSchools?.includes(mySchool)
+        );
+        if (apm) {
+          lineManagerId = apm.id;
+          lineManagerName = apm.name;
+        }
+      }
+      
+      const entry = {
+        date: selectedDate,
+        activityType: activityType,
+        teacherAfid: myAfid,
+        teacherName: currentUser.name,
+        teacherEmail: currentUser.email,
+        school: mySchool,
+        subject: mySubject,
+        class: selectedClass || null,
+        chapter: selectedChapter || null,
+        topic: selectedTopic || null,
+        testType: testType || null,
+        notes: notes || '',
+        startTime: startTime,
+        endTime: endTime,
+        hours: parseFloat(hoursWorked),
+        status: 'pending', // pending, approved, rejected
+        lineManagerId: lineManagerId,
+        lineManagerName: lineManagerName,
+        submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      
+      const docRef = await db.collection('timesheetEntries').add(entry);
+      
+      // Add to local state
+      setTimesheetEntries(prev => [{
+        ...entry,
+        id: docRef.id,
+        createdAt: new Date()
+      }, ...prev]);
+      
+      // Reset form
+      setActivityType('');
+      setSelectedClass('');
+      setSelectedChapter('');
+      setSelectedTopic('');
+      setTestType('');
+      setNotes('');
+      setStartTime('');
+      setEndTime('');
+      
+      alert('✅ Timesheet entry submitted for approval!');
+      
+    } catch (error) {
+      console.error('Error submitting timesheet:', error);
+      alert('Error submitting entry. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  
+  // Approve/Reject timesheet entry (for managers)
+  const handleApproval = async (entryId, action) => {
+    try {
+      await db.collection('timesheetEntries').doc(entryId).update({
+        status: action,
+        approvedBy: currentUser.name,
+        approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      // Update local state
+      setPendingApprovals(prev => prev.filter(e => e.id !== entryId));
+      setTimesheetEntries(prev => prev.map(e => 
+        e.id === entryId ? { ...e, status: action } : e
+      ));
+      
+      alert(`✅ Entry ${action}!`);
+    } catch (error) {
+      console.error('Error updating approval:', error);
+      alert('Error updating entry');
+    }
+  };
+  
+  // Filter entries for display
+  const filteredEntries = useMemo(() => {
+    return timesheetEntries.filter(entry => {
+      const matchesSchool = filterSchool === 'All' || entry.school === filterSchool;
+      const matchesTeacher = filterTeacher === 'All' || entry.teacherAfid === filterTeacher;
+      const matchesMonth = entry.date?.startsWith(filterMonth);
+      return matchesSchool && matchesTeacher && matchesMonth;
+    });
+  }, [timesheetEntries, filterSchool, filterTeacher, filterMonth]);
+  
+  // Calculate stats for chart
+  const chartData = useMemo(() => {
+    const byType = {};
+    filteredEntries.forEach(entry => {
+      const type = entry.activityType || 'others';
+      byType[type] = (byType[type] || 0) + (parseFloat(entry.hours) || 0);
+    });
+    return byType;
+  }, [filteredEntries]);
+  
+  // Teacher aggregates for chart
+  const teacherAggregates = useMemo(() => {
+    const byTeacher = {};
+    filteredEntries.forEach(entry => {
+      const key = entry.teacherAfid;
+      if (!byTeacher[key]) {
+        byTeacher[key] = {
+          name: entry.teacherName,
+          school: entry.school,
+          totalHours: 0,
+          approved: 0,
+          pending: 0
+        };
+      }
+      byTeacher[key].totalHours += parseFloat(entry.hours) || 0;
+      if (entry.status === 'approved') byTeacher[key].approved += parseFloat(entry.hours) || 0;
+      if (entry.status === 'pending') byTeacher[key].pending += parseFloat(entry.hours) || 0;
+    });
+    return Object.values(byTeacher).sort((a, b) => b.totalHours - a.totalHours);
+  }, [filteredEntries]);
+  
+  // Render Chart
+  useEffect(() => {
+    if (!chartRef.current || Object.keys(chartData).length === 0) return;
+    
+    if (chartInstance.current) {
+      chartInstance.current.destroy();
+    }
+    
+    const labels = ACTIVITY_TYPES.map(t => t.label.replace(/^[^\s]+\s/, ''));
+    const data = ACTIVITY_TYPES.map(t => chartData[t.id] || 0);
+    const colors = ['#F4B41A', '#3B82F6', '#10B981', '#8B5CF6', '#EF4444', '#6B7280'];
+    
+    chartInstance.current = new Chart(chartRef.current, {
+      type: 'doughnut',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: data,
+          backgroundColor: colors,
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { padding: 15, font: { size: 12 } }
+          },
+          title: {
+            display: true,
+            text: 'Hours by Activity Type',
+            font: { size: 16, weight: 'bold' }
+          }
+        }
+      }
+    });
+    
+    return () => {
+      if (chartInstance.current) chartInstance.current.destroy();
+    };
+  }, [chartData]);
+  
+  // Get my total hours this month
+  const myMonthlyHours = useMemo(() => {
+    return timesheetEntries
+      .filter(e => e.teacherAfid === myAfid && e.date?.startsWith(filterMonth))
+      .reduce((sum, e) => sum + (parseFloat(e.hours) || 0), 0);
+  }, [timesheetEntries, myAfid, filterMonth]);
+  
+  // Unique teachers for filter
+  const uniqueTeachers = useMemo(() => {
+    const map = {};
+    timesheetEntries.forEach(e => {
+      if (e.teacherAfid && !map[e.teacherAfid]) {
+        map[e.teacherAfid] = { afid: e.teacherAfid, name: e.teacherName };
+      }
+    });
+    return Object.values(map);
+  }, [timesheetEntries]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-500">Loading Timesheet...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-6 rounded-2xl shadow-lg">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
+              ⏱️ Timesheet
+            </h1>
+            <p className="opacity-90 mt-1">Track your daily activities and work hours</p>
+          </div>
+          <div className="flex gap-3">
+            <div className="bg-white/20 px-4 py-2 rounded-xl text-center">
+              <div className="text-2xl font-bold">{myMonthlyHours.toFixed(1)}</div>
+              <div className="text-xs opacity-90">Hours This Month</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Navigation Tabs */}
+      <div className="flex flex-wrap gap-2 bg-white p-2 rounded-xl shadow">
+        <button 
+          onClick={() => setActiveView('entry')}
+          className={`px-4 py-2 rounded-lg font-semibold transition-all ${activeView === 'entry' ? 'avanti-gradient text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+        >
+          ➕ New Entry
+        </button>
+        <button 
+          onClick={() => setActiveView('myLogs')}
+          className={`px-4 py-2 rounded-lg font-semibold transition-all ${activeView === 'myLogs' ? 'avanti-gradient text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+        >
+          📋 My Logs
+        </button>
+        {isAdmin && (
+          <button 
+            onClick={() => setActiveView('approvals')}
+            className={`px-4 py-2 rounded-lg font-semibold transition-all ${activeView === 'approvals' ? 'avanti-gradient text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+          >
+            ✅ Approvals {pendingApprovals.length > 0 && <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">{pendingApprovals.length}</span>}
+          </button>
+        )}
+        <button 
+          onClick={() => setActiveView('analytics')}
+          className={`px-4 py-2 rounded-lg font-semibold transition-all ${activeView === 'analytics' ? 'avanti-gradient text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+        >
+          📊 Analytics
+        </button>
+        <button 
+          onClick={() => setActiveView('recognition')}
+          className={`px-4 py-2 rounded-lg font-semibold transition-all ${activeView === 'recognition' ? 'avanti-gradient text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+        >
+          🏆 Recognition
+        </button>
+      </div>
+      
+      {/* New Entry Form */}
+      {activeView === 'entry' && (
+        <div className="grid md:grid-cols-3 gap-6">
+          {/* Entry Form */}
+          <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-lg">
+            <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <span className="text-2xl">📝</span> Log Activity
+            </h2>
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Date Selection */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">📅 Date</label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={e => setSelectedDate(e.target.value)}
+                  max={new Date().toISOString().split('T')[0]}
+                  className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200"
+                  required
+                />
+              </div>
+              
+              {/* Activity Type Selection */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">🎯 Activity Type</label>
+                <select
+                  value={activityType}
+                  onChange={e => {
+                    setActivityType(e.target.value);
+                    setSelectedClass('');
+                    setSelectedChapter('');
+                    setSelectedTopic('');
+                    setTestType('');
+                  }}
+                  className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200"
+                  required
+                >
+                  <option value="">-- Select Activity --</option>
+                  {ACTIVITY_TYPES.map(type => (
+                    <option key={type.id} value={type.id}>{type.label}</option>
+                  ))}
+                </select>
+              </div>
+              
+              {/* TEACHING FIELDS */}
+              {activityType === 'teaching' && (
+                <>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">🎓 Class</label>
+                      <select
+                        value={selectedClass}
+                        onChange={e => {
+                          setSelectedClass(e.target.value);
+                          setSelectedChapter('');
+                          setSelectedTopic('');
+                        }}
+                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        required
+                      >
+                        <option value="">-- Select Class --</option>
+                        <option value="11">Class 11</option>
+                        <option value="12">Class 12</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">📖 Chapter</label>
+                      <select
+                        value={selectedChapter}
+                        onChange={e => {
+                          setSelectedChapter(e.target.value);
+                          setSelectedTopic('');
+                        }}
+                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        required
+                        disabled={!selectedClass}
+                      >
+                        <option value="">-- Select Chapter --</option>
+                        {getChaptersForSubject(selectedClass).map((ch, idx) => (
+                          <option key={idx} value={ch.name}>{ch.name}</option>
+                        ))}
+                        <option value="Others">Others</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">📑 Topic</label>
+                    <select
+                      value={selectedTopic}
+                      onChange={e => setSelectedTopic(e.target.value)}
+                      className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                      disabled={!selectedChapter}
+                    >
+                      <option value="">-- Select Topic (Optional) --</option>
+                      {getTopicsForChapter().map((topic, idx) => (
+                        <option key={idx} value={typeof topic === 'string' ? topic : topic.name}>
+                          {typeof topic === 'string' ? topic : topic.name}
+                        </option>
+                      ))}
+                      <option value="Others">Others</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              
+              {/* TESTS FIELDS */}
+              {activityType === 'tests' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Test Type</label>
+                    <select
+                      value={testType}
+                      onChange={e => setTestType(e.target.value)}
+                      className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                      required
+                    >
+                      <option value="">-- Select Test Type --</option>
+                      {TEST_TYPES.map(t => (
+                        <option key={t.id} value={t.id}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">🎓 Class</label>
+                      <select
+                        value={selectedClass}
+                        onChange={e => {
+                          setSelectedClass(e.target.value);
+                          setSelectedChapter('');
+                        }}
+                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        required
+                      >
+                        <option value="">-- Select Class --</option>
+                        <option value="11">Class 11</option>
+                        <option value="12">Class 12</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">📖 Chapter</label>
+                      <select
+                        value={selectedChapter}
+                        onChange={e => setSelectedChapter(e.target.value)}
+                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        required
+                        disabled={!selectedClass}
+                      >
+                        <option value="">-- Select Chapter --</option>
+                        {getChaptersForSubject(selectedClass).map((ch, idx) => (
+                          <option key={idx} value={ch.name}>{ch.name}</option>
+                        ))}
+                        <option value="Others">Others</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Notes</label>
+                    <textarea
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="Add any notes about the test..."
+                      className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 min-h-[80px]"
+                    />
+                  </div>
+                </>
+              )}
+              
+              {/* MENTORING FIELDS */}
+              {activityType === 'mentoring' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">🎓 Class</label>
+                    <select
+                      value={selectedClass}
+                      onChange={e => setSelectedClass(e.target.value)}
+                      className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                      required
+                    >
+                      <option value="">-- Select Class --</option>
+                      <option value="11">Class 11</option>
+                      <option value="12">Class 12</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Notes</label>
+                    <textarea
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="What did you discuss during mentoring?"
+                      className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 min-h-[80px]"
+                    />
+                  </div>
+                </>
+              )}
+              
+              {/* DATA ENTRY / WEEKLY CHECKIN / OTHERS FIELDS */}
+              {(activityType === 'data_entry' || activityType === 'weekly_checkin' || activityType === 'others') && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Notes / Description</label>
+                  <textarea
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    placeholder="Describe what you worked on..."
+                    className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 min-h-[100px]"
+                    required
+                  />
+                </div>
+              )}
+              
+              {/* Time Entry */}
+              <div className="grid md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-xl">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">🕐 Start Time</label>
+                  <input
+                    type="time"
+                    value={startTime}
+                    onChange={e => setStartTime(e.target.value)}
+                    className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">🕐 End Time</label>
+                  <input
+                    type="time"
+                    value={endTime}
+                    onChange={e => setEndTime(e.target.value)}
+                    className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">⏱️ Total Hours</label>
+                  <div className="bg-yellow-100 border-2 border-yellow-300 px-4 py-3 rounded-xl text-center">
+                    <span className="text-2xl font-bold text-yellow-700">{hoursWorked}</span>
+                    <span className="text-yellow-600 ml-1">hrs</span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={submitting || !activityType}
+                className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                {submitting ? '⏳ Submitting...' : '✅ Submit for Approval'}
+              </button>
+            </form>
+          </div>
+          
+          {/* Quick Stats & Chart */}
+          <div className="space-y-6">
+            {/* Today's Summary */}
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+              <h3 className="font-bold text-lg mb-4">📅 Today's Logs</h3>
+              {timesheetEntries.filter(e => e.date === new Date().toISOString().split('T')[0] && e.teacherAfid === myAfid).length === 0 ? (
+                <p className="text-gray-500 text-center py-4">No entries today</p>
+              ) : (
+                <div className="space-y-2">
+                  {timesheetEntries
+                    .filter(e => e.date === new Date().toISOString().split('T')[0] && e.teacherAfid === myAfid)
+                    .map(entry => (
+                      <div key={entry.id} className="p-3 bg-gray-50 rounded-lg">
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold">{ACTIVITY_TYPES.find(t => t.id === entry.activityType)?.icon} {ACTIVITY_TYPES.find(t => t.id === entry.activityType)?.label.replace(/^[^\s]+\s/, '')}</span>
+                          <span className="text-yellow-600 font-bold">{entry.hours}h</span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {entry.startTime} - {entry.endTime}
+                          <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+                            entry.status === 'approved' ? 'bg-green-100 text-green-700' :
+                            entry.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {entry.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+            </div>
+            
+            {/* Mini Chart */}
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+              <h3 className="font-bold text-lg mb-4">📊 This Month's Breakdown</h3>
+              <div style={{ height: '200px' }}>
+                <canvas ref={chartRef}></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* My Logs View */}
+      {activeView === 'myLogs' && (
+        <div className="bg-white p-6 rounded-xl shadow-lg">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <h2 className="text-xl font-bold">📋 My Activity Logs</h2>
+            <div className="flex gap-3">
+              <input
+                type="month"
+                value={filterMonth}
+                onChange={e => setFilterMonth(e.target.value)}
+                className="border-2 px-4 py-2 rounded-xl"
+              />
+            </div>
+          </div>
+          
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-yellow-50 p-4 rounded-xl border-l-4 border-yellow-500">
+              <div className="text-sm text-yellow-700">Total Hours</div>
+              <div className="text-2xl font-bold text-yellow-600">
+                {timesheetEntries.filter(e => e.teacherAfid === myAfid && e.date?.startsWith(filterMonth)).reduce((s, e) => s + (parseFloat(e.hours) || 0), 0).toFixed(1)}h
+              </div>
+            </div>
+            <div className="bg-green-50 p-4 rounded-xl border-l-4 border-green-500">
+              <div className="text-sm text-green-700">Approved</div>
+              <div className="text-2xl font-bold text-green-600">
+                {timesheetEntries.filter(e => e.teacherAfid === myAfid && e.date?.startsWith(filterMonth) && e.status === 'approved').reduce((s, e) => s + (parseFloat(e.hours) || 0), 0).toFixed(1)}h
+              </div>
+            </div>
+            <div className="bg-orange-50 p-4 rounded-xl border-l-4 border-orange-500">
+              <div className="text-sm text-orange-700">Pending</div>
+              <div className="text-2xl font-bold text-orange-600">
+                {timesheetEntries.filter(e => e.teacherAfid === myAfid && e.date?.startsWith(filterMonth) && e.status === 'pending').reduce((s, e) => s + (parseFloat(e.hours) || 0), 0).toFixed(1)}h
+              </div>
+            </div>
+            <div className="bg-blue-50 p-4 rounded-xl border-l-4 border-blue-500">
+              <div className="text-sm text-blue-700">Total Entries</div>
+              <div className="text-2xl font-bold text-blue-600">
+                {timesheetEntries.filter(e => e.teacherAfid === myAfid && e.date?.startsWith(filterMonth)).length}
+              </div>
+            </div>
+          </div>
+          
+          {/* Logs Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="avanti-gradient-light">
+                <tr>
+                  <th className="p-3 text-left">Date</th>
+                  <th className="p-3 text-left">Activity</th>
+                  <th className="p-3 text-left">Details</th>
+                  <th className="p-3 text-left">Hours</th>
+                  <th className="p-3 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {timesheetEntries
+                  .filter(e => e.teacherAfid === myAfid && e.date?.startsWith(filterMonth))
+                  .sort((a, b) => new Date(b.date) - new Date(a.date))
+                  .map(entry => (
+                    <tr key={entry.id} className="border-b hover:bg-gray-50">
+                      <td className="p-3">
+                        <div className="font-semibold">{new Date(entry.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</div>
+                        <div className="text-xs text-gray-500">{entry.startTime} - {entry.endTime}</div>
+                      </td>
+                      <td className="p-3">
+                        <span className="px-3 py-1 bg-gray-100 rounded-full text-sm">
+                          {ACTIVITY_TYPES.find(t => t.id === entry.activityType)?.icon} {ACTIVITY_TYPES.find(t => t.id === entry.activityType)?.label.replace(/^[^\s]+\s/, '')}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <div className="text-sm">
+                          {entry.class && <span className="text-blue-600">Class {entry.class}</span>}
+                          {entry.chapter && <span className="text-gray-600"> | {entry.chapter}</span>}
+                          {entry.topic && <span className="text-gray-500"> | {entry.topic}</span>}
+                          {entry.testType && <span className="text-purple-600"> ({entry.testType === 'chapter_test' ? 'Chapter Test' : 'AIET'})</span>}
+                        </div>
+                        {entry.notes && <div className="text-xs text-gray-500 mt-1 truncate max-w-xs">{entry.notes}</div>}
+                      </td>
+                      <td className="p-3">
+                        <span className="text-lg font-bold text-yellow-600">{entry.hours}h</span>
+                      </td>
+                      <td className="p-3">
+                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                          entry.status === 'approved' ? 'bg-green-100 text-green-700' :
+                          entry.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {entry.status === 'approved' ? '✅ Approved' : entry.status === 'rejected' ? '❌ Rejected' : '⏳ Pending'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+            {timesheetEntries.filter(e => e.teacherAfid === myAfid && e.date?.startsWith(filterMonth)).length === 0 && (
+              <div className="text-center py-12 text-gray-500">
+                <div className="text-4xl mb-2">📭</div>
+                <div>No entries for this month</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Approvals View (Admin Only) */}
+      {activeView === 'approvals' && isAdmin && (
+        <div className="bg-white p-6 rounded-xl shadow-lg">
+          <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+            <span className="text-2xl">✅</span> Pending Approvals
+            {pendingApprovals.length > 0 && (
+              <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">{pendingApprovals.length} pending</span>
+            )}
+          </h2>
+          
+          {pendingApprovals.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <div className="text-6xl mb-4">✨</div>
+              <div className="text-xl font-semibold">All caught up!</div>
+              <div className="text-sm mt-2">No pending approvals</div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pendingApprovals.map(entry => (
+                <div key={entry.id} className="border-2 border-yellow-200 bg-yellow-50 p-4 rounded-xl">
+                  <div className="flex flex-col md:flex-row justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="font-bold text-lg">{entry.teacherName}</span>
+                        <span className="px-2 py-0.5 bg-gray-200 rounded text-xs">{entry.school}</span>
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">{entry.subject}</span>
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <div><strong>Date:</strong> {new Date(entry.date).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                        <div><strong>Activity:</strong> {ACTIVITY_TYPES.find(t => t.id === entry.activityType)?.label}</div>
+                        <div><strong>Time:</strong> {entry.startTime} - {entry.endTime} (<span className="text-yellow-600 font-bold">{entry.hours}h</span>)</div>
+                        {entry.class && <div><strong>Class:</strong> {entry.class}</div>}
+                        {entry.chapter && <div><strong>Chapter:</strong> {entry.chapter}</div>}
+                        {entry.topic && <div><strong>Topic:</strong> {entry.topic}</div>}
+                        {entry.notes && <div><strong>Notes:</strong> {entry.notes}</div>}
+                      </div>
+                    </div>
+                    <div className="flex flex-row md:flex-col gap-2">
+                      <button
+                        onClick={() => handleApproval(entry.id, 'approved')}
+                        className="px-6 py-2 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600"
+                      >
+                        ✅ Approve
+                      </button>
+                      <button
+                        onClick={() => handleApproval(entry.id, 'rejected')}
+                        className="px-6 py-2 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600"
+                      >
+                        ❌ Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Analytics View */}
+      {activeView === 'analytics' && (
+        <div className="space-y-6">
+          {/* Filters */}
+          <div className="bg-white p-4 rounded-xl shadow flex flex-wrap gap-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Month</label>
+              <input
+                type="month"
+                value={filterMonth}
+                onChange={e => setFilterMonth(e.target.value)}
+                className="border-2 px-3 py-2 rounded-lg"
+              />
+            </div>
+            {isAdmin && (
+              <>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">School</label>
+                  <select
+                    value={filterSchool}
+                    onChange={e => setFilterSchool(e.target.value)}
+                    className="border-2 px-3 py-2 rounded-lg"
+                  >
+                    <option value="All">All Schools</option>
+                    {accessibleSchools.map(school => (
+                      <option key={school} value={school}>{school}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Teacher</label>
+                  <select
+                    value={filterTeacher}
+                    onChange={e => setFilterTeacher(e.target.value)}
+                    className="border-2 px-3 py-2 rounded-lg"
+                  >
+                    <option value="All">All Teachers</option>
+                    {uniqueTeachers.map(t => (
+                      <option key={t.afid} value={t.afid}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+          </div>
+          
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-xl shadow border-l-4 border-yellow-500">
+              <div className="text-sm text-gray-500">Total Hours</div>
+              <div className="text-3xl font-bold text-yellow-600">
+                {filteredEntries.reduce((s, e) => s + (parseFloat(e.hours) || 0), 0).toFixed(1)}h
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-xl shadow border-l-4 border-green-500">
+              <div className="text-sm text-gray-500">Approved</div>
+              <div className="text-3xl font-bold text-green-600">
+                {filteredEntries.filter(e => e.status === 'approved').reduce((s, e) => s + (parseFloat(e.hours) || 0), 0).toFixed(1)}h
+              </div>
+            </div>
+            <div className="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
+              <div className="text-sm text-gray-500">Total Entries</div>
+              <div className="text-3xl font-bold text-blue-600">{filteredEntries.length}</div>
+            </div>
+            <div className="bg-white p-4 rounded-xl shadow border-l-4 border-purple-500">
+              <div className="text-sm text-gray-500">Active Teachers</div>
+              <div className="text-3xl font-bold text-purple-600">{new Set(filteredEntries.map(e => e.teacherAfid)).size}</div>
+            </div>
+          </div>
+          
+          {/* Charts and Leaderboard */}
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Activity Distribution Chart */}
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+              <h3 className="font-bold text-lg mb-4">📊 Hours by Activity Type</h3>
+              <div style={{ height: '300px' }}>
+                <canvas id="analyticsChart"></canvas>
+              </div>
+            </div>
+            
+            {/* Teacher Leaderboard */}
+            <div className="bg-white p-6 rounded-xl shadow-lg">
+              <h3 className="font-bold text-lg mb-4">🏆 Teacher Leaderboard</h3>
+              <div className="space-y-3 max-h-[350px] overflow-y-auto">
+                {teacherAggregates.slice(0, 10).map((teacher, idx) => (
+                  <div key={teacher.name} className={`flex items-center gap-3 p-3 rounded-xl ${idx === 0 ? 'bg-yellow-50 border-2 border-yellow-300' : 'bg-gray-50'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
+                      idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-orange-400' : 'bg-gray-300'
+                    }`}>
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-semibold">{teacher.name} {idx === 0 && '🏆'}</div>
+                      <div className="text-xs text-gray-500">{teacher.school}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-yellow-600">{teacher.totalHours.toFixed(1)}h</div>
+                      <div className="text-xs text-green-600">{teacher.approved.toFixed(1)}h approved</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Recognition View */}
+      {activeView === 'recognition' && (
+        <div className="space-y-6">
+          {/* Educator of the Month */}
+          <div className="bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 p-1 rounded-2xl">
+            <div className="bg-white p-6 rounded-2xl">
+              <div className="text-center">
+                <div className="text-5xl mb-4">🏆</div>
+                <h2 className="text-2xl font-bold mb-2">Educator of the Month</h2>
+                <p className="text-gray-500 mb-6">{new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</p>
+                
+                {educatorOfMonth ? (
+                  <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-6 rounded-xl inline-block">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4">
+                      {educatorOfMonth.name?.charAt(0)}
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-800">{educatorOfMonth.name}</h3>
+                    <p className="text-gray-600">{educatorOfMonth.subject} | {educatorOfMonth.school}</p>
+                    <div className="mt-4 flex justify-center gap-4">
+                      <div className="bg-yellow-100 px-4 py-2 rounded-lg">
+                        <div className="text-2xl font-bold text-yellow-600">{educatorOfMonth.totalHours?.toFixed(1)}h</div>
+                        <div className="text-xs text-yellow-700">Total Hours</div>
+                      </div>
+                      <div className="bg-green-100 px-4 py-2 rounded-lg">
+                        <div className="text-2xl font-bold text-green-600">{educatorOfMonth.entries}</div>
+                        <div className="text-xs text-green-700">Entries</div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-gray-500 py-8">
+                    <div className="text-4xl mb-2">📊</div>
+                    <p>Not enough data yet this month</p>
+                    <p className="text-sm">Keep logging your activities!</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Top Performers */}
+          <div className="bg-white p-6 rounded-xl shadow-lg">
+            <h3 className="text-xl font-bold mb-6">🌟 Top Performers This Month</h3>
+            <div className="grid md:grid-cols-3 gap-4">
+              {teacherAggregates.slice(0, 6).map((teacher, idx) => (
+                <div key={teacher.name} className={`p-4 rounded-xl border-2 ${
+                  idx === 0 ? 'border-yellow-300 bg-yellow-50' :
+                  idx === 1 ? 'border-gray-300 bg-gray-50' :
+                  idx === 2 ? 'border-orange-300 bg-orange-50' :
+                  'border-gray-200 bg-white'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                      idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-orange-400' : 'bg-gray-300'
+                    }`}>
+                      {idx < 3 ? ['🥇', '🥈', '🥉'][idx] : idx + 1}
+                    </div>
+                    <div>
+                      <div className="font-semibold">{teacher.name}</div>
+                      <div className="text-xs text-gray-500">{teacher.school}</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 text-right">
+                    <span className="text-2xl font-bold text-yellow-600">{teacher.totalHours.toFixed(1)}</span>
+                    <span className="text-gray-500"> hours</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Activity Breakdown */}
+          <div className="bg-white p-6 rounded-xl shadow-lg">
+            <h3 className="text-xl font-bold mb-4">📈 Your Activity Breakdown</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {ACTIVITY_TYPES.map(type => {
+                const hours = timesheetEntries
+                  .filter(e => e.teacherAfid === myAfid && e.activityType === type.id && e.date?.startsWith(filterMonth))
+                  .reduce((s, e) => s + (parseFloat(e.hours) || 0), 0);
+                return (
+                  <div key={type.id} className="bg-gray-50 p-4 rounded-xl">
+                    <div className="text-2xl mb-2">{type.icon}</div>
+                    <div className="font-semibold text-sm">{type.label.replace(/^[^\s]+\s/, '')}</div>
+                    <div className="text-2xl font-bold text-yellow-600">{hours.toFixed(1)}h</div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
