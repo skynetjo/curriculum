@@ -23895,10 +23895,15 @@ function SocialWall({ teachers, currentUser }) {
   const [loading, setLoading] = useState(true);
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(null);
   const [allMembers, setAllMembers] = useState([]);
-  const [activeTab, setActiveTab] = useState('feed'); // 'feed' or 'celebrations'
+  const [activeTab, setActiveTab] = useState('feed'); // 'feed', 'celebrations', or 'recognition'
   const [celebrationReactions, setCelebrationReactions] = useState({});
   const [wishMessage, setWishMessage] = useState('');
   const [showWishInput, setShowWishInput] = useState(null);
+  
+  // ✅ NEW: State for Educator of the Month recognition
+  const [topPerformers, setTopPerformers] = useState([]);
+  const [previousMonthWinners, setPreviousMonthWinners] = useState([]);
+  const [recognitionLoading, setRecognitionLoading] = useState(false);
   
   // New state for image attachments and replies
   const [postImage, setPostImage] = useState(null);
@@ -24377,6 +24382,99 @@ function SocialWall({ teachers, currentUser }) {
     loadCelebrationReactions();
   }, [teachers]);
 
+  // ✅ NEW: Fetch Educator of the Month recognition data
+  useEffect(() => {
+    const fetchRecognitionData = async () => {
+      if (activeTab !== 'recognition') return;
+      
+      setRecognitionLoading(true);
+      try {
+        const now = new Date();
+        const currentMonth = now.toISOString().slice(0, 7);
+        const currentStartDate = currentMonth + '-01';
+        const currentEndDate = currentMonth + '-31';
+        
+        // Get previous month
+        const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const prevMonthStr = prevMonth.toISOString().slice(0, 7);
+        const prevStartDate = prevMonthStr + '-01';
+        const prevEndDate = prevMonthStr + '-31';
+        
+        // Fetch current month entries
+        const currentMonthSnap = await db.collection('timesheetEntries')
+          .where('date', '>=', currentStartDate)
+          .where('date', '<=', currentEndDate)
+          .where('status', '==', 'approved')
+          .get();
+        
+        // Aggregate current month hours by teacher
+        const currentTeacherHours = {};
+        currentMonthSnap.docs.forEach(doc => {
+          const data = doc.data();
+          const key = data.teacherAfid;
+          if (!currentTeacherHours[key]) {
+            currentTeacherHours[key] = {
+              afid: data.teacherAfid,
+              name: data.teacherName,
+              school: data.school,
+              subject: data.subject,
+              totalHours: 0,
+              entries: 0
+            };
+          }
+          currentTeacherHours[key].totalHours += parseFloat(data.hours) || 0;
+          currentTeacherHours[key].entries += 1;
+        });
+        
+        // Get top 2 performers for current month
+        const sortedCurrent = Object.values(currentTeacherHours)
+          .sort((a, b) => b.totalHours - a.totalHours)
+          .slice(0, 2);
+        setTopPerformers(sortedCurrent);
+        
+        // Fetch previous month entries for previous winners
+        const prevMonthSnap = await db.collection('timesheetEntries')
+          .where('date', '>=', prevStartDate)
+          .where('date', '<=', prevEndDate)
+          .where('status', '==', 'approved')
+          .get();
+        
+        // Aggregate previous month hours
+        const prevTeacherHours = {};
+        prevMonthSnap.docs.forEach(doc => {
+          const data = doc.data();
+          const key = data.teacherAfid;
+          if (!prevTeacherHours[key]) {
+            prevTeacherHours[key] = {
+              afid: data.teacherAfid,
+              name: data.teacherName,
+              school: data.school,
+              subject: data.subject,
+              totalHours: 0,
+              entries: 0,
+              month: prevMonthStr
+            };
+          }
+          prevTeacherHours[key].totalHours += parseFloat(data.hours) || 0;
+          prevTeacherHours[key].entries += 1;
+        });
+        
+        // Get top 2 performers for previous month
+        const sortedPrev = Object.values(prevTeacherHours)
+          .sort((a, b) => b.totalHours - a.totalHours)
+          .slice(0, 2);
+        setPreviousMonthWinners(sortedPrev);
+        
+      } catch (error) {
+        console.error('Error fetching recognition data:', error);
+      } finally {
+        setRecognitionLoading(false);
+      }
+    };
+    
+    fetchRecognitionData();
+  }, [activeTab]);
+
   const handleCreatePost = async () => {
     if (!newPostContent.trim() && !postImage) return;
     setPosting(true);
@@ -24843,7 +24941,7 @@ function SocialWall({ teachers, currentUser }) {
       </div>
 
       {/* Tab Switcher */}
-      <div className="flex justify-center gap-4">
+      <div className="flex justify-center gap-4 flex-wrap">
         <button 
           onClick={() => setActiveTab('feed')}
           className={`tab-btn ${activeTab === 'feed' ? 'tab-active' : 'tab-inactive'}`}
@@ -24855,6 +24953,12 @@ function SocialWall({ teachers, currentUser }) {
           className={`tab-btn ${activeTab === 'celebrations' ? 'tab-active' : 'tab-inactive'}`}
         >
           🎂 Celebrations {birthdays.length > 0 && <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">{birthdays.length}</span>}
+        </button>
+        <button 
+          onClick={() => setActiveTab('recognition')}
+          className={`tab-btn ${activeTab === 'recognition' ? 'tab-active' : 'tab-inactive'}`}
+        >
+          🏆 Recognition
         </button>
       </div>
 
@@ -25796,6 +25900,127 @@ function SocialWall({ teachers, currentUser }) {
         </div>
       )}
 
+      {/* Recognition Tab - Educator of the Month */}
+      {activeTab === 'recognition' && (
+        <div className="space-y-6">
+          {recognitionLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-500">Loading recognition data...</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Current Month Top Performers */}
+              <div className="bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 p-1 rounded-2xl">
+                <div className="bg-white p-6 rounded-2xl">
+                  <div className="text-center">
+                    <div className="text-5xl mb-4">🏆</div>
+                    <h2 className="text-2xl font-bold mb-2">Educators of the Month</h2>
+                    <p className="text-gray-500 mb-6">{new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</p>
+                    
+                    {topPerformers.length > 0 ? (
+                      <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                        {topPerformers.map((educator, idx) => (
+                          <div key={educator.afid} className={`p-6 rounded-xl ${
+                            idx === 0 
+                              ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300' 
+                              : 'bg-gradient-to-r from-gray-50 to-slate-50 border-2 border-gray-300'
+                          }`}>
+                            <div className="text-4xl mb-3">
+                              {idx === 0 ? '🥇' : '🥈'}
+                            </div>
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3 ${
+                              idx === 0 
+                                ? 'bg-gradient-to-br from-yellow-400 to-orange-500' 
+                                : 'bg-gradient-to-br from-gray-400 to-slate-500'
+                            }`}>
+                              {educator.name?.charAt(0)}
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800">{educator.name}</h3>
+                            <p className="text-sm text-gray-600">{educator.subject}</p>
+                            <p className="text-xs text-gray-500">{educator.school}</p>
+                            <div className="mt-4 flex justify-center gap-3">
+                              <div className={`px-3 py-2 rounded-lg ${
+                                idx === 0 ? 'bg-yellow-100' : 'bg-gray-100'
+                              }`}>
+                                <div className={`text-xl font-bold ${
+                                  idx === 0 ? 'text-yellow-600' : 'text-gray-600'
+                                }`}>{educator.totalHours?.toFixed(1)}h</div>
+                                <div className={`text-xs ${
+                                  idx === 0 ? 'text-yellow-700' : 'text-gray-500'
+                                }`}>Hours</div>
+                              </div>
+                              <div className="bg-green-100 px-3 py-2 rounded-lg">
+                                <div className="text-xl font-bold text-green-600">{educator.entries}</div>
+                                <div className="text-xs text-green-700">Entries</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-gray-500 py-8">
+                        <div className="text-4xl mb-2">📊</div>
+                        <p>Not enough data yet this month</p>
+                        <p className="text-sm">Keep logging your activities!</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Previous Month Winners */}
+              {previousMonthWinners.length > 0 && (
+                <div className="bg-white p-6 rounded-xl shadow-lg">
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <span>🌟</span> Previous Month's Top Performers
+                    <span className="text-sm font-normal text-gray-500 ml-2">
+                      ({new Date(new Date().setMonth(new Date().getMonth() - 1)).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })})
+                    </span>
+                  </h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {previousMonthWinners.map((educator, idx) => (
+                      <div key={educator.afid} className={`p-4 rounded-xl border-2 flex items-center gap-4 ${
+                        idx === 0 ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-gray-50'
+                      }`}>
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-white ${
+                          idx === 0 ? 'bg-yellow-500' : 'bg-gray-400'
+                        }`}>
+                          {idx === 0 ? '🥇' : '🥈'}
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-semibold">{educator.name}</div>
+                          <div className="text-xs text-gray-500">{educator.school} • {educator.subject}</div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xl font-bold text-yellow-600">{educator.totalHours?.toFixed(1)}</span>
+                          <span className="text-gray-500 text-sm"> hrs</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Recognition Info */}
+              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-6 rounded-xl border-2 border-purple-200">
+                <h4 className="font-bold text-purple-800 mb-3 flex items-center gap-2">
+                  <span>💡</span> How Recognition Works
+                </h4>
+                <ul className="text-sm text-purple-700 space-y-2">
+                  <li>• Top 2 educators with most approved timesheet hours are recognized each month</li>
+                  <li>• Make sure to log your daily activities in the Timesheet</li>
+                  <li>• Get your entries approved by your line manager</li>
+                  <li>• Previous month's winners are also displayed for motivation!</li>
+                </ul>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Birthday Popup */}
       {showBirthdayPopup && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -25850,6 +26075,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedChapter, setSelectedChapter] = useState('');
   const [selectedTopic, setSelectedTopic] = useState('');
+  const [otherTopicText, setOtherTopicText] = useState(''); // For "Others" topic
+  const [otherChapterText, setOtherChapterText] = useState(''); // For "Others" chapter
   const [testType, setTestType] = useState('');
   const [notes, setNotes] = useState('');
   const [startTime, setStartTime] = useState('');
@@ -25859,9 +26086,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
   // State for data
   const [timesheetEntries, setTimesheetEntries] = useState([]);
   const [pendingApprovals, setPendingApprovals] = useState([]);
-  const [educatorOfMonth, setEducatorOfMonth] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState('entry'); // 'entry', 'myLogs', 'approvals', 'analytics', 'recognition'
+  const [activeView, setActiveView] = useState(isAdmin ? 'analytics' : 'entry'); // Managers default to analytics
   
   // Filters
   const [filterSchool, setFilterSchool] = useState('All');
@@ -25875,6 +26101,17 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
   const mySubject = currentUser.subject;
   const mySchool = currentUser.school;
   const myAfid = currentUser.afid || currentUser.uid || currentUser.id;
+  
+  // Check if current user is a manager (APM/PM/Program Head) - they shouldn't see entry form
+  const isManager = isAdmin || currentUser.role === 'apm' || currentUser.role === 'pm' || 
+                    currentUser.role === 'aph' || currentUser.role === MANAGER_ROLES.APM || 
+                    currentUser.role === MANAGER_ROLES.PM || currentUser.role === MANAGER_ROLES.APH ||
+                    currentUser.role === 'super_admin';
+  
+  // Check if user can enter timesheet (Teacher or APC only)
+  const canEnterTimesheet = !isManager && (currentUser.userType === 'teacher' || currentUser.userType === 'apc' || 
+                            currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC ||
+                            (!currentUser.role && currentUser.subject)); // Teachers don't always have role set
   
   // Activity types
   const ACTIVITY_TYPES = [
@@ -25891,84 +26128,105 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
     { id: 'aiet', label: 'AIET' }
   ];
   
-  // Get chapters for teacher's subject
+  // ✅ FIXED: Get chapters for teacher's subject - properly filter by grade
   const getChaptersForSubject = (grade) => {
+    if (!grade) return [];
+    
     const chapters = [];
-    const subjectKey = mySubject?.toLowerCase();
+    const subjectKey = mySubject?.toLowerCase()?.trim();
+    const gradeStr = String(grade);
+    
+    // Helper to check if a chapter name starts with grade indicator
+    const chapterMatchesGrade = (chapterName) => {
+      if (!chapterName) return false;
+      const name = chapterName.toLowerCase();
+      // Check patterns like "11M2", "12C35", "11P", "12B" etc.
+      const startsWithGrade = name.match(/^(\d{2})/);
+      if (startsWithGrade) {
+        return startsWithGrade[1] === gradeStr;
+      }
+      return true; // If no grade prefix, include it
+    };
     
     Object.entries(curriculum).forEach(([key, data]) => {
-      // Match format: school_subject_grade (e.g., "JNV Bharuch_physics_11")
       const keyLower = key.toLowerCase();
-      if (keyLower.includes(subjectKey) && keyLower.includes(grade)) {
+      
+      // Check if key matches subject and school
+      const matchesSubject = subjectKey && keyLower.includes(subjectKey);
+      const matchesSchool = keyLower.includes(mySchool?.toLowerCase() || '');
+      
+      // Check if key contains grade
+      const keyHasGrade11 = keyLower.includes('11') || keyLower.includes('_11') || keyLower.includes('-11');
+      const keyHasGrade12 = keyLower.includes('12') || keyLower.includes('_12') || keyLower.includes('-12');
+      
+      // Only process if subject matches
+      if (matchesSubject || matchesSchool) {
+        // If key has explicit grade, check it matches
+        if (keyHasGrade11 || keyHasGrade12) {
+          if ((gradeStr === '11' && !keyHasGrade11) || (gradeStr === '12' && !keyHasGrade12)) {
+            return; // Skip if grade doesn't match
+          }
+        }
+        
         if (data.chapters && Array.isArray(data.chapters)) {
           data.chapters.forEach(ch => {
-            if (ch.name && !chapters.find(c => c.name === ch.name)) {
-              chapters.push({
-                name: ch.name,
-                topics: ch.topics || []
-              });
-            }
-          });
-        }
-      }
-    });
-    
-    // Also check for simpler key formats
-    Object.entries(curriculum).forEach(([key, data]) => {
-      if (key.includes(mySchool) && key.includes(subjectKey) && key.includes(grade)) {
-        if (data.chapters && Array.isArray(data.chapters)) {
-          data.chapters.forEach(ch => {
-            if (ch.name && !chapters.find(c => c.name === ch.name)) {
-              chapters.push({
-                name: ch.name,
-                topics: ch.topics || []
-              });
-            }
-          });
-        }
-      }
-    });
-    
-    // Fallback - try to find any matching curriculum
-    if (chapters.length === 0) {
-      Object.entries(curriculum).forEach(([key, data]) => {
-        if (data.chapters && Array.isArray(data.chapters)) {
-          if (key.toLowerCase().includes(subjectKey)) {
-            const hasGrade = key.includes('11') || key.includes('12');
-            if ((grade === '11' && key.includes('11')) || (grade === '12' && key.includes('12')) || !hasGrade) {
-              data.chapters.forEach(ch => {
-                if (ch.name && !chapters.find(c => c.name === ch.name)) {
+            if (ch.name) {
+              // Filter chapters by grade prefix in chapter name
+              if (chapterMatchesGrade(ch.name)) {
+                if (!chapters.find(c => c.name === ch.name)) {
                   chapters.push({
                     name: ch.name,
                     topics: ch.topics || []
                   });
                 }
-              });
+              }
             }
-          }
+          });
         }
-      });
-    }
+      }
+    });
+    
+    // Sort chapters by name
+    chapters.sort((a, b) => a.name.localeCompare(b.name));
     
     return chapters;
   };
   
   // Get topics for selected chapter
   const getTopicsForChapter = () => {
+    if (!selectedClass || !selectedChapter || selectedChapter === 'Others') return [];
     const chapters = getChaptersForSubject(selectedClass);
     const chapter = chapters.find(ch => ch.name === selectedChapter);
     return chapter?.topics || [];
   };
   
-  // Calculate hours from start and end time
+  // ✅ FIXED: Calculate hours from start and end time
   const calculateHours = () => {
     if (!startTime || !endTime) return 0;
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
-    const start = startH * 60 + startM;
-    const end = endH * 60 + endM;
-    const diff = end - start;
-    return diff > 0 ? (diff / 60).toFixed(2) : 0;
+    
+    try {
+      // Parse time strings (format: "HH:MM")
+      const [startH, startM] = startTime.split(':').map(Number);
+      const [endH, endM] = endTime.split(':').map(Number);
+      
+      if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 0;
+      
+      const startMinutes = startH * 60 + startM;
+      const endMinutes = endH * 60 + endM;
+      
+      let diffMinutes = endMinutes - startMinutes;
+      
+      // Handle overnight (end time is next day)
+      if (diffMinutes < 0) {
+        diffMinutes += 24 * 60; // Add 24 hours
+      }
+      
+      const hours = diffMinutes / 60;
+      return hours > 0 ? hours.toFixed(2) : 0;
+    } catch (e) {
+      console.error('Error calculating hours:', e);
+      return 0;
+    }
   };
   
   const hoursWorked = calculateHours();
@@ -26026,9 +26284,6 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
           })));
         }
         
-        // Calculate Educator of the Month
-        await calculateEducatorOfMonth();
-        
       } catch (error) {
         console.error('Error fetching timesheet data:', error);
       } finally {
@@ -26038,48 +26293,6 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
     
     fetchData();
   }, [isAdmin, isSuperAdmin, accessibleSchools, myAfid]);
-  
-  // Calculate Educator of the Month
-  const calculateEducatorOfMonth = async () => {
-    try {
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const startOfMonth = currentMonth + '-01';
-      const endOfMonth = currentMonth + '-31';
-      
-      const monthEntriesSnap = await db.collection('timesheetEntries')
-        .where('date', '>=', startOfMonth)
-        .where('date', '<=', endOfMonth)
-        .where('status', '==', 'approved')
-        .get();
-      
-      // Aggregate hours by teacher
-      const teacherHours = {};
-      monthEntriesSnap.docs.forEach(doc => {
-        const data = doc.data();
-        const key = data.teacherAfid;
-        if (!teacherHours[key]) {
-          teacherHours[key] = {
-            afid: data.teacherAfid,
-            name: data.teacherName,
-            school: data.school,
-            subject: data.subject,
-            totalHours: 0,
-            entries: 0
-          };
-        }
-        teacherHours[key].totalHours += parseFloat(data.hours) || 0;
-        teacherHours[key].entries += 1;
-      });
-      
-      // Find top performer
-      const sorted = Object.values(teacherHours).sort((a, b) => b.totalHours - a.totalHours);
-      if (sorted.length > 0) {
-        setEducatorOfMonth(sorted[0]);
-      }
-    } catch (e) {
-      console.error('Error calculating educator of month:', e);
-    }
-  };
   
   // Submit timesheet entry
   const handleSubmit = async (e) => {
@@ -26150,8 +26363,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         school: mySchool,
         subject: mySubject,
         class: selectedClass || null,
-        chapter: selectedChapter || null,
-        topic: selectedTopic || null,
+        chapter: selectedChapter === 'Others' ? otherChapterText : (selectedChapter || null),
+        topic: selectedTopic === 'Others' ? otherTopicText : (selectedTopic || null),
         testType: testType || null,
         notes: notes || '',
         startTime: startTime,
@@ -26178,6 +26391,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       setSelectedClass('');
       setSelectedChapter('');
       setSelectedTopic('');
+      setOtherTopicText('');
+      setOtherChapterText('');
       setTestType('');
       setNotes('');
       setStartTime('');
@@ -26352,18 +26567,23 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       
       {/* Navigation Tabs */}
       <div className="flex flex-wrap gap-2 bg-white p-2 rounded-xl shadow">
-        <button 
-          onClick={() => setActiveView('entry')}
-          className={`px-4 py-2 rounded-lg font-semibold transition-all ${activeView === 'entry' ? 'avanti-gradient text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
-        >
-          ➕ New Entry
-        </button>
-        <button 
-          onClick={() => setActiveView('myLogs')}
-          className={`px-4 py-2 rounded-lg font-semibold transition-all ${activeView === 'myLogs' ? 'avanti-gradient text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
-        >
-          📋 My Logs
-        </button>
+        {/* Only show New Entry and My Logs for teachers/APC who can enter timesheet */}
+        {canEnterTimesheet && (
+          <>
+            <button 
+              onClick={() => setActiveView('entry')}
+              className={`px-4 py-2 rounded-lg font-semibold transition-all ${activeView === 'entry' ? 'avanti-gradient text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+            >
+              ➕ New Entry
+            </button>
+            <button 
+              onClick={() => setActiveView('myLogs')}
+              className={`px-4 py-2 rounded-lg font-semibold transition-all ${activeView === 'myLogs' ? 'avanti-gradient text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
+            >
+              📋 My Logs
+            </button>
+          </>
+        )}
         {isAdmin && (
           <button 
             onClick={() => setActiveView('approvals')}
@@ -26378,16 +26598,10 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         >
           📊 Analytics
         </button>
-        <button 
-          onClick={() => setActiveView('recognition')}
-          className={`px-4 py-2 rounded-lg font-semibold transition-all ${activeView === 'recognition' ? 'avanti-gradient text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
-        >
-          🏆 Recognition
-        </button>
       </div>
       
-      {/* New Entry Form */}
-      {activeView === 'entry' && (
+      {/* New Entry Form - Only for Teachers and APC */}
+      {activeView === 'entry' && canEnterTimesheet && (
         <div className="grid md:grid-cols-3 gap-6">
           {/* Entry Form */}
           <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-lg">
@@ -26443,6 +26657,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                           setSelectedClass(e.target.value);
                           setSelectedChapter('');
                           setSelectedTopic('');
+                          setOtherChapterText('');
+                          setOtherTopicText('');
                         }}
                         className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
                         required
@@ -26460,6 +26676,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                         onChange={e => {
                           setSelectedChapter(e.target.value);
                           setSelectedTopic('');
+                          setOtherTopicText('');
+                          if (e.target.value !== 'Others') setOtherChapterText('');
                         }}
                         className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
                         required
@@ -26474,11 +26692,29 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                     </div>
                   </div>
                   
+                  {/* Show text input if "Others" is selected for chapter */}
+                  {selectedChapter === 'Others' && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">✏️ Enter Chapter Name</label>
+                      <input
+                        type="text"
+                        value={otherChapterText}
+                        onChange={e => setOtherChapterText(e.target.value)}
+                        placeholder="Enter the chapter name..."
+                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        required
+                      />
+                    </div>
+                  )}
+                  
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">📑 Topic</label>
                     <select
                       value={selectedTopic}
-                      onChange={e => setSelectedTopic(e.target.value)}
+                      onChange={e => {
+                        setSelectedTopic(e.target.value);
+                        if (e.target.value !== 'Others') setOtherTopicText('');
+                      }}
                       className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
                       disabled={!selectedChapter}
                     >
@@ -26491,6 +26727,21 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                       <option value="Others">Others</option>
                     </select>
                   </div>
+                  
+                  {/* Show text input if "Others" is selected for topic */}
+                  {selectedTopic === 'Others' && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">✏️ Enter Topic Name</label>
+                      <input
+                        type="text"
+                        value={otherTopicText}
+                        onChange={e => setOtherTopicText(e.target.value)}
+                        placeholder="Enter the topic name..."
+                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
+                        required
+                      />
+                    </div>
+                  )}
                 </>
               )}
               
@@ -26604,34 +26855,85 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               )}
               
               {/* Time Entry */}
-              <div className="grid md:grid-cols-3 gap-4 bg-gray-50 p-4 rounded-xl">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">🕐 Start Time</label>
-                  <input
-                    type="time"
-                    value={startTime}
-                    onChange={e => setStartTime(e.target.value)}
-                    className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
-                    required
-                  />
+              <div className="bg-gradient-to-r from-gray-50 to-yellow-50 p-4 rounded-xl border-2 border-gray-200">
+                <div className="text-sm font-semibold text-gray-600 mb-3 flex items-center gap-2">
+                  <span>⏰</span> Work Duration
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">🕐 End Time</label>
-                  <input
-                    type="time"
-                    value={endTime}
-                    onChange={e => setEndTime(e.target.value)}
-                    className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">⏱️ Total Hours</label>
-                  <div className="bg-yellow-100 border-2 border-yellow-300 px-4 py-3 rounded-xl text-center">
-                    <span className="text-2xl font-bold text-yellow-700">{hoursWorked}</span>
-                    <span className="text-yellow-600 ml-1">hrs</span>
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <i className="fa-regular fa-clock mr-1"></i> Start Time
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="time"
+                        value={startTime}
+                        onChange={e => setStartTime(e.target.value)}
+                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 text-lg font-medium"
+                        required
+                      />
+                      {startTime && (
+                        <div className="text-xs text-gray-500 mt-1 text-center">
+                          {(() => {
+                            const [h, m] = startTime.split(':').map(Number);
+                            const ampm = h >= 12 ? 'PM' : 'AM';
+                            const hour12 = h % 12 || 12;
+                            return `${hour12}:${m.toString().padStart(2, '0')} ${ampm}`;
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <i className="fa-regular fa-clock mr-1"></i> End Time
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="time"
+                        value={endTime}
+                        onChange={e => setEndTime(e.target.value)}
+                        className="w-full border-2 px-4 py-3 rounded-xl focus:border-yellow-500 text-lg font-medium"
+                        required
+                      />
+                      {endTime && (
+                        <div className="text-xs text-gray-500 mt-1 text-center">
+                          {(() => {
+                            const [h, m] = endTime.split(':').map(Number);
+                            const ampm = h >= 12 ? 'PM' : 'AM';
+                            const hour12 = h % 12 || 12;
+                            return `${hour12}:${m.toString().padStart(2, '0')} ${ampm}`;
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">⏱️ Total Hours</label>
+                    <div className={`border-2 px-4 py-3 rounded-xl text-center ${
+                      parseFloat(hoursWorked) > 0 
+                        ? 'bg-green-100 border-green-300' 
+                        : 'bg-yellow-100 border-yellow-300'
+                    }`}>
+                      <span className={`text-2xl font-bold ${
+                        parseFloat(hoursWorked) > 0 ? 'text-green-700' : 'text-yellow-700'
+                      }`}>{hoursWorked}</span>
+                      <span className={`ml-1 ${
+                        parseFloat(hoursWorked) > 0 ? 'text-green-600' : 'text-yellow-600'
+                      }`}>hrs</span>
+                    </div>
+                    {parseFloat(hoursWorked) > 0 && (
+                      <div className="text-xs text-gray-500 mt-1 text-center">
+                        {Math.floor(parseFloat(hoursWorked))}h {Math.round((parseFloat(hoursWorked) % 1) * 60)}m
+                      </div>
+                    )}
                   </div>
                 </div>
+                {parseFloat(hoursWorked) <= 0 && startTime && endTime && (
+                  <div className="mt-2 text-sm text-red-500 text-center">
+                    ⚠️ End time must be after start time
+                  </div>
+                )}
               </div>
               
               {/* Submit Button */}
@@ -26690,8 +26992,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         </div>
       )}
       
-      {/* My Logs View */}
-      {activeView === 'myLogs' && (
+      {/* My Logs View - Only for Teachers and APC */}
+      {activeView === 'myLogs' && canEnterTimesheet && (
         <div className="bg-white p-6 rounded-xl shadow-lg">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <h2 className="text-xl font-bold">📋 My Activity Logs</h2>
@@ -26962,97 +27264,6 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         </div>
       )}
       
-      {/* Recognition View */}
-      {activeView === 'recognition' && (
-        <div className="space-y-6">
-          {/* Educator of the Month */}
-          <div className="bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 p-1 rounded-2xl">
-            <div className="bg-white p-6 rounded-2xl">
-              <div className="text-center">
-                <div className="text-5xl mb-4">🏆</div>
-                <h2 className="text-2xl font-bold mb-2">Educator of the Month</h2>
-                <p className="text-gray-500 mb-6">{new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</p>
-                
-                {educatorOfMonth ? (
-                  <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-6 rounded-xl inline-block">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4">
-                      {educatorOfMonth.name?.charAt(0)}
-                    </div>
-                    <h3 className="text-2xl font-bold text-gray-800">{educatorOfMonth.name}</h3>
-                    <p className="text-gray-600">{educatorOfMonth.subject} | {educatorOfMonth.school}</p>
-                    <div className="mt-4 flex justify-center gap-4">
-                      <div className="bg-yellow-100 px-4 py-2 rounded-lg">
-                        <div className="text-2xl font-bold text-yellow-600">{educatorOfMonth.totalHours?.toFixed(1)}h</div>
-                        <div className="text-xs text-yellow-700">Total Hours</div>
-                      </div>
-                      <div className="bg-green-100 px-4 py-2 rounded-lg">
-                        <div className="text-2xl font-bold text-green-600">{educatorOfMonth.entries}</div>
-                        <div className="text-xs text-green-700">Entries</div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-gray-500 py-8">
-                    <div className="text-4xl mb-2">📊</div>
-                    <p>Not enough data yet this month</p>
-                    <p className="text-sm">Keep logging your activities!</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          {/* Top Performers */}
-          <div className="bg-white p-6 rounded-xl shadow-lg">
-            <h3 className="text-xl font-bold mb-6">🌟 Top Performers This Month</h3>
-            <div className="grid md:grid-cols-3 gap-4">
-              {teacherAggregates.slice(0, 6).map((teacher, idx) => (
-                <div key={teacher.name} className={`p-4 rounded-xl border-2 ${
-                  idx === 0 ? 'border-yellow-300 bg-yellow-50' :
-                  idx === 1 ? 'border-gray-300 bg-gray-50' :
-                  idx === 2 ? 'border-orange-300 bg-orange-50' :
-                  'border-gray-200 bg-white'
-                }`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
-                      idx === 0 ? 'bg-yellow-500' : idx === 1 ? 'bg-gray-400' : idx === 2 ? 'bg-orange-400' : 'bg-gray-300'
-                    }`}>
-                      {idx < 3 ? ['🥇', '🥈', '🥉'][idx] : idx + 1}
-                    </div>
-                    <div>
-                      <div className="font-semibold">{teacher.name}</div>
-                      <div className="text-xs text-gray-500">{teacher.school}</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 text-right">
-                    <span className="text-2xl font-bold text-yellow-600">{teacher.totalHours.toFixed(1)}</span>
-                    <span className="text-gray-500"> hours</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          {/* Activity Breakdown */}
-          <div className="bg-white p-6 rounded-xl shadow-lg">
-            <h3 className="text-xl font-bold mb-4">📈 Your Activity Breakdown</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {ACTIVITY_TYPES.map(type => {
-                const hours = timesheetEntries
-                  .filter(e => e.teacherAfid === myAfid && e.activityType === type.id && e.date?.startsWith(filterMonth))
-                  .reduce((s, e) => s + (parseFloat(e.hours) || 0), 0);
-                return (
-                  <div key={type.id} className="bg-gray-50 p-4 rounded-xl">
-                    <div className="text-2xl mb-2">{type.icon}</div>
-                    <div className="font-semibold text-sm">{type.label.replace(/^[^\s]+\s/, '')}</div>
-                    <div className="text-2xl font-bold text-yellow-600">{hours.toFixed(1)}h</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
