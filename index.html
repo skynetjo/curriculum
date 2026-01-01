@@ -26565,7 +26565,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               .orderBy('date', 'desc')
               .limit(500);
           } else {
-            // Manager sees accessible schools - use simpler query
+            // Manager sees accessible schools - for viewing/analytics
             entriesQuery = db.collection('timesheetEntries')
               .orderBy('date', 'desc')
               .limit(500);
@@ -26586,7 +26586,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
           createdAt: d.data().createdAt?.toDate?.() || new Date()
         }));
         
-        // For non-super-admin managers, filter entries client-side
+        // For non-super-admin managers, filter entries client-side for viewing
         if (isAdmin && !isSuperAdmin) {
           entries = entries.filter(e => 
             accessibleSchools.includes(e.school) ||
@@ -26602,7 +26602,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
           let allPendingEntries = [];
           
           // Use existing index: status (asc) + date (asc)
-          // Fetch all pending, then sort client-side for desc order
+          // Fetch all pending, then filter client-side
           try {
             const pendingSnap = await db.collection('timesheetEntries')
               .where('status', '==', 'pending')
@@ -26636,32 +26636,33 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
           }
           
           // Filter for non-super-admin managers
+          // IMPORTANT: Approvals should ONLY go to the direct line manager, 
+          // NOT to everyone who has access to the school
           if (!isSuperAdmin && allPendingEntries.length > 0) {
-            console.log('Timesheet - Filtering for manager:', {
+            console.log('Timesheet - Filtering approvals for manager:', {
               myManagerId,
-              myManagerName,
-              accessibleSchools
+              myManagerName
             });
             
             allPendingEntries = allPendingEntries.filter(entry => {
-              // Check if entry belongs to manager's accessible schools
-              const schoolMatch = accessibleSchools.includes(entry.school);
+              // ONLY show entries directly assigned to this manager
+              // Do NOT use accessibleSchools for approvals - that's only for viewing
               
-              // Check if entry is directly assigned to this manager
+              // Check if entry is directly assigned to this manager by ID
               const managerIdMatch = entry.lineManagerId === myManagerId;
               
               // Check by manager name as backup
               const managerNameMatch = entry.lineManagerName === myManagerName;
               
-              const shouldInclude = schoolMatch || managerIdMatch || managerNameMatch;
+              const shouldInclude = managerIdMatch || managerNameMatch;
               
               if (shouldInclude) {
-                console.log('Timesheet - Including entry:', {
+                console.log('Timesheet - Including for approval:', {
                   teacherName: entry.teacherName,
                   school: entry.school,
                   lineManagerId: entry.lineManagerId,
                   lineManagerName: entry.lineManagerName,
-                  reason: schoolMatch ? 'school' : managerIdMatch ? 'managerId' : 'managerName'
+                  matchedBy: managerIdMatch ? 'managerId' : 'managerName'
                 });
               }
               
@@ -26676,7 +26677,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
             return dateB.localeCompare(dateA);
           });
           
-          console.log('Timesheet - Final pending approvals count:', allPendingEntries.length);
+          console.log('Timesheet - Final pending approvals for this manager:', allPendingEntries.length);
           setPendingApprovals(allPendingEntries);
         }
         
