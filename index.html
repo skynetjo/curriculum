@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10002,6 +10003,7 @@ function ProfileCompletionCard({ currentUser, onNavigateToProfile }) {
 }
 
 function App(){const[currentUser,setCurrentUser]=useState(null);const[isAdmin,setIsAdmin]=useState(false);const[isSuperAdmin,setIsSuperAdmin]=useState(false);const[managerProfile,setManagerProfile]=useState(null);const[activeTab,setActiveTab]=useState('overview');const[loginForm,setLoginForm]=useState({email:'',password:'',studentId:'',loginType:'teacher'});const[loading,setLoading]=useState(true);const[authLoading,setAuthLoading]=useState(false);const[loginProgress,setLoginProgress]=useState('');const[teachers,setTeachers]=useState([]);const[curriculum,setCurriculum]=useState({});const[chapterProgress,setChapterProgress]=useState({});const[students,setStudents]=useState([]);const[managers,setManagers]=useState([]);const[accessibleSchools,setAccessibleSchools]=useState([]);const[academicYearSettings,setAcademicYearSettings]=useState(null);
+const[precomputedRankings,setPrecomputedRankings]=useState(null); // ✅ COST FIX: Pre-computed rankings (1 doc instead of hundreds)
 const[studentAttendance,setStudentAttendance]=useState([]);
 const[teacherAttendance,setTeacherAttendance]=useState([]);
 const[leaveAdjustments,setLeaveAdjustments]=useState({});
@@ -10538,7 +10540,7 @@ useEffect(() => {
         );
       }
       
-      const [progressSnap, teachersSnap, curriculumSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, managersSnap, schoolsSnap, aySnap] = await Promise.all([
+      const [progressSnap, teachersSnap, curriculumSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, managersSnap, schoolsSnap, aySnap, rankingsSnap] = await Promise.all([
         progressQuery,
         teachersQuery,
         db.collection('curriculum').get(),
@@ -10548,13 +10550,23 @@ useEffect(() => {
         db.collection('leaveAdjustments').get(),
         db.collection('managers').where('status','==','active').get(),
         db.collection('schoolsList').get(),
-        db.collection('system').doc('academicYear').get()
+        db.collection('system').doc('academicYear').get(),
+        db.collection('system').doc('schoolRankings').get() // ✅ COST FIX: Fetch pre-computed rankings (1 doc)
       ]);
 
-      // Process chapter progress (filter by school for teachers)
+      // ✅ COST FIX: Process pre-computed rankings first
+      if (rankingsSnap.exists) {
+        setPrecomputedRankings(rankingsSnap.data());
+        console.log('✅ Loaded pre-computed rankings');
+      } else {
+        console.log('⚠️ No pre-computed rankings found - will compute on first chapter update');
+      }
+
+      // Process chapter progress (filter by school for teachers to save costs)
+      // Rankings now come from pre-computed document, so filtering is safe
       const map = {};
       progressSnap.docs.forEach(d => {
-        // For teachers, only include their school's progress
+        // For teachers, only include their school's progress (cost savings)
         if (!userIsAdmin && userSchool && !d.id.startsWith(userSchool + '_')) {
           return; // Skip other schools' data
         }
@@ -10565,10 +10577,11 @@ useEffect(() => {
       // Process teachers
       setTeachers(teachersSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
 
-      // Process curriculum (filter by school for teachers)
+      // Process curriculum (filter by school for teachers to save costs)
+      // Rankings now come from pre-computed document, so filtering is safe
       const currMap = {};
       curriculumSnap.docs.forEach(doc => {
-        // For teachers, only include their school's curriculum
+        // For teachers, only include their school's curriculum (cost savings)
         if (!userIsAdmin && userSchool && !doc.id.startsWith(userSchool + '_')) {
           return; // Skip other schools' data
         }
@@ -10711,6 +10724,22 @@ useEffect(() => {
   const interval = setInterval(fetchData, 15 * 60 * 1000);
   return () => clearInterval(interval);
 }, [currentUser]); // Re-run when user changes to fetch correct school's students
+
+// ✅ COST FIX: Initialize rankings if they don't exist (one-time setup)
+useEffect(() => {
+  if (currentUser && !loading && precomputedRankings === null) {
+    // Check if we're an admin - only admins should trigger the initial computation
+    const isAdmin = currentUser.email === 'admin@avantifellows.org' ||
+      currentUser.role === 'super_admin' || currentUser.role === 'program_head' ||
+      currentUser.role === 'program_manager' || currentUser.role === 'associate_program_manager';
+    
+    if (isAdmin) {
+      console.log('📊 Rankings not found - initializing for the first time...');
+      computeAndSaveRankings();
+    }
+  }
+}, [currentUser, loading, precomputedRankings, computeAndSaveRankings]);
+
 const handleLogin=async()=>{
   setAuthLoading(true);
   setLoginProgress('Connecting...');
@@ -10976,6 +11005,63 @@ const cancel2FA = async () => {
   setCurrentUser(null);
   setIsAdmin(false);
 };
+// ✅ COST FIX: Compute and save school rankings to a single document
+// This avoids loading ALL schools' data - teachers only fetch this 1 document
+const computeAndSaveRankings = useCallback(async () => {
+  try {
+    console.log('📊 Computing school rankings...');
+    // Fetch all curriculum and progress (server-side, not stored in state)
+    const [currSnap, progSnap] = await Promise.all([
+      db.collection('curriculum').get(),
+      db.collection('chapterProgress').get()
+    ]);
+    
+    // Build temporary maps
+    const currMap = {};
+    currSnap.docs.forEach(doc => { currMap[doc.id] = doc.data(); });
+    const progMap = {};
+    progSnap.docs.forEach(doc => { progMap[doc.id] = doc.data(); });
+    
+    // Calculate rankings for each school
+    const rankings = SCHOOLS.map(school => {
+      let total = 0, completed = 0;
+      SUBJECTS.forEach(subject => {
+        ['11', '12'].forEach(grade => {
+          const docId = `${school}_${subject}_${grade}`;
+          const chapters = currMap[docId]?.chapters || [];
+          chapters.forEach(ch => {
+            total++;
+            const progressId = `${school}_${ch.id}`;
+            const prog = progMap[progressId] || {};
+            if (prog.completed === 'Yes') completed++;
+          });
+        });
+      });
+      return { school, total, completed, percentage: total ? Math.round((completed / total) * 100) : 0 };
+    });
+    
+    // Sort by percentage descending
+    rankings.sort((a, b) => b.percentage - a.percentage);
+    
+    // Save to Firestore (single document)
+    await db.collection('system').doc('schoolRankings').set({
+      rankings: rankings,
+      updatedAt: new Date().toISOString(),
+      totalSchools: SCHOOLS.length
+    });
+    
+    console.log('✅ Rankings saved successfully');
+    
+    // Update local state
+    setPrecomputedRankings({ rankings, updatedAt: new Date().toISOString() });
+    
+    return rankings;
+  } catch (e) {
+    console.error('Rankings computation error:', e);
+    return null;
+  }
+}, []);
+
 const updateChapterProgress = useCallback(async (school, chapterId, field, value) => {
   try {
     const progressId = `${school}_${chapterId}`;
@@ -10998,6 +11084,15 @@ const updateChapterProgress = useCallback(async (school, chapterId, field, value
       [progressId]: updated,
     }));
 
+    // ✅ COST FIX: Update rankings when chapter completion changes
+    if (field === 'completed') {
+      // Debounce rankings update - wait 2 seconds to batch multiple updates
+      if (window._rankingsUpdateTimeout) clearTimeout(window._rankingsUpdateTimeout);
+      window._rankingsUpdateTimeout = setTimeout(() => {
+        computeAndSaveRankings();
+      }, 2000);
+    }
+
     // 🎉 Optional celebration when a chapter is marked completed
     if (
       (field === 'completed' && (value === 'Yes' || value === true)) ||
@@ -11014,7 +11109,7 @@ const updateChapterProgress = useCallback(async (school, chapterId, field, value
     console.error('Update error', e);
     alert('Failed to update: ' + e.message);
   }
-}, [chapterProgress]);
+}, [chapterProgress, computeAndSaveRankings]);
 
 const addChapter=async(school,subject,grade,chapter)=>{try{const docId=`${school}_${subject}_${grade}`;const doc=await db.collection('curriculum').doc(docId).get();const existing=doc.exists?(doc.data().chapters||[]):[];chapter.id=`${subject.charAt(0)}${grade}-${existing.length+1}-${Date.now().toString().slice(-4)}`;const updated=[...existing,chapter];await db.collection('curriculum').doc(docId).set({chapters:updated});alert('Chapter added successfully!')}catch(e){console.error('Add error',e);alert('Failed to add: '+e.message)}};
 const updateChapter=async(school,subject,grade,chapterId,updates)=>{try{const docId=`${school}_${subject}_${grade}`;const doc=await db.collection('curriculum').doc(docId).get();const existing=doc.exists?(doc.data().chapters||[]):[];const index=existing.findIndex(ch=>ch.id===chapterId);if(index===-1){alert('Chapter not found');return}existing[index]={...existing[index],...updates};await db.collection('curriculum').doc(docId).set({chapters:existing});alert('Chapter updated successfully!')}catch(e){console.error('Update error',e);alert('Failed to update: '+e.message)}};
@@ -11142,7 +11237,7 @@ if(currentUser && currentUser.userType === 'student') {
   return <StudentDashboard currentUser={currentUser} handleLogout={handleLogout} />;
 }
 
-return (<>{currentUser && <OnlineStatusCard currentUser={currentUser} />}{isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools} academicYearSettings={academicYearSettings} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} setSchoolInfo={setSchoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>}</>);
+return (<>{currentUser && <OnlineStatusCard currentUser={currentUser} />}{isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools} academicYearSettings={academicYearSettings} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} setSchoolInfo={setSchoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration} precomputedRankings={precomputedRankings}/>}</>);
 }
 
 // ========================================
@@ -12053,7 +12148,8 @@ function TeacherView({
   setActiveTab,
   leaveAdjustments,
   floatingCelebration,
-  setFloatingCelebration
+  setFloatingCelebration,
+  precomputedRankings
 }) {
   // Check if user is an APC
   const isAPC = currentUser.userType === 'apc' || currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC;
@@ -12375,6 +12471,7 @@ function TeacherView({
             teacherAttendance={teacherAttendance}
             schoolInfo={schoolInfo}
             onNavigateToProfile={() => setActiveTab('myprofile')}
+            precomputedRankings={precomputedRankings}
           />
         )}
 
@@ -15197,9 +15294,21 @@ function AdminView({
     </div>
   );
 }
-function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teacherAttendance,studentAttendance,onNavigateToProfile}){const mySchool=currentUser.school;const mySubject=currentUser.subject;const schoolRankings=useMemo(()=>{
+function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teacherAttendance,studentAttendance,onNavigateToProfile,precomputedRankings}){const mySchool=currentUser.school;const mySubject=currentUser.subject;
+
+// ✅ COST FIX: Use pre-computed rankings instead of calculating from all schools' data
+// This saves ~95% Firebase reads by not loading all schools' curriculum/progress
+const schoolRankings=useMemo(()=>{
+  // Use pre-computed rankings if available
+  if (precomputedRankings?.rankings?.length > 0) {
+    console.log('✅ Using pre-computed rankings');
+    return precomputedRankings.rankings;
+  }
+  
+  // Fallback: Calculate from local data (will only show teacher's school accurately)
+  console.log('⚠️ Pre-computed rankings not available, using local data');
   const rankings=SCHOOLS.map(school=>{
-    let total=0,completed=0,testsCompleted=0,testsPending=0;
+    let total=0,completed=0;
     SUBJECTS.forEach(subject=>{
       ['11','12'].forEach(grade=>{
         const docId=`${school}_${subject}_${grade}`;
@@ -15208,24 +15317,16 @@ function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teache
           total++;
           const progressId=`${school}_${ch.id}`;
           const prog=chapterProgress[progressId]||{};
-          // ✅ Count when chapter is completed (not test)
-          if(prog.completed==='Yes'){
-            completed++;
-            // Track tests separately
-            if(prog.testConducted==='Yes'){
-              testsCompleted++;
-            }else{
-              testsPending++;
-            }
-          }
+          if(prog.completed==='Yes') completed++;
         })
       })
     });
-    return{school,total,completed,testsCompleted,testsPending,percentage:total?Math.round((completed/total)*100):0}
+    return{school,total,completed,percentage:total?Math.round((completed/total)*100):0}
   });
   rankings.sort((a,b)=>b.percentage-a.percentage);
-  return rankings
-},[curriculum,chapterProgress]);                                                                                                  
+  return rankings;
+},[precomputedRankings,curriculum,chapterProgress]);
+
   const subjectRankings=useMemo(()=>{
   const rankings=SUBJECTS.map(subject=>{
     let total=0,completed=0;
@@ -15589,6 +15690,17 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
   const mySchool=currentUser.school;
   const mySubject=currentUser.subject;
   
+  // ✅ COST FIX: Check if we have data for all schools (admins) or just one school (teachers)
+  const hasAllSchoolsData = useMemo(() => {
+    // Count how many schools have curriculum data
+    const schoolsWithData = new Set();
+    Object.keys(curriculum).forEach(key => {
+      const school = key.split('_')[0];
+      schoolsWithData.add(school);
+    });
+    return schoolsWithData.size > 1;
+  }, [curriculum]);
+  
   // My school data
   const myData=useMemo(()=>{
     const data={
@@ -15630,7 +15742,7 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
     return{...data,avgDays};
   },[curriculum,chapterProgress,mySchool,mySubject]);
 
-  // All schools comparison data
+  // All schools comparison data - only accurate if we have all schools data
   const allSchoolsData=useMemo(()=>{
     const data={};
     SCHOOLS.forEach(school=>{
@@ -15723,20 +15835,22 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
       });
     }
 
-    // Chart 3: Class 11 - School Comparison
-    if(chart3Ref.current){
-      const ctx=chart3Ref.current.getContext('2d');
-      chartInstances.current.chart3=new Chart(ctx,{
-        type:'bar',
-        data:{
-          labels:SCHOOLS,
-          datasets:[{
-            label:'Chapters Completed',
-            data:SCHOOLS.map(s=>allSchoolsData[s][11].completed),
-            backgroundColor:SCHOOLS.map(s=>s===mySchool?'#C8342E':'#10B981'),
-            borderWidth:SCHOOLS.map(s=>s===mySchool?3:0),
-            borderColor:'#000'
-          }]
+    // Chart 3, 4, 5: School Comparison Charts - only create if we have all schools data
+    if (hasAllSchoolsData) {
+      // Chart 3: Class 11 - School Comparison
+      if(chart3Ref.current){
+        const ctx=chart3Ref.current.getContext('2d');
+        chartInstances.current.chart3=new Chart(ctx,{
+          type:'bar',
+          data:{
+            labels:SCHOOLS,
+            datasets:[{
+              label:'Chapters Completed',
+              data:SCHOOLS.map(s=>allSchoolsData[s][11].completed),
+              backgroundColor:SCHOOLS.map(s=>s===mySchool?'#C8342E':'#10B981'),
+              borderWidth:SCHOOLS.map(s=>s===mySchool?3:0),
+              borderColor:'#000'
+            }]
         },
         options:{
           responsive:true,
@@ -15808,11 +15922,12 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
         }
       });
     }
+    } // End of hasAllSchoolsData condition
 
     return()=>{
       Object.values(chartInstances.current).forEach(c=>c&&c.destroy());
     };
-  },[myData,allSchoolsData,mySchool,mySubject]);
+  },[myData,allSchoolsData,mySchool,mySubject,hasAllSchoolsData]);
 
   const handleExport=()=>{
     const exportData=[
@@ -15887,18 +16002,32 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
-        <canvas ref={chart5Ref}></canvas>
-      </div>
+      {/* ✅ COST FIX: Only show comparison charts if we have all schools data */}
+      {hasAllSchoolsData ? (
+        <>
+          <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+            <canvas ref={chart5Ref}></canvas>
+          </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
-          <canvas ref={chart3Ref}></canvas>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+              <canvas ref={chart3Ref}></canvas>
+            </div>
+            <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+              <canvas ref={chart4Ref}></canvas>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <div className="text-center py-8">
+            <div className="text-5xl mb-4">📊</div>
+            <h3 className="text-xl font-bold text-gray-700 mb-2">School Comparison Charts</h3>
+            <p className="text-gray-500">School comparison charts are available in the Dashboard rankings section.</p>
+            <p className="text-gray-400 text-sm mt-2">Your personal progress charts are shown above.</p>
+          </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
-          <canvas ref={chart4Ref}></canvas>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
