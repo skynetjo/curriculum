@@ -26546,6 +26546,15 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         
         // Get current manager's ID for lineManagerId matching
         const myManagerId = currentUser.managerId || currentUser.id || currentUser.uid || currentUser.afid;
+        const myManagerName = currentUser.name;
+        
+        console.log('Timesheet - Fetching data for:', {
+          isAdmin,
+          isSuperAdmin,
+          myManagerId,
+          myManagerName,
+          accessibleSchools
+        });
         
         // Fetch entries based on role
         let entriesQuery;
@@ -26556,9 +26565,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               .orderBy('date', 'desc')
               .limit(500);
           } else {
-            // Manager sees accessible schools
+            // Manager sees accessible schools - use simpler query
             entriesQuery = db.collection('timesheetEntries')
-              .where('school', 'in', accessibleSchools.length > 0 ? accessibleSchools.slice(0, 10) : ['none'])
               .orderBy('date', 'desc')
               .limit(500);
           }
@@ -26571,90 +26579,94 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         }
         
         const entriesSnap = await entriesQuery.get();
-        const entries = entriesSnap.docs.map(d => ({
+        let entries = entriesSnap.docs.map(d => ({
           ...d.data(),
           id: d.id,
           date: d.data().date || '',
           createdAt: d.data().createdAt?.toDate?.() || new Date()
         }));
+        
+        // For non-super-admin managers, filter entries client-side
+        if (isAdmin && !isSuperAdmin) {
+          entries = entries.filter(e => 
+            accessibleSchools.includes(e.school) ||
+            e.lineManagerId === myManagerId ||
+            e.lineManagerName === myManagerName
+          );
+        }
+        
         setTimesheetEntries(entries);
         
         // Fetch pending approvals for managers
         if (isAdmin) {
           let allPendingEntries = [];
           
-          if (isSuperAdmin) {
-            // Super admin sees all pending
+          // Use existing index: status (asc) + date (asc)
+          // Fetch all pending, then sort client-side for desc order
+          try {
             const pendingSnap = await db.collection('timesheetEntries')
               .where('status', '==', 'pending')
               .get();
+            
             allPendingEntries = pendingSnap.docs.map(d => ({
               ...d.data(),
               id: d.id
             }));
-          } else {
-            // For regular managers, fetch:
-            // 1. Entries from accessible schools
-            // 2. Entries directly assigned to this manager via lineManagerId
             
-            // Query 1: By accessible schools
-            if (accessibleSchools.length > 0) {
-              try {
-                const schoolPendingSnap = await db.collection('timesheetEntries')
-                  .where('school', 'in', accessibleSchools.slice(0, 10))
-                  .where('status', '==', 'pending')
-                  .get();
-                schoolPendingSnap.docs.forEach(d => {
-                  allPendingEntries.push({
-                    ...d.data(),
-                    id: d.id
-                  });
-                });
-              } catch (e) {
-                console.log('School query error:', e);
-              }
-            }
+            console.log('Timesheet - Total pending entries fetched:', allPendingEntries.length);
             
-            // Query 2: By lineManagerId (entries directly assigned to this manager)
-            if (myManagerId) {
-              try {
-                const managerPendingSnap = await db.collection('timesheetEntries')
-                  .where('lineManagerId', '==', myManagerId)
-                  .where('status', '==', 'pending')
-                  .get();
-                managerPendingSnap.docs.forEach(d => {
-                  // Add only if not already in the list (avoid duplicates)
-                  if (!allPendingEntries.find(e => e.id === d.id)) {
-                    allPendingEntries.push({
-                      ...d.data(),
-                      id: d.id
-                    });
-                  }
-                });
-              } catch (e) {
-                console.log('LineManager query error:', e);
-              }
-            }
+          } catch (e) {
+            console.error('Error fetching pending entries:', e);
             
-            // Query 3: Also check by manager name as backup
-            if (currentUser.name) {
-              try {
-                const namePendingSnap = await db.collection('timesheetEntries')
-                  .where('lineManagerName', '==', currentUser.name)
-                  .where('status', '==', 'pending')
-                  .get();
-                namePendingSnap.docs.forEach(d => {
-                  if (!allPendingEntries.find(e => e.id === d.id)) {
-                    allPendingEntries.push({
-                      ...d.data(),
-                      id: d.id
-                    });
-                  }
-                });
-              } catch (e) {
-                console.log('Manager name query error:', e);
-              }
+            // Fallback: try without orderBy
+            try {
+              const pendingSnap = await db.collection('timesheetEntries')
+                .where('status', '==', 'pending')
+                .get();
+              
+              allPendingEntries = pendingSnap.docs.map(d => ({
+                ...d.data(),
+                id: d.id
+              }));
+              
+              console.log('Timesheet - Fallback: pending entries fetched:', allPendingEntries.length);
+            } catch (e2) {
+              console.error('Fallback query also failed:', e2);
             }
+          }
+          
+          // Filter for non-super-admin managers
+          if (!isSuperAdmin && allPendingEntries.length > 0) {
+            console.log('Timesheet - Filtering for manager:', {
+              myManagerId,
+              myManagerName,
+              accessibleSchools
+            });
+            
+            allPendingEntries = allPendingEntries.filter(entry => {
+              // Check if entry belongs to manager's accessible schools
+              const schoolMatch = accessibleSchools.includes(entry.school);
+              
+              // Check if entry is directly assigned to this manager
+              const managerIdMatch = entry.lineManagerId === myManagerId;
+              
+              // Check by manager name as backup
+              const managerNameMatch = entry.lineManagerName === myManagerName;
+              
+              const shouldInclude = schoolMatch || managerIdMatch || managerNameMatch;
+              
+              if (shouldInclude) {
+                console.log('Timesheet - Including entry:', {
+                  teacherName: entry.teacherName,
+                  school: entry.school,
+                  lineManagerId: entry.lineManagerId,
+                  lineManagerName: entry.lineManagerName,
+                  reason: schoolMatch ? 'school' : managerIdMatch ? 'managerId' : 'managerName'
+                });
+              }
+              
+              return shouldInclude;
+            });
           }
           
           // Sort by date descending
@@ -26664,6 +26676,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
             return dateB.localeCompare(dateA);
           });
           
+          console.log('Timesheet - Final pending approvals count:', allPendingEntries.length);
           setPendingApprovals(allPendingEntries);
         }
         
