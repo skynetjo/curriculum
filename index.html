@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10559,17 +10557,15 @@ useEffect(() => {
         setPrecomputedRankings(rankingsSnap.data());
         console.log('✅ Loaded pre-computed rankings');
       } else {
-        console.log('⚠️ No pre-computed rankings found - will compute on first chapter update');
+        console.log('⚠️ No pre-computed rankings found - computing now...');
+        // Rankings don't exist - we need to compute them
+        // This happens on first deployment or if document was deleted
       }
 
-      // Process chapter progress (filter by school for teachers to save costs)
-      // Rankings now come from pre-computed document, so filtering is safe
+      // Process chapter progress - ALL schools needed for rankings
+      // ✅ FIX: Don't filter - rankings need all schools' data to show correctly
       const map = {};
       progressSnap.docs.forEach(d => {
-        // For teachers, only include their school's progress (cost savings)
-        if (!userIsAdmin && userSchool && !d.id.startsWith(userSchool + '_')) {
-          return; // Skip other schools' data
-        }
         map[d.id] = d.data();
       });
       setChapterProgress(map);
@@ -10577,14 +10573,10 @@ useEffect(() => {
       // Process teachers
       setTeachers(teachersSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
 
-      // Process curriculum (filter by school for teachers to save costs)
-      // Rankings now come from pre-computed document, so filtering is safe
+      // Process curriculum - ALL schools needed for rankings calculation
+      // ✅ FIX: Don't filter - rankings need all schools' chapters to calculate percentages
       const currMap = {};
       curriculumSnap.docs.forEach(doc => {
-        // For teachers, only include their school's curriculum (cost savings)
-        if (!userIsAdmin && userSchool && !doc.id.startsWith(userSchool + '_')) {
-          return; // Skip other schools' data
-        }
         currMap[doc.id] = doc.data();
       });
       setCurriculum(currMap);
@@ -15296,17 +15288,8 @@ function AdminView({
 }
 function TeacherOverview({currentUser,curriculum,chapterProgress,teachers,teacherAttendance,studentAttendance,onNavigateToProfile,precomputedRankings}){const mySchool=currentUser.school;const mySubject=currentUser.subject;
 
-// ✅ COST FIX: Use pre-computed rankings instead of calculating from all schools' data
-// This saves ~95% Firebase reads by not loading all schools' curriculum/progress
+// Calculate school rankings from curriculum and progress data
 const schoolRankings=useMemo(()=>{
-  // Use pre-computed rankings if available
-  if (precomputedRankings?.rankings?.length > 0) {
-    console.log('✅ Using pre-computed rankings');
-    return precomputedRankings.rankings;
-  }
-  
-  // Fallback: Calculate from local data (will only show teacher's school accurately)
-  console.log('⚠️ Pre-computed rankings not available, using local data');
   const rankings=SCHOOLS.map(school=>{
     let total=0,completed=0;
     SUBJECTS.forEach(subject=>{
@@ -15325,7 +15308,7 @@ const schoolRankings=useMemo(()=>{
   });
   rankings.sort((a,b)=>b.percentage-a.percentage);
   return rankings;
-},[precomputedRankings,curriculum,chapterProgress]);
+},[curriculum,chapterProgress]);
 
   const subjectRankings=useMemo(()=>{
   const rankings=SUBJECTS.map(subject=>{
@@ -15690,17 +15673,6 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
   const mySchool=currentUser.school;
   const mySubject=currentUser.subject;
   
-  // ✅ COST FIX: Check if we have data for all schools (admins) or just one school (teachers)
-  const hasAllSchoolsData = useMemo(() => {
-    // Count how many schools have curriculum data
-    const schoolsWithData = new Set();
-    Object.keys(curriculum).forEach(key => {
-      const school = key.split('_')[0];
-      schoolsWithData.add(school);
-    });
-    return schoolsWithData.size > 1;
-  }, [curriculum]);
-  
   // My school data
   const myData=useMemo(()=>{
     const data={
@@ -15742,7 +15714,7 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
     return{...data,avgDays};
   },[curriculum,chapterProgress,mySchool,mySubject]);
 
-  // All schools comparison data - only accurate if we have all schools data
+  // All schools comparison data
   const allSchoolsData=useMemo(()=>{
     const data={};
     SCHOOLS.forEach(school=>{
@@ -15835,22 +15807,20 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
       });
     }
 
-    // Chart 3, 4, 5: School Comparison Charts - only create if we have all schools data
-    if (hasAllSchoolsData) {
-      // Chart 3: Class 11 - School Comparison
-      if(chart3Ref.current){
-        const ctx=chart3Ref.current.getContext('2d');
-        chartInstances.current.chart3=new Chart(ctx,{
-          type:'bar',
-          data:{
-            labels:SCHOOLS,
-            datasets:[{
-              label:'Chapters Completed',
-              data:SCHOOLS.map(s=>allSchoolsData[s][11].completed),
-              backgroundColor:SCHOOLS.map(s=>s===mySchool?'#C8342E':'#10B981'),
-              borderWidth:SCHOOLS.map(s=>s===mySchool?3:0),
-              borderColor:'#000'
-            }]
+    // Chart 3: Class 11 - School Comparison
+    if(chart3Ref.current){
+      const ctx=chart3Ref.current.getContext('2d');
+      chartInstances.current.chart3=new Chart(ctx,{
+        type:'bar',
+        data:{
+          labels:SCHOOLS,
+          datasets:[{
+            label:'Chapters Completed',
+            data:SCHOOLS.map(s=>allSchoolsData[s][11].completed),
+            backgroundColor:SCHOOLS.map(s=>s===mySchool?'#C8342E':'#10B981'),
+            borderWidth:SCHOOLS.map(s=>s===mySchool?3:0),
+            borderColor:'#000'
+          }]
         },
         options:{
           responsive:true,
@@ -15922,12 +15892,11 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
         }
       });
     }
-    } // End of hasAllSchoolsData condition
 
     return()=>{
       Object.values(chartInstances.current).forEach(c=>c&&c.destroy());
     };
-  },[myData,allSchoolsData,mySchool,mySubject,hasAllSchoolsData]);
+  },[myData,allSchoolsData,mySchool,mySubject]);
 
   const handleExport=()=>{
     const exportData=[
@@ -16002,32 +15971,18 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
         </div>
       </div>
 
-      {/* ✅ COST FIX: Only show comparison charts if we have all schools data */}
-      {hasAllSchoolsData ? (
-        <>
-          <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
-            <canvas ref={chart5Ref}></canvas>
-          </div>
+      <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+        <canvas ref={chart5Ref}></canvas>
+      </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
-              <canvas ref={chart3Ref}></canvas>
-            </div>
-            <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
-              <canvas ref={chart4Ref}></canvas>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="bg-white p-6 rounded-2xl shadow-lg">
-          <div className="text-center py-8">
-            <div className="text-5xl mb-4">📊</div>
-            <h3 className="text-xl font-bold text-gray-700 mb-2">School Comparison Charts</h3>
-            <p className="text-gray-500">School comparison charts are available in the Dashboard rankings section.</p>
-            <p className="text-gray-400 text-sm mt-2">Your personal progress charts are shown above.</p>
-          </div>
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+          <canvas ref={chart3Ref}></canvas>
         </div>
-      )}
+        <div className="bg-white p-6 rounded-2xl shadow-lg" style={{height:'400px'}}>
+          <canvas ref={chart4Ref}></canvas>
+        </div>
+      </div>
     </div>
   );
 }
