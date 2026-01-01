@@ -26548,25 +26548,30 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         const myManagerId = currentUser.managerId || currentUser.id || currentUser.uid || currentUser.afid;
         const myManagerName = currentUser.name;
         
+        // Get this manager's direct schools
+        const myManagerProfile = managers.find(m => m.id === myManagerId || m.name === myManagerName);
+        const myDirectSchools = myManagerProfile?.directSchools || [];
+        
         console.log('Timesheet - Fetching data for:', {
           isAdmin,
           isSuperAdmin,
           myManagerId,
           myManagerName,
-          accessibleSchools
+          myDirectSchools,
+          myManagerProfile: myManagerProfile ? { id: myManagerProfile.id, name: myManagerProfile.name, role: myManagerProfile.role } : null
         });
         
-        // For managers (non-super-admin), first get list of direct reportees
+        // For managers (non-super-admin), find teachers in their direct schools
         let directReporteeAfids = [];
-        if (isAdmin && !isSuperAdmin) {
-          // Get teachers who report to this manager
-          const reporteesFromTeachers = teachers.filter(t => t.reportsTo === myManagerId);
+        if (isAdmin && !isSuperAdmin && myDirectSchools.length > 0) {
+          // Get teachers whose school is in this manager's directSchools
+          const reporteesFromTeachers = teachers.filter(t => myDirectSchools.includes(t.school));
           directReporteeAfids = reporteesFromTeachers.map(t => t.afid);
           
-          console.log('Timesheet - Direct reportees from teachers array:', {
-            myManagerId,
+          console.log('Timesheet - Direct reportees (by school):', {
+            myDirectSchools,
             reporteesCount: directReporteeAfids.length,
-            reportees: reporteesFromTeachers.map(t => ({ name: t.name, afid: t.afid, reportsTo: t.reportsTo }))
+            reportees: reporteesFromTeachers.map(t => ({ name: t.name, afid: t.afid, school: t.school }))
           });
         }
         
@@ -26603,13 +26608,13 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         // For non-super-admin managers, filter to show ONLY direct reportees
         if (isAdmin && !isSuperAdmin) {
           entries = entries.filter(e => {
-            // Include if teacher is a direct reportee
-            const isDirectReportee = directReporteeAfids.includes(e.teacherAfid);
+            // Include if teacher's school is in manager's directSchools
+            const schoolMatch = myDirectSchools.includes(e.school);
             
             // OR if entry is assigned to this manager
             const assignedToMe = e.lineManagerId === myManagerId || e.lineManagerName === myManagerName;
             
-            return isDirectReportee || assignedToMe;
+            return schoolMatch || assignedToMe;
           });
           
           console.log('Timesheet - Filtered entries for manager:', entries.length);
@@ -26621,7 +26626,6 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         if (isAdmin) {
           let allPendingEntries = [];
           
-          // Use existing index: status (asc) + date (asc)
           // Fetch all pending, then filter client-side
           try {
             const pendingSnap = await db.collection('timesheetEntries')
@@ -26637,31 +26641,15 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
             
           } catch (e) {
             console.error('Error fetching pending entries:', e);
-            
-            // Fallback: try without orderBy
-            try {
-              const pendingSnap = await db.collection('timesheetEntries')
-                .where('status', '==', 'pending')
-                .get();
-              
-              allPendingEntries = pendingSnap.docs.map(d => ({
-                ...d.data(),
-                id: d.id
-              }));
-              
-              console.log('Timesheet - Fallback: pending entries fetched:', allPendingEntries.length);
-            } catch (e2) {
-              console.error('Fallback query also failed:', e2);
-            }
           }
           
           // Filter for non-super-admin managers
-          // IMPORTANT: Approvals should ONLY go to the direct line manager
+          // Show entries from teachers in their directSchools OR entries assigned to them
           if (!isSuperAdmin && allPendingEntries.length > 0) {
             console.log('Timesheet - Filtering approvals for manager:', {
               myManagerId,
               myManagerName,
-              directReporteeAfids
+              myDirectSchools
             });
             
             allPendingEntries = allPendingEntries.filter(entry => {
@@ -26671,10 +26659,10 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               // Check by manager name as backup
               const managerNameMatch = entry.lineManagerName === myManagerName;
               
-              // Also include if teacher is a direct reportee (even if lineManager not set)
-              const isDirectReportee = directReporteeAfids.includes(entry.teacherAfid);
+              // Check if teacher's school is in this manager's directSchools
+              const schoolMatch = myDirectSchools.includes(entry.school);
               
-              const shouldInclude = managerIdMatch || managerNameMatch || isDirectReportee;
+              const shouldInclude = managerIdMatch || managerNameMatch || schoolMatch;
               
               if (shouldInclude) {
                 console.log('Timesheet - Including for approval:', {
@@ -26682,7 +26670,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                   school: entry.school,
                   lineManagerId: entry.lineManagerId,
                   lineManagerName: entry.lineManagerName,
-                  matchedBy: managerIdMatch ? 'managerId' : managerNameMatch ? 'managerName' : 'directReportee'
+                  matchedBy: managerIdMatch ? 'managerId' : managerNameMatch ? 'managerName' : 'schoolMatch'
                 });
               }
               
@@ -26709,7 +26697,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
     };
     
     fetchData();
-  }, [isAdmin, isSuperAdmin, accessibleSchools, myAfid, teachers]);
+  }, [isAdmin, isSuperAdmin, accessibleSchools, myAfid, teachers, managers]);
   
   // Submit timesheet entry
   const handleSubmit = async (e) => {
@@ -26759,119 +26747,113 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
     try {
       setSubmitting(true);
       
-      // Find line manager - fetch directly from Firestore for accuracy
+      // Find line manager - use SAME logic as Team Directory
       let lineManagerId = null;
       let lineManagerName = null;
       
       console.log('Timesheet - Looking up line manager for:', {
+        teacherName: currentUser.name,
         teacherAfid: myAfid,
         school: mySchool,
-        teachersInContext: teachers.length,
-        managersInContext: managers.length
+        managersAvailable: managers.length
       });
       
-      // Method 1: Check if teacher has reportsTo set in Firestore
-      try {
-        // First try to find in local teachers array
-        const localTeacher = teachers.find(t => 
-          t.afid === myAfid || 
-          t.id === myAfid || 
-          t.afid === currentUser.afid ||
-          t.email === currentUser.email
-        );
-        
-        console.log('Timesheet - Local teacher data:', localTeacher);
-        
-        if (localTeacher?.reportsTo) {
-          lineManagerId = localTeacher.reportsTo;
-          // Find manager name
-          const manager = managers.find(m => m.id === lineManagerId);
-          lineManagerName = manager?.name || null;
-          console.log('Timesheet - Found manager from local data:', { lineManagerId, lineManagerName });
-        }
-        
-        // If not found locally, fetch from Firestore
-        if (!lineManagerId) {
-          const teacherQuery = await db.collection('teachers')
-            .where('afid', '==', myAfid)
-            .limit(1)
-            .get();
-          
-          if (!teacherQuery.empty) {
-            const teacherDoc = teacherQuery.docs[0].data();
-            console.log('Timesheet - Teacher doc from Firestore:', teacherDoc);
-            
-            if (teacherDoc.reportsTo) {
-              lineManagerId = teacherDoc.reportsTo;
-              // Fetch manager details
-              const managerDoc = await db.collection('managers').doc(lineManagerId).get();
-              if (managerDoc.exists) {
-                lineManagerName = managerDoc.data().name;
-              } else {
-                // Try to find by ID in local managers
-                const localManager = managers.find(m => m.id === lineManagerId);
-                lineManagerName = localManager?.name || null;
-              }
-              console.log('Timesheet - Found manager from Firestore:', { lineManagerId, lineManagerName });
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Error looking up teacher reportsTo:', e);
+      // Debug: Show all managers and their schools
+      console.log('Timesheet - Available managers:', managers.map(m => ({
+        id: m.id,
+        name: m.name,
+        role: m.role,
+        directSchools: m.directSchools,
+        status: m.status
+      })));
+      
+      // Use SAME logic as Team Directory getMemberManager function:
+      // 1. Check APMs first (role === 'apm' && directSchools includes school)
+      const apm = managers.find(m => 
+        m.role === 'apm' && 
+        m.directSchools?.includes(mySchool)
+      );
+      
+      if (apm) {
+        lineManagerId = apm.id;
+        lineManagerName = apm.name;
+        console.log('Timesheet - Found APM for school:', { 
+          apmId: apm.id, 
+          apmName: apm.name, 
+          school: mySchool,
+          apmDirectSchools: apm.directSchools 
+        });
       }
       
-      // Method 2: Find APM assigned to this school
-      if (!lineManagerId) {
-        const apm = managers.find(m => 
-          (m.role === 'apm' || m.role === MANAGER_ROLES.APM) && 
-          m.directSchools?.includes(mySchool) &&
-          m.status === 'active'
-        );
-        if (apm) {
-          lineManagerId = apm.id;
-          lineManagerName = apm.name;
-          console.log('Timesheet - Using APM for school:', { lineManagerId, lineManagerName });
-        }
-      }
-      
-      // Method 3: Find PM who has this school
+      // 2. Then check PMs
       if (!lineManagerId) {
         const pm = managers.find(m => 
-          (m.role === 'pm' || m.role === MANAGER_ROLES.PM) && 
-          m.directSchools?.includes(mySchool) &&
-          m.status === 'active'
+          m.role === 'pm' && 
+          m.directSchools?.includes(mySchool)
         );
+        
         if (pm) {
           lineManagerId = pm.id;
           lineManagerName = pm.name;
-          console.log('Timesheet - Using PM for school:', { lineManagerId, lineManagerName });
+          console.log('Timesheet - Found PM for school:', { 
+            pmId: pm.id, 
+            pmName: pm.name, 
+            school: mySchool 
+          });
         }
       }
       
-      // Method 4: Find any active manager who has this school
+      // 3. Fallback: Any manager with this school
       if (!lineManagerId) {
         const anyManager = managers.find(m => 
           m.directSchools?.includes(mySchool) &&
           m.status === 'active'
         );
+        
         if (anyManager) {
           lineManagerId = anyManager.id;
           lineManagerName = anyManager.name;
-          console.log('Timesheet - Using any manager for school:', { lineManagerId, lineManagerName });
+          console.log('Timesheet - Found fallback manager for school:', { 
+            managerId: anyManager.id, 
+            managerName: anyManager.name, 
+            school: mySchool 
+          });
         }
       }
       
-      // Final debug log
+      // 4. Last resort: Fetch from Firestore directly
+      if (!lineManagerId) {
+        console.log('Timesheet - No manager found in local data, checking Firestore...');
+        try {
+          const managersSnap = await db.collection('managers')
+            .where('directSchools', 'array-contains', mySchool)
+            .where('status', '==', 'active')
+            .limit(1)
+            .get();
+          
+          if (!managersSnap.empty) {
+            const managerDoc = managersSnap.docs[0];
+            lineManagerId = managerDoc.id;
+            lineManagerName = managerDoc.data().name;
+            console.log('Timesheet - Found manager from Firestore:', { lineManagerId, lineManagerName });
+          }
+        } catch (e) {
+          console.error('Timesheet - Error fetching manager from Firestore:', e);
+        }
+      }
+      
+      // Final result
       console.log('Timesheet Entry - Final Line Manager Assignment:', {
-        teacherAfid: myAfid,
         teacherName: currentUser.name,
         school: mySchool,
         lineManagerId,
-        lineManagerName
+        lineManagerName,
+        success: !!lineManagerId
       });
       
       if (!lineManagerId) {
-        console.warn('Timesheet - No line manager found! Entry will need manual assignment.');
+        console.warn('⚠️ Timesheet - No line manager found for school:', mySchool);
+        alert('⚠️ Warning: No line manager found for your school. Please contact admin to set up manager assignment for ' + mySchool);
       }
       
       const entry = {
