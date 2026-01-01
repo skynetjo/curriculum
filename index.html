@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1603,7 +1604,7 @@ body.has-install-banner .sidebar {
   .main-content.sidebar-collapsed {
     margin-left: 0 !important;
     padding-top: 70px; /* Space for mobile header */
-    padding-bottom: 80px; /* Space for bottom nav */
+    padding-bottom: 20px;
     width: 100%;
   }
   
@@ -10471,6 +10472,23 @@ useEffect(() => {
       // For admins, fetch all data as they need full visibility
       let progressQuery, teachersQuery, studentAttQuery, teacherAttQuery;
       
+      // ✅ FIX: Helper function to handle index errors gracefully
+      const fetchWithIndexFallback = async (optimizedQuery, fallbackQuery, filterFn, queryName) => {
+        try {
+          return await optimizedQuery;
+        } catch (e) {
+          if (e.message && e.message.includes('index')) {
+            console.warn(`⚠️ ${queryName}: Index not ready, using fallback query`);
+            const fallbackSnap = await fallbackQuery;
+            // Filter client-side
+            return {
+              docs: fallbackSnap.docs.filter(doc => filterFn(doc.data()))
+            };
+          }
+          throw e;
+        }
+      };
+      
       if (userIsAdmin || !userSchool) {
         // Admin: Fetch ALL data (they need to see everything across all schools)
         console.log('📊 Admin/Manager detected - fetching ALL data');
@@ -10494,15 +10512,30 @@ useEffect(() => {
           .where('school', '==', userSchool)
           .get();
         
-        studentAttQuery = db.collection('studentAttendance')
-          .where('school', '==', userSchool)
-          .where('date', '>=', thirtyDaysAgo)
-          .get();
+        // ✅ FIX: Use fallback if index is still building
+        studentAttQuery = fetchWithIndexFallback(
+          db.collection('studentAttendance')
+            .where('school', '==', userSchool)
+            .where('date', '>=', thirtyDaysAgo)
+            .get(),
+          db.collection('studentAttendance')
+            .where('date', '>=', thirtyDaysAgo)
+            .get(),
+          (data) => data.school === userSchool,
+          'studentAttendance'
+        );
         
-        teacherAttQuery = db.collection('teacherAttendance')
-          .where('school', '==', userSchool)
-          .where('date', '>=', thirtyDaysAgo)
-          .get();
+        teacherAttQuery = fetchWithIndexFallback(
+          db.collection('teacherAttendance')
+            .where('school', '==', userSchool)
+            .where('date', '>=', thirtyDaysAgo)
+            .get(),
+          db.collection('teacherAttendance')
+            .where('date', '>=', thirtyDaysAgo)
+            .get(),
+          (data) => data.school === userSchool,
+          'teacherAttendance'
+        );
       }
       
       const [progressSnap, teachersSnap, curriculumSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, managersSnap, schoolsSnap, aySnap] = await Promise.all([
@@ -10565,21 +10598,76 @@ useEffect(() => {
           console.log('✅ Admin loaded ALL', studentsData.length, 'students');
         } else {
           // ✅ TEACHER: Fetch only their school's students (cost savings)
-          const userSchool = currentUser.school;
-          console.log('📊 Teacher detected - fetching students for:', userSchool);
-          const schoolStudentsSnap = await db.collection('students')
-            .where('school', '==', userSchool)
-            .get();
-          studentsData = schoolStudentsSnap.docs.map(d => {
-            const data = d.data();
-            let studentId = data.id;
-            if (!studentId) {
-              const parts = d.id.split('_');
-              studentId = parts[parts.length - 1];
+          const teacherSchool = currentUser.school;
+          console.log('📊 Teacher detected - fetching students for:', teacherSchool);
+          
+          try {
+            // Try optimized query first
+            const schoolStudentsSnap = await db.collection('students')
+              .where('school', '==', teacherSchool)
+              .get();
+            studentsData = schoolStudentsSnap.docs.map(d => {
+              const data = d.data();
+              let studentId = data.id;
+              if (!studentId) {
+                const parts = d.id.split('_');
+                studentId = parts[parts.length - 1];
+              }
+              return { ...data, id: studentId, docId: d.id };
+            });
+            console.log('✅ Teacher loaded', studentsData.length, 'students for', teacherSchool);
+            
+            // ✅ FIX: If no students found, try fetching all and filtering client-side
+            // This handles case-sensitivity and other data inconsistencies
+            if (studentsData.length === 0) {
+              console.log('⚠️ No students found with exact match, trying case-insensitive search...');
+              const allStudentsSnap = await db.collection('students').get();
+              const teacherSchoolLower = (teacherSchool || '').toString().trim().toLowerCase();
+              studentsData = allStudentsSnap.docs
+                .filter(d => {
+                  const studentSchool = (d.data().school || '').toString().trim().toLowerCase();
+                  return studentSchool === teacherSchoolLower;
+                })
+                .map(d => {
+                  const data = d.data();
+                  let studentId = data.id;
+                  if (!studentId) {
+                    const parts = d.id.split('_');
+                    studentId = parts[parts.length - 1];
+                  }
+                  return { ...data, id: studentId, docId: d.id };
+                });
+              console.log('✅ Case-insensitive search found', studentsData.length, 'students');
+              
+              // Log school name mismatch for debugging
+              if (studentsData.length > 0 && allStudentsSnap.docs.length > 0) {
+                const sampleSchools = Array.from(new Set(allStudentsSnap.docs.map(d => d.data().school))).slice(0, 5);
+                console.log('📋 Sample school names in database:', sampleSchools);
+                console.log('📋 Teacher school name:', teacherSchool);
+              }
             }
-            return { ...data, id: studentId, docId: d.id };
-          });
-          console.log('✅ Teacher loaded', studentsData.length, 'students for', userSchool);
+          } catch (e) {
+            console.error('❌ Error fetching students:', e);
+            // Fallback: fetch all and filter
+            console.log('⚠️ Fallback: Fetching all students and filtering...');
+            const allStudentsSnap = await db.collection('students').get();
+            const teacherSchoolLower = (teacherSchool || '').toString().trim().toLowerCase();
+            studentsData = allStudentsSnap.docs
+              .filter(d => {
+                const studentSchool = (d.data().school || '').toString().trim().toLowerCase();
+                return studentSchool === teacherSchoolLower;
+              })
+              .map(d => {
+                const data = d.data();
+                let studentId = data.id;
+                if (!studentId) {
+                  const parts = d.id.split('_');
+                  studentId = parts[parts.length - 1];
+                }
+                return { ...data, id: studentId, docId: d.id };
+              });
+            console.log('✅ Fallback loaded', studentsData.length, 'students');
+          }
         }
       }
       setStudents(studentsData);
@@ -12164,266 +12252,6 @@ function TeacherView({
         </header>
       )}
 
-      {/* ========== MOBILE BOTTOM NAVIGATION ========== */}
-      {isMobile && (
-        <nav style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: '65px',
-          background: '#1a1a2e',
-          zIndex: 100000,
-          boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
-          padding: '0 8px',
-          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-around',
-          pointerEvents: 'auto'
-        }}>
-          {/* Home/Overview */}
-          <button
-            onClick={() => handleTabClick('overview')}
-            onTouchEnd={(e) => { e.preventDefault(); handleTabClick('overview'); }}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '6px 10px',
-              color: activeTab === 'overview' ? '#F4B41A' : 'rgba(255,255,255,0.5)',
-              cursor: 'pointer',
-              borderRadius: '10px',
-              minWidth: '55px',
-              background: activeTab === 'overview' ? 'rgba(244, 180, 26, 0.15)' : 'none',
-              border: 'none',
-              fontFamily: 'inherit',
-              WebkitTapHighlightColor: 'transparent',
-              touchAction: 'manipulation'
-            }}
-          >
-            <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>🏠</span>
-            <span style={{fontSize: '0.6rem', fontWeight: 500}}>Home</span>
-          </button>
-          
-          {/* Teachers */}
-          <button
-            onClick={() => handleTabClick('teachers')}
-            onTouchEnd={(e) => { e.preventDefault(); handleTabClick('teachers'); }}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '6px 10px',
-              color: activeTab === 'teachers' ? '#F4B41A' : 'rgba(255,255,255,0.5)',
-              cursor: 'pointer',
-              borderRadius: '10px',
-              minWidth: '55px',
-              background: activeTab === 'teachers' ? 'rgba(244, 180, 26, 0.15)' : 'none',
-              border: 'none',
-              fontFamily: 'inherit',
-              WebkitTapHighlightColor: 'transparent',
-              touchAction: 'manipulation'
-            }}
-          >
-            <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>👨‍🏫</span>
-            <span style={{fontSize: '0.6rem', fontWeight: 500}}>Teachers</span>
-          </button>
-          
-          {/* Students */}
-          <button
-            onClick={() => handleTabClick('students')}
-            onTouchEnd={(e) => { e.preventDefault(); handleTabClick('students'); }}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '6px 10px',
-              color: activeTab === 'students' ? '#F4B41A' : 'rgba(255,255,255,0.5)',
-              cursor: 'pointer',
-              borderRadius: '10px',
-              minWidth: '55px',
-              background: activeTab === 'students' ? 'rgba(244, 180, 26, 0.15)' : 'none',
-              border: 'none',
-              fontFamily: 'inherit',
-              WebkitTapHighlightColor: 'transparent',
-              touchAction: 'manipulation'
-            }}
-          >
-            <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>👨‍🎓</span>
-            <span style={{fontSize: '0.6rem', fontWeight: 500}}>Students</span>
-          </button>
-          
-          {/* Analytics */}
-          <button
-            onClick={() => handleTabClick('analytics')}
-            onTouchEnd={(e) => { e.preventDefault(); handleTabClick('analytics'); }}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '6px 10px',
-              color: activeTab === 'analytics' ? '#F4B41A' : 'rgba(255,255,255,0.5)',
-              cursor: 'pointer',
-              borderRadius: '10px',
-              minWidth: '55px',
-              background: activeTab === 'analytics' ? 'rgba(244, 180, 26, 0.15)' : 'none',
-              border: 'none',
-              fontFamily: 'inherit',
-              WebkitTapHighlightColor: 'transparent',
-              touchAction: 'manipulation'
-            }}
-          >
-            <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>📊</span>
-            <span style={{fontSize: '0.6rem', fontWeight: 500}}>Analytics</span>
-          </button>
-          
-          {/* More */}
-          <button
-            onClick={() => setIsMobileMoreOpen(!isMobileMoreOpen)}
-            onTouchEnd={(e) => { e.preventDefault(); setIsMobileMoreOpen(!isMobileMoreOpen); }}
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '6px 10px',
-              color: isMobileMoreOpen ? '#F4B41A' : 'rgba(255,255,255,0.5)',
-              cursor: 'pointer',
-              borderRadius: '10px',
-              minWidth: '55px',
-              background: isMobileMoreOpen ? 'rgba(244, 180, 26, 0.15)' : 'none',
-              border: 'none',
-              fontFamily: 'inherit',
-              WebkitTapHighlightColor: 'transparent',
-              touchAction: 'manipulation'
-            }}
-          >
-            <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>
-              <i className={`fa-solid ${isMobileMoreOpen ? 'fa-times' : 'fa-ellipsis'}`}></i>
-            </span>
-            <span style={{fontSize: '0.6rem', fontWeight: 500}}>More</span>
-          </button>
-        </nav>
-      )}
-
-      {/* More Menu Overlay */}
-      {isMobile && isMobileMoreOpen && (
-        <div 
-          onClick={() => setIsMobileMoreOpen(false)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: '65px',
-            background: 'rgba(0,0,0,0.4)',
-            zIndex: 1001
-          }}
-        />
-      )}
-
-      {/* More Menu Popup */}
-      {isMobile && isMobileMoreOpen && (
-        <div style={{
-          position: 'fixed',
-          bottom: '75px',
-          right: '10px',
-          background: '#1a1a2e',
-          borderRadius: '16px',
-          boxShadow: '0 -8px 30px rgba(0,0,0,0.4)',
-          padding: '12px',
-          minWidth: '220px',
-          maxHeight: '60vh',
-          overflowY: 'auto',
-          zIndex: 1002,
-          border: '1px solid rgba(255,255,255,0.1)'
-        }}>
-          {teacherTabs.filter(tab => !['overview', 'teachers', 'students', 'analytics'].includes(tab.id)).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handleTabClick(tab.id)}
-              onTouchEnd={(e) => { e.preventDefault(); handleTabClick(tab.id); }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px 16px',
-                color: activeTab === tab.id ? '#F4B41A' : 'rgba(255,255,255,0.8)',
-                cursor: 'pointer',
-                borderRadius: '10px',
-                border: 'none',
-                background: activeTab === tab.id ? 'rgba(244, 180, 26, 0.2)' : 'none',
-                width: '100%',
-                textAlign: 'left',
-                fontFamily: 'inherit',
-                fontSize: '14px',
-                WebkitTapHighlightColor: 'transparent',
-                touchAction: 'manipulation'
-              }}
-            >
-              <span style={{fontSize: '1.1rem', width: '24px', textAlign: 'center'}}>{tab.icon}</span>
-              <span>{tab.label}</span>
-            </button>
-          ))}
-          
-          {/* Dark Mode Toggle */}
-          <button 
-            onClick={() => setDarkMode(!darkMode)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '12px 16px',
-              color: 'rgba(255,255,255,0.8)',
-              cursor: 'pointer',
-              borderRadius: '10px',
-              border: 'none',
-              background: 'none',
-              width: '100%',
-              textAlign: 'left',
-              fontFamily: 'inherit',
-              fontSize: '14px'
-            }}
-          >
-            <span style={{fontSize: '1.1rem', width: '24px', textAlign: 'center'}}>
-              <i className={`fa-solid ${darkMode ? 'fa-sun' : 'fa-moon'}`}></i>
-            </span>
-            <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
-          </button>
-          
-          {/* Logout */}
-          <button 
-            onClick={handleLogout}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '12px 16px',
-              color: '#f87171',
-              cursor: 'pointer',
-              borderRadius: '10px',
-              border: 'none',
-              background: 'none',
-              width: '100%',
-              textAlign: 'left',
-              fontFamily: 'inherit',
-              fontSize: '14px'
-            }}
-          >
-            <span style={{fontSize: '1.1rem', width: '24px', textAlign: 'center'}}>
-              <i className="fa-solid fa-right-from-bracket"></i>
-            </span>
-            <span>Logout</span>
-          </button>
-        </div>
-      )}
-
       {/* Sidebar Hover Zone (for auto-expand on desktop) */}
       {!isMobile && sidebarCollapsed && (
         <div 
@@ -12519,7 +12347,7 @@ function TeacherView({
       {/* Main content */}
       <div 
         className={`main-content ${sidebarCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}
-        style={isMobile ? {marginLeft: 0, paddingTop: '70px', paddingBottom: '80px'} : {}}
+        style={isMobile ? {marginLeft: 0, paddingTop: '70px', paddingBottom: '20px'} : {}}
       >
         {celebrationMessage && (
           <div className="avanti-gradient text-white text-center py-4 text-xl font-bold">
@@ -30379,7 +30207,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.7.2'; // ✅ FIX: 2FA device trust persistence + Bottom nav touch handling + Student school matching
+  const CURRENT_VERSION = '3.7.3'; // ✅ FIX: Removed bottom nav + Firebase index fallback + Better student loading
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
