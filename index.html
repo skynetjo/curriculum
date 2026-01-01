@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26548,32 +26549,44 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         const myManagerId = currentUser.managerId || currentUser.id || currentUser.uid || currentUser.afid;
         const myManagerName = currentUser.name;
         
-        // Get this manager's direct schools
+        // Get this manager's profile
         const myManagerProfile = managers.find(m => m.id === myManagerId || m.name === myManagerName);
         const myDirectSchools = myManagerProfile?.directSchools || [];
+        const myRole = myManagerProfile?.role || '';
         
         console.log('Timesheet - Fetching data for:', {
           isAdmin,
           isSuperAdmin,
           myManagerId,
           myManagerName,
-          myDirectSchools,
-          myManagerProfile: myManagerProfile ? { id: myManagerProfile.id, name: myManagerProfile.name, role: myManagerProfile.role } : null
+          myRole,
+          myDirectSchools
         });
         
-        // For managers (non-super-admin), find teachers in their direct schools
-        let directReporteeAfids = [];
-        if (isAdmin && !isSuperAdmin && myDirectSchools.length > 0) {
-          // Get teachers whose school is in this manager's directSchools
-          const reporteesFromTeachers = teachers.filter(t => myDirectSchools.includes(t.school));
-          directReporteeAfids = reporteesFromTeachers.map(t => t.afid);
+        // IMPORTANT: For PM, filter out schools that have an APM assigned
+        // This ensures APM sees their schools, PM only sees schools without an APM
+        let schoolsToManage = [...myDirectSchools];
+        
+        if (myRole === 'pm') {
+          // Find all APMs and their schools
+          const apmSchools = new Set();
+          managers.forEach(m => {
+            if (m.role === 'apm' && m.status === 'active' && m.directSchools) {
+              m.directSchools.forEach(school => apmSchools.add(school));
+            }
+          });
           
-          console.log('Timesheet - Direct reportees (by school):', {
+          // PM only manages schools that DON'T have an APM
+          schoolsToManage = myDirectSchools.filter(school => !apmSchools.has(school));
+          
+          console.log('Timesheet - PM school filtering:', {
             myDirectSchools,
-            reporteesCount: directReporteeAfids.length,
-            reportees: reporteesFromTeachers.map(t => ({ name: t.name, afid: t.afid, school: t.school }))
+            apmSchools: Array.from(apmSchools),
+            schoolsToManage: schoolsToManage
           });
         }
+        
+        console.log('Timesheet - Schools this manager will see:', schoolsToManage);
         
         // Fetch entries based on role
         let entriesQuery;
@@ -26584,7 +26597,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               .orderBy('date', 'desc')
               .limit(500);
           } else {
-            // Manager - fetch all and filter client-side for direct reportees
+            // Manager - fetch all and filter client-side
             entriesQuery = db.collection('timesheetEntries')
               .orderBy('date', 'desc')
               .limit(500);
@@ -26605,13 +26618,13 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
           createdAt: d.data().createdAt?.toDate?.() || new Date()
         }));
         
-        // For non-super-admin managers, filter to show ONLY direct reportees
+        // For non-super-admin managers, filter to show only their managed schools
         if (isAdmin && !isSuperAdmin) {
           entries = entries.filter(e => {
-            // Include if teacher's school is in manager's directSchools
-            const schoolMatch = myDirectSchools.includes(e.school);
+            // Include if teacher's school is in manager's managed schools
+            const schoolMatch = schoolsToManage.includes(e.school);
             
-            // OR if entry is assigned to this manager
+            // OR if entry is specifically assigned to this manager
             const assignedToMe = e.lineManagerId === myManagerId || e.lineManagerName === myManagerName;
             
             return schoolMatch || assignedToMe;
@@ -26644,23 +26657,22 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
           }
           
           // Filter for non-super-admin managers
-          // Show entries from teachers in their directSchools OR entries assigned to them
           if (!isSuperAdmin && allPendingEntries.length > 0) {
             console.log('Timesheet - Filtering approvals for manager:', {
               myManagerId,
               myManagerName,
-              myDirectSchools
+              myRole,
+              schoolsToManage
             });
             
             allPendingEntries = allPendingEntries.filter(entry => {
-              // Check if entry is directly assigned to this manager by ID
+              // Check if entry is directly assigned to this manager
               const managerIdMatch = entry.lineManagerId === myManagerId;
-              
-              // Check by manager name as backup
               const managerNameMatch = entry.lineManagerName === myManagerName;
               
-              // Check if teacher's school is in this manager's directSchools
-              const schoolMatch = myDirectSchools.includes(entry.school);
+              // Check if teacher's school is in this manager's managed schools
+              // (For PM, this excludes schools that have an APM)
+              const schoolMatch = schoolsToManage.includes(entry.school);
               
               const shouldInclude = managerIdMatch || managerNameMatch || schoolMatch;
               
@@ -26668,8 +26680,6 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                 console.log('Timesheet - Including for approval:', {
                   teacherName: entry.teacherName,
                   school: entry.school,
-                  lineManagerId: entry.lineManagerId,
-                  lineManagerName: entry.lineManagerName,
                   matchedBy: managerIdMatch ? 'managerId' : managerNameMatch ? 'managerName' : 'schoolMatch'
                 });
               }
