@@ -8281,23 +8281,69 @@ function generateDeviceId() {
 }
 
 // Get or create device ID for this browser
-// ✅ FIX: Safe for iOS private browsing mode
+// ✅ FIX: Multiple storage fallbacks for better persistence on PWA/iOS
 function getDeviceId() {
   try {
+    // Try localStorage first
     let deviceId = localStorage.getItem('avanti_device_id');
+    
+    // If not in localStorage, try sessionStorage (survives tab refresh)
     if (!deviceId) {
-      deviceId = generateDeviceId();
-      try {
-        localStorage.setItem('avanti_device_id', deviceId);
-      } catch(e) {
-        console.warn('[getDeviceId] Cannot save device ID:', e);
+      deviceId = sessionStorage.getItem('avanti_device_id');
+      if (deviceId) {
+        // Restore to localStorage
+        try { localStorage.setItem('avanti_device_id', deviceId); } catch(e) {}
       }
     }
+    
+    // If still not found, try to get from a cookie (survives localStorage clear)
+    if (!deviceId) {
+      const cookies = document.cookie.split(';');
+      for (let c of cookies) {
+        const [key, value] = c.trim().split('=');
+        if (key === 'avanti_device_id' && value) {
+          deviceId = value;
+          // Restore to localStorage and sessionStorage
+          try { 
+            localStorage.setItem('avanti_device_id', deviceId);
+            sessionStorage.setItem('avanti_device_id', deviceId);
+          } catch(e) {}
+          break;
+        }
+      }
+    }
+    
+    // Generate new ID if none exists
+    if (!deviceId) {
+      deviceId = generateDeviceId();
+    }
+    
+    // Store in all locations for persistence
+    try { 
+      localStorage.setItem('avanti_device_id', deviceId);
+      sessionStorage.setItem('avanti_device_id', deviceId);
+      // Set cookie that expires in 30 days
+      const expires = new Date(Date.now() + 30*24*60*60*1000).toUTCString();
+      document.cookie = `avanti_device_id=${deviceId};expires=${expires};path=/;SameSite=Strict`;
+    } catch(e) {
+      console.warn('[getDeviceId] Cannot save device ID:', e);
+    }
+    
     return deviceId;
   } catch(e) {
     // On iOS private browsing, localStorage throws
     console.warn('[getDeviceId] localStorage error, using session ID');
-    return 'session_' + generateDeviceId();
+    // Try to get from sessionStorage at least
+    try {
+      let sessionDeviceId = sessionStorage.getItem('avanti_device_id');
+      if (!sessionDeviceId) {
+        sessionDeviceId = 'session_' + generateDeviceId();
+        sessionStorage.setItem('avanti_device_id', sessionDeviceId);
+      }
+      return sessionDeviceId;
+    } catch(e2) {
+      return 'temp_' + generateDeviceId();
+    }
   }
 }
 
@@ -8305,26 +8351,42 @@ function getDeviceId() {
 async function isDeviceTrusted(userId) {
   try {
     const deviceId = getDeviceId();
+    console.log('🔍 Checking device trust for:', userId, 'Device ID:', deviceId.substring(0, 8) + '...');
+    
     const trustedDevicesDoc = await db.collection('trustedDevices').doc(userId).get();
     
-    if (!trustedDevicesDoc.exists) return false;
+    if (!trustedDevicesDoc.exists) {
+      console.log('❌ No trusted devices document found for user');
+      return false;
+    }
     
     const devices = trustedDevicesDoc.data().devices || [];
+    console.log('📱 Found', devices.length, 'trusted devices for user');
+    
     const trustedDevice = devices.find(d => d.deviceId === deviceId && d.active);
     
     if (trustedDevice) {
-      // Check if device trust has expired (30 days)
+      // Check if device trust has expired (15 days)
       const trustDate = new Date(trustedDevice.trustedAt);
       const now = new Date();
       const daysDiff = (now - trustDate) / (1000 * 60 * 60 * 24);
       
-      if (daysDiff > 30) {
-        // Trust expired, remove device
+      if (daysDiff > 15) {
+        // Trust expired after 15 days, remove device
+        console.log('⏰ Device trust expired after 15 days, requiring 2FA again');
         await removeDeviceTrust(userId, deviceId);
         return false;
       }
+      console.log('✅ Device trusted, days remaining:', Math.round(15 - daysDiff));
       return true;
     }
+    
+    // Device not found in trusted list - log partial IDs for debugging
+    console.log('❌ Device not in trusted list. Looking for:', deviceId.substring(0, 12));
+    devices.forEach((d, i) => {
+      console.log(`   Device ${i+1}: ${d.deviceId?.substring(0, 12)}... active:${d.active}`);
+    });
+    
     return false;
   } catch (e) {
     console.error('Error checking device trust:', e);
@@ -8336,10 +8398,13 @@ async function isDeviceTrusted(userId) {
 async function addDeviceTrust(userId, userEmail) {
   try {
     const deviceId = getDeviceId();
+    console.log('🔐 Adding device trust for:', userId, 'Device:', deviceId.substring(0, 8) + '...');
+    
     const deviceInfo = {
       deviceId: deviceId,
       trustedAt: new Date().toISOString(),
       userAgent: navigator.userAgent.substring(0, 200),
+      platform: navigator.platform || 'unknown',
       active: true
     };
     
@@ -8352,16 +8417,30 @@ async function addDeviceTrust(userId, userEmail) {
       const filteredDevices = devices.filter(d => d.deviceId !== deviceId);
       // Add new trust (keep max 5 devices)
       const updatedDevices = [...filteredDevices.slice(-4), deviceInfo];
-      await docRef.update({ devices: updatedDevices, userEmail: userEmail });
+      await docRef.update({ devices: updatedDevices, userEmail: userEmail, lastTrustUpdate: new Date().toISOString() });
+      console.log('✅ Device trust updated, total trusted devices:', updatedDevices.length);
     } else {
       await docRef.set({ 
         devices: [deviceInfo], 
         userEmail: userEmail,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        lastTrustUpdate: new Date().toISOString()
       });
+      console.log('✅ New device trust created');
     }
     
-    console.log('✅ Device trusted for user:', userId);
+    // Verify the trust was saved
+    const verifyDoc = await docRef.get();
+    if (verifyDoc.exists) {
+      const savedDevices = verifyDoc.data().devices || [];
+      const found = savedDevices.find(d => d.deviceId === deviceId);
+      if (found) {
+        console.log('✅ Device trust verified in Firestore');
+      } else {
+        console.warn('⚠️ Device trust not found after saving!');
+      }
+    }
+    
     return true;
   } catch (e) {
     console.error('Error adding device trust:', e);
@@ -8747,6 +8826,11 @@ function TwoFactorVerifyModal({ user, onVerified, onCancel, onUseBackupCode }) {
             {/* Helpful tip for remote users */}
             <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl text-sm text-blue-700">
               💡 <strong>Tip:</strong> Code changes every 30 seconds. Enter it as soon as you see it.
+            </div>
+            
+            {/* Device trust info */}
+            <div className="bg-green-50 border border-green-200 p-3 rounded-xl text-sm text-green-700">
+              ✅ This device will be remembered for <strong>15 days</strong> after verification.
             </div>
 
             <input
@@ -12089,18 +12173,20 @@ function TeacherView({
           right: 0,
           height: '65px',
           background: '#1a1a2e',
-          zIndex: 1001,
+          zIndex: 100000,
           boxShadow: '0 -4px 20px rgba(0,0,0,0.3)',
           padding: '0 8px',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           borderTop: '1px solid rgba(255,255,255,0.1)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-around'
+          justifyContent: 'space-around',
+          pointerEvents: 'auto'
         }}>
           {/* Home/Overview */}
           <button
             onClick={() => handleTabClick('overview')}
+            onTouchEnd={(e) => { e.preventDefault(); handleTabClick('overview'); }}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -12113,7 +12199,9 @@ function TeacherView({
               minWidth: '55px',
               background: activeTab === 'overview' ? 'rgba(244, 180, 26, 0.15)' : 'none',
               border: 'none',
-              fontFamily: 'inherit'
+              fontFamily: 'inherit',
+              WebkitTapHighlightColor: 'transparent',
+              touchAction: 'manipulation'
             }}
           >
             <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>🏠</span>
@@ -12123,6 +12211,7 @@ function TeacherView({
           {/* Teachers */}
           <button
             onClick={() => handleTabClick('teachers')}
+            onTouchEnd={(e) => { e.preventDefault(); handleTabClick('teachers'); }}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -12135,7 +12224,9 @@ function TeacherView({
               minWidth: '55px',
               background: activeTab === 'teachers' ? 'rgba(244, 180, 26, 0.15)' : 'none',
               border: 'none',
-              fontFamily: 'inherit'
+              fontFamily: 'inherit',
+              WebkitTapHighlightColor: 'transparent',
+              touchAction: 'manipulation'
             }}
           >
             <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>👨‍🏫</span>
@@ -12145,6 +12236,7 @@ function TeacherView({
           {/* Students */}
           <button
             onClick={() => handleTabClick('students')}
+            onTouchEnd={(e) => { e.preventDefault(); handleTabClick('students'); }}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -12157,7 +12249,9 @@ function TeacherView({
               minWidth: '55px',
               background: activeTab === 'students' ? 'rgba(244, 180, 26, 0.15)' : 'none',
               border: 'none',
-              fontFamily: 'inherit'
+              fontFamily: 'inherit',
+              WebkitTapHighlightColor: 'transparent',
+              touchAction: 'manipulation'
             }}
           >
             <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>👨‍🎓</span>
@@ -12167,6 +12261,7 @@ function TeacherView({
           {/* Analytics */}
           <button
             onClick={() => handleTabClick('analytics')}
+            onTouchEnd={(e) => { e.preventDefault(); handleTabClick('analytics'); }}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -12179,7 +12274,9 @@ function TeacherView({
               minWidth: '55px',
               background: activeTab === 'analytics' ? 'rgba(244, 180, 26, 0.15)' : 'none',
               border: 'none',
-              fontFamily: 'inherit'
+              fontFamily: 'inherit',
+              WebkitTapHighlightColor: 'transparent',
+              touchAction: 'manipulation'
             }}
           >
             <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>📊</span>
@@ -12189,6 +12286,7 @@ function TeacherView({
           {/* More */}
           <button
             onClick={() => setIsMobileMoreOpen(!isMobileMoreOpen)}
+            onTouchEnd={(e) => { e.preventDefault(); setIsMobileMoreOpen(!isMobileMoreOpen); }}
             style={{
               display: 'flex',
               flexDirection: 'column',
@@ -12201,7 +12299,9 @@ function TeacherView({
               minWidth: '55px',
               background: isMobileMoreOpen ? 'rgba(244, 180, 26, 0.15)' : 'none',
               border: 'none',
-              fontFamily: 'inherit'
+              fontFamily: 'inherit',
+              WebkitTapHighlightColor: 'transparent',
+              touchAction: 'manipulation'
             }}
           >
             <span style={{fontSize: '1.3rem', marginBottom: '2px'}}>
@@ -12248,6 +12348,7 @@ function TeacherView({
             <button
               key={tab.id}
               onClick={() => handleTabClick(tab.id)}
+              onTouchEnd={(e) => { e.preventDefault(); handleTabClick(tab.id); }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -12261,7 +12362,9 @@ function TeacherView({
                 width: '100%',
                 textAlign: 'left',
                 fontFamily: 'inherit',
-                fontSize: '14px'
+                fontSize: '14px',
+                WebkitTapHighlightColor: 'transparent',
+                touchAction: 'manipulation'
               }}
             >
               <span style={{fontSize: '1.1rem', width: '24px', textAlign: 'center'}}>{tab.icon}</span>
@@ -20239,17 +20342,29 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   const currentLockInfo = lockInfo[selectedGrade] || null;
 
   const mySchool=currentUser.school;
+  
+  // ✅ FIX: Case-insensitive and trim school name matching to handle data inconsistencies
+  const normalizeSchool = (school) => (school || '').toString().trim().toLowerCase();
+  const mySchoolNormalized = normalizeSchool(mySchool);
+  
   const filteredStudents=students
-  .filter(s=>s.school===mySchool&&s.grade===selectedGrade)
+  .filter(s => {
+    const studentSchoolNormalized = normalizeSchool(s.school);
+    const gradeMatches = String(s.grade) === String(selectedGrade);
+    const schoolMatches = studentSchoolNormalized === mySchoolNormalized;
+    return schoolMatches && gradeMatches;
+  })
   .sort((a,b)=>a.name.localeCompare(b.name));
 
   console.log('StudentAttendanceView Debug:',{
     mySchool,
+    mySchoolNormalized,
     selectedGrade,
     totalStudents:students.length,
     filteredCount:filteredStudents.length,
     allSchools:Array.from(new Set(students.map(s=>s.school))),
-    allGrades:Array.from(new Set(students.map(s=>s.grade)))
+    allGrades:Array.from(new Set(students.map(s=>s.grade))),
+    sampleStudents: students.slice(0,3).map(s=>({school:s.school, grade:s.grade, name:s.name}))
   });
 
   useEffect(()=>{
@@ -20612,7 +20727,19 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
       <div className="bg-white p-6 rounded-2xl shadow-lg">
         <h3 className="font-bold mb-4">Students ({filteredStudents.length})</h3>
         {filteredStudents.length===0?
-          <p className="text-gray-500 text-center py-8">No students found</p>
+          <div className="text-center py-8">
+            <p className="text-gray-500 mb-4">No students found</p>
+            {students.length > 0 && (
+              <div className="text-sm text-amber-600 bg-amber-50 p-4 rounded-xl">
+                <p className="font-semibold mb-2">⚠️ Debug Info:</p>
+                <p>Total students in database: {students.length}</p>
+                <p>Your school: "{mySchool}"</p>
+                <p>Selected grade: Class {selectedGrade}</p>
+                <p className="mt-2 text-xs">Schools in database: {Array.from(new Set(students.map(s=>s.school))).join(', ')}</p>
+                <p className="text-xs mt-1">If your school name doesn't match exactly, contact admin to update student records.</p>
+              </div>
+            )}
+          </div>
         :
           <div className="space-y-2">
             {filteredStudents.map(student=>
@@ -30252,7 +30379,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.7.0'; // ✅ COST FIX: Major Firebase cost optimization - reduced reads by ~90%
+  const CURRENT_VERSION = '3.7.2'; // ✅ FIX: 2FA device trust persistence + Bottom nav touch handling + Student school matching
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
@@ -30315,19 +30442,30 @@ ReactDOM.render(<App/>,document.getElementById('root'));
         console.log('🗑️ Service workers unregistered');
       }
 
-      // Preserve user session
+      // Preserve user session AND device ID for 2FA
       const sessionData = {
         studentSession: localStorage.getItem('studentSession'),
-        authToken: localStorage.getItem('authToken')
+        authToken: localStorage.getItem('authToken'),
+        avanti_device_id: localStorage.getItem('avanti_device_id'), // ✅ FIX: Preserve 2FA device trust
+        darkMode: localStorage.getItem('darkMode')
       };
 
       // Clear storage
       localStorage.clear();
       sessionStorage.clear();
 
-      // Restore session
+      // Restore session AND device ID
       if (sessionData.studentSession) localStorage.setItem('studentSession', sessionData.studentSession);
       if (sessionData.authToken) localStorage.setItem('authToken', sessionData.authToken);
+      if (sessionData.avanti_device_id) {
+        localStorage.setItem('avanti_device_id', sessionData.avanti_device_id);
+        sessionStorage.setItem('avanti_device_id', sessionData.avanti_device_id);
+        // Also restore cookie
+        const expires = new Date(Date.now() + 30*24*60*60*1000).toUTCString();
+        document.cookie = `avanti_device_id=${sessionData.avanti_device_id};expires=${expires};path=/;SameSite=Strict`;
+        console.log('✅ Device ID preserved during update');
+      }
+      if (sessionData.darkMode) localStorage.setItem('darkMode', sessionData.darkMode);
       
       // Set new version
       localStorage.setItem('appVersion', CURRENT_VERSION);
@@ -30639,7 +30777,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
     padding: 16px 20px;
     max-width: 280px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-    z-index: 99997;
+    z-index: 99980;
     cursor: pointer;
     opacity: 0;
     visibility: hidden;
@@ -30698,7 +30836,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
     border: none;
     cursor: pointer;
     box-shadow: 0 4px 20px rgba(244, 180, 26, 0.4);
-    z-index: 99999;
+    z-index: 99990;
     transition: transform 0.3s ease, box-shadow 0.3s ease, bottom 0.3s ease;
     display: flex;
     align-items: center;
