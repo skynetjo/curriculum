@@ -2586,15 +2586,16 @@ this.updatePresence('online');
     }
   },
   
-  // ✅ FIX: Optimized presence - 95% Firebase cost reduction
-  // Changed from realtime listener to periodic fetch (every 60 seconds)
+  // ✅ FIX: Optimized presence - fetch ALL presence data for last seen feature
   listenToPresence: function() {
     const fetchPresence = async () => {
       try {
+        // ✅ FIX: Fetch ALL presence data (not just online users) for "last seen" feature
         const snap = await db.collection('user_presence')
-  .where('status', 'in', ['online', 'away'])
-  .limit(30)
-  .get();
+          .orderBy('lastSeen', 'desc')
+          .limit(200) // Get more users for directory "last seen"
+          .get();
+          
         const online = {};
         const all = {};
         const now = Date.now();
@@ -2611,18 +2612,23 @@ this.updatePresence('online');
             }
           }
           
-          all[doc.id] = { ...data, status: effectiveStatus, originalStatus: data.status };
-          if (data.userId) all[data.userId] = { ...data, status: effectiveStatus };
-          if (data.userName) all[data.userName.toLowerCase()] = { ...data, status: effectiveStatus };
+          // Store presence data with multiple keys for flexible lookup
+          const presenceData = { ...data, status: effectiveStatus, originalStatus: data.status };
+          all[doc.id] = presenceData;
+          if (data.userId) all[data.userId] = presenceData;
+          if (data.userName) all[data.userName.toLowerCase()] = presenceData;
+          // Also store by email for matching
+          if (data.email) all[data.email.toLowerCase()] = presenceData;
           
           if (effectiveStatus === 'online' || effectiveStatus === 'away') {
-            online[doc.id] = { ...data, status: effectiveStatus };
+            online[doc.id] = presenceData;
           }
         });
         
         this.onlineUsers = online;
         this.allPresence = all;
         this.notifyListeners();
+        console.log('[Presence] Loaded', Object.keys(all).length, 'presence records');
       } catch (err) {
         console.log('[Presence] Fetch error:', err);
       }
@@ -2651,11 +2657,18 @@ this.updatePresence('online');
     if (this.allPresence[sanitizedKey]) return this.allPresence[sanitizedKey];
     if (this.allPresence[searchKey]) return this.allPresence[searchKey];
     
-    // Try to find by partial match
+    // Try to find by partial match or email
     for (const [key, data] of Object.entries(this.allPresence)) {
+      // Match by userId
+      if (data.userId && String(data.userId).toLowerCase() === searchKey) return data;
+      // Match by userName
+      if (data.userName && String(data.userName).toLowerCase() === searchKey) return data;
+      // Match by email
+      if (data.email && String(data.email).toLowerCase() === searchKey) return data;
+      // Partial match on key
+      if (key.toLowerCase() === searchKey) return data;
+      // Match if userId contains the search key
       if (data.userId && String(data.userId).toLowerCase().includes(searchKey)) return data;
-      if (data.userName && String(data.userName).toLowerCase().includes(searchKey)) return data;
-      if (key.toLowerCase().includes(searchKey)) return data;
     }
     
     return null;
@@ -23370,6 +23383,7 @@ function TeacherDirectory({ teachers, currentUser }) {
 function OrgChartDirectory({ teachers, currentUser }) {
   const [managers, setManagers] = useState([]);
   const [apcs, setApcs] = useState([]);
+  const [allTeachers, setAllTeachers] = useState([]); // ✅ FIX: Fetch all teachers directly
   const [selectedMember, setSelectedMember] = useState(null);
   const [loading, setLoading] = useState(true);
   
@@ -23384,13 +23398,24 @@ function OrgChartDirectory({ teachers, currentUser }) {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const managersSnap = await db.collection('managers').get();
+        
+        // ✅ FIX: Fetch ALL data directly for directory (not filtered by school)
+        const [managersSnap, apcsSnap, teachersSnap] = await Promise.all([
+          db.collection('managers').get(),
+          db.collection('apcs').get(),
+          db.collection('teachers').get() // Fetch ALL teachers
+        ]);
+        
         const managersData = managersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setManagers(managersData);
 
-        const apcsSnap = await db.collection('apcs').get();
         const apcsData = apcsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setApcs(apcsData);
+        
+        // ✅ FIX: Store all teachers
+        const teachersData = teachersSnap.docs.map(doc => ({ docId: doc.id, ...doc.data() }));
+        setAllTeachers(teachersData);
+        
       } catch (error) {
         console.error('Error:', error);
       } finally {
@@ -23426,8 +23451,8 @@ function OrgChartDirectory({ teachers, currentUser }) {
       });
     });
     
-    // Add teachers
-    teachers.filter(t => !t.isArchived && t.name?.toLowerCase() !== 'vacant').forEach(t => {
+    // ✅ FIX: Use allTeachers (fetched directly) instead of filtered teachers prop
+    allTeachers.filter(t => !t.isArchived && t.name?.toLowerCase() !== 'vacant').forEach(t => {
       members.push({
         ...t,
         memberType: 'teacher',
@@ -23441,7 +23466,7 @@ function OrgChartDirectory({ teachers, currentUser }) {
       if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
       return (a.name || '').localeCompare(b.name || '');
     });
-  }, [managers, apcs, teachers]);
+  }, [managers, apcs, allTeachers]);
 
   // Get unique values for filter dropdowns
   const filterOptions = useMemo(() => {
