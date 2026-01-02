@@ -11248,7 +11248,7 @@ if(currentUser && currentUser.userType === 'student') {
   return <StudentDashboard currentUser={currentUser} handleLogout={handleLogout} />;
 }
 
-return (<>{currentUser && <OnlineStatusCard currentUser={currentUser} />}{isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools} academicYearSettings={academicYearSettings} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} setSchoolInfo={setSchoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration} precomputedRankings={precomputedRankings}/>}</>);
+return (<>{currentUser && <OnlineStatusCard currentUser={currentUser} />}{isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools} academicYearSettings={academicYearSettings} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} setSchoolInfo={setSchoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration} precomputedRankings={precomputedRankings} managers={managers}/>}</>);
 }
 
 // ========================================
@@ -12160,7 +12160,8 @@ function TeacherView({
   leaveAdjustments,
   floatingCelebration,
   setFloatingCelebration,
-  precomputedRankings
+  precomputedRankings,
+  managers = []
 }) {
   // Check if user is an APC
   const isAPC = currentUser.userType === 'apc' || currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC;
@@ -12604,6 +12605,7 @@ function TeacherView({
             curriculum={curriculum}
             isAdmin={false}
             accessibleSchools={[currentUser.school]}
+            managers={managers}
           />
         )}
         </div>
@@ -26445,6 +26447,10 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                             currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC ||
                             (!currentUser.role && currentUser.subject)); // Teachers don't always have role set
   
+  // ✅ PERFORMANCE: Memoize stable values to prevent unnecessary recalculations
+  const stableMySchool = useMemo(() => mySchool, [mySchool]);
+  const stableMySubject = useMemo(() => mySubject, [mySubject]);
+  
   // Time dropdown options
   const HOURS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'];
   const MINUTES = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
@@ -26497,10 +26503,11 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
   };
   
   // ✅ FIXED: Get chapters for teacher's subject - filter by grade AND subject
+  // ✅ IMPROVED: Better deduplication to prevent duplicate chapters
   const getChaptersForSubject = (grade) => {
     if (!grade) return [];
     
-    const chapters = [];
+    const chaptersMap = new Map(); // Use Map for case-insensitive deduplication
     const subjectKey = mySubject?.toLowerCase()?.trim();
     const gradeStr = String(grade);
     const subjectInitial = getSubjectInitial();
@@ -26528,6 +26535,13 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       return name.includes(subjectKey);
     };
     
+    // ✅ FIX: Extract chapter number for proper deduplication
+    // Chapters like "11P2 Rectilinear Motion" should deduplicate by "11P2"
+    const getChapterKey = (name) => {
+      const match = name.match(/^(\d{2}[a-zA-Z]\d+)/);
+      return match ? match[1].toUpperCase() : name.toLowerCase().trim();
+    };
+    
     Object.entries(curriculum).forEach(([key, data]) => {
       const keyLower = key.toLowerCase();
       
@@ -26542,10 +26556,24 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
             if (ch.name) {
               // Filter chapters by grade AND subject
               if (chapterMatchesGradeAndSubject(ch.name)) {
-                if (!chapters.find(c => c.name === ch.name)) {
-                  chapters.push({
+                const chapterKey = getChapterKey(ch.name);
+                
+                // ✅ FIX: Only add if not already exists (case-insensitive key check)
+                if (!chaptersMap.has(chapterKey)) {
+                  chaptersMap.set(chapterKey, {
                     name: ch.name,
                     topics: ch.topics || []
+                  });
+                } else {
+                  // ✅ FIX: Merge topics if chapter already exists
+                  const existing = chaptersMap.get(chapterKey);
+                  const newTopics = ch.topics || [];
+                  const existingTopicNames = new Set(existing.topics.map(t => (t.name || t).toLowerCase()));
+                  newTopics.forEach(t => {
+                    const topicName = (t.name || t).toLowerCase();
+                    if (!existingTopicNames.has(topicName)) {
+                      existing.topics.push(t);
+                    }
                   });
                 }
               }
@@ -26555,8 +26583,25 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       }
     });
     
-    // Sort chapters by name
-    chapters.sort((a, b) => a.name.localeCompare(b.name));
+    // Convert Map to array and sort
+    const chapters = Array.from(chaptersMap.values());
+    
+    // ✅ FIX: Sort by chapter number (11P1 before 11P2, 11P10 after 11P9)
+    chapters.sort((a, b) => {
+      const matchA = a.name.match(/^(\d{2})([a-zA-Z])(\d+)/);
+      const matchB = b.name.match(/^(\d{2})([a-zA-Z])(\d+)/);
+      
+      if (matchA && matchB) {
+        // Compare grade first
+        if (matchA[1] !== matchB[1]) return matchA[1].localeCompare(matchB[1]);
+        // Then subject letter
+        if (matchA[2].toLowerCase() !== matchB[2].toLowerCase()) return matchA[2].localeCompare(matchB[2]);
+        // Then chapter number (as integer for proper sorting)
+        return parseInt(matchA[3]) - parseInt(matchB[3]);
+      }
+      // Fallback to string comparison
+      return a.name.localeCompare(b.name);
+    });
     
     return chapters;
   };
@@ -26605,6 +26650,9 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
   const dataFetchedRef = useRef(false);
   const lastFetchParamsRef = useRef('');
   
+  // ✅ PERFORMANCE: Add state for fetch errors
+  const [fetchError, setFetchError] = useState(null);
+  
   // Fetch timesheet entries
   useEffect(() => {
     // ✅ FIX: Create stable hash of fetch parameters to prevent unnecessary re-fetches
@@ -26622,9 +26670,20 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       return;
     }
     
+    // ✅ PERFORMANCE: Add timeout wrapper for slow connections
+    const fetchWithTimeout = (promise, timeoutMs = 15000) => {
+      return Promise.race([
+        promise,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timeout - slow connection')), timeoutMs)
+        )
+      ]);
+    };
+    
     const fetchData = async () => {
       try {
         setLoading(true);
+        setFetchError(null);
         
         // Get current manager's ID for lineManagerId matching
         const myManagerId = currentUser.managerId || currentUser.id || currentUser.uid || currentUser.afid;
@@ -26757,6 +26816,14 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         
       } catch (error) {
         console.error('Error fetching timesheet data:', error);
+        // ✅ PERFORMANCE: Set user-friendly error message
+        if (error.message.includes('timeout')) {
+          setFetchError('Slow connection. Data may be loading from cache.');
+        } else if (!navigator.onLine) {
+          setFetchError('You are offline. Showing cached data if available.');
+        } else {
+          setFetchError('Could not load data. Please try again.');
+        }
       } finally {
         setLoading(false);
       }
@@ -26834,9 +26901,10 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       })));
       
       // Use SAME logic as Team Directory getMemberManager function:
-      // 1. Check APMs first (role === 'apm' && directSchools includes school)
+      // 1. Check APMs first (role === 'apm' && directSchools includes school && status active)
       const apm = managers.find(m => 
         m.role === 'apm' && 
+        m.status === 'active' &&
         m.directSchools?.includes(mySchool)
       );
       
@@ -26851,10 +26919,11 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         });
       }
       
-      // 2. Then check PMs
+      // 2. Then check PMs (only if no APM found)
       if (!lineManagerId) {
         const pm = managers.find(m => 
           m.role === 'pm' && 
+          m.status === 'active' &&
           m.directSchools?.includes(mySchool)
         );
         
@@ -27136,7 +27205,34 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-500">Loading Timesheet...</p>
+          <p className="text-gray-500 font-medium">Loading Timesheet...</p>
+          <p className="text-xs text-gray-400 mt-2">
+            {navigator.onLine ? '📶 Connected' : '📴 Offline - Loading from cache'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  
+  // ✅ PERFORMANCE: Show error state with retry option
+  if (fetchError) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="text-5xl mb-4">⚠️</div>
+          <p className="text-gray-700 font-medium mb-2">Could not load timesheet</p>
+          <p className="text-sm text-gray-500 mb-4">{fetchError}</p>
+          <button 
+            onClick={() => {
+              dataFetchedRef.current = false;
+              lastFetchParamsRef.current = '';
+              setFetchError(null);
+              setLoading(true);
+            }}
+            className="px-6 py-2 bg-yellow-500 text-white rounded-lg font-semibold hover:bg-yellow-600"
+          >
+            🔄 Retry
+          </button>
         </div>
       </div>
     );
