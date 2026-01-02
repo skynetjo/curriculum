@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2913,6 +2912,8 @@ let SCHOOLS=['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal
 // ========================================
 const MANAGER_ROLES = {
   SUPER_ADMIN: 'super_admin',     // Full access to everything
+  DIRECTOR: 'director',           // Director - view all data (read-only)
+  ASSOC_DIRECTOR: 'assoc_director', // Associate Director - view all data (read-only)
   APH: 'aph',                     // Program Head - sees all reportees' schools
   PM: 'pm',                       // Program Manager - sees their schools + APM schools
   APM: 'apm',                     // Associate Program Manager - sees only assigned schools
@@ -2921,6 +2922,8 @@ const MANAGER_ROLES = {
 
 const ROLE_LABELS = {
   'super_admin': 'Super Admin',
+  'director': 'Director',
+  'assoc_director': 'Associate Director',
   'aph': 'Program Head',
   'pm': 'Program Manager',
   'apm': 'Associate Program Manager',
@@ -2929,6 +2932,8 @@ const ROLE_LABELS = {
 
 const ROLE_COLORS = {
   'super_admin': { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+  'director': { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-200' },
+  'assoc_director': { bg: 'bg-violet-100', text: 'text-violet-700', border: 'border-violet-200' },
   'aph': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
   'pm': { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' },
   'apm': { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
@@ -13035,6 +13040,8 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
   // Get valid "reports to" options based on selected role
   const getReportsToOptions = (role) => {
     switch(role) {
+      case MANAGER_ROLES.DIRECTOR: return []; // Director reports to no one
+      case MANAGER_ROLES.ASSOC_DIRECTOR: return []; // Associate Director reports to no one
       case MANAGER_ROLES.APH: return []; // APH reports to Super Admin (no selection needed)
       case MANAGER_ROLES.PM: return getManagersByRole(MANAGER_ROLES.APH); // PM reports to APH
       case MANAGER_ROLES.APM: return getManagersByRole(MANAGER_ROLES.PM); // APM reports to PM
@@ -13289,11 +13296,14 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
       return;
     }
     
-    // Validate reports to for PM and APM
+    // Validate reports to for PM and APM (not for Directors/APH)
     if ((form.role === MANAGER_ROLES.PM || form.role === MANAGER_ROLES.APM) && !form.reportsTo) {
       alert('Please select who this person reports to');
       return;
     }
+    
+    // ✅ Directors don't need schools - they have view-all access
+    const isDirectorRole = form.role === 'director' || form.role === 'assoc_director';
 
     try {
       const managerData = {
@@ -13301,8 +13311,10 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
         email: form.email.toLowerCase(),
         afCode: form.afCode || null,
         role: form.role,
-        reportsTo: form.role === MANAGER_ROLES.APH ? null : form.reportsTo,
-        directSchools: form.directSchools,
+        reportsTo: (form.role === MANAGER_ROLES.APH || isDirectorRole) ? null : form.reportsTo,
+        directSchools: isDirectorRole ? [] : form.directSchools, // Directors have all-access
+        viewAllSchools: isDirectorRole, // ✅ Flag for Directors to see all data
+        canApprove: !isDirectorRole, // ✅ Directors cannot approve timesheets
         phone: form.phone,
         whatsapp: form.whatsapp || null,
         status: form.status,
@@ -13536,6 +13548,8 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
               className="w-full border-2 px-4 py-3 rounded-xl"
             >
               <option value="All">All Roles</option>
+              <option value={MANAGER_ROLES.DIRECTOR}>Director</option>
+              <option value={MANAGER_ROLES.ASSOC_DIRECTOR}>Associate Director</option>
               <option value={MANAGER_ROLES.APH}>Program Head (PH)</option>
               <option value={MANAGER_ROLES.PM}>Program Manager (PM)</option>
               <option value={MANAGER_ROLES.APM}>Associate Program Manager (APM)</option>
@@ -13547,6 +13561,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
       {/* Hierarchy View */}
       <div className="bg-white p-6 rounded-2xl shadow-lg">
         <h3 className="text-xl font-bold mb-4">📊 Organization Hierarchy</h3>
+        <p className="text-sm text-gray-600 mb-4">Director → Associate Director → Program Head → Program Manager → Associate Program Manager</p>
         <div className="space-y-4">
           {/* Super Admin Card */}
           <div className="border-2 border-purple-200 rounded-xl p-4 bg-purple-50">
@@ -13558,6 +13573,34 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
             <div className="text-sm text-gray-600 mt-1">📧 admin@avantifellows.org</div>
             <div className="text-sm text-green-600 font-semibold mt-2">📊 Full Access: All Schools</div>
           </div>
+          
+          {/* Directors (view-only) */}
+          {managers.filter(m => m.role === 'director' && m.status === 'active').map(director => (
+            <div key={director.id} className="border-2 border-indigo-200 rounded-xl p-4 bg-indigo-50 ml-4">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🎯</span>
+                <span className="text-xl font-bold">{director.name}</span>
+                <span className="px-3 py-1 bg-indigo-600 text-white text-xs rounded-full font-bold">DIRECTOR</span>
+                <span className="px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded-full">View Only</span>
+              </div>
+              <div className="text-sm text-gray-600 mt-1">📧 {director.email}</div>
+              <div className="text-sm text-green-600 font-semibold mt-2">📊 View Access: All Schools</div>
+            </div>
+          ))}
+          
+          {/* Associate Directors (view-only) */}
+          {managers.filter(m => m.role === 'assoc_director' && m.status === 'active').map(assocDir => (
+            <div key={assocDir.id} className="border-2 border-violet-200 rounded-xl p-4 bg-violet-50 ml-4">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🎖️</span>
+                <span className="text-xl font-bold">{assocDir.name}</span>
+                <span className="px-3 py-1 bg-violet-600 text-white text-xs rounded-full font-bold">ASSOCIATE DIRECTOR</span>
+                <span className="px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded-full">View Only</span>
+              </div>
+              <div className="text-sm text-gray-600 mt-1">📧 {assocDir.email}</div>
+              <div className="text-sm text-green-600 font-semibold mt-2">📊 View Access: All Schools</div>
+            </div>
+          ))}
           
           {/* APHs and their tree */}
           {topLevelManagers.map(manager => renderManagerCard(manager))}
@@ -13766,10 +13809,15 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                     onChange={e => setForm({ ...form, role: e.target.value, reportsTo: '' })}
                     className="w-full border-2 px-3 py-2 rounded-lg"
                   >
+                    <option value={MANAGER_ROLES.DIRECTOR}>Director (View Only)</option>
+                    <option value={MANAGER_ROLES.ASSOC_DIRECTOR}>Associate Director (View Only)</option>
                     <option value={MANAGER_ROLES.APH}>Program Head (PH)</option>
                     <option value={MANAGER_ROLES.PM}>Program Manager (PM)</option>
                     <option value={MANAGER_ROLES.APM}>Associate Program Manager (APM)</option>
                   </select>
+                  {(form.role === 'director' || form.role === 'assoc_director') && (
+                    <p className="text-xs text-blue-600 mt-1">⚠️ Directors have view-only access to all data. They cannot approve timesheets.</p>
+                  )}
                 </div>
               </div>
 
@@ -13796,6 +13844,13 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                 </div>
               )}
 
+              {/* Directors have access to all schools, so no need to select */}
+              {(form.role === 'director' || form.role === 'assoc_director') ? (
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                  <p className="text-blue-700 font-semibold">📊 All Schools Access</p>
+                  <p className="text-sm text-blue-600 mt-1">Directors and Associate Directors have view-only access to all schools. No need to assign specific schools.</p>
+                </div>
+              ) : (
               <div>
                 <label className="block text-sm font-bold mb-2">Assign Schools *</label>
                 <div className="border-2 rounded-lg p-3 max-h-48 overflow-y-auto">
@@ -13816,6 +13871,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                 </div>
                 <p className="text-xs text-gray-600 mt-1">Selected: {form.directSchools.length} school(s)</p>
               </div>
+              )}
 
               <div className="flex gap-3">
                 <button onClick={handleSubmit} className="flex-1 avanti-gradient text-white py-3 rounded-xl font-bold">
@@ -26372,11 +26428,17 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
   const mySchool = currentUser.school;
   const myAfid = currentUser.afid || currentUser.uid || currentUser.id;
   
-  // Check if current user is a manager (APM/PM/Program Head) - they shouldn't see entry form
+  // Check if current user is a manager (APM/PM/Program Head/Director) - they shouldn't see entry form
   const isManager = isAdmin || currentUser.role === 'apm' || currentUser.role === 'pm' || 
                     currentUser.role === 'aph' || currentUser.role === MANAGER_ROLES.APM || 
                     currentUser.role === MANAGER_ROLES.PM || currentUser.role === MANAGER_ROLES.APH ||
-                    currentUser.role === 'super_admin';
+                    currentUser.role === 'super_admin' || currentUser.role === 'director' ||
+                    currentUser.role === 'assoc_director' || currentUser.role === MANAGER_ROLES.DIRECTOR ||
+                    currentUser.role === MANAGER_ROLES.ASSOC_DIRECTOR;
+  
+  // ✅ NEW: Check if user is Director/Associate Director (view-only access)
+  const isViewOnly = currentUser.role === 'director' || currentUser.role === 'assoc_director' ||
+                     currentUser.role === MANAGER_ROLES.DIRECTOR || currentUser.role === MANAGER_ROLES.ASSOC_DIRECTOR;
   
   // Check if user can enter timesheet (Teacher or APC only)
   const canEnterTimesheet = !isManager && (currentUser.userType === 'teacher' || currentUser.userType === 'apc' || 
@@ -26539,8 +26601,27 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
   const startTime = getTimeString(startHour, startMinute, startPeriod);
   const endTime = getTimeString(endHour, endMinute, endPeriod);
   
+  // ✅ FIX: Ref to prevent infinite re-fetching
+  const dataFetchedRef = useRef(false);
+  const lastFetchParamsRef = useRef('');
+  
   // Fetch timesheet entries
   useEffect(() => {
+    // ✅ FIX: Create stable hash of fetch parameters to prevent unnecessary re-fetches
+    const fetchParamsHash = JSON.stringify({
+      isAdmin,
+      isSuperAdmin,
+      myAfid,
+      managersCount: managers?.length || 0,
+      currentUserName: currentUser?.name,
+      currentUserRole: currentUser?.role
+    });
+    
+    // ✅ FIX: Skip if already fetched with same params
+    if (dataFetchedRef.current && lastFetchParamsRef.current === fetchParamsHash) {
+      return;
+    }
+    
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -26552,16 +26633,14 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         // Get this manager's profile
         const myManagerProfile = managers.find(m => m.id === myManagerId || m.name === myManagerName);
         const myDirectSchools = myManagerProfile?.directSchools || [];
-        const myRole = myManagerProfile?.role || '';
+        const myRole = myManagerProfile?.role || currentUser.role || '';
         
-        console.log('Timesheet - Fetching data for:', {
-          isAdmin,
-          isSuperAdmin,
-          myManagerId,
-          myManagerName,
-          myRole,
-          myDirectSchools
-        });
+        // ✅ FIX: Check for Director/Associate Director roles (view-only, see all data)
+        const isDirector = myRole === 'director' || myRole === 'assoc_director';
+        const hasViewAllAccess = isSuperAdmin || isDirector;
+        
+        // Single log instead of multiple
+        console.log('Timesheet - Fetching data:', { isAdmin, isSuperAdmin, isDirector, myRole, schools: myDirectSchools.length });
         
         // IMPORTANT: For PM, filter out schools that have an APM assigned
         // This ensures APM sees their schools, PM only sees schools without an APM
@@ -26578,26 +26657,18 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
           
           // PM only manages schools that DON'T have an APM
           schoolsToManage = myDirectSchools.filter(school => !apmSchools.has(school));
-          
-          console.log('Timesheet - PM school filtering:', {
-            myDirectSchools,
-            apmSchools: Array.from(apmSchools),
-            schoolsToManage: schoolsToManage
-          });
         }
-        
-        console.log('Timesheet - Schools this manager will see:', schoolsToManage);
         
         // Fetch entries based on role
         let entriesQuery;
         if (isAdmin) {
-          if (isSuperAdmin) {
-            // Super admin sees all
+          if (hasViewAllAccess) {
+            // Super admin, Director, Associate Director sees all
             entriesQuery = db.collection('timesheetEntries')
               .orderBy('date', 'desc')
               .limit(500);
           } else {
-            // Manager - fetch all and filter client-side
+            // Regular Manager - fetch all and filter client-side
             entriesQuery = db.collection('timesheetEntries')
               .orderBy('date', 'desc')
               .limit(500);
@@ -26618,8 +26689,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
           createdAt: d.data().createdAt?.toDate?.() || new Date()
         }));
         
-        // For non-super-admin managers, filter to show only their managed schools
-        if (isAdmin && !isSuperAdmin) {
+        // For non-super-admin/non-director managers, filter to show only their managed schools
+        if (isAdmin && !hasViewAllAccess) {
           entries = entries.filter(e => {
             // Include if teacher's school is in manager's managed schools
             const schoolMatch = schoolsToManage.includes(e.school);
@@ -26629,14 +26700,12 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
             
             return schoolMatch || assignedToMe;
           });
-          
-          console.log('Timesheet - Filtered entries for manager:', entries.length);
         }
         
         setTimesheetEntries(entries);
         
-        // Fetch pending approvals for managers
-        if (isAdmin) {
+        // Fetch pending approvals for managers (NOT for Director/Associate Director - they're view-only)
+        if (isAdmin && !isDirector) {
           let allPendingEntries = [];
           
           // Fetch all pending, then filter client-side
@@ -26650,21 +26719,12 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               id: d.id
             }));
             
-            console.log('Timesheet - Total pending entries fetched:', allPendingEntries.length);
-            
           } catch (e) {
             console.error('Error fetching pending entries:', e);
           }
           
           // Filter for non-super-admin managers
           if (!isSuperAdmin && allPendingEntries.length > 0) {
-            console.log('Timesheet - Filtering approvals for manager:', {
-              myManagerId,
-              myManagerName,
-              myRole,
-              schoolsToManage
-            });
-            
             allPendingEntries = allPendingEntries.filter(entry => {
               // Check if entry is directly assigned to this manager
               const managerIdMatch = entry.lineManagerId === myManagerId;
@@ -26674,17 +26734,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               // (For PM, this excludes schools that have an APM)
               const schoolMatch = schoolsToManage.includes(entry.school);
               
-              const shouldInclude = managerIdMatch || managerNameMatch || schoolMatch;
-              
-              if (shouldInclude) {
-                console.log('Timesheet - Including for approval:', {
-                  teacherName: entry.teacherName,
-                  school: entry.school,
-                  matchedBy: managerIdMatch ? 'managerId' : managerNameMatch ? 'managerName' : 'schoolMatch'
-                });
-              }
-              
-              return shouldInclude;
+              return managerIdMatch || managerNameMatch || schoolMatch;
             });
           }
           
@@ -26695,9 +26745,15 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
             return dateB.localeCompare(dateA);
           });
           
-          console.log('Timesheet - Final pending approvals for this manager:', allPendingEntries.length);
           setPendingApprovals(allPendingEntries);
+        } else if (isDirector) {
+          // Directors see all pending but can't approve (view-only)
+          setPendingApprovals([]);
         }
+        
+        // ✅ FIX: Mark as fetched
+        dataFetchedRef.current = true;
+        lastFetchParamsRef.current = fetchParamsHash;
         
       } catch (error) {
         console.error('Error fetching timesheet data:', error);
@@ -26707,7 +26763,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
     };
     
     fetchData();
-  }, [isAdmin, isSuperAdmin, accessibleSchools, myAfid, teachers, managers]);
+  }, [isAdmin, isSuperAdmin, myAfid, currentUser?.name, currentUser?.role, managers?.length]);
   
   // Submit timesheet entry
   const handleSubmit = async (e) => {
@@ -27764,7 +27820,18 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
             {pendingApprovals.length > 0 && (
               <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">{pendingApprovals.length} pending</span>
             )}
+            {isViewOnly && (
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm ml-2">View Only</span>
+            )}
           </h2>
+          
+          {/* Directors (view-only) see a notice instead of approval buttons */}
+          {isViewOnly && pendingApprovals.length > 0 && (
+            <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
+              <p className="text-blue-700 font-semibold">👁️ View Only Mode</p>
+              <p className="text-sm text-blue-600">As a Director/Associate Director, you can view all timesheet entries but cannot approve or reject them.</p>
+            </div>
+          )}
           
           {pendingApprovals.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
@@ -27796,6 +27863,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                         {entry.notes && <div><strong>Notes:</strong> {entry.notes}</div>}
                       </div>
                     </div>
+                    {/* ✅ Only show approval buttons if NOT view-only */}
+                    {!isViewOnly && (
                     <div className="flex flex-row md:flex-col gap-2">
                       <button
                         onClick={() => handleApproval(entry.id, 'approved')}
@@ -27817,6 +27886,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                         🗑️ Delete
                       </button>
                     </div>
+                    )}
                   </div>
                 </div>
               ))}
