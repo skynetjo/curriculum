@@ -17,17 +17,18 @@ const STATIC_FILES = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon-72.png',
-  '/icon-96.png',
-  '/icon-128.png',
-  '/icon-144.png',
-  '/icon-152.png',
+  '/offline.html',
+  // PNG icons
   '/icon-192.png',
-  '/icon-384.png',
   '/icon-512.png',
-  '/icon-maskable-192.png',
-  '/icon-maskable-512.png',
-  '/offline.html'
+  // JPG icons (your actual files)
+  '/Icon-72.jpg',
+  '/Icon-96.jpg',
+  '/Icon-144.jpg',
+  '/Icon-152.jpg',
+  '/Icon-192.jpg',
+  '/Icon-384.jpg',
+  '/Icon-512.jpg'
 ];
 
 // External resources to cache
@@ -60,6 +61,12 @@ self.addEventListener('install', event => {
         console.log('[SW] Caching static files');
         return cache.addAll(STATIC_FILES).catch(err => {
           console.log('[SW] Some static files failed to cache:', err);
+          // Try to cache files individually
+          return Promise.all(
+            STATIC_FILES.map(url => 
+              cache.add(url).catch(e => console.log('[SW] Failed:', url))
+            )
+          );
         });
       }),
       
@@ -164,7 +171,19 @@ self.addEventListener('fetch', event => {
         .catch(() => {
           // Try cache first, then offline page
           return caches.match(event.request)
-            .then(response => response || caches.match('/offline.html'));
+            .then(response => {
+              if (response) return response;
+              // Return offline page
+              return caches.match('/offline.html')
+                .then(offlineResponse => {
+                  if (offlineResponse) return offlineResponse;
+                  // Last resort: return a simple offline response
+                  return new Response(
+                    '<html><body><h1>You are offline</h1><p>Please check your connection.</p></body></html>',
+                    { headers: { 'Content-Type': 'text/html' } }
+                  );
+                });
+            });
         })
     );
     return;
@@ -278,21 +297,20 @@ async function syncAttendance() {
         
         // Remove from pending after successful sync
         await removeFromStore(db, 'pendingAttendance', record.id);
-        console.log('[SW] Synced attendance record:', record.id);
+        console.log('[SW] Attendance synced:', record.id);
       } catch (err) {
         console.error('[SW] Failed to sync attendance:', err);
       }
     }
     
-    // Notify user
-    await showNotification('Attendance Synced', {
-      body: 'Your offline attendance data has been uploaded successfully.',
-      icon: '/icon-192.png',
-      badge: '/icon-72.png',
-      tag: 'sync-complete'
+    // Notify completion
+    const clients = await self.clients.matchAll();
+    clients.forEach(client => {
+      client.postMessage({ type: 'SYNC_COMPLETE', store: 'attendance' });
     });
+    
   } catch (err) {
-    console.error('[SW] Attendance sync failed:', err);
+    console.error('[SW] Sync attendance error:', err);
   }
 }
 
@@ -314,13 +332,19 @@ async function syncCurriculum() {
         });
         
         await removeFromStore(db, 'pendingCurriculum', record.id);
-        console.log('[SW] Synced curriculum record:', record.id);
+        console.log('[SW] Curriculum synced:', record.id);
       } catch (err) {
         console.error('[SW] Failed to sync curriculum:', err);
       }
     }
+    
+    const clients = await self.clients.matchAll();
+    clients.forEach(client => {
+      client.postMessage({ type: 'SYNC_COMPLETE', store: 'curriculum' });
+    });
+    
   } catch (err) {
-    console.error('[SW] Curriculum sync failed:', err);
+    console.error('[SW] Sync curriculum error:', err);
   }
 }
 
@@ -342,21 +366,29 @@ async function syncFeedback() {
         });
         
         await removeFromStore(db, 'pendingFeedback', record.id);
-        console.log('[SW] Synced feedback record:', record.id);
+        console.log('[SW] Feedback synced:', record.id);
       } catch (err) {
         console.error('[SW] Failed to sync feedback:', err);
       }
     }
+    
+    const clients = await self.clients.matchAll();
+    clients.forEach(client => {
+      client.postMessage({ type: 'SYNC_COMPLETE', store: 'feedback' });
+    });
+    
   } catch (err) {
-    console.error('[SW] Feedback sync failed:', err);
+    console.error('[SW] Sync feedback error:', err);
   }
 }
 
 // Sync all pending data
 async function syncAllData() {
+  console.log('[SW] Syncing all pending data...');
   await syncAttendance();
   await syncCurriculum();
   await syncFeedback();
+  console.log('[SW] All data sync complete');
 }
 
 // ========================================
@@ -421,7 +453,7 @@ self.addEventListener('push', event => {
     title: 'Curriculum Tracker',
     body: 'You have a new notification',
     icon: '/icon-192.png',
-    badge: '/icon-72.png',
+    badge: '/Icon-72.jpg',
     tag: 'default',
     data: {}
   };
@@ -440,14 +472,14 @@ self.addEventListener('push', event => {
   const options = {
     body: data.body,
     icon: data.icon || '/icon-192.png',
-    badge: data.badge || '/icon-72.png',
+    badge: data.badge || '/Icon-72.jpg',
     tag: data.tag,
     data: data.data,
     vibrate: [100, 50, 100],
     requireInteraction: data.requireInteraction || false,
     actions: data.actions || [
-      { action: 'open', title: 'Open App', icon: '/icons/open.png' },
-      { action: 'dismiss', title: 'Dismiss', icon: '/icons/dismiss.png' }
+      { action: 'open', title: 'Open App', icon: '/icon-192.png' },
+      { action: 'dismiss', title: 'Dismiss' }
     ],
     // For Android
     image: data.image,
@@ -571,6 +603,9 @@ function openIndexedDB() {
       }
       if (!db.objectStoreNames.contains('pendingFeedback')) {
         db.createObjectStore('pendingFeedback', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('pendingObservations')) {
+        db.createObjectStore('pendingObservations', { keyPath: 'id' });
       }
       if (!db.objectStoreNames.contains('cachedData')) {
         db.createObjectStore('cachedData', { keyPath: 'key' });
