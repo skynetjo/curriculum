@@ -1,15 +1,25 @@
 {
   "name": "Curriculum Tracker - Avanti Fellows",
   "short_name": "Curriculum Tracker",
-  "description": "Track curriculum progress, attendance, and feedback for JNV Program across 32 schools",
+  "description": "Track curriculum progress, attendance, and feedback for JNV Program across 32 schools. Designed for teachers in remote areas with low connectivity.",
   "start_url": "/",
   "id": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#F4B41A",
   "theme_color": "#F4B41A",
   "orientation": "portrait-primary",
   "lang": "en",
+  "dir": "ltr",
+  "categories": ["education", "productivity", "utilities"],
+  "iarc_rating_id": "",
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "handle_links": "preferred",
   "icons": [
     {
       "src": "/Icon-72.jpg",
@@ -105,7 +115,51 @@
       "description": "Update curriculum progress",
       "url": "/?page=curriculum",
       "icons": [{ "src": "/Icon-192.jpg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Student Feedback",
+      "short_name": "Feedback",
+      "description": "Collect student feedback",
+      "url": "/?page=feedback",
+      "icons": [{ "src": "/Icon-192.jpg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Analytics Dashboard",
+      "short_name": "Analytics",
+      "description": "View analytics and reports",
+      "url": "/?page=analytics",
+      "icons": [{ "src": "/Icon-192.jpg", "sizes": "192x192" }]
     }
   ],
-  "prefer_related_applications": false
+  "share_target": {
+    "action": "/?share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "file",
+          "accept": ["image/*", "text/*", ".csv", ".xlsx"]
+        }
+      ]
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "/?file-handler",
+      "accept": {
+        "text/csv": [".csv"],
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"]
+      }
+    }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+curriculum",
+      "url": "/?protocol=%s"
+    }
+  ]
 }
