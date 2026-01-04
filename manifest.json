@@ -61,14 +61,14 @@
       "type": "application/json",
       "icons": [
         {
-          "src": "/Icon-192.jpg",
+          "src": "/Icon-192.png",
           "sizes": "192x192",
           "type": "image/jpeg"
         }
       ],
       "backgrounds": [
         {
-          "src": "/widget-bg.jpg",
+          "src": "/widget-bg.png",
           "sizes": "1024x1024",
           "type": "image/jpeg"
         }
@@ -93,7 +93,7 @@
       "type": "application/json",
       "icons": [
         {
-          "src": "/Icon-192.jpg",
+          "src": "/Icon-192.png",
           "sizes": "192x192",
           "type": "image/jpeg"
         }
@@ -102,50 +102,50 @@
   ],
   "icons": [
     {
-      "src": "/Icon-72.jpg",
+      "src": "/Icon-72.png",
       "sizes": "72x72",
       "type": "image/jpeg"
     },
     {
-      "src": "/Icon-96.jpg",
+      "src": "/Icon-96.png",
       "sizes": "96x96",
       "type": "image/jpeg"
     },
     {
-      "src": "/Icon-144.jpg",
+      "src": "/Icon-144.png",
       "sizes": "144x144",
       "type": "image/jpeg"
     },
     {
-      "src": "/Icon-152.jpg",
+      "src": "/Icon-152.png",
       "sizes": "152x152",
       "type": "image/jpeg"
     },
     {
-      "src": "/Icon-192.jpg",
+      "src": "/Icon-192.png",
       "sizes": "192x192",
       "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/Icon-384.jpg",
+      "src": "/Icon-384.png",
       "sizes": "384x384",
       "type": "image/jpeg"
     },
     {
-      "src": "/Icon-512.jpg",
+      "src": "/Icon-512.png",
       "sizes": "512x512",
       "type": "image/jpeg",
       "purpose": "any"
     },
     {
-      "src": "/Icon-192.jpg",
+      "src": "/Icon-192.png",
       "sizes": "192x192",
       "type": "image/jpeg",
       "purpose": "maskable"
     },
     {
-      "src": "/Icon-512.jpg",
+      "src": "/Icon-512.png",
       "sizes": "512x512",
       "type": "image/jpeg",
       "purpose": "maskable"
@@ -187,28 +187,28 @@
       "short_name": "Attendance",
       "description": "Quickly mark student attendance",
       "url": "/?page=attendance",
-      "icons": [{ "src": "/Icon-192.jpg", "sizes": "192x192" }]
+      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Curriculum Progress",
       "short_name": "Curriculum",
       "description": "Update curriculum progress",
       "url": "/?page=curriculum",
-      "icons": [{ "src": "/Icon-192.jpg", "sizes": "192x192" }]
+      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Student Feedback",
       "short_name": "Feedback",
       "description": "Collect student feedback",
       "url": "/?page=feedback",
-      "icons": [{ "src": "/Icon-192.jpg", "sizes": "192x192" }]
+      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Analytics Dashboard",
       "short_name": "Analytics",
       "description": "View analytics and reports",
       "url": "/?page=analytics",
-      "icons": [{ "src": "/Icon-192.jpg", "sizes": "192x192" }]
+      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192" }]
     }
   ],
   "share_target": {
