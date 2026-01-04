@@ -13,15 +13,13 @@ const DATA_CACHE = 'data-v' + VERSION;
 // CACHE CONFIGURATION
 // ========================================
 // Files to cache immediately on install (App Shell)
+// IMPORTANT: These paths must match your actual files in GitHub!
 const STATIC_FILES = [
   '/',
   '/index.html',
   '/manifest.json',
   '/offline.html',
-  // PNG icons
-  '/icon-192.png',
-  '/icon-512.png',
-  // JPG icons (your actual files)
+  // Your actual icon files (Capital I, JPG format)
   '/Icon-72.jpg',
   '/Icon-96.jpg',
   '/Icon-144.jpg',
@@ -56,18 +54,16 @@ self.addEventListener('install', event => {
   
   event.waitUntil(
     Promise.all([
-      // Cache static files
+      // Cache static files (fail gracefully for missing files)
       caches.open(STATIC_CACHE).then(cache => {
         console.log('[SW] Caching static files');
-        return cache.addAll(STATIC_FILES).catch(err => {
-          console.log('[SW] Some static files failed to cache:', err);
-          // Try to cache files individually
-          return Promise.all(
-            STATIC_FILES.map(url => 
-              cache.add(url).catch(e => console.log('[SW] Failed:', url))
-            )
-          );
-        });
+        return Promise.all(
+          STATIC_FILES.map(url => {
+            return cache.add(url).catch(err => {
+              console.log('[SW] Failed to cache (skipping):', url);
+            });
+          })
+        );
       }),
       
       // Cache external resources (CDN files)
@@ -81,16 +77,19 @@ self.addEventListener('install', event => {
                   return cache.put(url, response);
                 }
               })
-              .catch(err => console.log('[SW] Failed to cache:', url));
+              .catch(err => console.log('[SW] Failed to cache external:', url));
           })
         );
       }),
       
       // Create offline page cache
       caches.open(OFFLINE_CACHE).then(cache => {
-        return cache.add('/offline.html').catch(() => {});
+        return cache.add('/offline.html').catch(() => {
+          console.log('[SW] offline.html not found, creating fallback');
+        });
       })
     ]).then(() => {
+      console.log('[SW] Installation complete');
       // Skip waiting to activate immediately
       self.skipWaiting();
     })
@@ -179,7 +178,7 @@ self.addEventListener('fetch', event => {
                   if (offlineResponse) return offlineResponse;
                   // Last resort: return a simple offline response
                   return new Response(
-                    '<html><body><h1>You are offline</h1><p>Please check your connection.</p></body></html>',
+                    '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title><style>body{font-family:system-ui;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#1a1a2e;color:#fff;text-align:center}.container{padding:40px}h1{color:#F4B41A;margin-bottom:20px}button{background:#F4B41A;color:#000;border:none;padding:15px 30px;border-radius:10px;font-size:16px;cursor:pointer;margin-top:20px}</style></head><body><div class="container"><h1>📡 You are Offline</h1><p>Please check your internet connection and try again.</p><button onclick="location.reload()">Try Again</button></div></body></html>',
                     { headers: { 'Content-Type': 'text/html' } }
                   );
                 });
@@ -452,7 +451,7 @@ self.addEventListener('push', event => {
   let data = {
     title: 'Curriculum Tracker',
     body: 'You have a new notification',
-    icon: '/icon-192.png',
+    icon: '/Icon-192.jpg',
     badge: '/Icon-72.jpg',
     tag: 'default',
     data: {}
@@ -471,14 +470,14 @@ self.addEventListener('push', event => {
   
   const options = {
     body: data.body,
-    icon: data.icon || '/icon-192.png',
+    icon: data.icon || '/Icon-192.jpg',
     badge: data.badge || '/Icon-72.jpg',
     tag: data.tag,
     data: data.data,
     vibrate: [100, 50, 100],
     requireInteraction: data.requireInteraction || false,
     actions: data.actions || [
-      { action: 'open', title: 'Open App', icon: '/icon-192.png' },
+      { action: 'open', title: 'Open App', icon: '/Icon-192.jpg' },
       { action: 'dismiss', title: 'Dismiss' }
     ],
     // For Android
