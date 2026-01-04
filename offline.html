@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline - Curriculum Tracker</title>
+  <meta name="theme-color" content="#F4B41A">
+  <link rel="icon" href="/icon-192.png">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      padding: 20px;
+    }
+    
+    .offline-container {
+      text-align: center;
+      max-width: 400px;
+      padding: 40px 30px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    
+    .offline-icon {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 30px;
+      background: linear-gradient(135deg, #F4B41A 0%, #E8A830 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    .offline-icon svg {
+      width: 60px;
+      height: 60px;
+      fill: #1a1a2e;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.9; }
+    }
+    
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 15px;
+      color: #F4B41A;
+    }
+    
+    p {
+      font-size: 16px;
+      line-height: 1.6;
+      color: rgba(255, 255, 255, 0.8);
+      margin-bottom: 30px;
+    }
+    
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 15px 25px;
+      background: rgba(239, 68, 68, 0.2);
+      border-radius: 12px;
+      margin-bottom: 30px;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      background: #ef4444;
+      border-radius: 50%;
+      animation: blink 1.5s ease-in-out infinite;
+    }
+    
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    
+    .status-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fca5a5;
+    }
+    
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 16px 30px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: none;
+      text-decoration: none;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #F4B41A 0%, #E8A830 100%);
+      color: #1a1a2e;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(244, 180, 26, 0.3);
+    }
+    
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    
+    .btn svg {
+      width: 20px;
+      height: 20px;
+    }
+    
+    .tips {
+      margin-top: 40px;
+      padding-top: 30px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .tips h3 {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 15px;
+    }
+    
+    .tips ul {
+      list-style: none;
+      text-align: left;
+    }
+    
+    .tips li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 10px;
+    }
+    
+    .tips li::before {
+      content: '✓';
+      color: #F4B41A;
+      font-weight: bold;
+    }
+    
+    .pending-data {
+      margin-top: 30px;
+      padding: 20px;
+      background: rgba(34, 197, 94, 0.1);
+      border-radius: 12px;
+      border: 1px solid rgba(34, 197, 94, 0.2);
+      display: none;
+    }
+    
+    .pending-data.show {
+      display: block;
+    }
+    
+    .pending-data h4 {
+      color: #4ade80;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    
+    .pending-data p {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 0;
+    }
+    
+    /* Online status update */
+    body.online .offline-container {
+      display: none;
+    }
+    
+    .online-message {
+      display: none;
+      text-align: center;
+    }
+    
+    body.online .online-message {
+      display: block;
+    }
+    
+    @media (max-width: 480px) {
+      .offline-container {
+        padding: 30px 20px;
+      }
+      
+      h1 {
+        font-size: 24px;
+      }
+      
+      .offline-icon {
+        width: 100px;
+        height: 100px;
+      }
+      
+      .offline-icon svg {
+        width: 50px;
+        height: 50px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="offline-container">
+    <div class="offline-icon">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M24 8.98l-2.12 2.12c-2.54-2.54-5.96-3.98-9.88-3.98-3.92 0-7.34 1.44-9.88 3.98L0 8.98C3.08 5.9 7.28 4 12 4s8.92 1.9 12 4.98zm-4.24 4.24l-2.12 2.12c-1.52-1.52-3.54-2.34-5.64-2.34s-4.12.82-5.64 2.34l-2.12-2.12c2.04-2.04 4.82-3.22 7.76-3.22s5.72 1.18 7.76 3.22zM12 18c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z"/>
+        <path d="M2 4l2 2m16 16l2 2M4 20L20 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    
+    <h1>You're Offline</h1>
+    
+    <p>It looks like you're not connected to the internet. Don't worry - your data is safe!</p>
+    
+    <div class="status-indicator">
+      <div class="status-dot"></div>
+      <span class="status-text">No internet connection</span>
+    </div>
+    
+    <div class="pending-data" id="pendingData">
+      <h4>📦 Pending Data Saved</h4>
+      <p>Your attendance and curriculum updates are saved locally and will sync automatically when you're back online.</p>
+    </div>
+    
+    <div class="actions">
+      <button class="btn btn-primary" onclick="tryReconnect()">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+        </svg>
+        Try Again
+      </button>
+      
+      <a href="/" class="btn btn-secondary">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+        </svg>
+        Go to Homepage
+      </a>
+    </div>
+    
+    <div class="tips">
+      <h3>While you wait</h3>
+      <ul>
+        <li>Check if Wi-Fi or mobile data is enabled</li>
+        <li>Move to an area with better signal</li>
+        <li>Try switching between Wi-Fi and mobile data</li>
+        <li>Your saved data will sync automatically</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="online-message">
+    <div class="offline-container">
+      <div class="offline-icon" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);">
+        <svg viewBox="0 0 24 24" fill="#fff">
+          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+      </div>
+      <h1 style="color: #22c55e;">You're Back Online!</h1>
+      <p>Redirecting you to the app...</p>
+    </div>
+  </div>
+  
+  <script>
+    // Check for pending data in IndexedDB
+    async function checkPendingData() {
+      try {
+        const request = indexedDB.open('CurriculumTrackerOffline', 1);
+        request.onsuccess = (event) => {
+          const db = event.target.result;
+          const stores = ['pendingAttendance', 'pendingCurriculum', 'pendingFeedback'];
+          let hasPending = false;
+          
+          stores.forEach(storeName => {
+            try {
+              const transaction = db.transaction(storeName, 'readonly');
+              const store = transaction.objectStore(storeName);
+              const countRequest = store.count();
+              
+              countRequest.onsuccess = () => {
+                if (countRequest.result > 0) {
+                  hasPending = true;
+                  document.getElementById('pendingData').classList.add('show');
+                }
+              };
+            } catch (e) {
+              // Store might not exist yet
+            }
+          });
+        };
+      } catch (e) {
+        console.log('IndexedDB not available');
+      }
+    }
+    
+    // Try to reconnect
+    function tryReconnect() {
+      const btn = event.target.closest('.btn');
+      btn.innerHTML = '<span>Checking...</span>';
+      btn.disabled = true;
+      
+      fetch('/', { method: 'HEAD', cache: 'no-store' })
+        .then(response => {
+          if (response.ok) {
+            window.location.reload();
+          } else {
+            throw new Error('Still offline');
+          }
+        })
+        .catch(() => {
+          btn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="currentColor" style="width:20px;height:20px">
+              <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+            </svg>
+            Try Again
+          `;
+          btn.disabled = false;
+          
+          // Show brief error message
+          const statusText = document.querySelector('.status-text');
+          statusText.textContent = 'Still offline - please check your connection';
+          setTimeout(() => {
+            statusText.textContent = 'No internet connection';
+          }, 3000);
+        });
+    }
+    
+    // Listen for online/offline events
+    window.addEventListener('online', () => {
+      document.body.classList.add('online');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1500);
+    });
+    
+    window.addEventListener('offline', () => {
+      document.body.classList.remove('online');
+    });
+    
+    // Initial check
+    if (navigator.onLine) {
+      window.location.href = '/';
+    } else {
+      checkPendingData();
+    }
+    
+    // Periodic check for connection
+    setInterval(() => {
+      if (navigator.onLine) {
+        fetch('/', { method: 'HEAD', cache: 'no-store' })
+          .then(response => {
+            if (response.ok) {
+              document.body.classList.add('online');
+              setTimeout(() => {
+                window.location.href = '/';
+              }, 1500);
+            }
+          })
+          .catch(() => {});
+      }
+    }, 5000);
+  </script>
+</body>
+</html>
