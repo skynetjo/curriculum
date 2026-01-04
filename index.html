@@ -190,7 +190,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Curriculum Tracker">
-  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="apple-touch-icon" href="/Icon-192.jpg">
   
   <!-- FontAwesome Icons for Modern Sidebar -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" />
@@ -33065,8 +33065,8 @@ const AvantiWidget = {
         if (Notification.permission === 'granted') {
             new Notification(title, {
                 body: message,
-                icon: '/icon-192.png',
-                badge: '/icon-192.png',
+                icon: 'Icon-192.png',
+                badge: 'Icon-192.png',
                 tag: 'avanti-helpdesk',
                 requireInteraction: false
             });
@@ -33075,7 +33075,7 @@ const AvantiWidget = {
                 if (permission === 'granted') {
                     new Notification(title, {
                         body: message,
-                        icon: '/icon-192.png'
+                        icon: 'Icon-192.png'
                     });
                 }
             });
@@ -34962,7 +34962,7 @@ const NotificationManager = {
                         body: birthdays.length === 1 
                             ? `Wish ${names} a Happy Birthday!`
                             : `${names}${birthdays.length > 3 ? ` and ${birthdays.length - 3} more` : ''} have birthdays today!`,
-                        icon: '/icon-192.png',
+                        icon: 'Icon-192.png',
                         tag: 'birthday-notification',
                         requireInteraction: true
                     });
@@ -34985,7 +34985,7 @@ const NotificationManager = {
                             body: anniversaries.length === 1
                                 ? `Congratulate ${names} on their work anniversary!`
                                 : `${names}${anniversaries.length > 3 ? ` and ${anniversaries.length - 3} more` : ''} have work anniversaries today!`,
-                            icon: '/icon-192.png',
+                            icon: 'Icon-192.png',
                             tag: 'anniversary-notification',
                             requireInteraction: true
                         });
@@ -35103,7 +35103,7 @@ const NotificationManager = {
                     if (Notification.permission === 'granted') {
                         new Notification(payload.notification?.title || 'Avanti Fellows', {
                             body: payload.notification?.body,
-                            icon: '/icon-192.png'
+                            icon: 'Icon-192.png'
                         });
                     }
                     
@@ -35686,7 +35686,7 @@ const NotificationManager = {
                     try {
                         new Notification('🎫 ' + (notif.title || 'New Reply'), {
                             body: notif.message || 'You have a new message on your ticket',
-                            icon: '/icon-192.png',
+                            icon: 'Icon-192.png',
                             tag: 'ticket-' + (notif.ticketId || notif.id),
                             requireInteraction: true
                         });
