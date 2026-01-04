@@ -1,6 +1,6 @@
 // ========================================
 // SERVICE WORKER - Curriculum Tracker PWA
-// Version 3.9.0 - Fixed Offline Capability
+// Version 4.0.0 - Fixed Icon References
 // ========================================
 const VERSION = '3.7.3';
 const STATIC_CACHE = 'static-v' + VERSION;
@@ -154,10 +154,7 @@ self.addEventListener('fetch', event => {
     return;
   }
   
-  // ========================================
-  // NAVIGATION REQUESTS (HTML Pages)
-  // This is critical for PWABuilder offline test
-  // ========================================
+  // Navigation requests (HTML Pages)
   if (request.mode === 'navigate') {
     event.respondWith(handleNavigationRequest(request));
     return;
@@ -176,7 +173,7 @@ self.addEventListener('fetch', event => {
   }
   
   // Static assets (js, css, images, fonts)
-  if (url.pathname.match(/\.(js|css|png|png|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/)) {
+  if (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/)) {
     event.respondWith(handleStaticRequest(request));
     return;
   }
@@ -189,13 +186,10 @@ self.addEventListener('fetch', event => {
 // REQUEST HANDLERS
 // ========================================
 
-// Navigation requests - Network first, then cache, then offline page
 async function handleNavigationRequest(request) {
   try {
-    // Try network first
     const networkResponse = await fetch(request);
     
-    // Cache successful response
     if (networkResponse.ok) {
       const cache = await caches.open(DYNAMIC_CACHE);
       cache.put(request, networkResponse.clone());
@@ -205,24 +199,20 @@ async function handleNavigationRequest(request) {
   } catch (error) {
     console.log('[SW] Navigation failed, trying cache:', request.url);
     
-    // Try cache
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
       return cachedResponse;
     }
     
-    // Try root page from cache
     const rootResponse = await caches.match('/');
     if (rootResponse) {
       return rootResponse;
     }
     
-    // Return offline page
     return getOfflineResponse();
   }
 }
 
-// HTML requests
 async function handleHTMLRequest(request) {
   try {
     const networkResponse = await fetch(request);
@@ -243,7 +233,6 @@ async function handleHTMLRequest(request) {
   }
 }
 
-// API requests - Network first with cache fallback
 async function handleAPIRequest(request) {
   try {
     const networkResponse = await fetch(request);
@@ -263,12 +252,10 @@ async function handleAPIRequest(request) {
   }
 }
 
-// Static assets - Cache first with network fallback
 async function handleStaticRequest(request) {
   const cachedResponse = await caches.match(request);
   
   if (cachedResponse) {
-    // Update cache in background
     fetch(request).then(response => {
       if (response.ok) {
         caches.open(DYNAMIC_CACHE).then(cache => {
@@ -294,7 +281,6 @@ async function handleStaticRequest(request) {
   }
 }
 
-// Default requests
 async function handleDefaultRequest(request) {
   try {
     const networkResponse = await fetch(request);
@@ -311,15 +297,12 @@ async function handleDefaultRequest(request) {
   }
 }
 
-// Get offline response
 async function getOfflineResponse() {
-  // Try to get cached offline page
   const offlineResponse = await caches.match('/offline.html');
   if (offlineResponse) {
     return offlineResponse;
   }
   
-  // Return inline fallback
   return new Response(getOfflineFallbackHTML(), {
     status: 200,
     headers: { 'Content-Type': 'text/html; charset=utf-8' }
