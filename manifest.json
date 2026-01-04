@@ -167,13 +167,6 @@
       "label": "Attendance Tracking - Mark student attendance"
     },
     {
-      "src": "/screenshots/mobile.jpeg",
-      "sizes": "750x1334",
-      "type": "image/jpeg",
-      "form_factor": "narrow",
-      "label": "Mobile Dashboard - Access from anywhere"
-    },
-    {
       "src": "/screenshots/menu-mobile.jpeg",
       "sizes": "750x1334",
       "type": "image/jpeg",
