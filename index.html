@@ -36018,6 +36018,681 @@ const NotificationManager = {
 // Initialize when Firebase is ready
 setTimeout(() => NotificationManager.init(), 1500);
 </script>
+// ========================================
+// PWA ENHANCEMENT MODULE
+// Add this to your index.html for full PWA features
+// ========================================
+
+// PWA Manager - Handles all PWA features
+window.PWAManager = {
+  // Configuration
+  config: {
+    periodicSyncMinInterval: 60 * 60 * 1000, // 1 hour
+    vapidPublicKey: '', // Add your VAPID public key for push notifications
+  },
+  
+  // State
+  state: {
+    isOnline: navigator.onLine,
+    hasPendingSync: false,
+    pushSubscription: null,
+    periodicSyncRegistered: false,
+  },
+  
+  // ========================================
+  // INITIALIZATION
+  // ========================================
+  async init() {
+    console.log('[PWA] Initializing PWA Manager...');
+    
+    // Setup online/offline detection
+    this.setupNetworkDetection();
+    
+    // Register service worker
+    await this.registerServiceWorker();
+    
+    // Setup message handler
+    this.setupMessageHandler();
+    
+    // Initialize Background Sync
+    await this.initBackgroundSync();
+    
+    // Initialize Periodic Sync
+    await this.initPeriodicSync();
+    
+    // Check for pending data
+    await this.checkPendingData();
+    
+    console.log('[PWA] PWA Manager initialized');
+    return this;
+  },
+  
+  // ========================================
+  // SERVICE WORKER REGISTRATION
+  // ========================================
+  async registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) {
+      console.warn('[PWA] Service Workers not supported');
+      return null;
+    }
+    
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js', {
+        scope: '/'
+      });
+      
+      console.log('[PWA] Service Worker registered:', registration.scope);
+      
+      // Check for updates
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            this.showUpdateNotification();
+          }
+        });
+      });
+      
+      // Check for updates periodically
+      setInterval(() => registration.update(), 5 * 60 * 1000); // Every 5 minutes
+      
+      this.registration = registration;
+      return registration;
+    } catch (error) {
+      console.error('[PWA] Service Worker registration failed:', error);
+      return null;
+    }
+  },
+  
+  // ========================================
+  // NETWORK DETECTION
+  // ========================================
+  setupNetworkDetection() {
+    // Initial state
+    this.state.isOnline = navigator.onLine;
+    this.updateNetworkUI();
+    
+    // Online event
+    window.addEventListener('online', () => {
+      console.log('[PWA] Back online');
+      this.state.isOnline = true;
+      this.updateNetworkUI();
+      this.syncPendingData();
+      this.showToast('You\'re back online! Syncing data...', 'success');
+    });
+    
+    // Offline event
+    window.addEventListener('offline', () => {
+      console.log('[PWA] Gone offline');
+      this.state.isOnline = false;
+      this.updateNetworkUI();
+      this.showToast('You\'re offline. Data will be saved locally.', 'warning');
+    });
+    
+    // Periodic connectivity check (for unreliable connections in JNV areas)
+    setInterval(() => this.checkConnectivity(), 30000); // Every 30 seconds
+  },
+  
+  async checkConnectivity() {
+    try {
+      const response = await fetch('/manifest.json', { 
+        method: 'HEAD', 
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (response.ok && !this.state.isOnline) {
+        this.state.isOnline = true;
+        this.updateNetworkUI();
+        this.syncPendingData();
+      }
+    } catch (e) {
+      if (this.state.isOnline) {
+        this.state.isOnline = false;
+        this.updateNetworkUI();
+      }
+    }
+  },
+  
+  updateNetworkUI() {
+    // Update any network status indicators in your app
+    const statusEl = document.querySelector('.network-status');
+    if (statusEl) {
+      if (this.state.isOnline) {
+        statusEl.classList.remove('offline');
+        statusEl.classList.add('online');
+        statusEl.innerHTML = '<i class="fa-solid fa-wifi"></i> Online';
+      } else {
+        statusEl.classList.remove('online');
+        statusEl.classList.add('offline');
+        statusEl.innerHTML = '<i class="fa-solid fa-wifi-slash"></i> Offline';
+      }
+    }
+    
+    // Dispatch event for app to handle
+    window.dispatchEvent(new CustomEvent('networkStatusChange', {
+      detail: { isOnline: this.state.isOnline }
+    }));
+  },
+  
+  // ========================================
+  // BACKGROUND SYNC
+  // ========================================
+  async initBackgroundSync() {
+    if (!('serviceWorker' in navigator) || !('SyncManager' in window)) {
+      console.warn('[PWA] Background Sync not supported');
+      return false;
+    }
+    
+    console.log('[PWA] Background Sync available');
+    return true;
+  },
+  
+  // Store data for offline sync
+  async storeForSync(type, data) {
+    const storeName = `pending${type.charAt(0).toUpperCase() + type.slice(1)}`;
+    
+    try {
+      // Store in IndexedDB
+      const db = await this.openDatabase();
+      const transaction = db.transaction(storeName, 'readwrite');
+      const store = transaction.objectStore(storeName);
+      
+      await new Promise((resolve, reject) => {
+        const request = store.put({
+          ...data,
+          id: data.id || `${type}-${Date.now()}`,
+          timestamp: Date.now(),
+          synced: false
+        });
+        request.onsuccess = resolve;
+        request.onerror = () => reject(request.error);
+      });
+      
+      console.log(`[PWA] Stored ${type} data for sync`);
+      
+      // Request background sync
+      await this.requestSync(`sync-${type}`);
+      
+      return true;
+    } catch (error) {
+      console.error(`[PWA] Failed to store ${type} for sync:`, error);
+      return false;
+    }
+  },
+  
+  // Request a background sync
+  async requestSync(tag) {
+    if (!this.registration || !('sync' in this.registration)) {
+      console.warn('[PWA] Background Sync not available');
+      return false;
+    }
+    
+    try {
+      await this.registration.sync.register(tag);
+      console.log(`[PWA] Background sync registered: ${tag}`);
+      this.state.hasPendingSync = true;
+      return true;
+    } catch (error) {
+      console.error('[PWA] Failed to register sync:', error);
+      return false;
+    }
+  },
+  
+  // Sync all pending data
+  async syncPendingData() {
+    if (!this.state.isOnline) {
+      console.log('[PWA] Cannot sync - offline');
+      return;
+    }
+    
+    try {
+      // Request sync for all types
+      await this.requestSync('sync-all-data');
+    } catch (error) {
+      console.error('[PWA] Failed to sync pending data:', error);
+    }
+  },
+  
+  // ========================================
+  // PERIODIC BACKGROUND SYNC
+  // ========================================
+  async initPeriodicSync() {
+    if (!('periodicSync' in this.registration)) {
+      console.warn('[PWA] Periodic Sync not supported');
+      return false;
+    }
+    
+    try {
+      // Check permission
+      const status = await navigator.permissions.query({
+        name: 'periodic-background-sync',
+      });
+      
+      if (status.state === 'granted') {
+        await this.registerPeriodicSync();
+      } else {
+        console.log('[PWA] Periodic Sync permission not granted');
+      }
+      
+      return true;
+    } catch (error) {
+      console.warn('[PWA] Periodic Sync not available:', error);
+      return false;
+    }
+  },
+  
+  async registerPeriodicSync() {
+    try {
+      // Register periodic sync for curriculum updates (every 12 hours)
+      await this.registration.periodicSync.register('update-curriculum-data', {
+        minInterval: 12 * 60 * 60 * 1000 // 12 hours
+      });
+      
+      // Register periodic sync for pending data (every hour)
+      await this.registration.periodicSync.register('sync-pending-data', {
+        minInterval: 60 * 60 * 1000 // 1 hour
+      });
+      
+      // Register periodic sync for notifications (every 4 hours)
+      await this.registration.periodicSync.register('check-notifications', {
+        minInterval: 4 * 60 * 60 * 1000 // 4 hours
+      });
+      
+      this.state.periodicSyncRegistered = true;
+      console.log('[PWA] Periodic sync registered');
+    } catch (error) {
+      console.error('[PWA] Failed to register periodic sync:', error);
+    }
+  },
+  
+  // ========================================
+  // PUSH NOTIFICATIONS
+  // ========================================
+  async initPushNotifications() {
+    if (!('PushManager' in window)) {
+      console.warn('[PWA] Push notifications not supported');
+      return false;
+    }
+    
+    return true;
+  },
+  
+  async requestNotificationPermission() {
+    const permission = await Notification.requestPermission();
+    
+    if (permission === 'granted') {
+      console.log('[PWA] Notification permission granted');
+      await this.subscribeToPush();
+      return true;
+    } else {
+      console.log('[PWA] Notification permission denied');
+      return false;
+    }
+  },
+  
+  async subscribeToPush() {
+    if (!this.registration) {
+      console.error('[PWA] No service worker registration');
+      return null;
+    }
+    
+    try {
+      // Check existing subscription
+      let subscription = await this.registration.pushManager.getSubscription();
+      
+      if (subscription) {
+        console.log('[PWA] Existing push subscription found');
+        this.state.pushSubscription = subscription;
+        return subscription;
+      }
+      
+      // Create new subscription
+      // Note: You'll need to add your VAPID public key
+      if (!this.config.vapidPublicKey) {
+        console.warn('[PWA] VAPID public key not configured');
+        return null;
+      }
+      
+      subscription = await this.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: this.urlBase64ToUint8Array(this.config.vapidPublicKey)
+      });
+      
+      console.log('[PWA] Push subscription created');
+      this.state.pushSubscription = subscription;
+      
+      // Send subscription to server
+      await this.sendSubscriptionToServer(subscription);
+      
+      return subscription;
+    } catch (error) {
+      console.error('[PWA] Failed to subscribe to push:', error);
+      return null;
+    }
+  },
+  
+  async sendSubscriptionToServer(subscription) {
+    // Send to your Firebase backend
+    // This should be implemented based on your Firebase setup
+    console.log('[PWA] Push subscription:', JSON.stringify(subscription));
+    
+    // Example: Save to Firestore
+    // await firebase.firestore().collection('push_subscriptions').doc(userId).set({
+    //   subscription: JSON.parse(JSON.stringify(subscription)),
+    //   updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    // });
+  },
+  
+  // Show a local notification (doesn't require push)
+  async showLocalNotification(title, options = {}) {
+    if (!('Notification' in window)) {
+      console.warn('[PWA] Notifications not supported');
+      return false;
+    }
+    
+    if (Notification.permission !== 'granted') {
+      console.warn('[PWA] Notification permission not granted');
+      return false;
+    }
+    
+    const defaultOptions = {
+      icon: '/icon-192.png',
+      badge: '/icon-72.png',
+      vibrate: [100, 50, 100],
+      tag: 'curriculum-tracker',
+      renotify: true
+    };
+    
+    try {
+      if (this.registration) {
+        await this.registration.showNotification(title, { ...defaultOptions, ...options });
+      } else {
+        new Notification(title, { ...defaultOptions, ...options });
+      }
+      return true;
+    } catch (error) {
+      console.error('[PWA] Failed to show notification:', error);
+      return false;
+    }
+  },
+  
+  // ========================================
+  // INDEXED DB HELPERS
+  // ========================================
+  async openDatabase() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('CurriculumTrackerOffline', 1);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result);
+      
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        
+        const stores = ['pendingAttendance', 'pendingCurriculum', 'pendingFeedback', 'cachedData'];
+        stores.forEach(storeName => {
+          if (!db.objectStoreNames.contains(storeName)) {
+            db.createObjectStore(storeName, { keyPath: 'id' });
+          }
+        });
+      };
+    });
+  },
+  
+  async checkPendingData() {
+    try {
+      const db = await this.openDatabase();
+      const stores = ['pendingAttendance', 'pendingCurriculum', 'pendingFeedback'];
+      let totalPending = 0;
+      
+      for (const storeName of stores) {
+        const transaction = db.transaction(storeName, 'readonly');
+        const store = transaction.objectStore(storeName);
+        const count = await new Promise((resolve) => {
+          const request = store.count();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => resolve(0);
+        });
+        totalPending += count;
+      }
+      
+      if (totalPending > 0) {
+        this.state.hasPendingSync = true;
+        console.log(`[PWA] ${totalPending} items pending sync`);
+        
+        // Show indicator in UI
+        this.showPendingIndicator(totalPending);
+        
+        // Try to sync if online
+        if (this.state.isOnline) {
+          this.syncPendingData();
+        }
+      }
+      
+      return totalPending;
+    } catch (error) {
+      console.error('[PWA] Failed to check pending data:', error);
+      return 0;
+    }
+  },
+  
+  // ========================================
+  // UI HELPERS
+  // ========================================
+  showPendingIndicator(count) {
+    const indicator = document.querySelector('.pending-sync-indicator');
+    if (indicator) {
+      indicator.textContent = count;
+      indicator.style.display = count > 0 ? 'flex' : 'none';
+    }
+  },
+  
+  showUpdateNotification() {
+    // Show update available notification
+    if (typeof window.showToast === 'function') {
+      window.showToast('A new version is available! Click to refresh.', 'info', {
+        onClick: () => window.location.reload()
+      });
+    } else {
+      if (confirm('A new version of Curriculum Tracker is available. Refresh now?')) {
+        window.location.reload();
+      }
+    }
+  },
+  
+  showToast(message, type = 'info', options = {}) {
+    // Use app's toast function if available
+    if (typeof window.showToast === 'function') {
+      window.showToast(message, type, options);
+      return;
+    }
+    
+    // Fallback toast implementation
+    const toast = document.createElement('div');
+    toast.className = `pwa-toast pwa-toast-${type}`;
+    toast.innerHTML = `
+      <div class="pwa-toast-content">
+        <span class="pwa-toast-icon">${type === 'success' ? '✓' : type === 'warning' ? '⚠' : 'ℹ'}</span>
+        <span class="pwa-toast-message">${message}</span>
+      </div>
+    `;
+    
+    // Add styles if not exists
+    if (!document.querySelector('#pwa-toast-styles')) {
+      const style = document.createElement('style');
+      style.id = 'pwa-toast-styles';
+      style.textContent = `
+        .pwa-toast {
+          position: fixed;
+          bottom: 80px;
+          left: 50%;
+          transform: translateX(-50%);
+          padding: 12px 24px;
+          border-radius: 12px;
+          background: #1a1a2e;
+          color: #fff;
+          font-size: 14px;
+          z-index: 99999;
+          animation: pwaToastIn 0.3s ease, pwaToastOut 0.3s ease 2.7s forwards;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .pwa-toast-content { display: flex; align-items: center; gap: 8px; }
+        .pwa-toast-success { border-left: 4px solid #22c55e; }
+        .pwa-toast-warning { border-left: 4px solid #f59e0b; }
+        .pwa-toast-info { border-left: 4px solid #3b82f6; }
+        @keyframes pwaToastIn { from { opacity: 0; transform: translateX(-50%) translateY(20px); } }
+        @keyframes pwaToastOut { to { opacity: 0; transform: translateX(-50%) translateY(-20px); } }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  },
+  
+  // ========================================
+  // MESSAGE HANDLER
+  // ========================================
+  setupMessageHandler() {
+    navigator.serviceWorker.addEventListener('message', event => {
+      console.log('[PWA] Message from SW:', event.data);
+      
+      const { type, action, data } = event.data;
+      
+      switch (type) {
+        case 'SYNC_ATTENDANCE':
+          // Handle synced attendance - update Firestore
+          window.dispatchEvent(new CustomEvent('syncAttendance', { detail: data }));
+          break;
+          
+        case 'SYNC_CURRICULUM':
+          // Handle synced curriculum - update Firestore
+          window.dispatchEvent(new CustomEvent('syncCurriculum', { detail: data }));
+          break;
+          
+        case 'SYNC_FEEDBACK':
+          // Handle synced feedback - update Firestore
+          window.dispatchEvent(new CustomEvent('syncFeedback', { detail: data }));
+          break;
+          
+        case 'PERIODIC_SYNC':
+          if (action === 'UPDATE_CURRICULUM') {
+            window.dispatchEvent(new CustomEvent('refreshCurriculum'));
+          } else if (action === 'CHECK_NOTIFICATIONS') {
+            window.dispatchEvent(new CustomEvent('checkNotifications'));
+          }
+          break;
+          
+        case 'NOTIFICATION_CLICK':
+          // Handle notification click - navigate to specific page
+          if (data?.url) {
+            window.location.href = data.url;
+          }
+          break;
+      }
+    });
+  },
+  
+  // ========================================
+  // UTILITY FUNCTIONS
+  // ========================================
+  urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/\-/g, '+')
+      .replace(/_/g, '/');
+    
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  },
+  
+  // Get version from service worker
+  async getVersion() {
+    return new Promise((resolve) => {
+      const messageChannel = new MessageChannel();
+      messageChannel.port1.onmessage = (event) => {
+        resolve(event.data.version);
+      };
+      navigator.serviceWorker.controller?.postMessage(
+        { type: 'GET_VERSION' },
+        [messageChannel.port2]
+      );
+      setTimeout(() => resolve(null), 1000);
+    });
+  },
+  
+  // Clear all caches
+  async clearCache() {
+    return new Promise((resolve) => {
+      const messageChannel = new MessageChannel();
+      messageChannel.port1.onmessage = (event) => {
+        resolve(event.data.success);
+      };
+      navigator.serviceWorker.controller?.postMessage(
+        { type: 'CLEAR_CACHE' },
+        [messageChannel.port2]
+      );
+      setTimeout(() => resolve(false), 5000);
+    });
+  }
+};
+
+// ========================================
+// AUTO-INITIALIZE
+// ========================================
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => PWAManager.init());
+} else {
+  PWAManager.init();
+}
+
+// Export for use in app
+window.PWAManager = PWAManager;
+
+// ========================================
+// CONVENIENCE FUNCTIONS
+// ========================================
+// These can be called directly from your app
+
+// Save attendance offline
+window.saveAttendanceOffline = async (attendanceData) => {
+  return PWAManager.storeForSync('attendance', attendanceData);
+};
+
+// Save curriculum progress offline
+window.saveCurriculumOffline = async (curriculumData) => {
+  return PWAManager.storeForSync('curriculum', curriculumData);
+};
+
+// Save feedback offline
+window.saveFeedbackOffline = async (feedbackData) => {
+  return PWAManager.storeForSync('feedback', feedbackData);
+};
+
+// Request notification permission
+window.requestNotificationPermission = async () => {
+  return PWAManager.requestNotificationPermission();
+};
+
+// Show local notification
+window.showPWANotification = async (title, options) => {
+  return PWAManager.showLocalNotification(title, options);
+};
+
+// Check if online
+window.isPWAOnline = () => PWAManager.state.isOnline;
+
+// Check pending sync count
+window.getPendingSyncCount = () => PWAManager.checkPendingData();
+
+console.log('[PWA] PWA Enhancement Module loaded');
 <!-- Add before closing </body> tag -->
 <script src="/pwa-manager.js"></script>
 </body>
