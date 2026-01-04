@@ -1,19 +1,14 @@
 // ========================================
 // SERVICE WORKER - Curriculum Tracker PWA
-// Enhanced Version with Full PWA Features
-// Fixed Offline Capability Check
+// Version 3.9.0 - Fixed Offline Capability
 // ========================================
-// Version - UPDATE THIS WITH EACH DEPLOYMENT
 const VERSION = '3.7.3';
 const STATIC_CACHE = 'static-v' + VERSION;
 const DYNAMIC_CACHE = 'dynamic-v' + VERSION;
 const OFFLINE_CACHE = 'offline-v' + VERSION;
 const DATA_CACHE = 'data-v' + VERSION;
 
-// ========================================
-// CACHE CONFIGURATION
-// ========================================
-// Files to cache immediately on install (App Shell)
+// Files to cache immediately on install
 const STATIC_FILES = [
   '/',
   '/index.html',
@@ -28,7 +23,7 @@ const STATIC_FILES = [
   '/Icon-512.jpg'
 ];
 
-// External resources to cache
+// External CDN resources to cache
 const EXTERNAL_RESOURCES = [
   'https://cdn.tailwindcss.com',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
@@ -37,83 +32,80 @@ const EXTERNAL_RESOURCES = [
   'https://unpkg.com/@babel/standalone/babel.min.js'
 ];
 
-// Firebase URLs to never cache
-const FIREBASE_URLS = [
+// URLs to never cache (always fetch from network)
+const NEVER_CACHE = [
   'firebaseio.com',
   'googleapis.com',
   'firebase',
-  'firestore'
+  'firestore',
+  'freshdesk',
+  'freshchat',
+  'freshworks'
 ];
 
 // ========================================
-// INSTALL EVENT - Cache App Shell
+// INSTALL EVENT
 // ========================================
 self.addEventListener('install', event => {
   console.log('[SW] Installing version:', VERSION);
   
   event.waitUntil(
-    Promise.all([
-      // Cache static files with proper error handling
-      caches.open(STATIC_CACHE).then(async cache => {
-        console.log('[SW] Caching static files');
-        
-        // Cache each file individually with error handling
-        for (const url of STATIC_FILES) {
-          try {
-            const response = await fetch(url, { cache: 'reload' });
-            if (response.ok) {
-              await cache.put(url, response);
-              console.log('[SW] Cached:', url);
-            }
-          } catch (err) {
-            console.log('[SW] Failed to cache (will retry):', url);
-          }
-        }
-      }),
+    (async () => {
+      // Cache static files
+      const staticCache = await caches.open(STATIC_CACHE);
+      console.log('[SW] Caching static files');
       
-      // Cache external resources (CDN files)
-      caches.open(DYNAMIC_CACHE).then(async cache => {
-        console.log('[SW] Caching external resources');
-        
-        for (const url of EXTERNAL_RESOURCES) {
-          try {
-            const response = await fetch(url, { mode: 'cors' });
-            if (response.ok) {
-              await cache.put(url, response);
-            }
-          } catch (err) {
-            console.log('[SW] Failed to cache external:', url);
-          }
-        }
-      }),
-      
-      // Ensure offline page is cached
-      caches.open(OFFLINE_CACHE).then(async cache => {
+      for (const url of STATIC_FILES) {
         try {
-          const response = await fetch('/offline.html', { cache: 'reload' });
+          const response = await fetch(url, { cache: 'reload' });
           if (response.ok) {
-            await cache.put('/offline.html', response);
-            console.log('[SW] Offline page cached successfully');
+            await staticCache.put(url, response);
+            console.log('[SW] Cached:', url);
           }
         } catch (err) {
-          console.log('[SW] Creating fallback offline page');
-          // Create a fallback response if offline.html doesn't exist
-          const fallbackResponse = new Response(
-            getOfflineFallbackHTML(),
-            { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-          );
-          await cache.put('/offline.html', fallbackResponse);
+          console.log('[SW] Could not cache:', url);
         }
-      })
-    ]).then(() => {
+      }
+      
+      // Cache external resources
+      const dynamicCache = await caches.open(DYNAMIC_CACHE);
+      for (const url of EXTERNAL_RESOURCES) {
+        try {
+          const response = await fetch(url, { mode: 'cors' });
+          if (response.ok) {
+            await dynamicCache.put(url, response);
+          }
+        } catch (err) {
+          console.log('[SW] Could not cache external:', url);
+        }
+      }
+      
+      // Ensure offline page is cached
+      const offlineCache = await caches.open(OFFLINE_CACHE);
+      try {
+        const offlineResponse = await fetch('/offline.html', { cache: 'reload' });
+        if (offlineResponse.ok) {
+          await offlineCache.put('/offline.html', offlineResponse);
+          console.log('[SW] Offline page cached');
+        }
+      } catch (err) {
+        // Create fallback offline page
+        const fallbackHTML = getOfflineFallbackHTML();
+        const fallbackResponse = new Response(fallbackHTML, {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+        await offlineCache.put('/offline.html', fallbackResponse);
+        console.log('[SW] Fallback offline page created');
+      }
+      
       console.log('[SW] Installation complete');
       self.skipWaiting();
-    })
+    })()
   );
 });
 
 // ========================================
-// ACTIVATE EVENT - Clean Old Caches
+// ACTIVATE EVENT
 // ========================================
 self.addEventListener('activate', event => {
   console.log('[SW] Activating version:', VERSION);
@@ -121,358 +113,281 @@ self.addEventListener('activate', event => {
   const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, OFFLINE_CACHE, DATA_CACHE];
   
   event.waitUntil(
-    Promise.all([
-      // Clean up old caches
-      caches.keys().then(cacheNames => {
-        return Promise.all(
-          cacheNames.map(cacheName => {
-            if (!currentCaches.includes(cacheName)) {
-              console.log('[SW] Deleting old cache:', cacheName);
-              return caches.delete(cacheName);
-            }
-          })
-        );
-      }),
-      // Take control of all clients immediately
-      self.clients.claim()
-    ])
+    (async () => {
+      // Delete old caches
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames.map(cacheName => {
+          if (!currentCaches.includes(cacheName)) {
+            console.log('[SW] Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+      
+      // Take control immediately
+      await self.clients.claim();
+      console.log('[SW] Activation complete');
+    })()
   );
 });
 
 // ========================================
-// FETCH EVENT - Smart Caching Strategy
-// FIXED: Proper offline handling for PWABuilder
+// FETCH EVENT - CRITICAL FOR OFFLINE SUPPORT
 // ========================================
 self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
   
-  // Skip non-GET requests
+  // Only handle GET requests
   if (request.method !== 'GET') {
     return;
   }
   
-  // Skip chrome-extension and other non-http(s) schemes
+  // Skip non-http(s) protocols
   if (!url.protocol.startsWith('http')) {
     return;
   }
   
-  // Skip Firebase requests - always network
-  if (FIREBASE_URLS.some(domain => url.hostname.includes(domain))) {
-    return;
-  }
-  
-  // Skip Freshdesk/chat widgets
-  if (url.hostname.includes('freshdesk') || 
-      url.hostname.includes('freshchat') ||
-      url.hostname.includes('freshworks')) {
+  // Skip URLs that should never be cached
+  if (NEVER_CACHE.some(domain => url.hostname.includes(domain) || url.href.includes(domain))) {
     return;
   }
   
   // ========================================
   // NAVIGATION REQUESTS (HTML Pages)
-  // Network First → Cache → Offline Page
+  // This is critical for PWABuilder offline test
   // ========================================
   if (request.mode === 'navigate') {
-    event.respondWith(
-      (async () => {
-        try {
-          // Try network first
-          const networkResponse = await fetch(request);
-          
-          // Cache the response for future offline use
-          if (networkResponse.ok) {
-            const cache = await caches.open(DYNAMIC_CACHE);
-            cache.put(request, networkResponse.clone());
-          }
-          
-          return networkResponse;
-        } catch (error) {
-          console.log('[SW] Navigation failed, trying cache:', request.url);
-          
-          // Try to get from cache
-          const cachedResponse = await caches.match(request);
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          
-          // Try to return the root page from cache
-          const rootCache = await caches.match('/');
-          if (rootCache) {
-            return rootCache;
-          }
-          
-          // Return offline page
-          const offlineResponse = await caches.match('/offline.html');
-          if (offlineResponse) {
-            return offlineResponse;
-          }
-          
-          // Ultimate fallback
-          return new Response(
-            getOfflineFallbackHTML(),
-            { 
-              status: 200,
-              headers: { 'Content-Type': 'text/html; charset=utf-8' } 
-            }
-          );
-        }
-      })()
-    );
+    event.respondWith(handleNavigationRequest(request));
     return;
   }
   
-  // ========================================
-  // HTML PAGES (non-navigation)
-  // ========================================
+  // HTML files (non-navigation)
   if (url.pathname.endsWith('.html') || url.pathname === '/') {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          if (response.ok) {
-            const responseClone = response.clone();
-            caches.open(DYNAMIC_CACHE).then(cache => {
-              cache.put(request, responseClone);
-            });
-          }
-          return response;
-        })
-        .catch(async () => {
-          const cachedResponse = await caches.match(request);
-          if (cachedResponse) return cachedResponse;
-          
-          const offlineResponse = await caches.match('/offline.html');
-          return offlineResponse || new Response(
-            getOfflineFallbackHTML(),
-            { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-          );
-        })
-    );
+    event.respondWith(handleHTMLRequest(request));
     return;
   }
   
-  // ========================================
-  // API REQUESTS - Network First with Cache Fallback
-  // ========================================
+  // API requests
   if (url.pathname.includes('/api/') || url.pathname.includes('/data/')) {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          if (response.ok) {
-            const responseClone = response.clone();
-            caches.open(DATA_CACHE).then(cache => {
-              cache.put(request, responseClone);
-            });
-          }
-          return response;
-        })
-        .catch(() => caches.match(request))
-    );
+    event.respondWith(handleAPIRequest(request));
     return;
   }
   
-  // ========================================
-  // STATIC ASSETS - Cache First with Network Fallback
-  // ========================================
+  // Static assets (js, css, images, fonts)
   if (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/)) {
-    event.respondWith(
-      caches.match(request)
-        .then(async cachedResponse => {
-          if (cachedResponse) {
-            // Return cache but also update in background (stale-while-revalidate)
-            fetch(request).then(response => {
-              if (response.ok) {
-                caches.open(DYNAMIC_CACHE).then(cache => {
-                  cache.put(request, response);
-                });
-              }
-            }).catch(() => {});
-            return cachedResponse;
-          }
-          
-          // Not in cache, fetch and cache
-          try {
-            const response = await fetch(request);
-            if (response.ok) {
-              const responseClone = response.clone();
-              caches.open(DYNAMIC_CACHE).then(cache => {
-                cache.put(request, responseClone);
-              });
-            }
-            return response;
-          } catch (error) {
-            console.log('[SW] Asset not available:', request.url);
-            return new Response('', { status: 404 });
-          }
-        })
-    );
+    event.respondWith(handleStaticRequest(request));
     return;
   }
   
-  // ========================================
-  // DEFAULT - Network with Cache Fallback
-  // ========================================
-  event.respondWith(
-    fetch(request)
-      .then(response => {
-        if (response.ok) {
-          const responseClone = response.clone();
-          caches.open(DYNAMIC_CACHE).then(cache => {
-            cache.put(request, responseClone);
-          });
-        }
-        return response;
-      })
-      .catch(() => caches.match(request))
-  );
+  // Default handler
+  event.respondWith(handleDefaultRequest(request));
 });
 
 // ========================================
-// BACKGROUND SYNC - For Offline Data Submission
+// REQUEST HANDLERS
+// ========================================
+
+// Navigation requests - Network first, then cache, then offline page
+async function handleNavigationRequest(request) {
+  try {
+    // Try network first
+    const networkResponse = await fetch(request);
+    
+    // Cache successful response
+    if (networkResponse.ok) {
+      const cache = await caches.open(DYNAMIC_CACHE);
+      cache.put(request, networkResponse.clone());
+    }
+    
+    return networkResponse;
+  } catch (error) {
+    console.log('[SW] Navigation failed, trying cache:', request.url);
+    
+    // Try cache
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    
+    // Try root page from cache
+    const rootResponse = await caches.match('/');
+    if (rootResponse) {
+      return rootResponse;
+    }
+    
+    // Return offline page
+    return getOfflineResponse();
+  }
+}
+
+// HTML requests
+async function handleHTMLRequest(request) {
+  try {
+    const networkResponse = await fetch(request);
+    
+    if (networkResponse.ok) {
+      const cache = await caches.open(DYNAMIC_CACHE);
+      cache.put(request, networkResponse.clone());
+    }
+    
+    return networkResponse;
+  } catch (error) {
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    
+    return getOfflineResponse();
+  }
+}
+
+// API requests - Network first with cache fallback
+async function handleAPIRequest(request) {
+  try {
+    const networkResponse = await fetch(request);
+    
+    if (networkResponse.ok) {
+      const cache = await caches.open(DATA_CACHE);
+      cache.put(request, networkResponse.clone());
+    }
+    
+    return networkResponse;
+  } catch (error) {
+    const cachedResponse = await caches.match(request);
+    return cachedResponse || new Response(JSON.stringify({ error: 'Offline' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+// Static assets - Cache first with network fallback
+async function handleStaticRequest(request) {
+  const cachedResponse = await caches.match(request);
+  
+  if (cachedResponse) {
+    // Update cache in background
+    fetch(request).then(response => {
+      if (response.ok) {
+        caches.open(DYNAMIC_CACHE).then(cache => {
+          cache.put(request, response);
+        });
+      }
+    }).catch(() => {});
+    
+    return cachedResponse;
+  }
+  
+  try {
+    const networkResponse = await fetch(request);
+    
+    if (networkResponse.ok) {
+      const cache = await caches.open(DYNAMIC_CACHE);
+      cache.put(request, networkResponse.clone());
+    }
+    
+    return networkResponse;
+  } catch (error) {
+    return new Response('', { status: 404 });
+  }
+}
+
+// Default requests
+async function handleDefaultRequest(request) {
+  try {
+    const networkResponse = await fetch(request);
+    
+    if (networkResponse.ok) {
+      const cache = await caches.open(DYNAMIC_CACHE);
+      cache.put(request, networkResponse.clone());
+    }
+    
+    return networkResponse;
+  } catch (error) {
+    const cachedResponse = await caches.match(request);
+    return cachedResponse || new Response('', { status: 404 });
+  }
+}
+
+// Get offline response
+async function getOfflineResponse() {
+  // Try to get cached offline page
+  const offlineResponse = await caches.match('/offline.html');
+  if (offlineResponse) {
+    return offlineResponse;
+  }
+  
+  // Return inline fallback
+  return new Response(getOfflineFallbackHTML(), {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' }
+  });
+}
+
+// ========================================
+// BACKGROUND SYNC
 // ========================================
 self.addEventListener('sync', event => {
-  console.log('[SW] Background Sync triggered:', event.tag);
+  console.log('[SW] Background Sync:', event.tag);
   
-  if (event.tag === 'sync-attendance') {
-    event.waitUntil(syncAttendance());
-  }
-  
-  if (event.tag === 'sync-curriculum') {
-    event.waitUntil(syncCurriculum());
-  }
-  
-  if (event.tag === 'sync-feedback') {
-    event.waitUntil(syncFeedback());
-  }
-  
-  if (event.tag === 'sync-all-data') {
-    event.waitUntil(syncAllData());
+  switch (event.tag) {
+    case 'sync-attendance':
+      event.waitUntil(syncData('pendingAttendance', 'SYNC_ATTENDANCE'));
+      break;
+    case 'sync-curriculum':
+      event.waitUntil(syncData('pendingCurriculum', 'SYNC_CURRICULUM'));
+      break;
+    case 'sync-feedback':
+      event.waitUntil(syncData('pendingFeedback', 'SYNC_FEEDBACK'));
+      break;
+    case 'sync-all-data':
+      event.waitUntil(syncAllData());
+      break;
   }
 });
 
-// Sync attendance data when online
-async function syncAttendance() {
+async function syncData(storeName, messageType) {
   try {
     const db = await openIndexedDB();
-    const pendingAttendance = await getFromStore(db, 'pendingAttendance');
-    
-    for (const record of pendingAttendance) {
-      try {
-        await self.clients.matchAll().then(clients => {
-          clients.forEach(client => {
-            client.postMessage({
-              type: 'SYNC_ATTENDANCE',
-              data: record
-            });
-          });
-        });
-        
-        await removeFromStore(db, 'pendingAttendance', record.id);
-        console.log('[SW] Attendance synced:', record.id);
-      } catch (err) {
-        console.error('[SW] Failed to sync attendance:', err);
-      }
-    }
+    const records = await getFromStore(db, storeName);
     
     const clients = await self.clients.matchAll();
-    clients.forEach(client => {
-      client.postMessage({ type: 'SYNC_COMPLETE', store: 'attendance' });
-    });
     
+    for (const record of records) {
+      clients.forEach(client => {
+        client.postMessage({ type: messageType, data: record });
+      });
+      await removeFromStore(db, storeName, record.id);
+    }
+    
+    clients.forEach(client => {
+      client.postMessage({ type: 'SYNC_COMPLETE', store: storeName });
+    });
   } catch (err) {
-    console.error('[SW] Sync attendance error:', err);
+    console.error('[SW] Sync error:', err);
   }
 }
 
-// Sync curriculum data when online
-async function syncCurriculum() {
-  try {
-    const db = await openIndexedDB();
-    const pendingCurriculum = await getFromStore(db, 'pendingCurriculum');
-    
-    for (const record of pendingCurriculum) {
-      try {
-        await self.clients.matchAll().then(clients => {
-          clients.forEach(client => {
-            client.postMessage({
-              type: 'SYNC_CURRICULUM',
-              data: record
-            });
-          });
-        });
-        
-        await removeFromStore(db, 'pendingCurriculum', record.id);
-        console.log('[SW] Curriculum synced:', record.id);
-      } catch (err) {
-        console.error('[SW] Failed to sync curriculum:', err);
-      }
-    }
-    
-    const clients = await self.clients.matchAll();
-    clients.forEach(client => {
-      client.postMessage({ type: 'SYNC_COMPLETE', store: 'curriculum' });
-    });
-    
-  } catch (err) {
-    console.error('[SW] Sync curriculum error:', err);
-  }
-}
-
-// Sync feedback data when online
-async function syncFeedback() {
-  try {
-    const db = await openIndexedDB();
-    const pendingFeedback = await getFromStore(db, 'pendingFeedback');
-    
-    for (const record of pendingFeedback) {
-      try {
-        await self.clients.matchAll().then(clients => {
-          clients.forEach(client => {
-            client.postMessage({
-              type: 'SYNC_FEEDBACK',
-              data: record
-            });
-          });
-        });
-        
-        await removeFromStore(db, 'pendingFeedback', record.id);
-        console.log('[SW] Feedback synced:', record.id);
-      } catch (err) {
-        console.error('[SW] Failed to sync feedback:', err);
-      }
-    }
-    
-    const clients = await self.clients.matchAll();
-    clients.forEach(client => {
-      client.postMessage({ type: 'SYNC_COMPLETE', store: 'feedback' });
-    });
-    
-  } catch (err) {
-    console.error('[SW] Sync feedback error:', err);
-  }
-}
-
-// Sync all pending data
 async function syncAllData() {
-  console.log('[SW] Syncing all pending data...');
-  await syncAttendance();
-  await syncCurriculum();
-  await syncFeedback();
-  console.log('[SW] All data sync complete');
+  await syncData('pendingAttendance', 'SYNC_ATTENDANCE');
+  await syncData('pendingCurriculum', 'SYNC_CURRICULUM');
+  await syncData('pendingFeedback', 'SYNC_FEEDBACK');
 }
 
 // ========================================
 // PERIODIC BACKGROUND SYNC
 // ========================================
 self.addEventListener('periodicsync', event => {
-  console.log('[SW] Periodic Sync triggered:', event.tag);
+  console.log('[SW] Periodic Sync:', event.tag);
   
   if (event.tag === 'update-curriculum-data') {
-    event.waitUntil(updateCurriculumData());
+    event.waitUntil(notifyClients('UPDATE_CURRICULUM'));
   }
   
   if (event.tag === 'check-notifications') {
-    event.waitUntil(checkForNotifications());
+    event.waitUntil(notifyClients('CHECK_NOTIFICATIONS'));
   }
   
   if (event.tag === 'sync-pending-data') {
@@ -480,56 +395,29 @@ self.addEventListener('periodicsync', event => {
   }
 });
 
-// Fetch latest curriculum data in background
-async function updateCurriculumData() {
-  try {
-    const clients = await self.clients.matchAll();
-    clients.forEach(client => {
-      client.postMessage({
-        type: 'PERIODIC_SYNC',
-        action: 'UPDATE_CURRICULUM'
-      });
-    });
-    console.log('[SW] Periodic curriculum update requested');
-  } catch (err) {
-    console.error('[SW] Periodic sync failed:', err);
-  }
-}
-
-// Check for new notifications
-async function checkForNotifications() {
-  try {
-    const clients = await self.clients.matchAll();
-    clients.forEach(client => {
-      client.postMessage({
-        type: 'PERIODIC_SYNC',
-        action: 'CHECK_NOTIFICATIONS'
-      });
-    });
-  } catch (err) {
-    console.error('[SW] Notification check failed:', err);
-  }
+async function notifyClients(action) {
+  const clients = await self.clients.matchAll();
+  clients.forEach(client => {
+    client.postMessage({ type: 'PERIODIC_SYNC', action });
+  });
 }
 
 // ========================================
 // PUSH NOTIFICATIONS
 // ========================================
 self.addEventListener('push', event => {
-  console.log('[SW] Push notification received');
+  console.log('[SW] Push received');
   
   let data = {
     title: 'Curriculum Tracker',
     body: 'You have a new notification',
     icon: '/Icon-192.jpg',
-    badge: '/Icon-72.jpg',
-    tag: 'default',
-    data: {}
+    badge: '/Icon-72.jpg'
   };
   
   try {
     if (event.data) {
-      const payload = event.data.json();
-      data = { ...data, ...payload };
+      data = { ...data, ...event.data.json() };
     }
   } catch (e) {
     if (event.data) {
@@ -537,36 +425,26 @@ self.addEventListener('push', event => {
     }
   }
   
-  const options = {
-    body: data.body,
-    icon: data.icon || '/Icon-192.jpg',
-    badge: data.badge || '/Icon-72.jpg',
-    tag: data.tag,
-    data: data.data,
-    vibrate: [100, 50, 100],
-    requireInteraction: data.requireInteraction || false,
-    actions: data.actions || [
-      { action: 'open', title: 'Open App', icon: '/Icon-192.jpg' },
-      { action: 'dismiss', title: 'Dismiss' }
-    ],
-    image: data.image,
-    renotify: true
-  };
-  
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon,
+      badge: data.badge,
+      tag: data.tag || 'default',
+      data: data.data,
+      vibrate: [100, 50, 100],
+      actions: [
+        { action: 'open', title: 'Open App' },
+        { action: 'dismiss', title: 'Dismiss' }
+      ]
+    })
   );
 });
 
-// Handle notification click
 self.addEventListener('notificationclick', event => {
-  console.log('[SW] Notification clicked:', event.action);
-  
   event.notification.close();
   
-  if (event.action === 'dismiss') {
-    return;
-  }
+  if (event.action === 'dismiss') return;
   
   const urlToOpen = event.notification.data?.url || '/';
   
@@ -575,69 +453,49 @@ self.addEventListener('notificationclick', event => {
       .then(clientList => {
         for (const client of clientList) {
           if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.postMessage({
-              type: 'NOTIFICATION_CLICK',
-              data: event.notification.data
-            });
+            client.postMessage({ type: 'NOTIFICATION_CLICK', data: event.notification.data });
             return client.focus();
           }
         }
-        if (self.clients.openWindow) {
-          return self.clients.openWindow(urlToOpen);
-        }
+        return self.clients.openWindow(urlToOpen);
       })
   );
-});
-
-// Handle notification close
-self.addEventListener('notificationclose', event => {
-  console.log('[SW] Notification closed');
 });
 
 // ========================================
 // MESSAGE HANDLING
 // ========================================
 self.addEventListener('message', event => {
-  console.log('[SW] Message received:', event.data);
+  const { type, data } = event.data || {};
   
-  if (event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-  
-  if (event.data.type === 'GET_VERSION') {
-    event.ports[0].postMessage({ version: VERSION });
-  }
-  
-  if (event.data.type === 'CLEAR_CACHE') {
-    event.waitUntil(
-      caches.keys().then(names => {
-        return Promise.all(names.map(name => caches.delete(name)));
-      }).then(() => {
-        if (event.ports[0]) {
-          event.ports[0].postMessage({ success: true });
-        }
-      })
-    );
-  }
-  
-  if (event.data.type === 'CACHE_URLS') {
-    event.waitUntil(
-      caches.open(DYNAMIC_CACHE).then(cache => {
-        return cache.addAll(event.data.urls);
-      })
-    );
-  }
-  
-  if (event.data.type === 'STORE_FOR_SYNC') {
-    event.waitUntil(
-      storeForSync(event.data.store, event.data.data)
-    );
-  }
-  
-  if (event.data.type === 'REQUEST_SYNC') {
-    event.waitUntil(
-      self.registration.sync.register(event.data.tag)
-    );
+  switch (type) {
+    case 'SKIP_WAITING':
+      self.skipWaiting();
+      break;
+      
+    case 'GET_VERSION':
+      event.ports[0]?.postMessage({ version: VERSION });
+      break;
+      
+    case 'CLEAR_CACHE':
+      caches.keys().then(names => 
+        Promise.all(names.map(name => caches.delete(name)))
+      ).then(() => {
+        event.ports[0]?.postMessage({ success: true });
+      });
+      break;
+      
+    case 'CACHE_URLS':
+      caches.open(DYNAMIC_CACHE).then(cache => cache.addAll(data.urls || []));
+      break;
+      
+    case 'STORE_FOR_SYNC':
+      storeForSync(data.store, data.data);
+      break;
+      
+    case 'REQUEST_SYNC':
+      self.registration.sync.register(data.tag);
+      break;
   }
 });
 
@@ -654,21 +512,12 @@ function openIndexedDB() {
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
       
-      if (!db.objectStoreNames.contains('pendingAttendance')) {
-        db.createObjectStore('pendingAttendance', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('pendingCurriculum')) {
-        db.createObjectStore('pendingCurriculum', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('pendingFeedback')) {
-        db.createObjectStore('pendingFeedback', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('pendingObservations')) {
-        db.createObjectStore('pendingObservations', { keyPath: 'id' });
-      }
-      if (!db.objectStoreNames.contains('cachedData')) {
-        db.createObjectStore('cachedData', { keyPath: 'key' });
-      }
+      ['pendingAttendance', 'pendingCurriculum', 'pendingFeedback', 'pendingObservations', 'cachedData']
+        .forEach(store => {
+          if (!db.objectStoreNames.contains(store)) {
+            db.createObjectStore(store, { keyPath: store === 'cachedData' ? 'key' : 'id' });
+          }
+        });
     };
   });
 }
@@ -676,9 +525,7 @@ function openIndexedDB() {
 function getFromStore(db, storeName) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, 'readonly');
-    const store = transaction.objectStore(storeName);
-    const request = store.getAll();
-    
+    const request = transaction.objectStore(storeName).getAll();
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
   });
@@ -687,9 +534,7 @@ function getFromStore(db, storeName) {
 function addToStore(db, storeName, data) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, 'readwrite');
-    const store = transaction.objectStore(storeName);
-    const request = store.put(data);
-    
+    const request = transaction.objectStore(storeName).put(data);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve(request.result);
   });
@@ -698,9 +543,7 @@ function addToStore(db, storeName, data) {
 function removeFromStore(db, storeName, id) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(storeName, 'readwrite');
-    const store = transaction.objectStore(storeName);
-    const request = store.delete(id);
-    
+    const request = transaction.objectStore(storeName).delete(id);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => resolve();
   });
@@ -714,15 +557,13 @@ async function storeForSync(storeName, data) {
       id: data.id || Date.now().toString(),
       timestamp: Date.now()
     });
-    console.log('[SW] Data stored for sync:', storeName);
   } catch (err) {
-    console.error('[SW] Failed to store for sync:', err);
+    console.error('[SW] Store for sync error:', err);
   }
 }
 
 // ========================================
 // OFFLINE FALLBACK HTML
-// This ensures PWABuilder offline test passes
 // ========================================
 function getOfflineFallbackHTML() {
   return `<!DOCTYPE html>
@@ -763,7 +604,9 @@ function getOfflineFallbackHTML() {
       align-items: center;
       justify-content: center;
       font-size: 50px;
+      animation: pulse 2s ease-in-out infinite;
     }
+    @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
     h1 { font-size: 28px; color: #F4B41A; margin-bottom: 15px; }
     p { font-size: 16px; line-height: 1.6; color: rgba(255, 255, 255, 0.8); margin-bottom: 30px; }
     .status {
@@ -801,27 +644,24 @@ function getOfflineFallbackHTML() {
       width: 100%;
     }
     .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(244, 180, 26, 0.3); }
-    .info { margin-top: 30px; font-size: 14px; color: rgba(255, 255, 255, 0.6); }
+    .info { margin-top: 20px; font-size: 14px; color: rgba(255, 255, 255, 0.6); }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="icon">📡</div>
     <h1>You're Offline</h1>
-    <p>Don't worry - your data is saved locally and will sync when you're back online.</p>
+    <p>Your data is saved locally and will sync when you're back online.</p>
     <div class="status">
       <div class="dot"></div>
       <span>No internet connection</span>
     </div>
     <button class="btn" onclick="location.reload()">Try Again</button>
-    <p class="info">Check your Wi-Fi or mobile data and try again.</p>
+    <p class="info">Check your Wi-Fi or mobile data.</p>
   </div>
-  <script>
-    window.addEventListener('online', () => location.reload());
-  </script>
+  <script>window.addEventListener('online', () => location.reload());</script>
 </body>
 </html>`;
 }
 
-// Log service worker status
 console.log('[SW] Service Worker loaded - Version:', VERSION);
