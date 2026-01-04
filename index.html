@@ -20576,28 +20576,61 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
     }
     
     try{
-      // ✅ UPDATE UI FIRST (Optimistic update)
-      setAttendanceMap(prev=>({...prev,[studentId]:status}));
-      
-      // ✅ THEN save to database
-      const docId=`${mySchool}_${selectedGrade}_${studentId}_${selectedDate}`;
-      await db.collection('studentAttendance').doc(docId).set({
-        school:mySchool,
-        grade:selectedGrade,
-        studentId,
-        studentName:filteredStudents.find(s=>s.id===studentId)?.name||'',
-        date:selectedDate,
-        status,
-        remarks:status==='Absent'?remarks:'',
-        markedBy:currentUser.afid,
-        markedAt:new Date().toISOString()
-      });
-    }catch(e){
-      // ✅ Rollback UI if save fails
-      setAttendanceMap(prev=>({...prev,[studentId]:prev[studentId]||''}));
-      alert('Failed: '+e.message);
-    }
+  // ✅ UPDATE UI FIRST (Optimistic update)
+  setAttendanceMap(prev=>({...prev,[studentId]:status}));
+  
+  // ✅ Prepare attendance data
+  const docId=`${mySchool}_${selectedGrade}_${studentId}_${selectedDate}`;
+  const attendanceData = {
+    school:mySchool,
+    grade:selectedGrade,
+    studentId,
+    studentName:filteredStudents.find(s=>s.id===studentId)?.name||'',
+    date:selectedDate,
+    status,
+    remarks:status==='Absent'?remarks:'',
+    markedBy:currentUser.afid,
+    markedAt:new Date().toISOString(),
+    docId: docId
   };
+  
+  // ✅ PWA: Check if online or offline
+  if (window.isPWAOnline && !window.isPWAOnline()) {
+    // OFFLINE - Save locally, will sync later
+    await window.saveAttendanceOffline(attendanceData);
+    if (window.showPWAToast) window.showPWAToast('Saved offline - will sync when online', 'warning');
+  } else {
+    // ONLINE - Save directly to Firebase
+    await db.collection('studentAttendance').doc(docId).set(attendanceData);
+  }
+}catch(e){
+  // ✅ Try offline save if Firebase fails
+  try {
+    const docId=`${mySchool}_${selectedGrade}_${studentId}_${selectedDate}`;
+    const attendanceData = {
+      school:mySchool,
+      grade:selectedGrade,
+      studentId,
+      studentName:filteredStudents.find(s=>s.id===studentId)?.name||'',
+      date:selectedDate,
+      status,
+      remarks:status==='Absent'?remarks:'',
+      markedBy:currentUser.afid,
+      markedAt:new Date().toISOString(),
+      docId: docId
+    };
+    if (window.saveAttendanceOffline) {
+      await window.saveAttendanceOffline(attendanceData);
+      if (window.showPWAToast) window.showPWAToast('Network error - saved offline', 'warning');
+    } else {
+      throw e;
+    }
+  } catch (offlineErr) {
+    // ✅ Rollback UI if all saves fail
+    setAttendanceMap(prev=>({...prev,[studentId]:prev[studentId]||''}));
+    alert('Failed: '+e.message);
+  }
+}
 
   const handleSelectAll=async()=>{
     // ✅ CHECK IF LOCKED
@@ -20623,20 +20656,40 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
     try{
       let completed=0;
       for(const student of filteredStudents){
-        const docId=`${mySchool}_${selectedGrade}_${student.id}_${selectedDate}`;
-        await db.collection('studentAttendance').doc(docId).set({
-          school:mySchool,
-          grade:selectedGrade,
-          studentId:student.id,
-          studentName:student.name,
-          date:selectedDate,
-          status:'Present',
-          markedBy:currentUser.afid,
-          markedAt:new Date().toISOString()
-        });
-        completed++;
-        setMarkingProgress({current:completed,total:filteredStudents.length});
+  const docId=`${mySchool}_${selectedGrade}_${student.id}_${selectedDate}`;
+  const attendanceData = {
+    school:mySchool,
+    grade:selectedGrade,
+    studentId:student.id,
+    studentName:student.name,
+    date:selectedDate,
+    status:'Present',
+    markedBy:currentUser.afid,
+    markedAt:new Date().toISOString(),
+    docId: docId
+  };
+  
+  // ✅ PWA: Check if online or offline
+  if (window.isPWAOnline && !window.isPWAOnline()) {
+    await window.saveAttendanceOffline(attendanceData);
+  } else {
+    try {
+      await db.collection('studentAttendance').doc(docId).set(attendanceData);
+    } catch (err) {
+      // Fallback to offline if Firebase fails
+      if (window.saveAttendanceOffline) {
+        await window.saveAttendanceOffline(attendanceData);
       }
+    }
+  }
+  completed++;
+  setMarkingProgress({current:completed,total:filteredStudents.length});
+}
+
+// Show toast if saved offline
+if (window.isPWAOnline && !window.isPWAOnline()) {
+  if (window.showPWAToast) window.showPWAToast(`${filteredStudents.length} students saved offline`, 'warning');
+}
       const newMap={};
       filteredStudents.forEach(s=>newMap[s.id]='Present');
       setAttendanceMap(newMap);
@@ -36693,6 +36746,76 @@ window.isPWAOnline = () => PWAManager.state.isOnline;
 window.getPendingSyncCount = () => PWAManager.checkPendingData();
 
 console.log('[PWA] PWA Enhancement Module loaded');
+<!-- PWA Sync Handler - Handles data sync when back online -->
+<script>
+// Listen for sync events from PWA Manager
+window.addEventListener('syncAttendance', async (event) => {
+  const data = event.detail;
+  console.log('[Sync] Syncing attendance:', data);
+  
+  try {
+    if (typeof firebase !== 'undefined' && firebase.firestore) {
+      const docId = data.docId || `${data.school}_${data.grade}_${data.studentId}_${data.date}`;
+      await firebase.firestore().collection('studentAttendance').doc(docId).set({
+        school: data.school,
+        grade: data.grade,
+        studentId: data.studentId,
+        studentName: data.studentName,
+        date: data.date,
+        status: data.status,
+        remarks: data.remarks || '',
+        markedBy: data.markedBy,
+        markedAt: data.markedAt,
+        syncedAt: new Date().toISOString(),
+        wasOffline: true
+      });
+      console.log('[Sync] ✅ Attendance synced:', docId);
+    }
+  } catch (error) {
+    console.error('[Sync] ❌ Failed to sync attendance:', error);
+  }
+});
+
+// Listen for curriculum sync
+window.addEventListener('syncCurriculum', async (event) => {
+  const data = event.detail;
+  console.log('[Sync] Syncing curriculum:', data);
+  
+  try {
+    if (typeof firebase !== 'undefined' && firebase.firestore) {
+      await firebase.firestore().collection('curriculum_progress').add({
+        ...data,
+        syncedAt: new Date().toISOString(),
+        wasOffline: true
+      });
+      console.log('[Sync] ✅ Curriculum synced');
+    }
+  } catch (error) {
+    console.error('[Sync] ❌ Failed to sync curriculum:', error);
+  }
+});
+
+// Listen for feedback sync
+window.addEventListener('syncFeedback', async (event) => {
+  const data = event.detail;
+  console.log('[Sync] Syncing feedback:', data);
+  
+  try {
+    if (typeof firebase !== 'undefined' && firebase.firestore) {
+      await firebase.firestore().collection('student_feedback').add({
+        ...data,
+        syncedAt: new Date().toISOString(),
+        wasOffline: true
+      });
+      console.log('[Sync] ✅ Feedback synced');
+    }
+  } catch (error) {
+    console.error('[Sync] ❌ Failed to sync feedback:', error);
+  }
+});
+
+console.log('[PWA] Sync handlers registered');
+</script>
 <!-- Add before closing </body> tag -->
 <script src="/pwa-manager.js"></script>
 </body>
