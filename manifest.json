@@ -130,6 +130,20 @@
       "type": "image/png",
       "form_factor": "wide",
       "label": "Attendance Tracking - Mark student attendance"
+    },
+    {
+      "src": "/screenshots/school-info-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile View - School Information"
+    },
+    {
+      "src": "/screenshots/analytics.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile Analytics View"
     }
   ],
   "shortcuts": [
