@@ -8,7 +8,6 @@
   "display": "standalone",
   "display_override": [
     "window-controls-overlay",
-    "tabbed",
     "standalone",
     "minimal-ui"
   ],
@@ -33,13 +32,10 @@
   ],
   "scope_extensions": [
     {
-      "origin": "https://*.avantifellows.org"
+      "origin": "https://avantifellows.org"
     },
     {
-      "origin": "https://*.firebaseapp.com"
-    },
-    {
-      "origin": "https://*.web.app"
+      "origin": "https://curriculum-murex.vercel.app"
     }
   ],
   "launch_handler": {
@@ -63,39 +59,7 @@
         {
           "src": "/Icon-192.png",
           "sizes": "192x192",
-          "type": "image/jpeg"
-        }
-      ],
-      "backgrounds": [
-        {
-          "src": "/widget-bg.png",
-          "sizes": "1024x1024",
-          "type": "image/jpeg"
-        }
-      ],
-      "screenshots": [
-        {
-          "src": "/screenshots/widget-attendance.png",
-          "sizes": "600x400",
-          "type": "image/png",
-          "label": "Attendance widget preview"
-        }
-      ]
-    },
-    {
-      "name": "Curriculum Progress",
-      "short_name": "Progress",
-      "description": "Track curriculum completion progress",
-      "tag": "curriculum",
-      "template": "progress-widget",
-      "ms_ac_template": "widget/progress.json",
-      "data": "/api/widget/progress",
-      "type": "application/json",
-      "icons": [
-        {
-          "src": "/Icon-192.png",
-          "sizes": "192x192",
-          "type": "image/jpeg"
+          "type": "image/png"
         }
       ]
     }
@@ -104,50 +68,51 @@
     {
       "src": "/Icon-72.png",
       "sizes": "72x72",
-      "type": "image/jpeg"
+      "type": "image/png"
     },
     {
       "src": "/Icon-96.png",
       "sizes": "96x96",
-      "type": "image/jpeg"
+      "type": "image/png"
     },
     {
       "src": "/Icon-144.png",
       "sizes": "144x144",
-      "type": "image/jpeg"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/Icon-152.png",
       "sizes": "152x152",
-      "type": "image/jpeg"
+      "type": "image/png"
     },
     {
       "src": "/Icon-192.png",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     },
     {
       "src": "/Icon-384.png",
       "sizes": "384x384",
-      "type": "image/jpeg"
+      "type": "image/png"
     },
     {
       "src": "/Icon-512.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     },
     {
       "src": "/Icon-192.png",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "maskable"
     },
     {
       "src": "/Icon-512.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
@@ -165,13 +130,6 @@
       "type": "image/png",
       "form_factor": "wide",
       "label": "Attendance Tracking - Mark student attendance"
-    },
-    {
-      "src": "/screenshots/menu-mobile.jpeg",
-      "sizes": "750x1334",
-      "type": "image/jpeg",
-      "form_factor": "narrow",
-      "label": "Mobile Menu - Easy navigation"
     }
   ],
   "shortcuts": [
@@ -180,28 +138,28 @@
       "short_name": "Attendance",
       "description": "Quickly mark student attendance",
       "url": "/?page=attendance",
-      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Curriculum Progress",
       "short_name": "Curriculum",
       "description": "Update curriculum progress",
       "url": "/?page=curriculum",
-      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Student Feedback",
       "short_name": "Feedback",
       "description": "Collect student feedback",
       "url": "/?page=feedback",
-      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Analytics Dashboard",
       "short_name": "Analytics",
       "description": "View analytics and reports",
       "url": "/?page=analytics",
-      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/Icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ],
   "share_target": {
