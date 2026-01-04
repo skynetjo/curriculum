@@ -6,20 +6,100 @@
   "id": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "window-controls-overlay",
+    "tabbed",
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#F4B41A",
   "theme_color": "#F4B41A",
   "orientation": "portrait-primary",
   "lang": "en",
   "dir": "ltr",
   "categories": ["education", "productivity", "utilities"],
-  "iarc_rating_id": "",
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
   "prefer_related_applications": false,
-  "related_applications": [],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=org.avantifellows.curriculumtracker",
+      "id": "org.avantifellows.curriculumtracker"
+    },
+    {
+      "platform": "windows",
+      "url": "https://www.microsoft.com/store/apps/curriculumtracker"
+    }
+  ],
+  "scope_extensions": [
+    {
+      "origin": "https://*.avantifellows.org"
+    },
+    {
+      "origin": "https://*.firebaseapp.com"
+    },
+    {
+      "origin": "https://*.web.app"
+    }
+  ],
   "launch_handler": {
     "client_mode": ["navigate-existing", "auto"]
   },
   "handle_links": "preferred",
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "widgets": [
+    {
+      "name": "Attendance Quick View",
+      "short_name": "Attendance",
+      "description": "Quick view of today's attendance status",
+      "tag": "attendance",
+      "template": "attendance-widget",
+      "ms_ac_template": "widget/attendance.json",
+      "data": "/api/widget/attendance",
+      "type": "application/json",
+      "icons": [
+        {
+          "src": "/Icon-192.jpg",
+          "sizes": "192x192",
+          "type": "image/jpeg"
+        }
+      ],
+      "backgrounds": [
+        {
+          "src": "/widget-bg.jpg",
+          "sizes": "1024x1024",
+          "type": "image/jpeg"
+        }
+      ],
+      "screenshots": [
+        {
+          "src": "/screenshots/widget-attendance.png",
+          "sizes": "600x400",
+          "type": "image/png",
+          "label": "Attendance widget preview"
+        }
+      ]
+    },
+    {
+      "name": "Curriculum Progress",
+      "short_name": "Progress",
+      "description": "Track curriculum completion progress",
+      "tag": "curriculum",
+      "template": "progress-widget",
+      "ms_ac_template": "widget/progress.json",
+      "data": "/api/widget/progress",
+      "type": "application/json",
+      "icons": [
+        {
+          "src": "/Icon-192.jpg",
+          "sizes": "192x192",
+          "type": "image/jpeg"
+        }
+      ]
+    }
+  ],
   "icons": [
     {
       "src": "/Icon-72.jpg",
@@ -161,5 +241,8 @@
       "protocol": "web+curriculum",
       "url": "/?protocol=%s"
     }
-  ]
+  ],
+  "note_taking": {
+    "new_note_url": "/?action=new-note"
+  }
 }
