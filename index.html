@@ -2272,6 +2272,105 @@ body.has-install-banner .sidebar {
     gap: 2px;
   }
 }
+    /* ========================================
+   PWA ENHANCEMENT STYLES - Added for offline support
+   ======================================== */
+
+/* Network Status Indicator */
+.pwa-network-status {
+  position: fixed;
+  top: 10px;
+  right: 70px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 9998;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.pwa-network-status.online {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.pwa-network-status.offline {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  animation: pwa-pulse 2s infinite;
+}
+
+.pwa-network-status .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.pwa-network-status.online .status-dot { background: #22c55e; }
+.pwa-network-status.offline .status-dot { background: #ef4444; animation: pwa-blink 1s infinite; }
+
+@keyframes pwa-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+@keyframes pwa-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* Pending Sync Badge */
+.pwa-pending-badge {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 9997;
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+}
+
+.pwa-pending-badge.show { display: flex; }
+.pwa-pending-badge i { animation: pwa-spin 2s linear infinite; }
+
+@keyframes pwa-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* PWA Toast */
+.pwa-toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 14px 24px;
+  border-radius: 12px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 99999;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  animation: pwa-toastIn 0.3s ease;
+  max-width: 90%;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.pwa-toast.success { background: linear-gradient(135deg, #10b981, #059669); }
+.pwa-toast.warning { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.pwa-toast.error { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.pwa-toast.info { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+
+@keyframes pwa-toastIn { from { transform: translateX(-50%) translateY(30px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
+
+@media (max-width: 768px) {
+  .pwa-network-status { top: auto; bottom: 70px; right: 10px; padding: 5px 10px; font-size: 11px; }
+  .pwa-pending-badge { bottom: 120px; right: 10px; }
+}
   </style>
 </head>
 <body>
@@ -2296,6 +2395,17 @@ body.has-install-banner .sidebar {
   </div>
   
   <div id="root"></div>
+  <!-- PWA Network Status Indicator -->
+<div id="pwa-network-status" class="pwa-network-status online">
+  <span class="status-dot"></span>
+  <span class="status-text">Online</span>
+</div>
+
+<!-- PWA Pending Sync Badge -->
+<div id="pwa-pending-badge" class="pwa-pending-badge">
+  <i class="fa-solid fa-sync"></i>
+  <span id="pwa-pending-count">0</span> items pending sync
+</div>
   
   <script>
   // ✅ PERFORMANCE FIX: Hide instant loader once React app renders
