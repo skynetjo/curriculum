@@ -14,13 +14,13 @@ const STATIC_FILES = [
   '/index.html',
   '/manifest.json',
   '/offline.html',
-  '/Icon-72.jpg',
-  '/Icon-96.jpg',
-  '/Icon-144.jpg',
-  '/Icon-152.jpg',
-  '/Icon-192.jpg',
-  '/Icon-384.jpg',
-  '/Icon-512.jpg'
+  '/Icon-72.png',
+  '/Icon-96.png',
+  '/Icon-144.png',
+  '/Icon-152.png',
+  '/Icon-192.png',
+  '/Icon-384.png',
+  '/Icon-512.png'
 ];
 
 // External CDN resources to cache
@@ -176,7 +176,7 @@ self.addEventListener('fetch', event => {
   }
   
   // Static assets (js, css, images, fonts)
-  if (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/)) {
+  if (url.pathname.match(/\.(js|css|png|png|jpeg|gif|svg|ico|woff|woff2|ttf|eot|json)$/)) {
     event.respondWith(handleStaticRequest(request));
     return;
   }
@@ -411,8 +411,8 @@ self.addEventListener('push', event => {
   let data = {
     title: 'Curriculum Tracker',
     body: 'You have a new notification',
-    icon: '/Icon-192.jpg',
-    badge: '/Icon-72.jpg'
+    icon: '/Icon-192.png',
+    badge: '/Icon-72.png'
   };
   
   try {
