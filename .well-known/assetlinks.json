@@ -1,8 +1,8 @@
 [{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "com.avantifellows.curriculum.twa",
-    "sha256_cert_fingerprints": ["YOUR_SHA256_FINGERPRINT"]
-  }
-}]
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.curriculum_murex.twa",
+        "sha256_cert_fingerprints": ["42:A0:DC:71:A3:8B:BE:03:11:FA:68:06:97:3E:94:0A:A6:27:C9:91:6B:51:05:6C:2C:E8:94:EA:B1:42:8C:87"]
+      }
+    }]
