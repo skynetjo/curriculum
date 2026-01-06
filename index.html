@@ -10597,7 +10597,10 @@ useEffect(() => {
         currentUser.role === 'associate_program_manager' ||
         currentUser.role === 'aph' ||
         currentUser.role === 'pm' ||
-        currentUser.role === 'apm'
+        currentUser.role === 'apm' ||
+        // ✅ FIX: Include Directors - they need ALL data access (view-only)
+        currentUser.role === 'director' ||
+        currentUser.role === 'assoc_director'
       );
       
       const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
@@ -11369,7 +11372,7 @@ return (<>{currentUser && <OnlineStatusCard currentUser={currentUser} />}{isAdmi
 // ========================================
 // ADMIN STUDENT PROFILES VIEW
 // ========================================
-function AdminStudentProfiles({ accessibleSchools = SCHOOLS, isSuperAdmin = true }){
+function AdminStudentProfiles({ accessibleSchools = SCHOOLS, isSuperAdmin = true, isDirector = false }){
   const[studentProfiles,setStudentProfiles]=useState([]);
   const[filterSchool,setFilterSchool]=useState('All');
   const[filterGrade,setFilterGrade]=useState('All');
@@ -11379,21 +11382,24 @@ function AdminStudentProfiles({ accessibleSchools = SCHOOLS, isSuperAdmin = true
   const schoolDistChartRef = useRef(null);
   const chartInstances = useRef({});
   
+  // ✅ FIX: Directors get full data access like Super Admin
+  const hasFullDataAccess = isSuperAdmin || isDirector;
+  
   // Filter schools based on access
-  const availableSchools = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  const availableSchools = hasFullDataAccess ? SCHOOLS : accessibleSchools;
 
   useEffect(()=>{
     const fetchData=async()=>{
       const profilesSnap=await db.collection('studentProfiles').get();
       let profiles = profilesSnap.docs.map(d=>({...d.data(),id:d.id}));
-      // Filter by accessible schools for managers
-      if (!isSuperAdmin) {
+      // Filter by accessible schools for managers (not for Directors/Super Admin)
+      if (!hasFullDataAccess) {
         profiles = profiles.filter(p => accessibleSchools.includes(p.school));
       }
       setStudentProfiles(profiles);
     };
     fetchData();
-  },[isSuperAdmin, accessibleSchools]);
+  },[hasFullDataAccess, accessibleSchools]);
 
   const filteredProfiles=studentProfiles.filter(p=>{
     if(filterSchool!=='All'&&p.school!==filterSchool)return false;
@@ -12736,7 +12742,7 @@ function TeacherView({
 // ========================================
 // ADMIN EXAM REGISTRATION STATISTICS
 // ========================================
-function AdminExamStats({ accessibleSchools = [], isSuperAdmin = false }) {
+function AdminExamStats({ accessibleSchools = [], isSuperAdmin = false, isDirector = false }) {
   const [examRegistrations, setExamRegistrations] = useState([]);
   const [students, setStudents] = useState([]);
 
@@ -12746,13 +12752,16 @@ function AdminExamStats({ accessibleSchools = [], isSuperAdmin = false }) {
   const [filterStatus, setFilterStatus] = useState('All'); // Completed / Partial / NotDone / NeedHelp
   const [filterExam, setFilterExam] = useState('All');
 
+  // ✅ FIX: Directors get full data access like Super Admin
+  const hasFullDataAccess = isSuperAdmin || isDirector;
+
   useEffect(() => {
     const fetchData = async () => {
       const regsSnap = await db.collection('studentExamRegistrations').get();
       setExamRegistrations(regsSnap.docs.map(d => ({ ...d.data(), id: d.id })));
 
       // ✅ FIXED: Fetch ALL students for admins
-      console.log('📊 [ExamStats] Fetching students, isSuperAdmin:', isSuperAdmin);
+      console.log('📊 [ExamStats] Fetching students, hasFullDataAccess:', hasFullDataAccess);
       const studentsSnap = await db.collection('students').get();
       const studentsData = studentsSnap.docs.map(d => {
         const data = d.data();
@@ -12767,13 +12776,13 @@ function AdminExamStats({ accessibleSchools = [], isSuperAdmin = false }) {
       setStudents(studentsData);
     };
     fetchData();
-  }, [isSuperAdmin]);
+  }, [hasFullDataAccess]);
 
-  // Use only accessible schools for dropdown
-  const schoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  // ✅ FIX: Use only accessible schools for dropdown - Directors get all schools
+  const schoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
   
-  // Filter students by accessible schools first
-  const accessibleStudents = isSuperAdmin ? students : students.filter(s => accessibleSchools.includes(s.school));
+  // ✅ FIX: Filter students by accessible schools first - Directors see all
+  const accessibleStudents = hasFullDataAccess ? students : students.filter(s => accessibleSchools.includes(s.school));
   
   const gradeOptions = Array.from(new Set(accessibleStudents.map(s => s.grade).filter(Boolean))).sort();
   const genderOptions = Array.from(new Set(accessibleStudents.map(s => s.gender).filter(Boolean))).sort();
@@ -15059,6 +15068,10 @@ function AdminView({
     return saved === 'true';
   });
   
+  // ✅ FIX: Check if user is Director/Associate Director (view-only but full data access)
+  const isDirector = currentUser?.role === 'director' || currentUser?.role === 'assoc_director';
+  const hasFullDataAccess = isSuperAdmin || isDirector;
+  
   // Detect mobile screen size
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 768);
@@ -15073,15 +15086,15 @@ function AdminView({
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
 
-  // Filter data based on accessible schools for managers/APMs
-  const filteredTeachers = isSuperAdmin ? teachers : teachers.filter(t => accessibleSchools.includes(t.school));
-  const filteredStudents = isSuperAdmin ? students : students.filter(s => accessibleSchools.includes(s.school));
-  const filteredStudentAttendance = isSuperAdmin ? studentAttendance : studentAttendance.filter(a => accessibleSchools.includes(a.school));
-  const filteredTeacherAttendance = isSuperAdmin ? teacherAttendance : teacherAttendance.filter(a => accessibleSchools.includes(a.school));
-  const filteredSchoolInfo = isSuperAdmin ? schoolInfo : schoolInfo.filter(s => accessibleSchools.includes(s.school));
+  // ✅ FIX: Filter data - Directors get ALL data (view-only), same as Super Admin
+  const filteredTeachers = hasFullDataAccess ? teachers : teachers.filter(t => accessibleSchools.includes(t.school));
+  const filteredStudents = hasFullDataAccess ? students : students.filter(s => accessibleSchools.includes(s.school));
+  const filteredStudentAttendance = hasFullDataAccess ? studentAttendance : studentAttendance.filter(a => accessibleSchools.includes(a.school));
+  const filteredTeacherAttendance = hasFullDataAccess ? teacherAttendance : teacherAttendance.filter(a => accessibleSchools.includes(a.school));
+  const filteredSchoolInfo = hasFullDataAccess ? schoolInfo : schoolInfo.filter(s => accessibleSchools.includes(s.school));
 
-  // Get available schools for dropdowns
-  const availableSchools = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  // ✅ FIX: Get available schools for dropdowns - Directors get all schools
+  const availableSchools = hasFullDataAccess ? SCHOOLS : accessibleSchools;
 
   const adminTabs = [
     ...(isSuperAdmin ? [
@@ -15375,11 +15388,11 @@ function AdminView({
           <Admin2FAManagement teachers={filteredTeachers} managers={managers} />
         )}
 
-        {activeTab === 'teachers' && <TeacherManagement teachers={filteredTeachers} teacherAttendance={filteredTeacherAttendance} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} isSuperAdmin={isSuperAdmin} />}
+        {activeTab === 'teachers' && <TeacherManagement teachers={filteredTeachers} teacherAttendance={filteredTeacherAttendance} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
 
         {activeTab === 'teacherhistory' && <TeacherHistoryView teachers={filteredTeachers} />}
 
-        {activeTab === 'students' && <StudentManagement students={filteredStudents} isSuperAdmin={isSuperAdmin} accessibleSchools={availableSchools} />}
+        {activeTab === 'students' && <StudentManagement students={filteredStudents} isSuperAdmin={isSuperAdmin} isDirector={isDirector} accessibleSchools={availableSchools} />}
 
         {activeTab === 'directory' && (
           <OrgChartDirectory teachers={teachers} currentUser={currentUser} allEmployeesAccess={true} />
@@ -15400,6 +15413,7 @@ function AdminView({
             curriculum={curriculum}
             isAdmin={true}
             isSuperAdmin={isSuperAdmin}
+            isDirector={isDirector}
             accessibleSchools={availableSchools}
             managers={managers}
           />
@@ -15425,6 +15439,7 @@ function AdminView({
             chapterProgress={chapterProgress}
             accessibleSchools={availableSchools}
             isSuperAdmin={isSuperAdmin}
+            isDirector={isDirector}
           />
         )}
 
@@ -15444,6 +15459,7 @@ function AdminView({
             teacherAttendance={filteredTeacherAttendance}
             accessibleSchools={availableSchools}
             isSuperAdmin={isSuperAdmin}
+            isDirector={isDirector}
           />
         )}
 
@@ -15452,18 +15468,18 @@ function AdminView({
         )}
 
         {activeTab === 'assets' && (
-          <AdminAssetManagement accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} />
+          <AdminAssetManagement accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />
         )}
 
         {activeTab === 'birthdays' && <AdminBirthdays teachers={filteredTeachers} />}
 
-        {activeTab === 'studentprofiles' && <AdminStudentProfiles accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} />}
+        {activeTab === 'studentprofiles' && <AdminStudentProfiles accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
 
         {activeTab === 'settings' && isSuperAdmin && <AdminSettings />}
 
-        {activeTab === 'examstats' && <AdminExamStats accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} />}
+        {activeTab === 'examstats' && <AdminExamStats accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
         
-        {activeTab === 'studentfeedback' && <StudentFeedbackView accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} />}
+        {activeTab === 'studentfeedback' && <StudentFeedbackView accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
         </div>
       </div>
 
@@ -17978,12 +17994,15 @@ return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum 
     const priorityIcon = topicPriority === 'high' ? '🟢' : topicPriority === 'medium' ? '🟡' : '🔴';
     return <li key={i}>• {topicName} <span className="ml-1">{priorityIcon}</span></li>;
   })}</ul>}</div></div><div className="flex gap-2 mt-2 md:mt-0 flex-shrink-0"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
-function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools = SCHOOLS,isSuperAdmin = false}){
+function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools = SCHOOLS,isSuperAdmin = false, isDirector = false}){
+  // ✅ FIX: Directors get full data access like Super Admin
+  const hasFullDataAccess = isSuperAdmin || isDirector;
+  
   // Available schools for dropdown
-  const availableSchoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  const availableSchoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
   
   // Multi-select: Use arrays instead of single values
-  const initialSchools = isSuperAdmin ? [...SCHOOLS] : [...accessibleSchools];
+  const initialSchools = hasFullDataAccess ? [...SCHOOLS] : [...accessibleSchools];
   const[filterSchools,setFilterSchools]=useState(initialSchools);
   const[filterGrade,setFilterGrade]=useState('All');
   const[filterTeachers,setFilterTeachers]=useState([]);
@@ -19004,7 +19023,7 @@ function AdminSettings() {
 // ========================================
 // ADMIN ASSET MANAGEMENT - VIEW ACROSS SCHOOLS
 // ========================================
-function AdminAssetManagement({ accessibleSchools = [], isSuperAdmin = false }) {
+function AdminAssetManagement({ accessibleSchools = [], isSuperAdmin = false, isDirector = false }) {
   const [assets, setAssets] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19014,6 +19033,9 @@ function AdminAssetManagement({ accessibleSchools = [], isSuperAdmin = false }) 
   const [searchTerm, setSearchTerm] = useState('');
   const [activeSubTab, setActiveSubTab] = useState('overview');
 
+  // ✅ FIX: Directors get full data access like Super Admin
+  const hasFullDataAccess = isSuperAdmin || isDirector;
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -19021,7 +19043,7 @@ function AdminAssetManagement({ accessibleSchools = [], isSuperAdmin = false }) 
         let allAssets = [];
         let allAssignments = [];
         
-        const schoolsToFetch = isSuperAdmin ? SCHOOLS : accessibleSchools;
+        const schoolsToFetch = hasFullDataAccess ? SCHOOLS : accessibleSchools;
         
         for (const school of schoolsToFetch) {
           const assetsSnap = await db.collection('assets').where('school', '==', school).get();
@@ -19040,7 +19062,7 @@ function AdminAssetManagement({ accessibleSchools = [], isSuperAdmin = false }) 
       }
     };
     fetchData();
-  }, [accessibleSchools, isSuperAdmin]);
+  }, [accessibleSchools, hasFullDataAccess]);
 
   const filteredAssets = useMemo(() => {
     return assets.filter(asset => {
@@ -19070,7 +19092,7 @@ function AdminAssetManagement({ accessibleSchools = [], isSuperAdmin = false }) 
   }, [assets, filterSchool]);
 
   const schoolStats = useMemo(() => {
-    const schoolsToShow = isSuperAdmin ? SCHOOLS : accessibleSchools;
+    const schoolsToShow = hasFullDataAccess ? SCHOOLS : accessibleSchools;
     return schoolsToShow.map(school => {
       const schoolAssets = assets.filter(a => a.school === school);
       return {
@@ -19086,7 +19108,7 @@ function AdminAssetManagement({ accessibleSchools = [], isSuperAdmin = false }) 
 
   if (loading) return <div className="text-center py-8">Loading assets...</div>;
 
-  const schoolsToShow = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  const schoolsToShow = hasFullDataAccess ? SCHOOLS : accessibleSchools;
 
   return (
     <div className="space-y-6">
@@ -19282,7 +19304,7 @@ function AdminAssetManagement({ accessibleSchools = [], isSuperAdmin = false }) 
 }
 
 function AdminBirthdays({teachers}){const todayBirthdays=useMemo(()=>getBirthdays(teachers,'today'),[teachers]);const weekBirthdays=useMemo(()=>getBirthdays(teachers,'week'),[teachers]);const monthBirthdays=useMemo(()=>getBirthdays(teachers,'month'),[teachers]);const todayAnniversaries=useMemo(()=>getAnniversaries(teachers,'today'),[teachers]);const weekAnniversaries=useMemo(()=>getAnniversaries(teachers,'week'),[teachers]);const monthAnniversaries=useMemo(()=>getAnniversaries(teachers,'month'),[teachers]);return(<div className="space-y-6"><h2 className="text-3xl font-bold">🎉 Celebrations</h2><div className="grid md:grid-cols-2 gap-6"><>{todayBirthdays.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎂 Today's Birthdays</h3>{todayBirthdays.map(t=><div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{t.school} - {t.subject}</div></div>)}</div>}{todayAnniversaries.length>0&&<div className="birthday-card p-6 rounded-2xl"><h3 className="text-2xl font-bold text-white mb-4">🎉 Today's Work Anniversaries</h3>{todayAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="bg-white p-4 rounded-lg mb-2"><div className="font-bold text-lg">{t.name}</div><div className="text-sm text-gray-600">{years} Years - {t.school}</div></div>)})}</div>}</></div><div className="grid md:grid-cols-3 gap-6"><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Week</h3>{weekBirthdays.length===0&&weekAnniversaries.length===0?<p className="text-gray-500">No celebrations</p>:<div className="space-y-2"><>{weekBirthdays.map(t=><div key={t.id} className="p-3 bg-blue-50 rounded-lg"><div className="font-semibold">🎂 {t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}{weekAnniversaries.map(t=><div key={t.id} className="p-3 bg-green-50 rounded-lg"><div className="font-semibold">🎉 {t.name}</div><div className="text-sm text-gray-600">Work Anniversary</div></div>)}</></div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month - Birthdays</h3>{monthBirthdays.length===0?<p className="text-gray-500">No birthdays</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthBirthdays.map(t=><div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{new Date(t.dob).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</div></div>)}</div>}</div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-xl font-bold mb-4">This Month - Anniversaries</h3>{monthAnniversaries.length===0?<p className="text-gray-500">No anniversaries</p>:<div className="space-y-2 max-h-96 overflow-y-auto">{monthAnniversaries.map(t=>{const years=new Date().getFullYear()-new Date(t.joiningDate).getFullYear();return(<div key={t.id} className="p-3 bg-gray-50 rounded-lg"><div className="font-semibold">{t.name}</div><div className="text-sm text-gray-600">{years} Years</div></div>)})}</div>}</div></div></div>)}
-function StudentManagement({students, isSuperAdmin = true, accessibleSchools = SCHOOLS}){
+function StudentManagement({students, isSuperAdmin = true, isDirector = false, accessibleSchools = SCHOOLS}){
   const[showModal,setShowModal]=useState(false);
   const[editingStudent,setEditingStudent]=useState(null);
   const[form,setForm]=useState({school:'',grade:'',name:'',gender:'',id:''});
@@ -19294,13 +19316,16 @@ function StudentManagement({students, isSuperAdmin = true, accessibleSchools = S
   const fileInputRef=useRef(null);
   const updateIdFileRef=useRef(null);
   
+  // ✅ FIX: Directors get full data access like Super Admin
+  const hasFullDataAccess = isSuperAdmin || isDirector;
+  
   // Filter schools based on access
-  const availableSchools = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  const availableSchools = hasFullDataAccess ? SCHOOLS : accessibleSchools;
 
   const filteredStudents=students
   .filter(s=>{
-    // First filter by accessible schools for managers
-    if(!isSuperAdmin && !accessibleSchools.includes(s.school)) return false;
+    // First filter by accessible schools for managers (Directors see all)
+    if(!hasFullDataAccess && !accessibleSchools.includes(s.school)) return false;
     if(filterSchool!=='All'&&s.school!==filterSchool)return false;
     if(filterGrade!=='All'&&s.grade!==filterGrade)return false;
     if(searchQuery && !s.name?.toLowerCase().includes(searchQuery.toLowerCase()) && !s.id?.toLowerCase().includes(searchQuery.toLowerCase()))return false;
@@ -21449,9 +21474,12 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
 // ========================================
 // ADMIN ATTENDANCE ANALYTICS
 // ========================================
-function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAttendance,accessibleSchools=[],isSuperAdmin=false}){
+function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAttendance,accessibleSchools=[],isSuperAdmin=false,isDirector=false}){
+  // ✅ FIX: Directors get full data access like Super Admin
+  const hasFullDataAccess = isSuperAdmin || isDirector;
+  
   // Use accessible schools for dropdown
-  const schoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  const schoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
   
   // Multi-select: Initialize with all schools selected
   const[filterSchools,setFilterSchools]=useState([...schoolOptions]);
@@ -21517,8 +21545,8 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
   const filteredLocks = attendanceLocks.filter(lock => {
     if(lockFilterSchool !== 'All' && lock.school !== lockFilterSchool) return false;
     if(lockFilterDate && lock.date !== lockFilterDate) return false;
-    // Also filter by accessible schools for non-super admins
-    if(!isSuperAdmin && !accessibleSchools.includes(lock.school)) return false;
+    // Also filter by accessible schools for non-super admins (Directors see all)
+    if(!hasFullDataAccess && !accessibleSchools.includes(lock.school)) return false;
     return true;
   });
 
@@ -29209,11 +29237,14 @@ function TeacherExamStats({ currentUser }) {
 // ========================================
 // STUDENT FEEDBACK VIEW (ADMIN)
 // ========================================
-function StudentFeedbackView({ accessibleSchools = [], isSuperAdmin = false }) {
+function StudentFeedbackView({ accessibleSchools = [], isSuperAdmin = false, isDirector = false }) {
   const [feedbackList, setFeedbackList] = useState([]);
   const [students, setStudents] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // ✅ FIX: Directors get full data access like Super Admin
+  const hasFullDataAccess = isSuperAdmin || isDirector;
   
   // Filters
   const [filterSchool, setFilterSchool] = useState('All');
@@ -29350,14 +29381,14 @@ const feedbackData = feedbackSnap.docs.map(doc => {
     fetchData();
   }, []);
 
-  // Use only accessible schools for dropdown
-  const schoolOptions = isSuperAdmin ? SCHOOLS : accessibleSchools;
+  // ✅ FIX: Use only accessible schools for dropdown - Directors get all schools
+  const schoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
   
-  // Filter feedback by accessible schools first
-  const accessibleFeedback = isSuperAdmin ? feedbackList : feedbackList.filter(f => accessibleSchools.includes(f.school));
+  // ✅ FIX: Filter feedback by accessible schools first - Directors see all
+  const accessibleFeedback = hasFullDataAccess ? feedbackList : feedbackList.filter(f => accessibleSchools.includes(f.school));
   
-  // Filter teachers by accessible schools for dropdown (Fix #6)
-  const accessibleTeachers = isSuperAdmin ? teachers : teachers.filter(t => accessibleSchools.includes(t.school));
+  // ✅ FIX: Filter teachers by accessible schools for dropdown - Directors see all
+  const accessibleTeachers = hasFullDataAccess ? teachers : teachers.filter(t => accessibleSchools.includes(t.school));
   
   // When school filter is selected, further filter teachers to that school only
   const teachersForDropdown = filterSchool === 'All' 
