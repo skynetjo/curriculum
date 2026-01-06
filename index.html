@@ -9841,8 +9841,8 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
   const [isDismissed, setIsDismissed] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   
-  // List of roles that don't need profile completion (managers/admins)
-  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin'];
+  // List of roles that don't need profile completion (managers/admins/directors)
+  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin', 'Director', 'Associate Director', 'director', 'assoc_director'];
   
   // Check if current user is a manager/admin
   const isManager = currentUser?.role && managerRoles.some(role => 
@@ -10030,8 +10030,8 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
 // PROFILE COMPLETION CARD (For Dashboard)
 // ========================================
 function ProfileCompletionCard({ currentUser, onNavigateToProfile }) {
-  // List of roles that don't need profile completion (managers/admins)
-  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin'];
+  // List of roles that don't need profile completion (managers/admins/directors)
+  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin', 'Director', 'Associate Director', 'director', 'assoc_director'];
   
   // Check if current user is a manager/admin
   const isManager = currentUser?.role && managerRoles.some(role => 
@@ -10268,6 +10268,11 @@ useEffect(() => {
 // Helper function to get accessible schools for a manager (supports 4-level hierarchy)
 const getAccessibleSchools = useCallback((managerData, allManagers) => {
   if (!managerData) return [];
+  
+  // ✅ FIX: Directors and Associate Directors have access to ALL schools
+  if (managerData.viewAllSchools || managerData.role === 'director' || managerData.role === 'assoc_director') {
+    return [...SCHOOLS];
+  }
   
   let schools = [...(managerData.directSchools || [])];
   
@@ -20958,19 +20963,52 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
   const[location,setLocation]=useState('');
   const[fetchingLocation,setFetchingLocation]=useState(false);
   const[submitting,setSubmitting]=useState(false);
-
-  const todayRecord=teacherAttendance.find(a=>a.teacherId===currentUser.afid&&a.date===selectedDate);
   
-  // Calculate leave balance (including adjustments)
+  // ✅ FIX: Track locally submitted attendance to update leave balance immediately
+  const[localSubmittedAttendance,setLocalSubmittedAttendance]=useState([]);
+  
+  // ✅ FIX: Track GPS verification status
+  const[gpsVerified,setGpsVerified]=useState(false);
+
+  // ✅ FIX: Calculate allowed date range (today and previous 2 days only)
+  const today = new Date();
+  const maxDate = getTodayDate(); // Today - no future dates allowed
+  const minDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 2); // 2 days before today
+    return d.toISOString().split('T')[0];
+  }, []);
+
+  // ✅ FIX: Merge prop attendance with locally submitted attendance
+  const allAttendance = useMemo(() => {
+    const merged = [...teacherAttendance];
+    localSubmittedAttendance.forEach(local => {
+      // Only add if not already in the main list
+      if (!merged.some(a => a.teacherId === local.teacherId && a.date === local.date)) {
+        merged.push(local);
+      }
+    });
+    return merged;
+  }, [teacherAttendance, localSubmittedAttendance]);
+
+  const todayRecord=allAttendance.find(a=>a.teacherId===currentUser.afid&&a.date===selectedDate);
+  
+  // ✅ FIX: Check if attendance already exists for selected date (prevents modification)
+  const hasExistingAttendance = useMemo(() => {
+    return allAttendance.some(a => a.teacherId === currentUser.afid && a.date === selectedDate);
+  }, [allAttendance, currentUser.afid, selectedDate]);
+  
+  // ✅ FIX: Calculate leave balance using merged attendance data
   const leaveBalance = useMemo(() => {
-    return calculateLeaveBalance(teacherAttendance, currentUser.afid, leaveAdjustments || {});
-  }, [teacherAttendance, currentUser.afid, leaveAdjustments]);
+    return calculateLeaveBalance(allAttendance, currentUser.afid, leaveAdjustments || {});
+  }, [allAttendance, currentUser.afid, leaveAdjustments]);
 
   useEffect(()=>{
     if(todayRecord){
       setStatus(todayRecord.status);
       setReason(todayRecord.reason||'Present');
       setLocation(todayRecord.location||'');
+      setGpsVerified(true); // Already marked, so GPS was verified
     }
   },[todayRecord]);
 
@@ -20981,23 +21019,57 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
       setEndDate(selectedDate);
     }
   }, [status, selectedDate]);
+  
+  // ✅ FIX: Reset GPS verification when status changes
+  useEffect(() => {
+    if (status === 'On Leave') {
+      setGpsVerified(true); // GPS not required for leave
+      setLocation('Leave - GPS not required');
+    } else {
+      setGpsVerified(false);
+      setLocation('');
+    }
+  }, [status]);
 
   const getLocation=()=>{
     setFetchingLocation(true);
     if(navigator.geolocation){
       navigator.geolocation.getCurrentPosition(
         position=>{
-          const loc=`${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
+          const lat = position.coords.latitude.toFixed(6);
+          const lng = position.coords.longitude.toFixed(6);
+          const accuracy = Math.round(position.coords.accuracy);
+          const loc=`${lat}, ${lng} (±${accuracy}m)`;
           setLocation(loc);
+          setGpsVerified(true); // ✅ Mark GPS as verified
           setFetchingLocation(false);
         },
-        ()=>{
-          alert('Unable to fetch location');
+        (error)=>{
+          let errorMsg = 'Unable to fetch location. ';
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              errorMsg += 'Please enable location permission in your browser/phone settings.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMsg += 'Location information unavailable. Please try again.';
+              break;
+            case error.TIMEOUT:
+              errorMsg += 'Location request timed out. Please try again.';
+              break;
+            default:
+              errorMsg += 'Please try again.';
+          }
+          alert(errorMsg);
           setFetchingLocation(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
         }
       );
     }else{
-      alert('Geolocation not supported');
+      alert('Geolocation not supported by your browser');
       setFetchingLocation(false);
     }
   };
@@ -21024,6 +21096,12 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
   const handleSubmit=async()=>{
     if(status!=='Present'&&!reason){
       alert('Please select a reason');
+      return;
+    }
+    
+    // ✅ FIX: Require GPS verification for Present status
+    if(status === 'Present' && !gpsVerified){
+      alert('📍 GPS verification required!\n\nPlease click "Get GPS Location" button to verify your location before marking attendance.');
       return;
     }
 
@@ -21063,10 +21141,13 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
       // Create batch for multiple dates
       const batch = db.batch();
       
+      // ✅ FIX: Prepare local records to update leave balance immediately
+      const newLocalRecords = [];
+      
       datesToMark.forEach(date => {
         const docId = `${currentUser.afid}_${date}`;
         const docRef = db.collection('teacherAttendance').doc(docId);
-        batch.set(docRef, {
+        const recordData = {
           teacherId: currentUser.afid,
           teacherName: currentUser.name,
           school: currentUser.school,
@@ -21079,16 +21160,22 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
           // Store date range info for reference
           isPartOfRange: datesToMark.length > 1,
           rangeStart: datesToMark.length > 1 ? selectedDate : null,
-          rangeEnd: datesToMark.length > 1 ? endDate : null
-        });
+          rangeEnd: datesToMark.length > 1 ? endDate : null,
+          gpsVerified: gpsVerified // ✅ Track if GPS was verified
+        };
+        batch.set(docRef, recordData);
+        newLocalRecords.push(recordData);
       });
       
       await batch.commit();
       
+      // ✅ FIX: Update local state to reflect new attendance immediately
+      setLocalSubmittedAttendance(prev => [...prev, ...newLocalRecords]);
+      
       if (datesToMark.length > 1) {
-        alert(`Leave marked for ${datesToMark.length} days! ✓\nFrom: ${selectedDate}\nTo: ${endDate}`);
+        alert(`✅ Leave marked for ${datesToMark.length} days!\nFrom: ${selectedDate}\nTo: ${endDate}\n\nYour leave balance has been updated.`);
       } else {
-        alert(`Attendance marked! ✓\nPunch-in time: ${punchInTime}`);
+        alert(`✅ Attendance marked!\nPunch-in time: ${punchInTime}\nLocation: ${location}`);
       }
       
       // Reset date range after successful submission
@@ -21227,6 +21314,8 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
               <input 
                 type="date" 
                 value={selectedDate} 
+                min={minDate}
+                max={maxDate}
                 onChange={e => {
                   setSelectedDate(e.target.value);
                   if (!isDateRange || e.target.value > endDate) {
@@ -21235,6 +21324,7 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
                 }} 
                 className="w-full border-2 px-4 py-3 rounded-xl"
               />
+              <p className="text-xs text-gray-500 mt-1">📅 You can mark attendance for today and previous 2 days only</p>
             </div>
             
             {isDateRange && status === 'On Leave' && (
@@ -21244,6 +21334,7 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
                   type="date" 
                   value={endDate} 
                   min={selectedDate}
+                  max={maxDate}
                   onChange={e => setEndDate(e.target.value)} 
                   className="w-full border-2 px-4 py-3 rounded-xl"
                 />
@@ -21264,23 +21355,79 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
 
           {status === 'Present' && (
             <div>
-              <label className="block text-sm font-bold mb-2">Location</label>
+              <label className="block text-sm font-bold mb-2">
+                📍 GPS Location <span className="text-red-500">*</span>
+                {gpsVerified && <span className="text-green-600 text-xs ml-2">✓ Verified</span>}
+              </label>
+              
+              {/* ✅ FIX: GPS requirement notice */}
+              <div className="bg-blue-50 p-3 rounded-xl border-2 border-blue-200 mb-3">
+                <p className="text-sm text-blue-800 font-semibold">📍 GPS verification is mandatory</p>
+                <p className="text-xs text-blue-600 mt-1">You must fetch your GPS location to mark attendance. Manual entry is not allowed.</p>
+              </div>
+              
               <div className="flex gap-2">
-                <input type="text" value={location} onChange={e=>setLocation(e.target.value)} className="flex-1 border-2 px-4 py-3 rounded-xl" placeholder="Enter location or fetch GPS"/>
-                <button onClick={getLocation} disabled={fetchingLocation} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold disabled:opacity-50">
-                  {fetchingLocation?'📍 Fetching...':'📍 Get GPS'}
+                {/* ✅ FIX: Location field is now read-only */}
+                <input 
+                  type="text" 
+                  value={location} 
+                  readOnly
+                  className="flex-1 border-2 px-4 py-3 rounded-xl bg-gray-100 cursor-not-allowed" 
+                  placeholder="Click 'Get GPS Location' button →"
+                />
+                <button 
+                  onClick={getLocation} 
+                  disabled={fetchingLocation || gpsVerified} 
+                  className={`px-6 py-3 rounded-xl font-semibold disabled:opacity-50 transition-all ${
+                    gpsVerified 
+                      ? 'bg-green-600 text-white' 
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  {fetchingLocation ? '📍 Fetching...' : gpsVerified ? '✓ GPS Verified' : '📍 Get GPS Location'}
                 </button>
               </div>
-              {location&&<p className="text-sm text-gray-600 mt-2">📍 {location}</p>}
+              
+              {location && gpsVerified && (
+                <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-sm text-green-700">✓ Location captured: {location}</p>
+                </div>
+              )}
+              
+              {!gpsVerified && (
+                <p className="text-xs text-red-500 mt-2">⚠️ Please click "Get GPS Location" to verify your location before submitting</p>
+              )}
+            </div>
+          )}
+
+          {/* ✅ FIX: Show warning if attendance already exists */}
+          {hasExistingAttendance && (
+            <div className="bg-amber-50 p-4 rounded-xl border-2 border-amber-300">
+              <p className="font-semibold text-amber-800">🔒 Attendance already marked for {selectedDate}</p>
+              <p className="text-sm text-amber-700 mt-1">Once attendance is submitted, it cannot be modified. Please contact your admin if you need to make changes.</p>
             </div>
           )}
 
           <button 
             onClick={handleSubmit} 
-            disabled={submitting}
-            className="w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-50"
+            disabled={submitting || hasExistingAttendance || (status === 'Present' && !gpsVerified)}
+            className={`w-full py-4 rounded-xl font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all ${
+              hasExistingAttendance 
+                ? 'bg-gray-400 text-white' 
+                : (status === 'Present' && !gpsVerified)
+                  ? 'bg-red-400 text-white'
+                  : 'avanti-gradient text-white'
+            }`}
           >
-            {submitting ? 'Submitting...' : (isDateRange && status === 'On Leave' ? `Submit Leave (${daysToMark} days)` : 'Submit Attendance')}
+            {submitting 
+              ? 'Submitting...' 
+              : hasExistingAttendance 
+                ? '🔒 Already Marked (No Changes Allowed)' 
+                : (status === 'Present' && !gpsVerified)
+                  ? '📍 GPS Verification Required'
+                  : (isDateRange && status === 'On Leave' 
+                    ? `Submit Leave (${daysToMark} days)` 
+                    : 'Submit Attendance')}
           </button>
 
           {todayRecord&&(
@@ -21290,6 +21437,7 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
               <p><strong>Reason:</strong> {todayRecord.reason}</p>
               <p><strong>Punch-in Time:</strong> ⏰ {todayRecord.punchInTime||'Not recorded'}</p>
               <p><strong>Location:</strong> {todayRecord.location}</p>
+              {todayRecord.gpsVerified && <p className="text-xs text-green-600 mt-1">✓ GPS Verified</p>}
             </div>
           )}
         </div>
@@ -30696,6 +30844,134 @@ function AdminClassroomObservations({ teachers, currentUser }) {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  // ✅ NEW: Generate PDF for observation
+  const generateObservationPDF = (observation) => {
+    const printWindow = window.open('', '_blank');
+    
+    const parameterRows = CLASSROOM_OBSERVATION_PARAMETERS.map(param => {
+      const score = observation.responses?.[param.id] ?? 'N/A';
+      const remark = observation.remarks?.[param.id] || '';
+      const isFlagged = score !== param.maxScore;
+      return `
+        <tr style="border-bottom: 1px solid #eee; ${isFlagged ? 'background-color: #FEE2E2;' : ''}">
+          <td style="padding: 8px; font-size: 12px;">${param.type === 'major' ? '⭐' : '📌'} ${param.text}</td>
+          <td style="padding: 8px; text-align: center; font-weight: bold; ${isFlagged ? 'color: #DC2626;' : 'color: #059669;'}">${score}/${param.maxScore}</td>
+          <td style="padding: 8px; font-size: 11px; color: #666;">${remark}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const mediaSection = observation.mediaLinks?.length > 0 ? `
+      <div style="margin-top: 20px;">
+        <h3 style="color: #1F2937; border-bottom: 2px solid #F4B41A; padding-bottom: 5px;">📸 Media Links</h3>
+        <ul style="font-size: 12px;">
+          ${observation.mediaLinks.map((link, i) => `<li><a href="${link}" target="_blank">Media ${i + 1}</a></li>`).join('')}
+        </ul>
+      </div>
+    ` : '';
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Classroom Observation - ${observation.teacherName}</title>
+        <style>
+          @media print {
+            @page { margin: 1cm; size: A4; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+          body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #F4B41A; padding-bottom: 15px; margin-bottom: 20px; }
+          .logo { font-size: 24px; font-weight: bold; color: #F4B41A; }
+          .score-box { background: linear-gradient(135deg, #F4B41A, #E8B039); color: white; padding: 15px 25px; border-radius: 10px; text-align: center; }
+          .score-box .score { font-size: 32px; font-weight: bold; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+          .info-item { padding: 10px; background: #F9FAFB; border-radius: 8px; }
+          .info-item label { font-size: 11px; color: #6B7280; text-transform: uppercase; }
+          .info-item span { display: block; font-weight: bold; color: #1F2937; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+          th { background: #F4B41A; color: white; padding: 10px; text-align: left; }
+          .flagged { background: #FEF2F2; }
+          .footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 10px 20px; font-size: 10px; border-top: 1px solid #ddd; display: flex; justify-content: space-between; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="logo">अवंती Avanti Fellows</div>
+            <h1 style="margin: 10px 0 5px; font-size: 20px;">Classroom Observation Report</h1>
+            <p style="margin: 0; color: #666;">Teacher: ${observation.teacherName} | ${observation.teacherSubject}</p>
+          </div>
+          <div class="score-box">
+            <div class="score">${observation.totalScore}/${observation.maxScore}</div>
+            <div style="font-size: 14px;">${observation.percentageScore}%</div>
+            <div style="font-size: 12px; margin-top: 5px;">${observation.flaggedCount} flagged</div>
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div class="info-item">
+            <label>School</label>
+            <span>${observation.school}</span>
+          </div>
+          <div class="info-item">
+            <label>Grade</label>
+            <span>Class ${observation.grade}</span>
+          </div>
+          <div class="info-item">
+            <label>Observation Date</label>
+            <span>${new Date(observation.observationDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })} ${observation.observationTime || ''}</span>
+          </div>
+          <div class="info-item">
+            <label>Observer</label>
+            <span>${observation.observerName} (${observation.observerPosition || 'Manager'})</span>
+          </div>
+        </div>
+
+        <h3 style="color: #1F2937; border-bottom: 2px solid #F4B41A; padding-bottom: 5px;">Observation Parameters</h3>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 60%;">Parameter</th>
+              <th style="width: 15%;">Score</th>
+              <th style="width: 25%;">Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${parameterRows}
+          </tbody>
+        </table>
+
+        ${observation.strengths ? `
+          <div style="margin-top: 20px; background: #ECFDF5; padding: 15px; border-radius: 8px;">
+            <h4 style="color: #059669; margin: 0 0 10px;">✅ Strengths Observed</h4>
+            <p style="margin: 0; font-size: 13px;">${observation.strengths}</p>
+          </div>
+        ` : ''}
+
+        ${observation.improvements ? `
+          <div style="margin-top: 15px; background: #FEF3C7; padding: 15px; border-radius: 8px;">
+            <h4 style="color: #D97706; margin: 0 0 10px;">💡 Points of Improvement</h4>
+            <p style="margin: 0; font-size: 13px;">${observation.improvements}</p>
+          </div>
+        ` : ''}
+
+        ${mediaSection}
+
+        <div class="footer">
+          <span>Private & Confidential</span>
+          <span>Avanti Fellows - Classroom Observation</span>
+        </div>
+      </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+    }, 500);
+  };
+
   // Fetch all observations
   useEffect(() => {
     const fetchObservations = async () => {
@@ -31010,18 +31286,27 @@ function AdminClassroomObservations({ teachers, currentUser }) {
                     </td>
                     <td className="p-3 text-sm">{obs.observerName}</td>
                     <td className="p-3">
-                      <button
-                        onClick={() => {
-                          const teacher = teachers.find(t => t.afid === obs.teacherId);
-                          if (teacher) {
-                            setSelectedTeacher(teacher);
-                            setShowTeacherProfile(true);
-                          }
-                        }}
-                        className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm"
-                      >
-                        View
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            const teacher = teachers.find(t => t.afid === obs.teacherId);
+                            if (teacher) {
+                              setSelectedTeacher(teacher);
+                              setShowTeacherProfile(true);
+                            }
+                          }}
+                          className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => generateObservationPDF(obs)}
+                          className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm"
+                          title="Download/Print PDF"
+                        >
+                          📄 PDF
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
