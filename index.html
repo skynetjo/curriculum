@@ -3024,6 +3024,7 @@ const MANAGER_ROLES = {
   SUPER_ADMIN: 'super_admin',     // Full access to everything
   DIRECTOR: 'director',           // Director - view all data (read-only)
   ASSOC_DIRECTOR: 'assoc_director', // Associate Director - view all data (read-only)
+  TRAINING: 'training',           // Training Department - view all data (read-only)
   APH: 'aph',                     // Program Head - sees all reportees' schools
   PM: 'pm',                       // Program Manager - sees their schools + APM schools
   APM: 'apm',                     // Associate Program Manager - sees only assigned schools
@@ -3034,6 +3035,7 @@ const ROLE_LABELS = {
   'super_admin': 'Super Admin',
   'director': 'Director',
   'assoc_director': 'Associate Director',
+  'training': 'Training Department',
   'aph': 'Program Head',
   'pm': 'Program Manager',
   'apm': 'Associate Program Manager',
@@ -3044,6 +3046,7 @@ const ROLE_COLORS = {
   'super_admin': { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
   'director': { bg: 'bg-indigo-100', text: 'text-indigo-700', border: 'border-indigo-200' },
   'assoc_director': { bg: 'bg-violet-100', text: 'text-violet-700', border: 'border-violet-200' },
+  'training': { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-200' },
   'aph': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
   'pm': { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200' },
   'apm': { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-200' },
@@ -9842,7 +9845,7 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
   const [showDetails, setShowDetails] = useState(false);
   
   // List of roles that don't need profile completion (managers/admins/directors)
-  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin', 'Director', 'Associate Director', 'director', 'assoc_director'];
+  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin', 'Director', 'Associate Director', 'Training Department', 'director', 'assoc_director', 'training'];
   
   // Check if current user is a manager/admin
   const isManager = currentUser?.role && managerRoles.some(role => 
@@ -10031,7 +10034,7 @@ function ProfileCompletionBanner({ currentUser, onNavigateToProfile }) {
 // ========================================
 function ProfileCompletionCard({ currentUser, onNavigateToProfile }) {
   // List of roles that don't need profile completion (managers/admins/directors)
-  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin', 'Director', 'Associate Director', 'director', 'assoc_director'];
+  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin', 'Director', 'Associate Director', 'Training Department', 'director', 'assoc_director', 'training'];
   
   // Check if current user is a manager/admin
   const isManager = currentUser?.role && managerRoles.some(role => 
@@ -10270,7 +10273,7 @@ const getAccessibleSchools = useCallback((managerData, allManagers) => {
   if (!managerData) return [];
   
   // ✅ FIX: Directors and Associate Directors have access to ALL schools
-  if (managerData.viewAllSchools || managerData.role === 'director' || managerData.role === 'assoc_director') {
+  if (managerData.viewAllSchools || managerData.role === 'director' || managerData.role === 'assoc_director' || managerData.role === 'training') {
     return [...SCHOOLS];
   }
   
@@ -10598,9 +10601,10 @@ useEffect(() => {
         currentUser.role === 'aph' ||
         currentUser.role === 'pm' ||
         currentUser.role === 'apm' ||
-        // ✅ FIX: Include Directors - they need ALL data access (view-only)
+        // ✅ FIX: Include Directors/Training - they need ALL data access (view-only)
         currentUser.role === 'director' ||
-        currentUser.role === 'assoc_director'
+        currentUser.role === 'assoc_director' ||
+        currentUser.role === 'training'
       );
       
       const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
@@ -13168,6 +13172,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
     switch(role) {
       case MANAGER_ROLES.DIRECTOR: return []; // Director reports to no one
       case MANAGER_ROLES.ASSOC_DIRECTOR: return []; // Associate Director reports to no one
+      case MANAGER_ROLES.TRAINING: return []; // Training Department reports to no one
       case MANAGER_ROLES.APH: return []; // APH reports to Super Admin (no selection needed)
       case MANAGER_ROLES.PM: return getManagersByRole(MANAGER_ROLES.APH); // PM reports to APH
       case MANAGER_ROLES.APM: return getManagersByRole(MANAGER_ROLES.PM); // APM reports to PM
@@ -13429,7 +13434,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
     }
     
     // ✅ Directors don't need schools - they have view-all access
-    const isDirectorRole = form.role === 'director' || form.role === 'assoc_director';
+    const isDirectorRole = form.role === 'director' || form.role === 'assoc_director' || form.role === 'training';
 
     try {
       const managerData = {
@@ -13676,6 +13681,7 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
               <option value="All">All Roles</option>
               <option value={MANAGER_ROLES.DIRECTOR}>Director</option>
               <option value={MANAGER_ROLES.ASSOC_DIRECTOR}>Associate Director</option>
+              <option value={MANAGER_ROLES.TRAINING}>Training Department</option>
               <option value={MANAGER_ROLES.APH}>Program Head (PH)</option>
               <option value={MANAGER_ROLES.PM}>Program Manager (PM)</option>
               <option value={MANAGER_ROLES.APM}>Associate Program Manager (APM)</option>
@@ -13724,6 +13730,20 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                 <span className="px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded-full">View Only</span>
               </div>
               <div className="text-sm text-gray-600 mt-1">📧 {assocDir.email}</div>
+              <div className="text-sm text-green-600 font-semibold mt-2">📊 View Access: All Schools</div>
+            </div>
+          ))}
+          
+          {/* Training Department (view-only) */}
+          {managers.filter(m => m.role === 'training' && m.status === 'active').map(trainer => (
+            <div key={trainer.id} className="border-2 border-cyan-200 rounded-xl p-4 bg-cyan-50 ml-4">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">📚</span>
+                <span className="text-xl font-bold">{trainer.name}</span>
+                <span className="px-3 py-1 bg-cyan-600 text-white text-xs rounded-full font-bold">TRAINING DEPARTMENT</span>
+                <span className="px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded-full">View Only</span>
+              </div>
+              <div className="text-sm text-gray-600 mt-1">📧 {trainer.email}</div>
               <div className="text-sm text-green-600 font-semibold mt-2">📊 View Access: All Schools</div>
             </div>
           ))}
@@ -13937,12 +13957,13 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                   >
                     <option value={MANAGER_ROLES.DIRECTOR}>Director (View Only)</option>
                     <option value={MANAGER_ROLES.ASSOC_DIRECTOR}>Associate Director (View Only)</option>
+                    <option value={MANAGER_ROLES.TRAINING}>Training Department (View Only)</option>
                     <option value={MANAGER_ROLES.APH}>Program Head (PH)</option>
                     <option value={MANAGER_ROLES.PM}>Program Manager (PM)</option>
                     <option value={MANAGER_ROLES.APM}>Associate Program Manager (APM)</option>
                   </select>
-                  {(form.role === 'director' || form.role === 'assoc_director') && (
-                    <p className="text-xs text-blue-600 mt-1">⚠️ Directors have view-only access to all data. They cannot approve timesheets.</p>
+                  {(form.role === 'director' || form.role === 'assoc_director' || form.role === 'training') && (
+                    <p className="text-xs text-blue-600 mt-1">⚠️ This role has view-only access to all data. They cannot approve timesheets.</p>
                   )}
                 </div>
               </div>
@@ -13970,11 +13991,11 @@ function ManagerManagement({ managers, currentUser, isSuperAdmin }) {
                 </div>
               )}
 
-              {/* Directors have access to all schools, so no need to select */}
-              {(form.role === 'director' || form.role === 'assoc_director') ? (
+              {/* Directors/Training have access to all schools, so no need to select */}
+              {(form.role === 'director' || form.role === 'assoc_director' || form.role === 'training') ? (
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
                   <p className="text-blue-700 font-semibold">📊 All Schools Access</p>
-                  <p className="text-sm text-blue-600 mt-1">Directors and Associate Directors have view-only access to all schools. No need to assign specific schools.</p>
+                  <p className="text-sm text-blue-600 mt-1">This role has view-only access to all schools. No need to assign specific schools.</p>
                 </div>
               ) : (
               <div>
@@ -15068,8 +15089,8 @@ function AdminView({
     return saved === 'true';
   });
   
-  // ✅ FIX: Check if user is Director/Associate Director (view-only but full data access)
-  const isDirector = currentUser?.role === 'director' || currentUser?.role === 'assoc_director';
+  // ✅ FIX: Check if user is Director/Associate Director/Training (view-only but full data access)
+  const isDirector = currentUser?.role === 'director' || currentUser?.role === 'assoc_director' || currentUser?.role === 'training';
   const hasFullDataAccess = isSuperAdmin || isDirector;
   
   // Detect mobile screen size
@@ -26770,17 +26791,20 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
   const mySchool = currentUser.school;
   const myAfid = currentUser.afid || currentUser.uid || currentUser.id;
   
-  // Check if current user is a manager (APM/PM/Program Head/Director) - they shouldn't see entry form
+  // Check if current user is a manager (APM/PM/Program Head/Director/Training) - they shouldn't see entry form
   const isManager = isAdmin || currentUser.role === 'apm' || currentUser.role === 'pm' || 
                     currentUser.role === 'aph' || currentUser.role === MANAGER_ROLES.APM || 
                     currentUser.role === MANAGER_ROLES.PM || currentUser.role === MANAGER_ROLES.APH ||
                     currentUser.role === 'super_admin' || currentUser.role === 'director' ||
-                    currentUser.role === 'assoc_director' || currentUser.role === MANAGER_ROLES.DIRECTOR ||
-                    currentUser.role === MANAGER_ROLES.ASSOC_DIRECTOR;
+                    currentUser.role === 'assoc_director' || currentUser.role === 'training' ||
+                    currentUser.role === MANAGER_ROLES.DIRECTOR || currentUser.role === MANAGER_ROLES.ASSOC_DIRECTOR ||
+                    currentUser.role === MANAGER_ROLES.TRAINING;
   
-  // ✅ NEW: Check if user is Director/Associate Director (view-only access)
-  const isViewOnly = currentUser.role === 'director' || currentUser.role === 'assoc_director' ||
-                     currentUser.role === MANAGER_ROLES.DIRECTOR || currentUser.role === MANAGER_ROLES.ASSOC_DIRECTOR;
+  // ✅ NEW: Check if user is Director/Associate Director/Training (view-only access)
+  const isViewOnly = currentUser.role === 'director' || currentUser.role === 'assoc_director' || 
+                     currentUser.role === 'training' ||
+                     currentUser.role === MANAGER_ROLES.DIRECTOR || currentUser.role === MANAGER_ROLES.ASSOC_DIRECTOR ||
+                     currentUser.role === MANAGER_ROLES.TRAINING;
   
   // Check if user can enter timesheet (Teacher or APC only)
   const canEnterTimesheet = !isManager && (currentUser.userType === 'teacher' || currentUser.userType === 'apc' || 
@@ -27034,8 +27058,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         const myDirectSchools = myManagerProfile?.directSchools || [];
         const myRole = myManagerProfile?.role || currentUser.role || '';
         
-        // ✅ FIX: Check for Director/Associate Director roles (view-only, see all data)
-        const isDirector = myRole === 'director' || myRole === 'assoc_director';
+        // ✅ FIX: Check for Director/Associate Director/Training roles (view-only, see all data)
+        const isDirector = myRole === 'director' || myRole === 'assoc_director' || myRole === 'training';
         const hasViewAllAccess = isSuperAdmin || isDirector;
         
         // Single log instead of multiple
