@@ -181,6 +181,74 @@
           catch(e) { return false; }
         }
       };
+      
+      // ✅ NEW: IndexedDB wrapper for persistent storage (survives PWA/APK restarts)
+      window.persistentStorage = {
+        _db: null,
+        _dbName: 'AvantiCurriculumTracker',
+        _storeName: 'sessions',
+        
+        init: function() {
+          return new Promise((resolve, reject) => {
+            if (this._db) { resolve(this._db); return; }
+            if (!window.indexedDB) { reject('IndexedDB not supported'); return; }
+            
+            const request = indexedDB.open(this._dbName, 1);
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => { this._db = request.result; resolve(this._db); };
+            request.onupgradeneeded = (e) => {
+              const db = e.target.result;
+              if (!db.objectStoreNames.contains(this._storeName)) {
+                db.createObjectStore(this._storeName, { keyPath: 'key' });
+              }
+            };
+          });
+        },
+        
+        getItem: async function(key) {
+          try {
+            await this.init();
+            return new Promise((resolve) => {
+              const tx = this._db.transaction(this._storeName, 'readonly');
+              const store = tx.objectStore(this._storeName);
+              const request = store.get(key);
+              request.onsuccess = () => resolve(request.result?.value || null);
+              request.onerror = () => resolve(null);
+            });
+          } catch(e) { return null; }
+        },
+        
+        setItem: async function(key, value) {
+          try {
+            await this.init();
+            return new Promise((resolve) => {
+              const tx = this._db.transaction(this._storeName, 'readwrite');
+              const store = tx.objectStore(this._storeName);
+              store.put({ key, value, timestamp: Date.now() });
+              tx.oncomplete = () => resolve(true);
+              tx.onerror = () => resolve(false);
+            });
+          } catch(e) { return false; }
+        },
+        
+        removeItem: async function(key) {
+          try {
+            await this.init();
+            return new Promise((resolve) => {
+              const tx = this._db.transaction(this._storeName, 'readwrite');
+              const store = tx.objectStore(this._storeName);
+              store.delete(key);
+              tx.oncomplete = () => resolve(true);
+              tx.onerror = () => resolve(false);
+            });
+          } catch(e) { return false; }
+        }
+      };
+      
+      // Initialize IndexedDB early
+      window.persistentStorage.init().catch(function(e) {
+        console.log('IndexedDB init skipped:', e);
+      });
     })();
   </script>
   
@@ -8413,10 +8481,10 @@ function generateDeviceId() {
 }
 
 // Get or create device ID for this browser
-// ✅ FIX: Multiple storage fallbacks for better persistence on PWA/iOS
+// ✅ IMPROVED: Multiple storage fallbacks including IndexedDB for PWA/APK
 function getDeviceId() {
   try {
-    // Try localStorage first
+    // Try localStorage first (fastest)
     let deviceId = localStorage.getItem('avanti_device_id');
     
     // If not in localStorage, try sessionStorage (survives tab refresh)
@@ -8450,13 +8518,17 @@ function getDeviceId() {
       deviceId = generateDeviceId();
     }
     
-    // Store in all locations for persistence
+    // Store in all locations for maximum persistence
     try { 
       localStorage.setItem('avanti_device_id', deviceId);
       sessionStorage.setItem('avanti_device_id', deviceId);
-      // Set cookie that expires in 30 days
-      const expires = new Date(Date.now() + 30*24*60*60*1000).toUTCString();
+      // Set cookie that expires in 90 days (increased from 30)
+      const expires = new Date(Date.now() + 90*24*60*60*1000).toUTCString();
       document.cookie = `avanti_device_id=${deviceId};expires=${expires};path=/;SameSite=Strict`;
+      // ✅ NEW: Also save to IndexedDB for PWA/APK persistence
+      if (window.persistentStorage) {
+        window.persistentStorage.setItem('avanti_device_id', deviceId).catch(() => {});
+      }
     } catch(e) {
       console.warn('[getDeviceId] Cannot save device ID:', e);
     }
@@ -8478,6 +8550,29 @@ function getDeviceId() {
     }
   }
 }
+
+// ✅ NEW: Async version to restore device ID from IndexedDB on app startup
+async function restoreDeviceIdFromIDB() {
+  try {
+    if (!window.persistentStorage) return;
+    const storedId = await window.persistentStorage.getItem('avanti_device_id');
+    if (storedId) {
+      // Restore to all storage mechanisms
+      try {
+        localStorage.setItem('avanti_device_id', storedId);
+        sessionStorage.setItem('avanti_device_id', storedId);
+        const expires = new Date(Date.now() + 90*24*60*60*1000).toUTCString();
+        document.cookie = `avanti_device_id=${storedId};expires=${expires};path=/;SameSite=Strict`;
+        console.log('✅ Device ID restored from IndexedDB');
+      } catch(e) {}
+    }
+  } catch(e) {
+    console.log('[restoreDeviceId] Could not restore from IDB:', e);
+  }
+}
+
+// Run restoration on load
+restoreDeviceIdFromIDB();
 
 // Check if current device is trusted for a user
 async function isDeviceTrusted(userId) {
@@ -10303,12 +10398,25 @@ const getAccessibleSchools = useCallback((managerData, allManagers) => {
 
 useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
   // ✅ CHECK FOR STUDENT FIRST (anonymous auth users)
-  // Students use anonymous auth, so check localStorage for student session
+  // Students use anonymous auth, so check localStorage/IndexedDB for student session
   if (user.isAnonymous) {
-    // ✅ iOS FIX: Use safe storage wrapper
-    const studentSession = typeof window.safeStorage !== 'undefined' 
+    // ✅ IMPROVED: Try multiple storage sources for PWA/APK persistence
+    let studentSession = typeof window.safeStorage !== 'undefined' 
       ? window.safeStorage.getItem('studentSession')
       : (function() { try { return localStorage.getItem('studentSession'); } catch(e) { return null; } })();
+    
+    // ✅ NEW: If not in localStorage, try IndexedDB (for PWA/APK)
+    if (!studentSession && window.persistentStorage) {
+      try {
+        studentSession = await window.persistentStorage.getItem('studentSession');
+        // Restore to localStorage if found in IndexedDB
+        if (studentSession) {
+          console.log('✅ Restored student session from IndexedDB');
+          try { localStorage.setItem('studentSession', studentSession); } catch(e) {}
+        }
+      } catch(e) {}
+    }
+    
     if (studentSession) {
       try {
         const studentData = JSON.parse(studentSession);
@@ -10327,6 +10435,9 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
         } else {
           try { localStorage.removeItem('studentSession'); } catch(e) {}
         }
+        if (window.persistentStorage) {
+          window.persistentStorage.removeItem('studentSession').catch(() => {});
+        }
       }
     }
     // No student session but anonymous user - sign out
@@ -10334,6 +10445,44 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
     await auth.signOut();
     setLoading(false);
     return;
+  }
+  
+  // ✅ NEW: FAST PATH - Try to restore cached teacher session for instant login
+  // This avoids slow Firebase queries on PWA/APK restart
+  let cachedSession = window.safeStorage?.getItem('teacherSession');
+  if (!cachedSession && window.persistentStorage) {
+    try {
+      cachedSession = await window.persistentStorage.getItem('teacherSession');
+    } catch(e) {}
+  }
+  if (cachedSession) {
+    try {
+      const cached = JSON.parse(cachedSession);
+      // Verify session is for the same email and not too old (7 days max)
+      const isValid = cached.email === user.email && 
+                      cached.loginTime && 
+                      (Date.now() - cached.loginTime) < 7 * 24 * 60 * 60 * 1000;
+      if (isValid) {
+        // Quick device trust check (this is fast since it uses cached device ID)
+        const userId = cached.afid || cached.id;
+        const deviceTrusted = await isDeviceTrusted(userId);
+        if (deviceTrusted) {
+          console.log('⚡ FAST PATH: Restored teacher session instantly!');
+          setCurrentUser(cached);
+          setIsAdmin(!!cached.isAdmin);
+          setActiveTab(cached.userType === 'manager' ? 'analytics' : 'overview');
+          setLoading(false);
+          setAuthLoading(false);
+          setLoginProgress('');
+          return;
+        }
+      }
+      // Session invalid or device not trusted - clear cache and continue normal flow
+      window.safeStorage?.removeItem('teacherSession');
+      window.persistentStorage?.removeItem('teacherSession').catch(() => {});
+    } catch(e) {
+      console.log('Could not restore cached session:', e);
+    }
   }
   
   // Check for Super Admin first
@@ -10425,8 +10574,28 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
           docId: managerData.docId,
           school: schools[0] || 'Admin',
           role: managerData.role,
-          directSchools: managerData.directSchools || []
+          directSchools: managerData.directSchools || [],
+          userType: 'manager',
+          isAdmin: true
         });
+        // ✅ NEW: Cache session for faster future logins
+        const sessionToCache = {
+          name: managerData.name,
+          email: user.email,
+          afid: managerData.id,
+          id: managerData.id,
+          docId: managerData.docId,
+          school: schools[0] || 'Admin',
+          role: managerData.role,
+          directSchools: managerData.directSchools || [],
+          userType: 'manager',
+          isAdmin: true,
+          loginTime: Date.now()
+        };
+        try {
+          window.safeStorage?.setItem('teacherSession', JSON.stringify(sessionToCache));
+          window.persistentStorage?.setItem('teacherSession', JSON.stringify(sessionToCache)).catch(() => {});
+        } catch(e) {}
         setActiveTab('analytics');
         setLoading(false);
         setAuthLoading(false);
@@ -10473,6 +10642,12 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
         if (deviceTrusted) {
           // Device is trusted, skip 2FA verification
           console.log('✅ Trusted device - skipping 2FA for ' + userType + ':', teacherData.name);
+          // ✅ NEW: Cache session for faster future logins
+          const sessionToCache = {...teacherData, loginTime: Date.now()};
+          try {
+            window.safeStorage?.setItem('teacherSession', JSON.stringify(sessionToCache));
+            window.persistentStorage?.setItem('teacherSession', JSON.stringify(sessionToCache)).catch(() => {});
+          } catch(e) {}
           setCurrentUser(teacherData);
           setIsAdmin(false);
           setActiveTab('overview');
@@ -10570,17 +10745,17 @@ useEffect(() => {
   return () => clearTimeout(timer);
 }, []);
 
-// ✅ FIX: Safety timeout - Force stop loading after 20 seconds (prevents infinite loading on slow JNV networks)
-// Reduced from 30s to 20s for better mobile experience
+// ✅ FIX: Safety timeout - Force stop loading after 15 seconds (prevents infinite loading on slow JNV networks)
+// ✅ PERFORMANCE: Reduced from 20s to 15s for better mobile experience
 useEffect(() => {
   if (loading) {
     const safetyTimeout = setTimeout(() => {
-      console.warn('[Safety] Force stopping infinite loading after 20 seconds');
+      console.warn('[Safety] Force stopping infinite loading after 15 seconds');
       setLoading(false);
       setAuthLoading(false);
       setLoginProgress('');
       // Don't show alert immediately - user might just have slow connection
-    }, 20000);
+    }, 15000);
     return () => clearTimeout(safetyTimeout);
   }
 }, [loading]);
@@ -10901,11 +11076,11 @@ const handleLogin=async()=>{
         setLoginProgress('Authenticating...');
         // ✅ STEP 1: Sign in anonymously to get Firebase Auth credentials
         // This allows students to access Firestore collections
-        // ✅ iOS FIX: Add timeout for auth
+        // ✅ PERFORMANCE: Reduced timeout from 15s to 8s for faster login
         const authPromise = auth.signInAnonymously();
         const authResult = await Promise.race([
           authPromise,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout. Please check your internet.')), 15000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout. Please check your internet.')), 8000))
         ]);
         console.log('✅ Anonymous auth successful');
         
@@ -10933,13 +11108,19 @@ const foundStudent = { ...doc.data(), docId: doc.id };
           const studentUser = {
             ...foundStudent,
             userType:'student',
-            studentId:studentId
+            studentId:studentId,
+            loginTime: Date.now() // ✅ Track login time
           };
-          // ✅ iOS FIX: Use safe storage wrapper
+          // ✅ IMPROVED: Save to multiple storage mechanisms for PWA/APK persistence
+          const sessionStr = JSON.stringify(studentUser);
           if (typeof window.safeStorage !== 'undefined') {
-            window.safeStorage.setItem('studentSession', JSON.stringify(studentUser));
+            window.safeStorage.setItem('studentSession', sessionStr);
           } else {
-            try { localStorage.setItem('studentSession', JSON.stringify(studentUser)); } catch(e) {}
+            try { localStorage.setItem('studentSession', sessionStr); } catch(e) {}
+          }
+          // ✅ NEW: Also save to IndexedDB for PWA/APK persistence
+          if (window.persistentStorage) {
+            window.persistentStorage.setItem('studentSession', sessionStr).catch(() => {});
           }
           setCurrentUser(studentUser);
           setIsAdmin(false);
@@ -10968,11 +11149,11 @@ const foundStudent = { ...doc.data(), docId: doc.id };
         return;
       }
       setLoginProgress('Authenticating...');
-      // ✅ iOS FIX: Add timeout for Firebase auth
+      // ✅ PERFORMANCE: Reduced timeout from 15s to 8s for faster login experience
       const authPromise = auth.signInWithEmailAndPassword(email,password);
       await Promise.race([
         authPromise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout. Please check your internet.')), 15000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout. Please check your internet.')), 8000))
       ]);
       setLoginProgress('Loading profile...');
       // Note: setAuthLoading(false) will be called by onAuthStateChanged
@@ -10994,8 +11175,17 @@ const handleLogout=async()=>{
     // ✅ iOS FIX: Use safe storage wrapper
     if (typeof window.safeStorage !== 'undefined') {
       window.safeStorage.removeItem('studentSession');
+      window.safeStorage.removeItem('teacherSession'); // ✅ NEW: Clear teacher cache too
     } else {
-      try { localStorage.removeItem('studentSession'); } catch(e) {}
+      try { 
+        localStorage.removeItem('studentSession'); 
+        localStorage.removeItem('teacherSession'); // ✅ NEW
+      } catch(e) {}
+    }
+    // ✅ NEW: Clear from IndexedDB too
+    if (window.persistentStorage) {
+      window.persistentStorage.removeItem('studentSession').catch(() => {});
+      window.persistentStorage.removeItem('teacherSession').catch(() => {});
     }
     // Clear 2FA states
     setPending2FAUser(null);
@@ -26842,6 +27032,8 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
     { id: 'tests', label: '📝 Tests', icon: '📝' },
     { id: 'mentoring', label: '👥 Mentoring', icon: '👥' },
     { id: 'class_cancelled', label: '🚫 Class Cancelled', icon: '🚫' },
+    { id: 'class_observation', label: '👁️ Class Observation', icon: '👁️' },
+    { id: 'jnv_school_work', label: '🏫 JNV School Work', icon: '🏫' },
     { id: 'data_entry', label: '💻 Data Entry', icon: '💻' },
     { id: 'weekly_checkin', label: '🗓️ Weekly Check-in Meetings', icon: '🗓️' },
     { id: 'others', label: '📋 Others', icon: '📋' }
@@ -27221,9 +27413,17 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
       return;
     }
     
-    if (activityType === 'tests' && (!testType || !selectedClass || !selectedChapter)) {
-      alert('Please fill all required fields for tests');
-      return;
+    // ✅ FIXED: AIET doesn't require chapter selection (only Chapter Test does)
+    if (activityType === 'tests') {
+      if (!testType || !selectedClass) {
+        alert('Please select test type and class');
+        return;
+      }
+      // Only require chapter for Chapter Test, not for AIET
+      if (testType === 'chapter_test' && !selectedChapter) {
+        alert('Please select chapter for Chapter Test');
+        return;
+      }
     }
     
     if (activityType === 'mentoring' && !selectedClass) {
@@ -27817,7 +28017,13 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                     <label className="block text-base font-semibold text-gray-700 mb-3">📝 Test Type</label>
                     <select
                       value={testType}
-                      onChange={e => setTestType(e.target.value)}
+                      onChange={e => {
+                        setTestType(e.target.value);
+                        // Clear chapter when switching to AIET
+                        if (e.target.value === 'aiet') {
+                          setSelectedChapter('');
+                        }
+                      }}
                       className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
                       required
                     >
@@ -27828,24 +28034,26 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                     </select>
                   </div>
                   
-                  <div className="grid md:grid-cols-2 gap-5">
-                    <div>
-                      <label className="block text-base font-semibold text-gray-700 mb-3">🎓 Class</label>
-                      <select
-                        value={selectedClass}
-                        onChange={e => {
-                          setSelectedClass(e.target.value);
-                          setSelectedChapter('');
-                        }}
-                        className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
-                        required
-                      >
-                        <option value="">-- Select Class --</option>
-                        <option value="11">Class 11</option>
-                        <option value="12">Class 12</option>
-                      </select>
-                    </div>
-                    
+                  {/* ✅ FIXED: Show class selection for all test types */}
+                  <div>
+                    <label className="block text-base font-semibold text-gray-700 mb-3">🎓 Class</label>
+                    <select
+                      value={selectedClass}
+                      onChange={e => {
+                        setSelectedClass(e.target.value);
+                        setSelectedChapter('');
+                      }}
+                      className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
+                      required
+                    >
+                      <option value="">-- Select Class --</option>
+                      <option value="11">Class 11</option>
+                      <option value="12">Class 12</option>
+                    </select>
+                  </div>
+                  
+                  {/* ✅ FIXED: Only show chapter selection for Chapter Test, not AIET */}
+                  {testType === 'chapter_test' && (
                     <div>
                       <label className="block text-base font-semibold text-gray-700 mb-3">📖 Chapter</label>
                       <select
@@ -27862,7 +28070,16 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                         <option value="Others">Others</option>
                       </select>
                     </div>
-                  </div>
+                  )}
+                  
+                  {/* Info for AIET */}
+                  {testType === 'aiet' && (
+                    <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
+                      <p className="text-blue-700 text-sm">
+                        <strong>ℹ️ AIET:</strong> All India Entrance Test - covers full syllabus, no specific chapter selection needed.
+                      </p>
+                    </div>
+                  )}
                   
                   <div>
                     <label className="block text-base font-semibold text-gray-700 mb-3">📝 Notes</label>
@@ -27929,6 +28146,64 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                       onChange={e => setNotes(e.target.value)}
                       placeholder="Please provide the reason why the class was cancelled..."
                       className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all min-h-[100px] resize-y"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+              
+              {/* ✅ NEW: CLASS OBSERVATION FIELDS */}
+              {activityType === 'class_observation' && (
+                <>
+                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-4">
+                    <p className="text-blue-700 text-sm">
+                      <strong>👁️ Class Observation:</strong> Record time spent observing classes for quality assessment and feedback.
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-base font-semibold text-gray-700 mb-3">🎓 Class Observed</label>
+                    <select
+                      value={selectedClass}
+                      onChange={e => setSelectedClass(e.target.value)}
+                      className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all"
+                      required
+                    >
+                      <option value="">-- Select Class --</option>
+                      <option value="11">Class 11</option>
+                      <option value="12">Class 12</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-base font-semibold text-gray-700 mb-3">📝 Observation Notes</label>
+                    <textarea
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="Enter observation details, feedback points, areas of improvement..."
+                      className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all min-h-[120px] resize-y"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+              
+              {/* ✅ NEW: JNV SCHOOL WORK FIELDS */}
+              {activityType === 'jnv_school_work' && (
+                <>
+                  <div className="bg-green-50 border border-green-200 p-4 rounded-xl mb-4">
+                    <p className="text-green-700 text-sm">
+                      <strong>🏫 JNV School Work:</strong> Record time spent on JNV-related administrative or school work.
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-base font-semibold text-gray-700 mb-3">📝 Work Description</label>
+                    <textarea
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="Describe the JNV school work done (e.g., exam supervision, duty assignments, administrative tasks, coordination meetings...)"
+                      className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 transition-all min-h-[120px] resize-y"
                       required
                     />
                   </div>
