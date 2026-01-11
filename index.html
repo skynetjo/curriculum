@@ -143,21 +143,21 @@
       var isAndroid = /Android/.test(navigator.userAgent);
       var isMobile = isIOS || isAndroid;
       
-      // ✅ FIX: Set aggressive timeout for mobile devices (especially iOS)
-      var loaderTimeout = isMobile ? 12000 : 20000; // 12s mobile, 20s desktop
+      // ✅ PERFORMANCE: Reduced timeout - app should load within 8-10 seconds
+      var loaderTimeout = isMobile ? 10000 : 15000; // 10s mobile, 15s desktop
       
       window._loaderTimeoutId = setTimeout(function() {
         var loader = document.getElementById('instant-loader');
         if (loader) {
           loader.classList.add('slow-loading');
         }
-      }, loaderTimeout - 5000); // Show "slow loading" message 5s before force hide
+      }, loaderTimeout - 4000); // Show "slow loading" message 4s before force hide
       
       // ✅ FIX: Force hide loader after timeout (prevents infinite loading on iOS)
       window._forceHideTimeout = setTimeout(function() {
         var loader = document.getElementById('instant-loader');
         if (loader && loader.parentNode) {
-          console.warn('[iOS Fix] Force hiding stuck loader after ' + loaderTimeout + 'ms');
+          console.warn('[Loader] Force hiding stuck loader after ' + loaderTimeout + 'ms');
           loader.style.transition = 'opacity 0.3s';
           loader.style.opacity = '0';
           setTimeout(function() { 
@@ -165,6 +165,12 @@
           }, 300);
         }
       }, loaderTimeout);
+      
+      // ✅ PERFORMANCE: Track load time for debugging
+      window._appLoadStart = Date.now();
+      window._logLoadTime = function(stage) {
+        console.log('⏱️ ' + stage + ': ' + (Date.now() - window._appLoadStart) + 'ms');
+      };
       
       // ✅ FIX: Safe localStorage wrapper for iOS private mode
       window.safeStorage = {
@@ -10736,12 +10742,12 @@ useEffect(() => {
 useEffect(() => {
   if (loading) {
     const safetyTimeout = setTimeout(() => {
-      console.warn('[Safety] Force stopping infinite loading after 15 seconds');
+      console.warn('[Safety] Force stopping infinite loading after 12 seconds');
       setLoading(false);
       setAuthLoading(false);
       setLoginProgress('');
       // Don't show alert immediately - user might just have slow connection
-    }, 15000);
+    }, 12000);
     return () => clearTimeout(safetyTimeout);
   }
 }, [loading]);
@@ -10817,7 +10823,7 @@ useEffect(() => {
       };
       
       // ✅ PERFORMANCE: Wrap Firebase calls with timeout for slow networks
-      const timeoutPromise = (promise, ms = 8000, fallback = { docs: [] }) => {
+      const timeoutPromise = (promise, ms = 6000, fallback = { docs: [] }) => {
         return Promise.race([
           promise,
           new Promise((_, reject) => setTimeout(() => {
@@ -10831,6 +10837,8 @@ useEffect(() => {
       };
       
       // ✅ STAGE 1: Critical data (needed for UI to work)
+      if (window._logLoadTime) window._logLoadTime('Starting critical data fetch');
+      
       let teachersQuery;
       if (userIsAdmin || !userSchool) {
         teachersQuery = db.collection('teachers').get();
@@ -10839,12 +10847,13 @@ useEffect(() => {
       }
       
       const [teachersSnap, curriculumSnap, managersSnap, aySnap] = await Promise.all([
-        timeoutPromise(teachersQuery),
-        timeoutPromise(db.collection('curriculum').get()),
-        timeoutPromise(db.collection('managers').where('status','==','active').get()),
-        timeoutPromise(db.collection('system').doc('academicYear').get(), 5000, { exists: false })
+        timeoutPromise(teachersQuery, 6000),
+        timeoutPromise(db.collection('curriculum').get(), 6000),
+        timeoutPromise(db.collection('managers').where('status','==','active').get(), 6000),
+        timeoutPromise(db.collection('system').doc('academicYear').get(), 4000, { exists: false })
       ]);
       
+      if (window._logLoadTime) window._logLoadTime('Critical data loaded');
       console.log('✅ Critical data loaded in', Date.now() - criticalStartTime, 'ms');
       
       // Process and set critical data immediately
@@ -10910,14 +10919,16 @@ useEffect(() => {
       }
       
       const [progressSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, schoolsSnap, rankingsSnap] = await Promise.all([
-        timeoutPromise(progressQuery, 10000),
-        timeoutPromise(studentAttQuery, 10000),
-        timeoutPromise(teacherAttQuery, 10000),
-        timeoutPromise(db.collection('schoolInfo').get(), 5000),
-        timeoutPromise(db.collection('leaveAdjustments').get(), 5000),
-        timeoutPromise(db.collection('schoolsList').get(), 5000),
-        timeoutPromise(db.collection('system').doc('schoolRankings').get(), 5000, { exists: false })
+        timeoutPromise(progressQuery, 8000),
+        timeoutPromise(studentAttQuery, 8000),
+        timeoutPromise(teacherAttQuery, 8000),
+        timeoutPromise(db.collection('schoolInfo').get(), 8000),
+        timeoutPromise(db.collection('leaveAdjustments').get(), 6000),
+        timeoutPromise(db.collection('schoolsList').get(), 6000),
+        timeoutPromise(db.collection('system').doc('schoolRankings').get(), 4000, { exists: false })
       ]);
+      
+      if (window._logLoadTime) window._logLoadTime('Secondary data loaded');
 
       // ✅ COST FIX: Process pre-computed rankings first
       if (rankingsSnap.exists) {
@@ -11034,8 +11045,14 @@ useEffect(() => {
       // Process attendance - ✅ FIX: Add null safety for timeout cases
       setStudentAttendance((studentAttSnap.docs || []).map(d => ({ ...d.data(), docId: d.id })));
       setTeacherAttendance((teacherAttSnap.docs || []).map(d => ({ ...d.data(), docId: d.id })));
-      // Process school info
-      setSchoolInfo((schoolInfoSnap.docs || []).map(d => ({ ...d.data(), docId: d.id })));
+      
+      // Process school info - ✅ FIX: Add debugging and null safety
+      const schoolInfoData = (schoolInfoSnap.docs || []).map(d => ({ ...d.data(), docId: d.id }));
+      console.log('📊 School Info loaded:', schoolInfoData.length, 'records');
+      if (schoolInfoData.length > 0) {
+        console.log('📊 Sample school info schools:', schoolInfoData.slice(0, 3).map(s => s.school));
+      }
+      setSchoolInfo(schoolInfoData);
       
       // Process leave adjustments (keyed by teacher AFID)
       const adjMap = {};
@@ -11614,7 +11631,8 @@ function AdminStudentProfiles({ accessibleSchools = SCHOOLS, isSuperAdmin = true
   const chartInstances = useRef({});
   
   // ✅ FIX: Directors get full data access like Super Admin
-  const hasFullDataAccess = isSuperAdmin || isDirector;
+  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
+  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
   
   // Filter schools based on access
   const availableSchools = hasFullDataAccess ? SCHOOLS : accessibleSchools;
@@ -12984,7 +13002,8 @@ function AdminExamStats({ accessibleSchools = [], isSuperAdmin = false, isDirect
   const [filterExam, setFilterExam] = useState('All');
 
   // ✅ FIX: Directors get full data access like Super Admin
-  const hasFullDataAccess = isSuperAdmin || isDirector;
+  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
+  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -15318,7 +15337,11 @@ function AdminView({
   
   // ✅ FIX: Check if user is Director/Associate Director/Training (view-only but full data access)
   const isDirector = currentUser?.role === 'director' || currentUser?.role === 'assoc_director' || currentUser?.role === 'training';
-  const hasFullDataAccess = isSuperAdmin || isDirector;
+  
+  // ✅ FIX: PMs and APHs should also have full data access since they manage multiple schools
+  const isPMorAPH = currentUser?.role === 'pm' || currentUser?.role === 'aph' || 
+                     currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
+  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH;
   
   // Detect mobile screen size
   useEffect(() => {
@@ -15334,12 +15357,19 @@ function AdminView({
     localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
 
-  // ✅ FIX: Filter data - Directors get ALL data (view-only), same as Super Admin
-  const filteredTeachers = hasFullDataAccess ? teachers : teachers.filter(t => accessibleSchools.includes(t.school));
-  const filteredStudents = hasFullDataAccess ? students : students.filter(s => accessibleSchools.includes(s.school));
-  const filteredStudentAttendance = hasFullDataAccess ? studentAttendance : studentAttendance.filter(a => accessibleSchools.includes(a.school));
-  const filteredTeacherAttendance = hasFullDataAccess ? teacherAttendance : teacherAttendance.filter(a => accessibleSchools.includes(a.school));
-  const filteredSchoolInfo = hasFullDataAccess ? schoolInfo : schoolInfo.filter(s => accessibleSchools.includes(s.school));
+  // ✅ FIX: Case-insensitive school matching helper
+  const schoolMatches = (itemSchool, allowedSchools) => {
+    if (!itemSchool || !allowedSchools || allowedSchools.length === 0) return false;
+    const itemSchoolLower = (itemSchool || '').toString().toLowerCase().trim();
+    return allowedSchools.some(s => (s || '').toString().toLowerCase().trim() === itemSchoolLower);
+  };
+
+  // ✅ FIX: Filter data - Directors/PMs/APHs get ALL data
+  const filteredTeachers = hasFullDataAccess ? teachers : teachers.filter(t => schoolMatches(t.school, accessibleSchools));
+  const filteredStudents = hasFullDataAccess ? students : students.filter(s => schoolMatches(s.school, accessibleSchools));
+  const filteredStudentAttendance = hasFullDataAccess ? studentAttendance : studentAttendance.filter(a => schoolMatches(a.school, accessibleSchools));
+  const filteredTeacherAttendance = hasFullDataAccess ? teacherAttendance : teacherAttendance.filter(a => schoolMatches(a.school, accessibleSchools));
+  const filteredSchoolInfo = hasFullDataAccess ? schoolInfo : schoolInfo.filter(s => schoolMatches(s.school, accessibleSchools));
 
   // ✅ FIX: Get available schools for dropdowns - Directors get all schools
   const availableSchools = hasFullDataAccess ? SCHOOLS : accessibleSchools;
@@ -18244,7 +18274,8 @@ return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum 
   })}</ul>}</div></div><div className="flex gap-2 mt-2 md:mt-0 flex-shrink-0"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
 function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools = SCHOOLS,isSuperAdmin = false, isDirector = false}){
   // ✅ FIX: Directors get full data access like Super Admin
-  const hasFullDataAccess = isSuperAdmin || isDirector;
+  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
+  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
   
   // Available schools for dropdown
   const availableSchoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
@@ -19282,7 +19313,8 @@ function AdminAssetManagement({ accessibleSchools = [], isSuperAdmin = false, is
   const [activeSubTab, setActiveSubTab] = useState('overview');
 
   // ✅ FIX: Directors get full data access like Super Admin
-  const hasFullDataAccess = isSuperAdmin || isDirector;
+  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
+  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -19565,7 +19597,8 @@ function StudentManagement({students, isSuperAdmin = true, isDirector = false, a
   const updateIdFileRef=useRef(null);
   
   // ✅ FIX: Directors get full data access like Super Admin
-  const hasFullDataAccess = isSuperAdmin || isDirector;
+  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
+  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
   
   // Filter schools based on access
   const availableSchools = hasFullDataAccess ? SCHOOLS : accessibleSchools;
@@ -21724,7 +21757,8 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
 // ========================================
 function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAttendance,accessibleSchools=[],isSuperAdmin=false,isDirector=false}){
   // ✅ FIX: Directors get full data access like Super Admin
-  const hasFullDataAccess = isSuperAdmin || isDirector;
+  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
+  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
   
   // Use accessible schools for dropdown
   const schoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
@@ -29580,7 +29614,8 @@ function StudentFeedbackView({ accessibleSchools = [], isSuperAdmin = false, isD
   const [loading, setLoading] = useState(true);
   
   // ✅ FIX: Directors get full data access like Super Admin
-  const hasFullDataAccess = isSuperAdmin || isDirector;
+  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
+  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
   
   // Filters
   const [filterSchool, setFilterSchool] = useState('All');
