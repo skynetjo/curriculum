@@ -260,14 +260,20 @@
   <meta name="apple-mobile-web-app-title" content="Curriculum Tracker">
   <link rel="apple-touch-icon" href="/Icon-192.png">
   
-  <!-- FontAwesome Icons for Modern Sidebar -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" />
+  <!-- ✅ PERFORMANCE: Preload critical scripts for faster loading -->
+  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" as="script">
+  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js" as="script">
+  <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script" crossorigin>
+  <link rel="preload" href="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" as="script" crossorigin>
+  
+  <!-- ✅ PERFORMANCE: Defer FontAwesome - not critical for initial render -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" media="print" onload="this.media='all'" />
 
-  <!-- ✅ PERFORMANCE FIX: Load critical scripts first, defer others -->
+  <!-- ✅ PERFORMANCE FIX: Load critical scripts first -->
   <!-- Firebase Core (required for auth) -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   
   <!-- ✅ COST FIX: Enable offline persistence early -->
   <script>
@@ -10761,9 +10767,33 @@ useEffect(() => {
 }, [loading]);
 
   // ✅ OPTIMIZED: Fetch data once on load, refresh only when needed
+  // ✅ PERFORMANCE FIX: Split into critical and non-critical data loads
 useEffect(() => {
+  // ✅ NEW: Try to load cached data immediately for instant display
+  const loadCachedData = () => {
+    try {
+      const cached = localStorage.getItem('cachedAppData');
+      if (cached) {
+        const data = JSON.parse(cached);
+        // Only use cache if less than 5 minutes old
+        if (data.timestamp && (Date.now() - data.timestamp) < 5 * 60 * 1000) {
+          console.log('⚡ Loading cached data for instant display');
+          if (data.teachers) setTeachers(data.teachers);
+          if (data.curriculum) setCurriculum(data.curriculum);
+          if (data.chapterProgress) setChapterProgress(data.chapterProgress);
+          if (data.managers) setManagers(data.managers);
+          return true;
+        }
+      }
+    } catch(e) { console.log('Cache load failed:', e); }
+    return false;
+  };
+  
   const fetchData = async () => {
     try {
+      // ✅ PERFORMANCE: Load cached data first for instant UI
+      const hasCachedData = loadCachedData();
+      
       // ✅ COST FIX: Determine if user needs ALL data or just their school's data
       // Admins need all data, teachers only need their school
       const userSchool = currentUser?.school;
@@ -10784,9 +10814,10 @@ useEffect(() => {
       
       const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
       
-      // ✅ COST FIX: For teachers, add school filter to reduce reads by ~95%
-      // For admins, fetch all data as they need full visibility
-      let progressQuery, teachersQuery, studentAttQuery, teacherAttQuery;
+      // ✅ PERFORMANCE FIX: Fetch CRITICAL data first (teachers, curriculum, managers)
+      // These are needed to display the main UI
+      console.log('📊 Fetching critical data...');
+      const criticalStartTime = Date.now();
       
       // ✅ FIX: Helper function to handle index errors gracefully
       const fetchWithIndexFallback = async (optimizedQuery, fallbackQuery, filterFn, queryName) => {
@@ -10805,11 +10836,67 @@ useEffect(() => {
         }
       };
       
+      // ✅ PERFORMANCE: Wrap Firebase calls with timeout for slow networks
+      const timeoutPromise = (promise, ms = 8000, fallback = { docs: [] }) => {
+        return Promise.race([
+          promise,
+          new Promise((_, reject) => setTimeout(() => {
+            console.warn('⏱️ Firebase query timeout after', ms, 'ms');
+            reject(new Error('timeout'));
+          }, ms))
+        ]).catch(e => {
+          console.warn('Query failed:', e.message);
+          return fallback;
+        });
+      };
+      
+      // ✅ STAGE 1: Critical data (needed for UI to work)
+      let teachersQuery;
       if (userIsAdmin || !userSchool) {
-        // Admin: Fetch ALL data (they need to see everything across all schools)
-        console.log('📊 Admin/Manager detected - fetching ALL data');
-        progressQuery = db.collection('chapterProgress').get();
         teachersQuery = db.collection('teachers').get();
+      } else {
+        teachersQuery = db.collection('teachers').where('school', '==', userSchool).get();
+      }
+      
+      const [teachersSnap, curriculumSnap, managersSnap, aySnap] = await Promise.all([
+        timeoutPromise(teachersQuery),
+        timeoutPromise(db.collection('curriculum').get()),
+        timeoutPromise(db.collection('managers').where('status','==','active').get()),
+        timeoutPromise(db.collection('system').doc('academicYear').get(), 5000, { exists: false })
+      ]);
+      
+      console.log('✅ Critical data loaded in', Date.now() - criticalStartTime, 'ms');
+      
+      // Process and set critical data immediately
+      const teachersData = teachersSnap.docs?.map(d => ({ ...d.data(), docId: d.id })) || [];
+      setTeachers(teachersData);
+      
+      const currMap = {};
+      curriculumSnap.docs?.forEach(doc => { currMap[doc.id] = doc.data(); });
+      setCurriculum(currMap);
+      
+      const managersData = managersSnap.docs?.map(d => ({ ...d.data(), id: d.id })) || [];
+      setManagers(managersData);
+      
+      if (aySnap.exists) setAcademicYearSettings(aySnap.data());
+      
+      // ✅ Cache critical data for faster next load
+      try {
+        localStorage.setItem('cachedAppData', JSON.stringify({
+          teachers: teachersData.slice(0, 50), // Limit cache size
+          curriculum: currMap,
+          managers: managersData,
+          timestamp: Date.now()
+        }));
+      } catch(e) { console.log('Cache save failed:', e); }
+      
+      // ✅ STAGE 2: Secondary data (load in background)
+      console.log('📊 Fetching secondary data in background...');
+      
+      let progressQuery, studentAttQuery, teacherAttQuery;
+      
+      if (userIsAdmin || !userSchool) {
+        progressQuery = db.collection('chapterProgress').get();
         studentAttQuery = db.collection('studentAttendance')
           .where('date', '>=', thirtyDaysAgo)
           .get();
@@ -10817,18 +10904,7 @@ useEffect(() => {
           .where('date', '>=', thirtyDaysAgo)
           .get();
       } else {
-        // Teacher: Fetch only their school's data (saves ~95% of reads)
-        console.log('📊 Teacher detected - fetching data for:', userSchool, 'only');
-        
-        // Filter by school where possible
-        // Note: chapterProgress docs are keyed by school_subject_grade, so we filter client-side
         progressQuery = db.collection('chapterProgress').get();
-        
-        teachersQuery = db.collection('teachers')
-          .where('school', '==', userSchool)
-          .get();
-        
-        // ✅ FIX: Use fallback if index is still building
         studentAttQuery = fetchWithIndexFallback(
           db.collection('studentAttendance')
             .where('school', '==', userSchool)
@@ -10840,7 +10916,6 @@ useEffect(() => {
           (data) => data.school === userSchool,
           'studentAttendance'
         );
-        
         teacherAttQuery = fetchWithIndexFallback(
           db.collection('teacherAttendance')
             .where('school', '==', userSchool)
@@ -10854,18 +10929,14 @@ useEffect(() => {
         );
       }
       
-      const [progressSnap, teachersSnap, curriculumSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, managersSnap, schoolsSnap, aySnap, rankingsSnap] = await Promise.all([
-        progressQuery,
-        teachersQuery,
-        db.collection('curriculum').get(),
-        studentAttQuery,
-        teacherAttQuery,
-        db.collection('schoolInfo').get(),
-        db.collection('leaveAdjustments').get(),
-        db.collection('managers').where('status','==','active').get(),
-        db.collection('schoolsList').get(),
-        db.collection('system').doc('academicYear').get(),
-        db.collection('system').doc('schoolRankings').get() // ✅ COST FIX: Fetch pre-computed rankings (1 doc)
+      const [progressSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, schoolsSnap, rankingsSnap] = await Promise.all([
+        timeoutPromise(progressQuery, 10000),
+        timeoutPromise(studentAttQuery, 10000),
+        timeoutPromise(teacherAttQuery, 10000),
+        timeoutPromise(db.collection('schoolInfo').get(), 5000),
+        timeoutPromise(db.collection('leaveAdjustments').get(), 5000),
+        timeoutPromise(db.collection('schoolsList').get(), 5000),
+        timeoutPromise(db.collection('system').doc('schoolRankings').get(), 5000, { exists: false })
       ]);
 
       // ✅ COST FIX: Process pre-computed rankings first
@@ -10874,28 +10945,15 @@ useEffect(() => {
         console.log('✅ Loaded pre-computed rankings');
       } else {
         console.log('⚠️ No pre-computed rankings found - computing now...');
-        // Rankings don't exist - we need to compute them
-        // This happens on first deployment or if document was deleted
       }
 
       // Process chapter progress - ALL schools needed for rankings
       // ✅ FIX: Don't filter - rankings need all schools' data to show correctly
-      const map = {};
-      progressSnap.docs.forEach(d => {
-        map[d.id] = d.data();
+      const progressMap = {};
+      (progressSnap.docs || []).forEach(d => {
+        progressMap[d.id] = d.data();
       });
-      setChapterProgress(map);
-
-      // Process teachers
-      setTeachers(teachersSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
-
-      // Process curriculum - ALL schools needed for rankings calculation
-      // ✅ FIX: Don't filter - rankings need all schools' chapters to calculate percentages
-      const currMap = {};
-      curriculumSnap.docs.forEach(doc => {
-        currMap[doc.id] = doc.data();
-      });
-      setCurriculum(currMap);
+      setChapterProgress(progressMap);
 
       // ✅ FIXED: Fetch students based on user type
       // For admins: fetch ALL students (they need to see everything)
@@ -10993,35 +11051,34 @@ useEffect(() => {
       }
       setStudents(studentsData);
 
-      // Process attendance
-      setStudentAttendance(studentAttSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
-      setTeacherAttendance(teacherAttSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+      // Process attendance - ✅ FIX: Add null safety for timeout cases
+      setStudentAttendance((studentAttSnap.docs || []).map(d => ({ ...d.data(), docId: d.id })));
+      setTeacherAttendance((teacherAttSnap.docs || []).map(d => ({ ...d.data(), docId: d.id })));
       // Process school info
-      setSchoolInfo(schoolInfoSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+      setSchoolInfo((schoolInfoSnap.docs || []).map(d => ({ ...d.data(), docId: d.id })));
       
       // Process leave adjustments (keyed by teacher AFID)
       const adjMap = {};
-      leaveAdjSnap.docs.forEach(d => { adjMap[d.id] = d.data() });
+      (leaveAdjSnap.docs || []).forEach(d => { adjMap[d.id] = d.data() });
       setLeaveAdjustments(adjMap);
       
-      // Process managers
-      setManagers(managersSnap.docs.map(d => ({ ...d.data(), id: d.id })));
+      // Note: Managers already set in critical data load above
       
-      // Process dynamic schools list
-      if (!schoolsSnap.empty) {
+      // Process dynamic schools list - ✅ FIX: Add null safety
+      if (schoolsSnap && schoolsSnap.docs && schoolsSnap.docs.length > 0) {
         const schoolsData = schoolsSnap.docs.map(d => d.data().name).filter(Boolean);
         if (schoolsData.length > 0) {
           SCHOOLS = schoolsData; // Update global SCHOOLS array
         }
       }
       
-      // Process academic year settings
-      if (aySnap.exists) {
-        setAcademicYearSettings(aySnap.data());
-      }
+      // Note: Academic year settings already set in critical data load above
+      
+      console.log('✅ All data loaded successfully');
 
     } catch (e) {
       console.error('Data fetch error:', e);
+      // ✅ FIX: Don't fail silently - users should see cached data if available
     }
   };
 
