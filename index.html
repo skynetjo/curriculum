@@ -10371,14 +10371,22 @@ useEffect(() => {
 
 // Helper function to get accessible schools for a manager (supports 4-level hierarchy)
 const getAccessibleSchools = useCallback((managerData, allManagers) => {
-  if (!managerData) return [];
+  if (!managerData) {
+    console.warn('⚠️ getAccessibleSchools: No manager data provided');
+    return [];
+  }
+  
+  console.log('📊 Calculating accessible schools for:', managerData.name, 'Role:', managerData.role);
+  console.log('📊 Manager directSchools:', managerData.directSchools);
   
   // ✅ FIX: Directors and Associate Directors have access to ALL schools
   if (managerData.viewAllSchools || managerData.role === 'director' || managerData.role === 'assoc_director' || managerData.role === 'training') {
+    console.log('📊 Manager has viewAllSchools access, returning ALL schools:', SCHOOLS.length);
     return [...SCHOOLS];
   }
   
   let schools = [...(managerData.directSchools || [])];
+  console.log('📊 Starting with directSchools:', schools.length, schools);
   
   // Recursive function to get all reportees at all levels
   const getAllReportees = (managerId) => {
@@ -10393,13 +10401,23 @@ const getAccessibleSchools = useCallback((managerData, allManagers) => {
   // If not APM, include schools from all reportees (recursive)
   if (managerData.role !== MANAGER_ROLES.APM) {
     const reportees = getAllReportees(managerData.id);
+    console.log('📊 Found reportees:', reportees.length, reportees.map(r => r.name));
     reportees.forEach(reportee => {
       schools = [...schools, ...(reportee.directSchools || [])];
     });
   }
   
   // Remove duplicates
-  return [...new Set(schools)];
+  const uniqueSchools = [...new Set(schools)];
+  console.log('📊 Final accessible schools:', uniqueSchools.length, uniqueSchools);
+  
+  // ✅ FIX: If no schools found for PM/APH, use ALL schools as fallback with warning
+  if (uniqueSchools.length === 0 && (managerData.role === 'pm' || managerData.role === 'aph')) {
+    console.warn('⚠️ No schools found for PM/APH, using ALL schools as fallback');
+    return [...SCHOOLS];
+  }
+  
+  return uniqueSchools;
 }, []);
 
 useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
@@ -10451,44 +10469,6 @@ useEffect(()=>{const unsubscribe=auth.onAuthStateChanged(async(user)=>{if(user){
     await auth.signOut();
     setLoading(false);
     return;
-  }
-  
-  // ✅ NEW: FAST PATH - Try to restore cached teacher session for instant login
-  // This avoids slow Firebase queries on PWA/APK restart
-  let cachedSession = window.safeStorage?.getItem('teacherSession');
-  if (!cachedSession && window.persistentStorage) {
-    try {
-      cachedSession = await window.persistentStorage.getItem('teacherSession');
-    } catch(e) {}
-  }
-  if (cachedSession) {
-    try {
-      const cached = JSON.parse(cachedSession);
-      // Verify session is for the same email and not too old (7 days max)
-      const isValid = cached.email === user.email && 
-                      cached.loginTime && 
-                      (Date.now() - cached.loginTime) < 7 * 24 * 60 * 60 * 1000;
-      if (isValid) {
-        // Quick device trust check (this is fast since it uses cached device ID)
-        const userId = cached.afid || cached.id;
-        const deviceTrusted = await isDeviceTrusted(userId);
-        if (deviceTrusted) {
-          console.log('⚡ FAST PATH: Restored teacher session instantly!');
-          setCurrentUser(cached);
-          setIsAdmin(!!cached.isAdmin);
-          setActiveTab(cached.userType === 'manager' ? 'analytics' : 'overview');
-          setLoading(false);
-          setAuthLoading(false);
-          setLoginProgress('');
-          return;
-        }
-      }
-      // Session invalid or device not trusted - clear cache and continue normal flow
-      window.safeStorage?.removeItem('teacherSession');
-      window.persistentStorage?.removeItem('teacherSession').catch(() => {});
-    } catch(e) {
-      console.log('Could not restore cached session:', e);
-    }
   }
   
   // Check for Super Admin first
