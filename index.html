@@ -10417,10 +10417,9 @@ const getAccessibleSchools = useCallback((managerData, allManagers) => {
   const uniqueSchools = [...new Set(schools)];
   console.log('📊 Final accessible schools:', uniqueSchools.length, uniqueSchools);
   
-  // ✅ FIX: If no schools found for PM/APH, use ALL schools as fallback with warning
-  if (uniqueSchools.length === 0 && (managerData.role === 'pm' || managerData.role === 'aph')) {
-    console.warn('⚠️ No schools found for PM/APH, using ALL schools as fallback');
-    return [...SCHOOLS];
+  // If no schools found, log warning (they'll see empty data - admin needs to assign schools)
+  if (uniqueSchools.length === 0) {
+    console.warn('⚠️ No schools found for this manager. Please contact admin to assign schools.');
   }
   
   return uniqueSchools;
@@ -15333,16 +15332,12 @@ function AdminView({
     return saved === 'true';
   });
   
-  // ✅ FIX: Check if user is Director/Associate Director/Training (view-only but full data access)
+  // ✅ FIX: Check if user is Director/Associate Director/Training (view-only but full data access to ALL schools)
   const isDirector = currentUser?.role === 'director' || currentUser?.role === 'assoc_director' || currentUser?.role === 'training';
   
-  // ✅ FIX: PMs and APHs should also have full data access since they manage multiple schools
-  const isPMorAPH = currentUser?.role === 'pm' || currentUser?.role === 'aph' || 
-                     currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
-  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH;
-  
-  // ✅ FIX: Pass this as isDirector to child components so PMs/APHs get full data access
-  const isDirectorOrPM = isDirector || isPMorAPH;
+  // Only Super Admin and Directors see ALL schools
+  // PMs/APMs see only their assigned schools (via accessibleSchools)
+  const hasFullDataAccess = isSuperAdmin || isDirector;
   
   // Detect mobile screen size
   useEffect(() => {
@@ -15365,14 +15360,17 @@ function AdminView({
     return allowedSchools.some(s => (s || '').toString().toLowerCase().trim() === itemSchoolLower);
   };
 
-  // ✅ FIX: Filter data - Directors/PMs/APHs get ALL data
+  // ✅ FIX: Filter data based on access
+  // Super Admin & Directors see ALL data
+  // PMs/APMs see only their accessibleSchools (direct + reportees' schools)
   const filteredTeachers = hasFullDataAccess ? teachers : teachers.filter(t => schoolMatches(t.school, accessibleSchools));
   const filteredStudents = hasFullDataAccess ? students : students.filter(s => schoolMatches(s.school, accessibleSchools));
   const filteredStudentAttendance = hasFullDataAccess ? studentAttendance : studentAttendance.filter(a => schoolMatches(a.school, accessibleSchools));
   const filteredTeacherAttendance = hasFullDataAccess ? teacherAttendance : teacherAttendance.filter(a => schoolMatches(a.school, accessibleSchools));
   const filteredSchoolInfo = hasFullDataAccess ? schoolInfo : schoolInfo.filter(s => schoolMatches(s.school, accessibleSchools));
 
-  // ✅ FIX: Get available schools for dropdowns - Directors get all schools
+  // ✅ FIX: Get available schools for dropdowns
+  // Directors see all schools, PMs/APMs see only their accessible schools
   const availableSchools = hasFullDataAccess ? SCHOOLS : accessibleSchools;
 
   const adminTabs = [
@@ -15667,11 +15665,11 @@ function AdminView({
           <Admin2FAManagement teachers={filteredTeachers} managers={managers} />
         )}
 
-        {activeTab === 'teachers' && <TeacherManagement teachers={filteredTeachers} teacherAttendance={filteredTeacherAttendance} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} />}
+        {activeTab === 'teachers' && <TeacherManagement teachers={filteredTeachers} teacherAttendance={filteredTeacherAttendance} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
 
         {activeTab === 'teacherhistory' && <TeacherHistoryView teachers={filteredTeachers} />}
 
-        {activeTab === 'students' && <StudentManagement students={filteredStudents} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} accessibleSchools={availableSchools} />}
+        {activeTab === 'students' && <StudentManagement students={filteredStudents} isSuperAdmin={isSuperAdmin} isDirector={isDirector} accessibleSchools={availableSchools} />}
 
         {activeTab === 'directory' && (
           <OrgChartDirectory teachers={teachers} currentUser={currentUser} allEmployeesAccess={true} />
@@ -15692,7 +15690,7 @@ function AdminView({
             curriculum={curriculum}
             isAdmin={true}
             isSuperAdmin={isSuperAdmin}
-            isDirector={isDirectorOrPM}
+            isDirector={isDirector}
             accessibleSchools={availableSchools}
             managers={managers}
           />
@@ -15718,7 +15716,7 @@ function AdminView({
             chapterProgress={chapterProgress}
             accessibleSchools={availableSchools}
             isSuperAdmin={isSuperAdmin}
-            isDirector={isDirectorOrPM}
+            isDirector={isDirector}
           />
         )}
 
@@ -15738,7 +15736,7 @@ function AdminView({
             teacherAttendance={filteredTeacherAttendance}
             accessibleSchools={availableSchools}
             isSuperAdmin={isSuperAdmin}
-            isDirector={isDirectorOrPM}
+            isDirector={isDirector}
           />
         )}
 
@@ -15747,18 +15745,18 @@ function AdminView({
         )}
 
         {activeTab === 'assets' && (
-          <AdminAssetManagement accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} />
+          <AdminAssetManagement accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />
         )}
 
         {activeTab === 'birthdays' && <AdminBirthdays teachers={filteredTeachers} />}
 
-        {activeTab === 'studentprofiles' && <AdminStudentProfiles accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} />}
+        {activeTab === 'studentprofiles' && <AdminStudentProfiles accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
 
         {activeTab === 'settings' && isSuperAdmin && <AdminSettings />}
 
-        {activeTab === 'examstats' && <AdminExamStats accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} />}
+        {activeTab === 'examstats' && <AdminExamStats accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
         
-        {activeTab === 'studentfeedback' && <StudentFeedbackView accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} />}
+        {activeTab === 'studentfeedback' && <StudentFeedbackView accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
         </div>
       </div>
 
