@@ -18831,7 +18831,61 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
       XLSX.utils.book_append_sheet(wb, wsTeacher, "Teacher Summary");
     }
     
-    // Sheet 5: Overall Summary
+    // Sheet 5: Chapter Details with Completion Dates
+    const chapterDetailsData = [];
+    const schoolsToProcess = filterSchools.length > 0 ? filterSchools : [];
+    const gradesToProcess = filterGrade === 'All' ? ['11', '12'] : [filterGrade];
+    
+    schoolsToProcess.forEach(school => {
+      SUBJECTS.forEach(subject => {
+        gradesToProcess.forEach(grade => {
+          const docId = `${school}_${subject}_${grade}`;
+          const chapters = curriculum[docId]?.chapters || [];
+          
+          chapters.forEach((ch, idx) => {
+            const progressId = `${school}_${ch.id}`;
+            const prog = chapterProgress[progressId] || {};
+            const status = getChapterStatus(ch, prog);
+            
+            // Calculate days difference if both dates exist
+            let daysDiff = '—';
+            if(prog.completionDate && ch.targetDate) {
+              const target = new Date(ch.targetDate);
+              const completion = new Date(prog.completionDate);
+              const diff = Math.ceil((completion - target) / (1000 * 60 * 60 * 24));
+              daysDiff = diff > 0 ? `+${diff} days (Late)` : diff < 0 ? `${diff} days (Early)` : 'On Time';
+            }
+            
+            // Find teacher for this school/subject
+            const teacher = teachers.find(t => 
+              t.school?.toLowerCase() === school?.toLowerCase() && t.subject === subject
+            );
+            
+            chapterDetailsData.push({
+              'School': school,
+              'Subject': subject,
+              'Grade': `Class ${grade}`,
+              'Teacher': teacher?.name || '—',
+              'Chapter Name': ch.name || '—',
+              'Target Date': ch.targetDate || '—',
+              'Completed': prog.completed || 'No',
+              'Completion Date': prog.completionDate || '—',
+              'Days Difference': daysDiff,
+              'Status': status.label,
+              'Test Conducted': prog.testConducted || 'No',
+              'Notes': prog.notes || '—'
+            });
+          });
+        });
+      });
+    });
+    
+    if (chapterDetailsData.length > 0) {
+      const wsChapterDetails = XLSX.utils.json_to_sheet(chapterDetailsData);
+      XLSX.utils.book_append_sheet(wb, wsChapterDetails, "Chapter Details");
+    }
+    
+    // Sheet 6: Overall Summary
     const overallData = [{
       'Total Chapters': filteredData.totalChapters,
       'Completed': filteredData.completedChapters,
