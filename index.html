@@ -11631,8 +11631,7 @@ function AdminStudentProfiles({ accessibleSchools = SCHOOLS, isSuperAdmin = true
   const chartInstances = useRef({});
   
   // ✅ FIX: Directors get full data access like Super Admin
-  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
-  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
+  const hasFullDataAccess = isSuperAdmin || isDirector;
   
   // Filter schools based on access
   const availableSchools = hasFullDataAccess ? SCHOOLS : accessibleSchools;
@@ -13002,8 +13001,7 @@ function AdminExamStats({ accessibleSchools = [], isSuperAdmin = false, isDirect
   const [filterExam, setFilterExam] = useState('All');
 
   // ✅ FIX: Directors get full data access like Super Admin
-  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
-  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
+  const hasFullDataAccess = isSuperAdmin || isDirector;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -15343,6 +15341,9 @@ function AdminView({
                      currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
   const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH;
   
+  // ✅ FIX: Pass this as isDirector to child components so PMs/APHs get full data access
+  const isDirectorOrPM = isDirector || isPMorAPH;
+  
   // Detect mobile screen size
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 768);
@@ -15666,11 +15667,11 @@ function AdminView({
           <Admin2FAManagement teachers={filteredTeachers} managers={managers} />
         )}
 
-        {activeTab === 'teachers' && <TeacherManagement teachers={filteredTeachers} teacherAttendance={filteredTeacherAttendance} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
+        {activeTab === 'teachers' && <TeacherManagement teachers={filteredTeachers} teacherAttendance={filteredTeacherAttendance} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} />}
 
         {activeTab === 'teacherhistory' && <TeacherHistoryView teachers={filteredTeachers} />}
 
-        {activeTab === 'students' && <StudentManagement students={filteredStudents} isSuperAdmin={isSuperAdmin} isDirector={isDirector} accessibleSchools={availableSchools} />}
+        {activeTab === 'students' && <StudentManagement students={filteredStudents} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} accessibleSchools={availableSchools} />}
 
         {activeTab === 'directory' && (
           <OrgChartDirectory teachers={teachers} currentUser={currentUser} allEmployeesAccess={true} />
@@ -15691,7 +15692,7 @@ function AdminView({
             curriculum={curriculum}
             isAdmin={true}
             isSuperAdmin={isSuperAdmin}
-            isDirector={isDirector}
+            isDirector={isDirectorOrPM}
             accessibleSchools={availableSchools}
             managers={managers}
           />
@@ -15717,7 +15718,7 @@ function AdminView({
             chapterProgress={chapterProgress}
             accessibleSchools={availableSchools}
             isSuperAdmin={isSuperAdmin}
-            isDirector={isDirector}
+            isDirector={isDirectorOrPM}
           />
         )}
 
@@ -15737,7 +15738,7 @@ function AdminView({
             teacherAttendance={filteredTeacherAttendance}
             accessibleSchools={availableSchools}
             isSuperAdmin={isSuperAdmin}
-            isDirector={isDirector}
+            isDirector={isDirectorOrPM}
           />
         )}
 
@@ -15746,18 +15747,18 @@ function AdminView({
         )}
 
         {activeTab === 'assets' && (
-          <AdminAssetManagement accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />
+          <AdminAssetManagement accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} />
         )}
 
         {activeTab === 'birthdays' && <AdminBirthdays teachers={filteredTeachers} />}
 
-        {activeTab === 'studentprofiles' && <AdminStudentProfiles accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
+        {activeTab === 'studentprofiles' && <AdminStudentProfiles accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} />}
 
         {activeTab === 'settings' && isSuperAdmin && <AdminSettings />}
 
-        {activeTab === 'examstats' && <AdminExamStats accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
+        {activeTab === 'examstats' && <AdminExamStats accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} />}
         
-        {activeTab === 'studentfeedback' && <StudentFeedbackView accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirector} />}
+        {activeTab === 'studentfeedback' && <StudentFeedbackView accessibleSchools={availableSchools} isSuperAdmin={isSuperAdmin} isDirector={isDirectorOrPM} />}
         </div>
       </div>
 
@@ -18273,9 +18274,9 @@ return(<div className="space-y-6"><h2 className="text-3xl font-bold">Curriculum 
     return <li key={i}>• {topicName} <span className="ml-1">{priorityIcon}</span></li>;
   })}</ul>}</div></div><div className="flex gap-2 mt-2 md:mt-0 flex-shrink-0"><button onClick={()=>handleEditChapter(ch)} className="px-3 py-1 bg-yellow-400 rounded-lg">Edit</button><button onClick={()=>deleteChapter(selectedSchool,selectedSubject,selectedGrade,ch.id)} className="px-3 py-1 bg-red-500 text-white rounded-lg">Delete</button></div></div></div>)}</div>}</div></div>)}
 function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools = SCHOOLS,isSuperAdmin = false, isDirector = false}){
-  // ✅ FIX: Directors get full data access like Super Admin
-  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
-  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
+  // ✅ FIX: Directors and PMs get full data access - for this component, use props since currentUser isn't passed
+  // Note: If caller passes isDirector=true for PMs, they get full access
+  const hasFullDataAccess = isSuperAdmin || isDirector;
   
   // Available schools for dropdown
   const availableSchoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
@@ -19313,8 +19314,7 @@ function AdminAssetManagement({ accessibleSchools = [], isSuperAdmin = false, is
   const [activeSubTab, setActiveSubTab] = useState('overview');
 
   // ✅ FIX: Directors get full data access like Super Admin
-  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
-  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
+  const hasFullDataAccess = isSuperAdmin || isDirector;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -19597,8 +19597,7 @@ function StudentManagement({students, isSuperAdmin = true, isDirector = false, a
   const updateIdFileRef=useRef(null);
   
   // ✅ FIX: Directors get full data access like Super Admin
-  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
-  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
+  const hasFullDataAccess = isSuperAdmin || isDirector;
   
   // Filter schools based on access
   const availableSchools = hasFullDataAccess ? SCHOOLS : accessibleSchools;
@@ -21757,8 +21756,7 @@ function TeacherAttendanceView({currentUser,teacherAttendance,leaveAdjustments})
 // ========================================
 function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAttendance,accessibleSchools=[],isSuperAdmin=false,isDirector=false}){
   // ✅ FIX: Directors get full data access like Super Admin
-  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
-  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
+  const hasFullDataAccess = isSuperAdmin || isDirector;
   
   // Use accessible schools for dropdown
   const schoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
@@ -29614,8 +29612,7 @@ function StudentFeedbackView({ accessibleSchools = [], isSuperAdmin = false, isD
   const [loading, setLoading] = useState(true);
   
   // ✅ FIX: Directors get full data access like Super Admin
-  const isPMorAPH_access = currentUser?.role === 'pm' || currentUser?.role === 'aph' || currentUser?.role === 'program_manager' || currentUser?.role === 'program_head';
-  const hasFullDataAccess = isSuperAdmin || isDirector || isPMorAPH_access;
+  const hasFullDataAccess = isSuperAdmin || isDirector;
   
   // Filters
   const [filterSchool, setFilterSchool] = useState('All');
