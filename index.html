@@ -16394,7 +16394,11 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
   },[myData,allSchoolsData,mySchool,mySubject]);
 
   const handleExport=()=>{
-    const exportData=[
+    // Create workbook with multiple sheets
+    const wb = XLSX.utils.book_new();
+    
+    // Sheet 1: Summary
+    const summaryData=[
       {
         Grade:'Class 11',
         'Total Chapters':myData[11].total,
@@ -16412,7 +16416,67 @@ function TeacherAnalytics({currentUser,curriculum,chapterProgress}){
         'Completion %':myData[12].total?Math.round((myData[12].completed/myData[12].total)*100):0
       }
     ];
-    exportToExcel(exportData,`${mySubject}_analytics_${mySchool}`);
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+    
+    // Sheet 2: Chapter Details with Completion Dates
+    const chapterDetailsData = [];
+    ['11','12'].forEach(grade=>{
+      const docId=`${mySchool}_${mySubject}_${grade}`;
+      const chapters=curriculum[docId]?.chapters||[];
+      chapters.forEach((ch, idx)=>{
+        const progressId=`${mySchool}_${ch.id}`;
+        const prog=chapterProgress[progressId]||{};
+        
+        // Calculate days difference if both dates exist
+        let daysDiff = '—';
+        if(prog.completionDate && ch.targetDate) {
+          const target = new Date(ch.targetDate);
+          const completion = new Date(prog.completionDate);
+          const diff = Math.ceil((completion - target) / (1000 * 60 * 60 * 24));
+          daysDiff = diff > 0 ? `+${diff} days (Late)` : diff < 0 ? `${diff} days (Early)` : 'On Time';
+        }
+        
+        chapterDetailsData.push({
+          'S.No': idx + 1,
+          'Grade': `Class ${grade}`,
+          'Chapter Name': ch.name || '—',
+          'Topics': ch.topics ? ch.topics.join(', ') : '—',
+          'Target Date': ch.targetDate || '—',
+          'Completed': prog.completed || 'No',
+          'Completion Date': prog.completionDate || '—',
+          'Days Difference': daysDiff,
+          'Test Conducted': prog.testConducted || 'No',
+          'Notes': prog.notes || '—'
+        });
+      });
+    });
+    
+    if(chapterDetailsData.length > 0) {
+      const wsChapters = XLSX.utils.json_to_sheet(chapterDetailsData);
+      XLSX.utils.book_append_sheet(wb, wsChapters, "Chapter Details");
+    }
+    
+    // Sheet 3: School Comparison (for reference)
+    const comparisonData = SCHOOLS.map(school => {
+      const s11 = allSchoolsData[school]?.[11] || {total:0,completed:0,testsCompleted:0};
+      const s12 = allSchoolsData[school]?.[12] || {total:0,completed:0,testsCompleted:0};
+      return {
+        'School': school,
+        'Class 11 Total': s11.total,
+        'Class 11 Completed': s11.completed,
+        'Class 11 Tests': s11.testsCompleted,
+        'Class 12 Total': s12.total,
+        'Class 12 Completed': s12.completed,
+        'Class 12 Tests': s12.testsCompleted,
+        'Overall %': (s11.total + s12.total) ? Math.round(((s11.completed + s12.completed) / (s11.total + s12.total)) * 100) : 0
+      };
+    });
+    const wsComparison = XLSX.utils.json_to_sheet(comparisonData);
+    XLSX.utils.book_append_sheet(wb, wsComparison, "School Comparison");
+    
+    // Download the workbook
+    XLSX.writeFile(wb,`${mySubject}_analytics_${mySchool}_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   return(
