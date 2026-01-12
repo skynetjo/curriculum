@@ -15368,6 +15368,21 @@ function AdminView({
   const filteredStudentAttendance = hasFullDataAccess ? studentAttendance : studentAttendance.filter(a => schoolMatches(a.school, accessibleSchools));
   const filteredTeacherAttendance = hasFullDataAccess ? teacherAttendance : teacherAttendance.filter(a => schoolMatches(a.school, accessibleSchools));
   const filteredSchoolInfo = hasFullDataAccess ? schoolInfo : schoolInfo.filter(s => schoolMatches(s.school, accessibleSchools));
+  
+  // ✅ DEBUG: Log filtered data counts
+  console.log('📊 AdminView Data:', {
+    hasFullDataAccess,
+    accessibleSchools,
+    teachers: teachers.length,
+    filteredTeachers: filteredTeachers.length,
+    students: students.length,
+    filteredStudents: filteredStudents.length,
+    studentAttendance: studentAttendance.length,
+    filteredStudentAttendance: filteredStudentAttendance.length,
+    schoolInfo: schoolInfo.length,
+    filteredSchoolInfo: filteredSchoolInfo.length,
+    schoolInfoSchools: schoolInfo.map(s => s.school)
+  });
 
   // ✅ FIX: Get available schools for dropdowns
   // Directors see all schools, PMs/APMs see only their accessible schools
@@ -18276,6 +18291,14 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
   // Note: If caller passes isDirector=true for PMs, they get full access
   const hasFullDataAccess = isSuperAdmin || isDirector;
   
+  // ✅ FIX: Case-insensitive school matching helper
+  const schoolMatchesFilter = (itemSchool, selectedSchools) => {
+    if (!selectedSchools || selectedSchools.length === 0) return false;
+    if (!itemSchool) return false;
+    const itemSchoolLower = itemSchool.toString().toLowerCase().trim();
+    return selectedSchools.some(s => s && s.toString().toLowerCase().trim() === itemSchoolLower);
+  };
+  
   // Available schools for dropdown
   const availableSchoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
   
@@ -18288,7 +18311,7 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
   // Filter teachers based on selected schools
   const availableTeachers = useMemo(() => {
     if (filterSchools.length === 0) return [];
-    return teachers.filter(t => filterSchools.includes(t.school));
+    return teachers.filter(t => schoolMatchesFilter(t.school, filterSchools));
   }, [teachers, filterSchools]);
 
   // Reset teacher selection when schools change
@@ -18331,9 +18354,9 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
   // Multi-select: Use selected schools array directly
   const schoolsToProcess = filterSchools.length > 0 ? filterSchools : [];
   const gradesToProcess=filterGrade==='All'?['11','12']:[filterGrade];
-  // Multi-select: Filter teachers based on selection
+  // Multi-select: Filter teachers based on selection - use case-insensitive matching
   const teachersFiltered = filterTeachers.length === 0 
-    ? teachers.filter(t => schoolsToProcess.includes(t.school))
+    ? teachers.filter(t => schoolMatchesFilter(t.school, schoolsToProcess))
     : teachers.filter(t => filterTeachers.includes(t.afid));
 
   schoolsToProcess.forEach(school=>{
@@ -18354,7 +18377,8 @@ function AdminAnalytics({teachers,curriculum,chapterProgress,accessibleSchools =
         const docId=`${school}_${subject}_${grade}`;
         const chapters=curriculum[docId]?.chapters||[];
 
-        const relevantTeachers=teachersFiltered.filter(t=>t.school===school&&t.subject===subject);
+        // ✅ FIX: Use case-insensitive matching for teacher school
+        const relevantTeachers=teachersFiltered.filter(t=>t.school?.toLowerCase()===school?.toLowerCase()&&t.subject===subject);
         if(filterTeachers.length>0&&relevantTeachers.length===0)return;
 
         chapters.forEach(ch=>{
@@ -21759,6 +21783,14 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
   // Use accessible schools for dropdown
   const schoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
   
+  // ✅ FIX: Case-insensitive school matching helper
+  const schoolMatchesFilter = (itemSchool, selectedSchools) => {
+    if (!selectedSchools || selectedSchools.length === 0) return true;
+    if (!itemSchool) return false;
+    const itemSchoolLower = itemSchool.toString().toLowerCase().trim();
+    return selectedSchools.some(s => s && s.toString().toLowerCase().trim() === itemSchoolLower);
+  };
+  
   // Multi-select: Initialize with all schools selected
   const[filterSchools,setFilterSchools]=useState([...schoolOptions]);
   const[filterGrade,setFilterGrade]=useState('All');
@@ -21821,16 +21853,16 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
   
   // Filter locks for display
   const filteredLocks = attendanceLocks.filter(lock => {
-    if(lockFilterSchool !== 'All' && lock.school !== lockFilterSchool) return false;
+    if(lockFilterSchool !== 'All' && lock.school?.toLowerCase() !== lockFilterSchool?.toLowerCase()) return false;
     if(lockFilterDate && lock.date !== lockFilterDate) return false;
     // Also filter by accessible schools for non-super admins (Directors see all)
-    if(!hasFullDataAccess && !accessibleSchools.includes(lock.school)) return false;
+    if(!hasFullDataAccess && !schoolMatchesFilter(lock.school, accessibleSchools)) return false;
     return true;
   });
 
   const filteredStudentAttendance=useMemo(()=>{
     return studentAttendance.filter(a=>{
-      if(filterSchools.length > 0 && !filterSchools.includes(a.school))return false;
+      if(!schoolMatchesFilter(a.school, filterSchools))return false;
       if(filterGrade!=='All'&&a.grade!==filterGrade)return false;
       if(a.date<startDate||a.date>endDate)return false;
       return true;
@@ -21839,7 +21871,7 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
 
   const filteredTeacherAttendance=useMemo(()=>{
     return teacherAttendance.filter(a=>{
-      if(filterSchools.length > 0 && !filterSchools.includes(a.school))return false;
+      if(!schoolMatchesFilter(a.school, filterSchools))return false;
       if(a.date<startDate||a.date>endDate)return false;
       return true;
     });
@@ -21848,13 +21880,13 @@ function AdminAttendanceAnalytics({students,teachers,studentAttendance,teacherAt
   const todayStats=useMemo(()=>{
   const studentRecords=studentAttendance.filter(a=>{
     if(a.date!==selectedDate)return false;
-    if(filterSchools.length > 0 && !filterSchools.includes(a.school))return false;
+    if(!schoolMatchesFilter(a.school, filterSchools))return false;
     if(filterGrade!=='All'&&a.grade!==filterGrade)return false;
     return true;
   });
   const teacherRecords=teacherAttendance.filter(a=>{
     if(a.date!==selectedDate)return false;
-    if(filterSchools.length > 0 && !filterSchools.includes(a.school))return false;
+    if(!schoolMatchesFilter(a.school, filterSchools))return false;
     return true;
   });
   return{
@@ -27333,12 +27365,12 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
           const apmSchools = new Set();
           managers.forEach(m => {
             if (m.role === 'apm' && m.status === 'active' && m.directSchools) {
-              m.directSchools.forEach(school => apmSchools.add(school));
+              m.directSchools.forEach(school => apmSchools.add(school?.toLowerCase?.() || school));
             }
           });
           
-          // PM only manages schools that DON'T have an APM
-          schoolsToManage = myDirectSchools.filter(school => !apmSchools.has(school));
+          // PM only manages schools that DON'T have an APM - case-insensitive
+          schoolsToManage = myDirectSchools.filter(school => !apmSchools.has(school?.toLowerCase?.() || school));
         }
         
         // Fetch entries based on role
@@ -27374,8 +27406,9 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
         // For non-super-admin/non-director managers, filter to show only their managed schools
         if (isAdmin && !hasViewAllAccess) {
           entries = entries.filter(e => {
-            // Include if teacher's school is in manager's managed schools
-            const schoolMatch = schoolsToManage.includes(e.school);
+            // ✅ FIX: Use case-insensitive school matching
+            const entrySchoolLower = (e.school || '').toString().toLowerCase().trim();
+            const schoolMatch = schoolsToManage.some(s => s && s.toString().toLowerCase().trim() === entrySchoolLower);
             
             // OR if entry is specifically assigned to this manager
             const assignedToMe = e.lineManagerId === myManagerId || e.lineManagerName === myManagerName;
@@ -27412,9 +27445,9 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               const managerIdMatch = entry.lineManagerId === myManagerId;
               const managerNameMatch = entry.lineManagerName === myManagerName;
               
-              // Check if teacher's school is in this manager's managed schools
-              // (For PM, this excludes schools that have an APM)
-              const schoolMatch = schoolsToManage.includes(entry.school);
+              // ✅ FIX: Check if teacher's school is in this manager's managed schools - case-insensitive
+              const entrySchoolLower = (entry.school || '').toString().toLowerCase().trim();
+              const schoolMatch = schoolsToManage.some(s => s && s.toString().toLowerCase().trim() === entrySchoolLower);
               
               return managerIdMatch || managerNameMatch || schoolMatch;
             });
