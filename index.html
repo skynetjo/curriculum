@@ -143,15 +143,16 @@
       var isAndroid = /Android/.test(navigator.userAgent);
       var isMobile = isIOS || isAndroid;
       
-      // ✅ PERFORMANCE: Reduced timeout - app should load within 8-10 seconds
-      var loaderTimeout = isMobile ? 10000 : 15000; // 10s mobile, 15s desktop
+      // ✅ CRITICAL FIX: Increased timeout for remote JNV areas with slow connectivity
+      // Teachers are 30-40km from cities with poor signals, need more time to load
+      var loaderTimeout = isMobile ? 35000 : 45000; // 35s mobile, 45s desktop
       
       window._loaderTimeoutId = setTimeout(function() {
         var loader = document.getElementById('instant-loader');
         if (loader) {
           loader.classList.add('slow-loading');
         }
-      }, loaderTimeout - 4000); // Show "slow loading" message 4s before force hide
+      }, loaderTimeout - 10000); // Show "slow loading" message 10s before force hide
       
       // ✅ FIX: Force hide loader after timeout (prevents infinite loading on iOS)
       window._forceHideTimeout = setTimeout(function() {
@@ -199,13 +200,17 @@
             if (this._db) { resolve(this._db); return; }
             if (!window.indexedDB) { reject('IndexedDB not supported'); return; }
             
-            const request = indexedDB.open(this._dbName, 1);
+            const request = indexedDB.open(this._dbName, 2); // Upgraded to v2 for dataCache store
             request.onerror = () => reject(request.error);
             request.onsuccess = () => { this._db = request.result; resolve(this._db); };
             request.onupgradeneeded = (e) => {
               const db = e.target.result;
               if (!db.objectStoreNames.contains(this._storeName)) {
                 db.createObjectStore(this._storeName, { keyPath: 'key' });
+              }
+              // ✅ NEW: Add dataCache store for app data persistence
+              if (!db.objectStoreNames.contains('dataCache')) {
+                db.createObjectStore('dataCache', { keyPath: 'key' });
               }
             };
           });
@@ -250,6 +255,244 @@
           } catch(e) { return false; }
         }
       };
+      
+      // ========================================
+      // ✅ CRITICAL FIX: Enhanced Data Cache Manager
+      // Solves "Dashboard showing 0" and "Attendance not showing" issues
+      // Uses Cache-First + Background Refresh strategy for low-connectivity areas
+      // ========================================
+      window.DataCacheManager = {
+        _initialized: false,
+        _cacheTimestamps: {},
+        _dataFreshness: {},
+        CACHE_MAX_AGE: 24 * 60 * 60 * 1000, // 24 hours max cache age
+        STALE_THRESHOLD: 5 * 60 * 1000, // 5 minutes = consider stale, but still use
+        
+        init: async function() {
+          if (this._initialized) return;
+          try {
+            await window.persistentStorage.init();
+            this._initialized = true;
+            console.log('[DataCache] ✅ Initialized successfully');
+          } catch(e) {
+            console.warn('[DataCache] Init failed, using memory cache only:', e);
+          }
+        },
+        
+        // Save data to IndexedDB cache
+        saveToCache: async function(key, data) {
+          try {
+            await this.init();
+            const db = window.persistentStorage._db;
+            if (!db) return false;
+            
+            return new Promise((resolve) => {
+              try {
+                const tx = db.transaction('dataCache', 'readwrite');
+                const store = tx.objectStore('dataCache');
+                store.put({ 
+                  key, 
+                  data,
+                  timestamp: Date.now(),
+                  userSchool: window._currentUserSchool || 'unknown'
+                });
+                tx.oncomplete = () => {
+                  this._cacheTimestamps[key] = Date.now();
+                  console.log('[DataCache] ✅ Saved:', key);
+                  resolve(true);
+                };
+                tx.onerror = () => resolve(false);
+              } catch(e) {
+                resolve(false);
+              }
+            });
+          } catch(e) { 
+            console.warn('[DataCache] Save failed for', key, e);
+            return false; 
+          }
+        },
+        
+        // Load data from IndexedDB cache
+        loadFromCache: async function(key) {
+          try {
+            await this.init();
+            const db = window.persistentStorage._db;
+            if (!db) return null;
+            
+            return new Promise((resolve) => {
+              try {
+                const tx = db.transaction('dataCache', 'readonly');
+                const store = tx.objectStore('dataCache');
+                const request = store.get(key);
+                request.onsuccess = () => {
+                  const result = request.result;
+                  if (result && result.data) {
+                    const age = Date.now() - (result.timestamp || 0);
+                    // Return cached data if not too old (24 hours max)
+                    if (age < this.CACHE_MAX_AGE) {
+                      this._cacheTimestamps[key] = result.timestamp;
+                      this._dataFreshness[key] = age < this.STALE_THRESHOLD ? 'fresh' : 'stale';
+                      console.log('[DataCache] ✅ Loaded from cache:', key, '(age:', Math.round(age/1000), 's)');
+                      resolve(result.data);
+                      return;
+                    }
+                  }
+                  resolve(null);
+                };
+                request.onerror = () => resolve(null);
+              } catch(e) {
+                resolve(null);
+              }
+            });
+          } catch(e) { 
+            return null; 
+          }
+        },
+        
+        // Check if data is stale
+        isStale: function(key) {
+          const timestamp = this._cacheTimestamps[key];
+          if (!timestamp) return true;
+          return (Date.now() - timestamp) > this.STALE_THRESHOLD;
+        },
+        
+        // Get freshness status for UI
+        getFreshness: function(key) {
+          return this._dataFreshness[key] || 'unknown';
+        },
+        
+        // Clear all cached data (for logout, etc)
+        clearAll: async function() {
+          try {
+            await this.init();
+            const db = window.persistentStorage._db;
+            if (!db) return;
+            
+            const tx = db.transaction('dataCache', 'readwrite');
+            const store = tx.objectStore('dataCache');
+            store.clear();
+            this._cacheTimestamps = {};
+            this._dataFreshness = {};
+            console.log('[DataCache] 🗑️ Cleared all cache');
+          } catch(e) {
+            console.warn('[DataCache] Clear failed:', e);
+          }
+        }
+      };
+      
+      // ========================================
+      // ✅ CRITICAL FIX: Smart Firebase Query with Retry + Cache
+      // Longer timeouts (30s), auto-retry, and cache fallback
+      // ========================================
+      window.smartFetch = async function(promise, options = {}) {
+        const {
+          cacheKey = null,
+          timeoutMs = 30000, // ✅ Increased from 6-8s to 30s for remote areas
+          retries = 3,
+          fallback = { docs: [] }
+        } = options;
+        
+        // ✅ STEP 1: Return cached data immediately if available
+        let cachedData = null;
+        if (cacheKey) {
+          cachedData = await window.DataCacheManager.loadFromCache(cacheKey);
+          if (cachedData && !window._forceRefresh) {
+            console.log('[SmartFetch] ✅ Using cached data for:', cacheKey);
+            // Schedule background refresh
+            setTimeout(() => {
+              window._backgroundRefresh(promise, cacheKey);
+            }, 100);
+            return cachedData;
+          }
+        }
+        
+        // ✅ STEP 2: Try to fetch fresh data with retries
+        for (let attempt = 1; attempt <= retries; attempt++) {
+          try {
+            const result = await Promise.race([
+              promise,
+              new Promise((_, reject) => setTimeout(() => {
+                reject(new Error(`Timeout after ${timeoutMs}ms (attempt ${attempt}/${retries})`));
+              }, timeoutMs))
+            ]);
+            
+            // ✅ Success! Save to cache and return
+            if (cacheKey && result?.docs) {
+              const dataToCache = {
+                docs: result.docs.map(d => ({ id: d.id, data: d.data() }))
+              };
+              window.DataCacheManager.saveToCache(cacheKey, dataToCache);
+            }
+            
+            console.log('[SmartFetch] ✅ Fresh data loaded for:', cacheKey || 'query');
+            return result;
+            
+          } catch (error) {
+            console.warn(`[SmartFetch] ⚠️ Attempt ${attempt}/${retries} failed:`, error.message);
+            
+            // Wait before retry (exponential backoff)
+            if (attempt < retries) {
+              await new Promise(r => setTimeout(r, 1000 * attempt));
+            }
+          }
+        }
+        
+        // ✅ STEP 3: All retries failed - use cache if available, otherwise fallback
+        if (cachedData) {
+          console.log('[SmartFetch] ⚠️ Using stale cache as fallback for:', cacheKey);
+          window.DataCacheManager._dataFreshness[cacheKey] = 'stale';
+          return cachedData;
+        }
+        
+        console.warn('[SmartFetch] ❌ All attempts failed, using empty fallback for:', cacheKey || 'query');
+        return fallback;
+      };
+      
+      // Background refresh function (updates cache silently)
+      window._backgroundRefresh = async function(promiseFactory, cacheKey) {
+        try {
+          // Create a new promise instance for background fetch
+          const result = await Promise.race([
+            typeof promiseFactory === 'function' ? promiseFactory() : promiseFactory,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Background timeout')), 45000))
+          ]);
+          
+          if (result?.docs && cacheKey) {
+            const dataToCache = {
+              docs: result.docs.map(d => ({ id: d.id, data: d.data() }))
+            };
+            await window.DataCacheManager.saveToCache(cacheKey, dataToCache);
+            window.DataCacheManager._dataFreshness[cacheKey] = 'fresh';
+            console.log('[BackgroundRefresh] ✅ Updated cache for:', cacheKey);
+            
+            // Dispatch event for UI to know fresh data is available
+            window.dispatchEvent(new CustomEvent('dataCacheUpdated', { detail: { key: cacheKey } }));
+          }
+        } catch(e) {
+          console.log('[BackgroundRefresh] Background refresh failed:', e.message);
+        }
+      };
+      
+      // ✅ Track data loading state globally for UI indicators
+      window._dataLoadingState = {
+        isLoading: false,
+        lastLoadTime: null,
+        errors: [],
+        setLoading: function(loading) {
+          this.isLoading = loading;
+          if (!loading) this.lastLoadTime = Date.now();
+          window.dispatchEvent(new CustomEvent('dataLoadingStateChange', { detail: this }));
+        },
+        addError: function(error) {
+          this.errors.push({ message: error, time: Date.now() });
+          if (this.errors.length > 10) this.errors.shift();
+        }
+      };
+      
+      // Initialize DataCache early
+      window.DataCacheManager.init().catch(function(e) {
+        console.log('[DataCache] Early init skipped:', e);
+      });
       
       // Initialize IndexedDB early
       window.persistentStorage.init().catch(function(e) {
@@ -9476,6 +9719,120 @@ function NetworkStatus() {
 }
 
 // ========================================
+// DATA FRESHNESS INDICATOR COMPONENT
+// Shows when data might be stale (for low-connectivity JNV areas)
+// ========================================
+function DataFreshnessIndicator() {
+  const [isStale, setIsStale] = useState(false);
+  const [lastUpdateTime, setLastUpdateTime] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  
+  useEffect(() => {
+    // Check data freshness periodically
+    const checkFreshness = () => {
+      if (window.DataCacheManager) {
+        const attendanceFreshness = window.DataCacheManager.getFreshness('studentAttendance_' + (window._currentUserSchool || 'all'));
+        const isDataStale = attendanceFreshness === 'stale';
+        setIsStale(isDataStale);
+        
+        const timestamp = window.DataCacheManager._cacheTimestamps['studentAttendance_' + (window._currentUserSchool || 'all')];
+        if (timestamp) {
+          setLastUpdateTime(timestamp);
+        }
+      }
+    };
+    
+    checkFreshness();
+    const interval = setInterval(checkFreshness, 30000); // Check every 30 seconds
+    
+    // Listen for cache updates
+    const handleCacheUpdate = () => {
+      checkFreshness();
+      setIsRefreshing(false);
+    };
+    window.addEventListener('dataCacheUpdated', handleCacheUpdate);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('dataCacheUpdated', handleCacheUpdate);
+    };
+  }, []);
+  
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    window._forceRefresh = true;
+    
+    try {
+      // Trigger page reload to force fresh data
+      window.location.reload();
+    } catch(e) {
+      console.error('Refresh failed:', e);
+      setIsRefreshing(false);
+    }
+    
+    // Reset force refresh flag after 5 seconds
+    setTimeout(() => { window._forceRefresh = false; }, 5000);
+  };
+  
+  const getTimeAgo = (timestamp) => {
+    if (!timestamp) return 'Unknown';
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+    return Math.floor(seconds / 86400) + 'd ago';
+  };
+  
+  // Don't show if data is fresh
+  if (!isStale && !isRefreshing) return null;
+  
+  return (
+    <div className="fixed bottom-20 right-4 z-40">
+      <div 
+        className={`px-3 py-2 rounded-lg shadow-lg text-sm cursor-pointer transition-all ${
+          isStale ? 'bg-yellow-500 text-white' : 'bg-green-500 text-white'
+        }`}
+        onClick={() => setShowDetails(!showDetails)}
+      >
+        <div className="flex items-center gap-2">
+          {isRefreshing ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Refreshing data...</span>
+            </>
+          ) : (
+            <>
+              <span>⏱️</span>
+              <span>Data: {getTimeAgo(lastUpdateTime)}</span>
+            </>
+          )}
+        </div>
+      </div>
+      
+      {showDetails && (
+        <div className="mt-2 bg-white rounded-lg shadow-lg p-3 text-sm">
+          <div className="text-gray-700 mb-2">
+            <strong>📡 Low Connectivity Mode</strong>
+            <p className="text-xs text-gray-500 mt-1">
+              Showing cached data from {getTimeAgo(lastUpdateTime)}. 
+              Tap refresh to load latest.
+            </p>
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="w-full px-3 py-2 bg-blue-500 text-white rounded-lg font-medium disabled:opacity-50"
+          >
+            {isRefreshing ? 'Refreshing...' : '🔄 Refresh Now'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========================================
 // ONLINE STATUS CARD COMPONENT
 // ========================================
 function OnlineStatusCard({ currentUser }) {
@@ -10736,17 +11093,20 @@ useEffect(() => {
   return () => clearTimeout(timer);
 }, []);
 
-// ✅ FIX: Safety timeout - Force stop loading after 15 seconds (prevents infinite loading on slow JNV networks)
-// ✅ PERFORMANCE: Reduced from 20s to 15s for better mobile experience
+// ✅ CRITICAL FIX: Safety timeout - Allow 45 seconds for data loading in remote JNV areas
+// This is longer because we now use 20-30 second timeouts for critical data
 useEffect(() => {
   if (loading) {
     const safetyTimeout = setTimeout(() => {
-      console.warn('[Safety] Force stopping infinite loading after 12 seconds');
+      console.warn('[Safety] Force stopping infinite loading after 45 seconds');
       setLoading(false);
       setAuthLoading(false);
       setLoginProgress('');
-      // Don't show alert immediately - user might just have slow connection
-    }, 12000);
+      // Show cached data if available
+      if (window.DataCacheManager) {
+        console.log('📦 Showing cached data after timeout');
+      }
+    }, 45000); // ✅ Increased from 12s to 45s to allow for slow networks
     return () => clearTimeout(safetyTimeout);
   }
 }, [loading]);
@@ -10821,16 +11181,67 @@ useEffect(() => {
         }
       };
       
-      // ✅ PERFORMANCE: Wrap Firebase calls with timeout for slow networks
-      const timeoutPromise = (promise, ms = 6000, fallback = { docs: [] }) => {
+      // ========================================
+      // ✅ CRITICAL FIX: Enhanced data loading with Cache-First strategy
+      // Solves "Dashboard showing 0" issue in low-connectivity JNV areas
+      // ========================================
+      
+      // Store user school globally for cache key generation
+      window._currentUserSchool = userSchool || 'admin';
+      
+      // ✅ STEP 1: Load from cache IMMEDIATELY (shows data instantly)
+      console.log('📦 Loading cached data first for instant display...');
+      let usedCache = false;
+      
+      try {
+        // Try to load cached data immediately
+        const cachedTeachers = await window.DataCacheManager.loadFromCache('teachers_' + (userSchool || 'all'));
+        const cachedCurriculum = await window.DataCacheManager.loadFromCache('curriculum');
+        const cachedStudentAtt = await window.DataCacheManager.loadFromCache('studentAttendance_' + (userSchool || 'all'));
+        const cachedTeacherAtt = await window.DataCacheManager.loadFromCache('teacherAttendance_' + (userSchool || 'all'));
+        const cachedProgress = await window.DataCacheManager.loadFromCache('chapterProgress');
+        
+        if (cachedTeachers?.docs?.length || cachedCurriculum?.docs?.length || 
+            cachedStudentAtt?.docs?.length || cachedTeacherAtt?.docs?.length) {
+          console.log('✅ Found cached data - displaying immediately');
+          usedCache = true;
+          
+          // Set cached data immediately (users see data instantly!)
+          if (cachedTeachers?.docs) {
+            const teachersData = cachedTeachers.docs.map(d => ({ ...d.data, docId: d.id }));
+            setTeachers(teachersData);
+          }
+          if (cachedCurriculum?.docs) {
+            const currMap = {};
+            cachedCurriculum.docs.forEach(d => { currMap[d.id] = d.data; });
+            setCurriculum(currMap);
+          }
+          if (cachedStudentAtt?.docs) {
+            setStudentAttendance(cachedStudentAtt.docs.map(d => ({ ...d.data, docId: d.id })));
+          }
+          if (cachedTeacherAtt?.docs) {
+            setTeacherAttendance(cachedTeacherAtt.docs.map(d => ({ ...d.data, docId: d.id })));
+          }
+          if (cachedProgress?.docs) {
+            const progressMap = {};
+            cachedProgress.docs.forEach(d => { progressMap[d.id] = d.data; });
+            setChapterProgress(progressMap);
+          }
+        }
+      } catch(cacheError) {
+        console.log('Cache load skipped:', cacheError.message);
+      }
+      
+      // ✅ Enhanced timeoutPromise with longer timeouts for remote areas
+      const timeoutPromise = (promise, ms = 20000, fallback = { docs: [] }) => {
         return Promise.race([
           promise,
           new Promise((_, reject) => setTimeout(() => {
-            console.warn('⏱️ Firebase query timeout after', ms, 'ms');
+            console.warn('⏱️ Firebase query timeout after', ms, 'ms - will use cache');
             reject(new Error('timeout'));
           }, ms))
         ]).catch(e => {
-          console.warn('Query failed:', e.message);
+          console.warn('Query failed:', e.message, '- checking cache fallback');
           return fallback;
         });
       };
@@ -10845,11 +11256,12 @@ useEffect(() => {
         teachersQuery = db.collection('teachers').where('school', '==', userSchool).get();
       }
       
+      // ✅ INCREASED TIMEOUTS: 20 seconds for critical, 30 seconds for secondary
       const [teachersSnap, curriculumSnap, managersSnap, aySnap] = await Promise.all([
-        timeoutPromise(teachersQuery, 6000),
-        timeoutPromise(db.collection('curriculum').get(), 6000),
-        timeoutPromise(db.collection('managers').where('status','==','active').get(), 6000),
-        timeoutPromise(db.collection('system').doc('academicYear').get(), 4000, { exists: false })
+        timeoutPromise(teachersQuery, 20000),
+        timeoutPromise(db.collection('curriculum').get(), 20000),
+        timeoutPromise(db.collection('managers').where('status','==','active').get(), 15000),
+        timeoutPromise(db.collection('system').doc('academicYear').get(), 10000, { exists: false })
       ]);
       
       if (window._logLoadTime) window._logLoadTime('Critical data loaded');
@@ -10857,11 +11269,22 @@ useEffect(() => {
       
       // Process and set critical data immediately
       const teachersData = teachersSnap.docs?.map(d => ({ ...d.data(), docId: d.id })) || [];
-      setTeachers(teachersData);
+      if (teachersData.length > 0 || !usedCache) {
+        setTeachers(teachersData);
+        // Save to cache for next time
+        window.DataCacheManager.saveToCache('teachers_' + (userSchool || 'all'), {
+          docs: teachersSnap.docs?.map(d => ({ id: d.id, data: d.data() })) || []
+        });
+      }
       
       const currMap = {};
       curriculumSnap.docs?.forEach(doc => { currMap[doc.id] = doc.data(); });
-      setCurriculum(currMap);
+      if (Object.keys(currMap).length > 0 || !usedCache) {
+        setCurriculum(currMap);
+        window.DataCacheManager.saveToCache('curriculum', {
+          docs: curriculumSnap.docs?.map(d => ({ id: d.id, data: d.data() })) || []
+        });
+      }
       
       const managersData = managersSnap.docs?.map(d => ({ ...d.data(), id: d.id })) || [];
       setManagers(managersData);
@@ -10879,7 +11302,7 @@ useEffect(() => {
       } catch(e) { console.log('Cache save failed:', e); }
       
       // ✅ STAGE 2: Secondary data (load in background)
-      console.log('📊 Fetching secondary data in background...');
+      console.log('📊 Fetching secondary data...');
       
       let progressQuery, studentAttQuery, teacherAttQuery;
       
@@ -10917,14 +11340,15 @@ useEffect(() => {
         );
       }
       
+      // ✅ CRITICAL FIX: 30 second timeouts for attendance data (prevents "showing 0" issue)
       const [progressSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, schoolsSnap, rankingsSnap] = await Promise.all([
-        timeoutPromise(progressQuery, 8000),
-        timeoutPromise(studentAttQuery, 8000),
-        timeoutPromise(teacherAttQuery, 8000),
-        timeoutPromise(db.collection('schoolInfo').get(), 8000),
-        timeoutPromise(db.collection('leaveAdjustments').get(), 6000),
-        timeoutPromise(db.collection('schoolsList').get(), 6000),
-        timeoutPromise(db.collection('system').doc('schoolRankings').get(), 4000, { exists: false })
+        timeoutPromise(progressQuery, 25000),
+        timeoutPromise(studentAttQuery, 30000), // ✅ LONGER: Attendance is critical
+        timeoutPromise(teacherAttQuery, 30000), // ✅ LONGER: Attendance is critical
+        timeoutPromise(db.collection('schoolInfo').get(), 20000),
+        timeoutPromise(db.collection('leaveAdjustments').get(), 15000),
+        timeoutPromise(db.collection('schoolsList').get(), 15000),
+        timeoutPromise(db.collection('system').doc('schoolRankings').get(), 10000, { exists: false })
       ]);
       
       if (window._logLoadTime) window._logLoadTime('Secondary data loaded');
@@ -11041,9 +11465,38 @@ useEffect(() => {
       }
       setStudents(studentsData);
 
-      // Process attendance - ✅ FIX: Add null safety for timeout cases
-      setStudentAttendance((studentAttSnap.docs || []).map(d => ({ ...d.data(), docId: d.id })));
-      setTeacherAttendance((teacherAttSnap.docs || []).map(d => ({ ...d.data(), docId: d.id })));
+      // ✅ CRITICAL FIX: Process attendance with caching to prevent "showing 0" issue
+      const studentAttData = (studentAttSnap.docs || []).map(d => ({ ...d.data(), docId: d.id }));
+      const teacherAttData = (teacherAttSnap.docs || []).map(d => ({ ...d.data(), docId: d.id }));
+      
+      // Only update if we got fresh data (prevents overwriting cache with empty array on timeout)
+      if (studentAttData.length > 0 || !usedCache) {
+        setStudentAttendance(studentAttData);
+        // Save to cache for next time
+        window.DataCacheManager.saveToCache('studentAttendance_' + (userSchool || 'all'), {
+          docs: (studentAttSnap.docs || []).map(d => ({ id: d.id, data: d.data() }))
+        });
+        console.log('✅ Student attendance loaded:', studentAttData.length, 'records');
+      } else {
+        console.log('⚠️ Student attendance query returned empty - keeping cached data');
+      }
+      
+      if (teacherAttData.length > 0 || !usedCache) {
+        setTeacherAttendance(teacherAttData);
+        // Save to cache for next time
+        window.DataCacheManager.saveToCache('teacherAttendance_' + (userSchool || 'all'), {
+          docs: (teacherAttSnap.docs || []).map(d => ({ id: d.id, data: d.data() }))
+        });
+        console.log('✅ Teacher attendance loaded:', teacherAttData.length, 'records');
+      } else {
+        console.log('⚠️ Teacher attendance query returned empty - keeping cached data');
+      }
+      
+      // ✅ Save chapter progress to cache
+      const progressData = (progressSnap.docs || []).map(d => ({ id: d.id, data: d.data() }));
+      if (progressData.length > 0) {
+        window.DataCacheManager.saveToCache('chapterProgress', { docs: progressData });
+      }
       
       // Process school info - ✅ FIX: Add debugging and null safety
       const schoolInfoData = (schoolInfoSnap.docs || []).map(d => ({ ...d.data(), docId: d.id }));
@@ -11613,7 +12066,7 @@ if(currentUser && currentUser.userType === 'student') {
   return <StudentDashboard currentUser={currentUser} handleLogout={handleLogout} />;
 }
 
-return (<>{currentUser && <OnlineStatusCard currentUser={currentUser} />}{isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools} academicYearSettings={academicYearSettings} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} setSchoolInfo={setSchoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration} precomputedRankings={precomputedRankings} managers={managers}/>}</>);
+return (<>{currentUser && <OnlineStatusCard currentUser={currentUser} />}{currentUser && <DataFreshnessIndicator />}{isAdmin?<AdminView currentUser={currentUser} handleLogout={handleLogout} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} addChapter={addChapter} updateChapter={updateChapter} deleteChapter={deleteChapter} leaveAdjustments={leaveAdjustments} setLeaveAdjustments={setLeaveAdjustments} managers={managers} isSuperAdmin={isSuperAdmin} accessibleSchools={accessibleSchools} academicYearSettings={academicYearSettings} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration}/>:<TeacherView currentUser={currentUser} handleLogout={handleLogout} showConfetti={showConfetti} Confetti={Confetti} celebrationMessage={celebrationMessage} teachers={teachers} students={students} curriculum={curriculum} chapterProgress={chapterProgress} studentAttendance={studentAttendance} teacherAttendance={teacherAttendance} schoolInfo={schoolInfo} setSchoolInfo={setSchoolInfo} updateChapterProgress={updateChapterProgress} activeTab={activeTab} setActiveTab={setActiveTab} leaveAdjustments={leaveAdjustments} floatingCelebration={floatingCelebration} setFloatingCelebration={setFloatingCelebration} precomputedRankings={precomputedRankings} managers={managers}/>}</>);
 }
 
 // ========================================
@@ -21045,14 +21498,40 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   };
   
   // ✅ PWA: Check if online or offline
+  let savedSuccessfully = false;
   if (window.isPWAOnline && !window.isPWAOnline()) {
     // OFFLINE - Save locally, will sync later
     await window.saveAttendanceOffline(attendanceData);
     if (window.showPWAToast) window.showPWAToast('Saved offline - will sync when online', 'warning');
+    savedSuccessfully = true;
   } else {
     // ONLINE - Save directly to Firebase
     await db.collection('studentAttendance').doc(docId).set(attendanceData);
+    savedSuccessfully = true;
   }
+  
+  // ✅ CRITICAL FIX: Update the global attendance cache immediately
+  // This ensures the dashboard shows the correct count right away
+  if (savedSuccessfully && window.DataCacheManager) {
+    try {
+      const cacheKey = 'studentAttendance_' + (mySchool || 'all');
+      const cachedData = await window.DataCacheManager.loadFromCache(cacheKey);
+      if (cachedData?.docs) {
+        // Update or add the attendance record in cache
+        const existingIndex = cachedData.docs.findIndex(d => d.id === docId);
+        if (existingIndex >= 0) {
+          cachedData.docs[existingIndex].data = attendanceData;
+        } else {
+          cachedData.docs.push({ id: docId, data: attendanceData });
+        }
+        await window.DataCacheManager.saveToCache(cacheKey, cachedData);
+        console.log('✅ Attendance cache updated for:', docId);
+      }
+    } catch (cacheErr) {
+      console.log('Cache update skipped:', cacheErr.message);
+    }
+  }
+  
 }catch(e){
   // ✅ Try offline save if Firebase fails
   try {
