@@ -545,6 +545,247 @@
           }
         });
     };
+    
+    // ========================================
+    // ✅ MODERN PERFORMANCE ENHANCEMENTS
+    // For fast, error-free loading in low-connectivity areas
+    // ========================================
+    
+    // 1. CONNECTION STATUS DETECTION
+    window.ConnectionManager = {
+      _online: navigator.onLine,
+      _listeners: [],
+      _connectionQuality: 'unknown', // 'good', 'slow', 'offline'
+      _lastPingTime: null,
+      
+      init: function() {
+        window.addEventListener('online', () => this._setStatus(true));
+        window.addEventListener('offline', () => this._setStatus(false));
+        
+        // Check actual connectivity (not just network interface)
+        this.checkRealConnectivity();
+        setInterval(() => this.checkRealConnectivity(), 30000);
+      },
+      
+      _setStatus: function(online) {
+        const wasOnline = this._online;
+        this._online = online;
+        this._connectionQuality = online ? 'unknown' : 'offline';
+        
+        if (!wasOnline && online) {
+          console.log('📶 Back online - syncing data...');
+          window.dispatchEvent(new CustomEvent('connectionRestored'));
+        } else if (wasOnline && !online) {
+          console.log('📴 Gone offline - using cached data');
+          window.dispatchEvent(new CustomEvent('connectionLost'));
+        }
+        
+        this._notifyListeners();
+      },
+      
+      checkRealConnectivity: async function() {
+        if (!navigator.onLine) {
+          this._connectionQuality = 'offline';
+          return;
+        }
+        
+        const startTime = Date.now();
+        try {
+          // Use a small Firebase read to test actual connectivity
+          const response = await Promise.race([
+            fetch('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js', { method: 'HEAD', mode: 'no-cors' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+          ]);
+          
+          const pingTime = Date.now() - startTime;
+          this._lastPingTime = pingTime;
+          
+          if (pingTime < 1000) {
+            this._connectionQuality = 'good';
+          } else if (pingTime < 3000) {
+            this._connectionQuality = 'slow';
+          } else {
+            this._connectionQuality = 'very-slow';
+          }
+          
+          console.log('📶 Connection:', this._connectionQuality, '(' + pingTime + 'ms)');
+        } catch (e) {
+          this._connectionQuality = 'offline';
+          this._online = false;
+        }
+        
+        this._notifyListeners();
+      },
+      
+      isOnline: function() { return this._online; },
+      getQuality: function() { return this._connectionQuality; },
+      
+      subscribe: function(callback) {
+        this._listeners.push(callback);
+        return () => {
+          this._listeners = this._listeners.filter(l => l !== callback);
+        };
+      },
+      
+      _notifyListeners: function() {
+        this._listeners.forEach(l => l(this._online, this._connectionQuality));
+      }
+    };
+    
+    // 2. REQUEST DEDUPLICATION (prevents duplicate API calls)
+    window.RequestDeduplicator = {
+      _pendingRequests: new Map(),
+      
+      // Wrap a promise to deduplicate concurrent identical requests
+      dedupe: function(key, promiseFactory) {
+        if (this._pendingRequests.has(key)) {
+          console.log('⚡ Deduplicating request:', key);
+          return this._pendingRequests.get(key);
+        }
+        
+        const promise = promiseFactory()
+          .finally(() => {
+            // Remove from pending after a short delay
+            setTimeout(() => this._pendingRequests.delete(key), 100);
+          });
+        
+        this._pendingRequests.set(key, promise);
+        return promise;
+      },
+      
+      clear: function() {
+        this._pendingRequests.clear();
+      }
+    };
+    
+    // 3. EXPONENTIAL BACKOFF RETRY
+    window.retryWithBackoff = async function(fn, options = {}) {
+      const { maxRetries = 3, baseDelay = 1000, maxDelay = 30000, onRetry = null } = options;
+      let lastError;
+      
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          return await fn();
+        } catch (error) {
+          lastError = error;
+          
+          if (attempt < maxRetries - 1) {
+            const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+            console.log(`⏳ Retry ${attempt + 1}/${maxRetries} in ${delay}ms...`);
+            
+            if (onRetry) onRetry(attempt + 1, delay, error);
+            
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
+      }
+      
+      throw lastError;
+    };
+    
+    // 4. REQUEST QUEUE FOR OFFLINE (queues requests when offline)
+    window.OfflineQueue = {
+      _queue: [],
+      _processing: false,
+      
+      init: function() {
+        // Load queue from storage
+        try {
+          const saved = localStorage.getItem('offlineQueue');
+          if (saved) this._queue = JSON.parse(saved);
+        } catch(e) {}
+        
+        // Process when back online
+        window.addEventListener('connectionRestored', () => this.processQueue());
+      },
+      
+      add: function(operation) {
+        this._queue.push({
+          ...operation,
+          id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+          timestamp: new Date().toISOString()
+        });
+        this._save();
+        console.log('📝 Queued offline operation:', operation.type);
+      },
+      
+      processQueue: async function() {
+        if (this._processing || this._queue.length === 0) return;
+        this._processing = true;
+        
+        console.log('🔄 Processing', this._queue.length, 'queued operations...');
+        
+        const queue = [...this._queue];
+        this._queue = [];
+        this._save();
+        
+        for (const op of queue) {
+          try {
+            if (op.type === 'attendance') {
+              await firebase.firestore().collection('studentAttendance').doc(op.docId).set(op.data);
+              console.log('✅ Synced attendance:', op.docId);
+            } else if (op.type === 'curriculum') {
+              await firebase.firestore().collection('chapterProgress').doc(op.docId).set(op.data, { merge: true });
+              console.log('✅ Synced curriculum:', op.docId);
+            }
+          } catch (e) {
+            console.error('❌ Failed to sync:', op, e);
+            this._queue.push(op); // Re-add failed operations
+          }
+        }
+        
+        this._save();
+        this._processing = false;
+        
+        if (this._queue.length > 0) {
+          console.log('⚠️', this._queue.length, 'operations still pending');
+        }
+      },
+      
+      _save: function() {
+        try {
+          localStorage.setItem('offlineQueue', JSON.stringify(this._queue));
+        } catch(e) {}
+      },
+      
+      getPendingCount: function() {
+        return this._queue.length;
+      }
+    };
+    
+    // 5. GLOBAL ERROR BOUNDARY (prevents app crashes)
+    window.onerror = function(message, source, lineno, colno, error) {
+      console.error('🚨 Global error:', message, source, lineno);
+      
+      // Don't crash on non-critical errors
+      if (message.includes('Loading chunk') || message.includes('ChunkLoadError')) {
+        console.log('Attempting to recover from chunk load error...');
+        // Could trigger a soft reload here
+        return true;
+      }
+      
+      return false;
+    };
+    
+    window.addEventListener('unhandledrejection', function(event) {
+      console.error('🚨 Unhandled promise rejection:', event.reason);
+      
+      // Prevent crash on network errors
+      if (event.reason && (
+        event.reason.message?.includes('network') ||
+        event.reason.message?.includes('timeout') ||
+        event.reason.code === 'unavailable'
+      )) {
+        event.preventDefault();
+        console.log('📶 Network error handled gracefully');
+      }
+    });
+    
+    // Initialize managers early
+    window.ConnectionManager.init();
+    window.OfflineQueue.init();
+    
+    console.log('✅ Modern performance enhancements loaded');
   </script>
   
   <!-- React (required for app) -->
@@ -9720,17 +9961,21 @@ function NetworkStatus() {
 
 // ========================================
 // DATA FRESHNESS INDICATOR COMPONENT
-// Shows when data might be stale (for low-connectivity JNV areas)
+// Shows connection status, data freshness, and pending sync (for low-connectivity JNV areas)
 // ========================================
 function DataFreshnessIndicator() {
   const [isStale, setIsStale] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [connectionQuality, setConnectionQuality] = useState('unknown');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [pendingCount, setPendingCount] = useState(0);
   
   useEffect(() => {
     // Check data freshness periodically
-    const checkFreshness = () => {
+    const checkStatus = () => {
+      // Data freshness
       if (window.DataCacheManager) {
         const attendanceFreshness = window.DataCacheManager.getFreshness('studentAttendance_' + (window._currentUserSchool || 'all'));
         const isDataStale = attendanceFreshness === 'stale';
@@ -9741,21 +9986,38 @@ function DataFreshnessIndicator() {
           setLastUpdateTime(timestamp);
         }
       }
+      
+      // Connection quality
+      if (window.ConnectionManager) {
+        setConnectionQuality(window.ConnectionManager.getQuality());
+        setIsOnline(window.ConnectionManager.isOnline());
+      } else {
+        setIsOnline(navigator.onLine);
+      }
+      
+      // Pending operations
+      if (window.OfflineQueue) {
+        setPendingCount(window.OfflineQueue.getPendingCount());
+      }
     };
     
-    checkFreshness();
-    const interval = setInterval(checkFreshness, 30000); // Check every 30 seconds
+    checkStatus();
+    const interval = setInterval(checkStatus, 10000); // Check every 10 seconds
     
-    // Listen for cache updates
+    // Listen for updates
     const handleCacheUpdate = () => {
-      checkFreshness();
+      checkStatus();
       setIsRefreshing(false);
     };
     window.addEventListener('dataCacheUpdated', handleCacheUpdate);
+    window.addEventListener('connectionRestored', checkStatus);
+    window.addEventListener('connectionLost', checkStatus);
     
     return () => {
       clearInterval(interval);
       window.removeEventListener('dataCacheUpdated', handleCacheUpdate);
+      window.removeEventListener('connectionRestored', checkStatus);
+      window.removeEventListener('connectionLost', checkStatus);
     };
   }, []);
   
@@ -9764,6 +10026,11 @@ function DataFreshnessIndicator() {
     window._forceRefresh = true;
     
     try {
+      // First try to sync pending operations
+      if (window.OfflineQueue && pendingCount > 0) {
+        await window.OfflineQueue.processQueue();
+      }
+      
       // Trigger page reload to force fresh data
       window.location.reload();
     } catch(e) {
@@ -9771,7 +10038,6 @@ function DataFreshnessIndicator() {
       setIsRefreshing(false);
     }
     
-    // Reset force refresh flag after 5 seconds
     setTimeout(() => { window._forceRefresh = false; }, 5000);
   };
   
@@ -9784,47 +10050,112 @@ function DataFreshnessIndicator() {
     return Math.floor(seconds / 86400) + 'd ago';
   };
   
-  // Don't show if data is fresh
-  if (!isStale && !isRefreshing) return null;
+  const getConnectionIcon = () => {
+    if (!isOnline) return '📴';
+    if (connectionQuality === 'good') return '📶';
+    if (connectionQuality === 'slow') return '📶';
+    if (connectionQuality === 'very-slow') return '🐌';
+    return '📡';
+  };
+  
+  const getConnectionColor = () => {
+    if (!isOnline) return 'bg-red-500';
+    if (connectionQuality === 'good') return 'bg-green-500';
+    if (connectionQuality === 'slow') return 'bg-yellow-500';
+    if (connectionQuality === 'very-slow') return 'bg-orange-500';
+    return 'bg-gray-500';
+  };
+  
+  // Always show if offline or has pending operations
+  const shouldShow = !isOnline || isStale || isRefreshing || pendingCount > 0 || connectionQuality === 'very-slow';
+  if (!shouldShow) return null;
   
   return (
     <div className="fixed bottom-20 right-4 z-40">
       <div 
-        className={`px-3 py-2 rounded-lg shadow-lg text-sm cursor-pointer transition-all ${
-          isStale ? 'bg-yellow-500 text-white' : 'bg-green-500 text-white'
-        }`}
+        className={`px-3 py-2 rounded-lg shadow-lg text-sm cursor-pointer transition-all ${getConnectionColor()} text-white`}
         onClick={() => setShowDetails(!showDetails)}
       >
         <div className="flex items-center gap-2">
           {isRefreshing ? (
             <>
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              <span>Refreshing data...</span>
+              <span>Syncing...</span>
             </>
           ) : (
             <>
-              <span>⏱️</span>
-              <span>Data: {getTimeAgo(lastUpdateTime)}</span>
+              <span>{getConnectionIcon()}</span>
+              <span>
+                {!isOnline ? 'Offline' : 
+                 connectionQuality === 'very-slow' ? 'Slow Network' :
+                 isStale ? `Data: ${getTimeAgo(lastUpdateTime)}` : 'Online'}
+              </span>
+              {pendingCount > 0 && (
+                <span className="bg-white text-red-500 px-1.5 rounded-full text-xs font-bold">{pendingCount}</span>
+              )}
             </>
           )}
         </div>
       </div>
       
       {showDetails && (
-        <div className="mt-2 bg-white rounded-lg shadow-lg p-3 text-sm">
-          <div className="text-gray-700 mb-2">
-            <strong>📡 Low Connectivity Mode</strong>
-            <p className="text-xs text-gray-500 mt-1">
-              Showing cached data from {getTimeAgo(lastUpdateTime)}. 
-              Tap refresh to load latest.
-            </p>
+        <div className="mt-2 bg-white rounded-lg shadow-lg p-3 text-sm border border-gray-200">
+          <div className="text-gray-700 mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <strong>📡 Network Status</strong>
+              <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {isOnline ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+            
+            {connectionQuality && connectionQuality !== 'unknown' && (
+              <div className="text-xs text-gray-500 mb-2">
+                Speed: <span className={`font-bold ${
+                  connectionQuality === 'good' ? 'text-green-600' :
+                  connectionQuality === 'slow' ? 'text-yellow-600' : 'text-red-600'
+                }`}>
+                  {connectionQuality === 'good' ? 'Good' :
+                   connectionQuality === 'slow' ? 'Slow' : 'Very Slow'}
+                </span>
+              </div>
+            )}
+            
+            {lastUpdateTime && (
+              <div className="text-xs text-gray-500 mb-2">
+                Last sync: <span className="font-medium">{getTimeAgo(lastUpdateTime)}</span>
+              </div>
+            )}
+            
+            {pendingCount > 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-2 mb-2">
+                <span className="text-yellow-700 text-xs">
+                  ⏳ {pendingCount} operation(s) waiting to sync
+                </span>
+              </div>
+            )}
+            
+            {!isOnline && (
+              <p className="text-xs text-gray-500 mt-1 bg-gray-50 p-2 rounded">
+                You're offline. Data is saved locally and will sync when connected.
+              </p>
+            )}
           </div>
+          
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="w-full px-3 py-2 bg-blue-500 text-white rounded-lg font-medium disabled:opacity-50"
+            className="w-full px-3 py-2 bg-blue-500 text-white rounded-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {isRefreshing ? 'Refreshing...' : '🔄 Refresh Now'}
+            {isRefreshing ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Syncing...
+              </>
+            ) : (
+              <>🔄 Refresh Now</>
+            )}
           </button>
         </div>
       )}
@@ -21497,17 +21828,56 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
     docId: docId
   };
   
-  // ✅ PWA: Check if online or offline
+  // ✅ MODERN: Use ConnectionManager for better offline detection
+  const isOnline = window.ConnectionManager ? 
+    window.ConnectionManager.isOnline() : 
+    (window.isPWAOnline ? window.isPWAOnline() : navigator.onLine);
+  
   let savedSuccessfully = false;
-  if (window.isPWAOnline && !window.isPWAOnline()) {
-    // OFFLINE - Save locally, will sync later
-    await window.saveAttendanceOffline(attendanceData);
+  
+  if (!isOnline) {
+    // OFFLINE - Queue for later sync
+    if (window.OfflineQueue) {
+      window.OfflineQueue.add({
+        type: 'attendance',
+        docId: docId,
+        data: attendanceData
+      });
+      console.log('📝 Attendance queued for offline sync:', docId);
+    } else if (window.saveAttendanceOffline) {
+      await window.saveAttendanceOffline(attendanceData);
+    }
+    // Show non-intrusive notification
     if (window.showPWAToast) window.showPWAToast('Saved offline - will sync when online', 'warning');
     savedSuccessfully = true;
   } else {
-    // ONLINE - Save directly to Firebase
-    await db.collection('studentAttendance').doc(docId).set(attendanceData);
-    savedSuccessfully = true;
+    // ONLINE - Save to Firebase with retry
+    try {
+      if (window.retryWithBackoff) {
+        await window.retryWithBackoff(
+          () => db.collection('studentAttendance').doc(docId).set(attendanceData),
+          { maxRetries: 2, baseDelay: 500 }
+        );
+      } else {
+        await db.collection('studentAttendance').doc(docId).set(attendanceData);
+      }
+      savedSuccessfully = true;
+      console.log('✅ Attendance saved:', docId);
+    } catch (firebaseError) {
+      // Firebase failed, queue for offline sync
+      console.warn('Firebase save failed, queuing offline:', firebaseError.message);
+      if (window.OfflineQueue) {
+        window.OfflineQueue.add({
+          type: 'attendance',
+          docId: docId,
+          data: attendanceData
+        });
+        savedSuccessfully = true;
+        if (window.showPWAToast) window.showPWAToast('Network slow - saved locally', 'warning');
+      } else {
+        throw firebaseError;
+      }
+    }
   }
   
   // ✅ CRITICAL FIX: Update the global attendance cache immediately
@@ -21533,7 +21903,7 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   }
   
 }catch(e){
-  // ✅ Try offline save if Firebase fails
+  // ✅ Try offline queue if all else fails
   try {
     const docId=`${mySchool}_${selectedGrade}_${studentId}_${selectedDate}`;
     const attendanceData = {
@@ -21548,7 +21918,15 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
       markedAt:new Date().toISOString(),
       docId: docId
     };
-    if (window.saveAttendanceOffline) {
+    
+    if (window.OfflineQueue) {
+      window.OfflineQueue.add({
+        type: 'attendance',
+        docId: docId,
+        data: attendanceData
+      });
+      if (window.showPWAToast) window.showPWAToast('Saved locally - will sync later', 'warning');
+    } else if (window.saveAttendanceOffline) {
       await window.saveAttendanceOffline(attendanceData);
       if (window.showPWAToast) window.showPWAToast('Network error - saved offline', 'warning');
     } else {
@@ -21557,7 +21935,7 @@ function StudentAttendanceView({currentUser,students,studentAttendance}){
   } catch (offlineErr) {
     // ✅ Rollback UI if all saves fail
     setAttendanceMap(prev=>({...prev,[studentId]:prev[studentId]||''}));
-    alert('Failed: '+e.message);
+    alert('Failed to save: '+e.message);
   }
 }
 };
