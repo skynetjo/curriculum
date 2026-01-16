@@ -27,39 +27,63 @@
     styleEl.id = 'avanti-widget-styles';
     styleEl.textContent = `
 /* ============================================
-   AVANTI WIDGET STYLES v4.0
+   AVANTI WIDGET STYLES v6.0 - KOMMUNICATE STYLE
+   Light theme with modern UI
    ============================================ */
 
-/* Greeting Popup */
+:root {
+    --avanti-primary: #F4B41A;
+    --avanti-primary-dark: #E8A830;
+    --avanti-accent: #6366f1;
+    --avanti-bg: #ffffff;
+    --avanti-bg-secondary: #f8fafc;
+    --avanti-text: #1e293b;
+    --avanti-text-muted: #64748b;
+    --avanti-border: #e2e8f0;
+    --avanti-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* Greeting Popup - Speech Bubble */
 .avanti-greeting-popup {
     position: fixed;
     bottom: 100px;
     right: 30px;
-    background: linear-gradient(135deg, #12121a, #1a1a24);
-    border: 1px solid #2a2a3a;
-    border-radius: 16px;
+    background: var(--avanti-bg);
+    border-radius: 20px;
     padding: 16px 20px;
-    max-width: 280px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    max-width: 300px;
+    box-shadow: var(--avanti-shadow);
     z-index: 99980;
     cursor: pointer;
     opacity: 0;
     visibility: hidden;
-    transform: translateY(10px) translateZ(0);
-    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-    will-change: opacity, transform;
+    transform: translateY(10px) scale(0.95);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--avanti-border);
+    font-family: 'Inter', 'DM Sans', sans-serif;
+}
+
+.avanti-greeting-popup::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    right: 30px;
+    width: 20px;
+    height: 20px;
+    background: var(--avanti-bg);
+    transform: rotate(45deg);
+    border-right: 1px solid var(--avanti-border);
+    border-bottom: 1px solid var(--avanti-border);
 }
 
 .avanti-greeting-popup.show {
     opacity: 1;
     visibility: visible;
-    transform: translateY(0) translateZ(0);
+    transform: translateY(0) scale(1);
 }
 
 .avanti-greeting-popup .greeting-text {
-    color: #fff;
+    color: var(--avanti-text);
     font-size: 14px;
     line-height: 1.5;
 }
@@ -70,274 +94,270 @@
     right: 8px;
     background: none;
     border: none;
-    color: #5a5a6a;
+    color: var(--avanti-text-muted);
     cursor: pointer;
     font-size: 18px;
     padding: 4px;
     line-height: 1;
     border-radius: 50%;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.2s;
 }
 
 .avanti-greeting-popup .greeting-close:hover {
-    color: #fff;
-    background: rgba(255,255,255,0.1);
+    color: var(--avanti-text);
+    background: var(--avanti-bg-secondary);
 }
 
-/* Help Button - YELLOW GRADIENT */
+/* Main Chat Button */
 .avanti-help-btn {
     position: fixed;
-    bottom: 30px;
-    right: 30px;
-    width: 60px;
-    height: 60px;
+    bottom: 24px;
+    right: 24px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    background: linear-gradient(135deg, var(--avanti-primary), var(--avanti-primary-dark));
     border: none;
     cursor: pointer;
-    box-shadow: 0 4px 20px rgba(244, 180, 26, 0.4);
+    box-shadow: 0 8px 24px rgba(244, 180, 26, 0.4);
     z-index: 99990;
-    transition: transform 0.3s ease, box-shadow 0.3s ease, bottom 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: center;
     justify-content: center;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-    will-change: transform;
 }
 
-/* Position chatbot button above bottom nav on mobile */
 @media (max-width: 768px) {
     .avanti-help-btn {
-        bottom: 85px !important;
-        right: 20px;
-        width: 50px;
-        height: 50px;
+        bottom: 80px !important;
+        right: 16px;
+        width: 56px;
+        height: 56px;
+    }
+    .avanti-greeting-popup {
+        bottom: 145px;
+        right: 16px;
+        max-width: 280px;
+    }
+    .avanti-widget-panel {
+        bottom: 0 !important;
+        right: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
     }
 }
 
 .avanti-help-btn:hover {
-    transform: scale(1.1) translateZ(0);
-    box-shadow: 0 6px 30px rgba(244, 180, 26, 0.5);
+    transform: scale(1.1);
+    box-shadow: 0 12px 32px rgba(244, 180, 26, 0.5);
 }
 
 .avanti-help-btn .btn-icon {
     width: 28px;
     height: 28px;
-    transition: transform 0.3s ease;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
+    transition: all 0.3s ease;
 }
 
 .avanti-help-btn .btn-icon svg {
     width: 100%;
     height: 100%;
     fill: #0a0a0f;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
 }
 
-.avanti-help-btn.open .btn-icon svg.chat-icon {
-    display: none;
-}
+.avanti-help-btn.open .btn-icon svg.chat-icon { display: none; }
+.avanti-help-btn.open .btn-icon svg.close-icon { display: block; }
+.avanti-help-btn .btn-icon svg.close-icon { display: none; }
+.avanti-help-btn.open .btn-icon { transform: rotate(90deg); }
 
-.avanti-help-btn.open .btn-icon svg.close-icon {
-    display: block;
-}
-
-.avanti-help-btn .btn-icon svg.close-icon {
-    display: none;
-}
-
-/* PWA Notification Badge */
+/* Notification Badge */
 .avanti-help-btn .notification-dot {
     position: absolute;
-    top: 0px;
-    right: 0px;
-    width: 18px;
-    height: 18px;
+    top: -2px;
+    right: -2px;
+    width: 20px;
+    height: 20px;
     background: #ef4444;
     border-radius: 50%;
-    border: 3px solid #0a0a0f;
+    border: 3px solid #fff;
     display: none;
-    animation: pulseBadge 2s infinite;
+    animation: badgePulse 2s ease-in-out infinite;
 }
 
-.avanti-help-btn .notification-dot.show {
-    display: block;
-}
+.avanti-help-btn .notification-dot.show { display: block; }
 
-@keyframes pulseBadge {
+@keyframes badgePulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.1); }
 }
 
-/* Widget Panel */
+/* Widget Panel - Clean White */
 .avanti-widget-panel {
     position: fixed;
     bottom: 100px;
-    right: 30px;
-    width: 380px;
-    height: 520px;
-    background: #12121a;
+    right: 24px;
+    width: 400px;
+    height: 600px;
+    max-height: calc(100vh - 120px);
+    background: var(--avanti-bg);
     border-radius: 20px;
-    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--avanti-shadow);
     z-index: 99998;
     display: flex;
     flex-direction: column;
-    border: 1px solid #2a2a3a;
+    border: 1px solid var(--avanti-border);
     opacity: 0;
     visibility: hidden;
     transform: translateY(20px) scale(0.95);
-    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-    -webkit-transform-style: preserve-3d;
-    transform-style: preserve-3d;
-    will-change: opacity, transform;
+    font-family: 'Inter', 'DM Sans', sans-serif;
 }
 
 .avanti-widget-panel.open {
     opacity: 1;
     visibility: visible;
-    transform: translateY(0) scale(1) translateZ(0);
+    transform: translateY(0) scale(1);
 }
 
-/* Header */
+/* Header with Online Status */
 .avanti-widget-header {
-    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    background: linear-gradient(135deg, var(--avanti-primary), var(--avanti-primary-dark));
     padding: 16px 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    min-height: 70px;
+    min-height: 72px;
 }
 
 .avanti-widget-header-content {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
+}
+
+.avanti-header-avatar {
+    position: relative;
+}
+
+.avanti-header-avatar .online-dot {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 12px;
+    height: 12px;
+    background: #22c55e;
+    border-radius: 50%;
+    border: 2px solid var(--avanti-primary);
+    animation: pulse-online 2s ease-in-out infinite;
+}
+
+@keyframes pulse-online {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.8; }
 }
 
 .avanti-widget-header .logo {
-    width: 42px;
-    height: 42px;
-    background: rgba(0,0,0,0.15);
-    border-radius: 10px;
+    width: 48px;
+    height: 48px;
+    background: rgba(0,0,0,0.1);
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 22px;
+    font-size: 24px;
+    position: relative;
 }
 
 .avanti-widget-header h3 {
     color: #0a0a0f;
     font-size: 17px;
     font-weight: 700;
-    margin: 0;
+    margin: 0 0 2px 0;
 }
 
-.avanti-widget-header p {
+.avanti-widget-header p,
+.avanti-widget-header .status-text {
     color: rgba(0,0,0,0.6);
-    font-size: 12px;
-    margin: 2px 0 0 0;
+    font-size: 13px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
-/* FIXED: Close button - better styling for mobile */
-.avanti-widget-header .close-btn {
-    background: rgba(0,0,0,0.15);
-    border: none;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+.avanti-widget-header .status-text::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: #22c55e;
     border-radius: 50%;
+}
+
+.avanti-widget-header .close-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.1);
+    border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
-    font-weight: bold;
     color: #0a0a0f;
+    font-size: 20px;
     transition: all 0.2s;
-    -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
 }
 
-.avanti-widget-header .close-btn:hover,
-.avanti-widget-header .close-btn:active {
-    background: rgba(0,0,0,0.25);
-    transform: scale(1.05);
+.avanti-widget-header .close-btn:hover {
+    background: rgba(0,0,0,0.2);
 }
 
-/* Body */
+/* Widget Body */
 .avanti-widget-body {
     flex: 1;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    background: var(--avanti-bg-secondary);
 }
 
 /* Home View */
 .avanti-home-view {
-    padding: 24px 20px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
     height: 100%;
+    background: var(--avanti-bg);
 }
 
 .avanti-welcome {
-    margin-bottom: 24px;
+    background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid #bae6fd;
+    text-align: center;
 }
 
 .avanti-welcome h2 {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 700;
-    color: #fff;
-    margin: 0 0 4px 0;
-    line-height: 1.3;
+    color: var(--avanti-text);
+    margin: 0 0 6px 0;
 }
 
 .avanti-welcome p {
-    color: #8a8a9a;
-    font-size: 15px;
+    color: var(--avanti-text-muted);
+    font-size: 14px;
     margin: 0;
-}
-
-/* Search Box */
-.avanti-search-box {
-    background: #1a1a24;
-    border: 1px solid #2a2a3a;
-    border-radius: 12px;
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-bottom: 20px;
-}
-
-.avanti-search-box:hover {
-    border-color: #F4B41A;
-}
-
-.avanti-search-box span {
-    color: #5a5a6a;
-    font-size: 15px;
-}
-
-.avanti-search-box .arrow {
-    margin-left: auto;
-    color: #F4B41A;
-    font-size: 18px;
 }
 
 /* Quick Actions */
@@ -349,89 +369,87 @@
 }
 
 .avanti-quick-action {
-    background: #1a1a24;
-    border: 1px solid #2a2a3a;
-    border-radius: 12px;
-    padding: 14px 16px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
+    padding: 14px 18px;
+    background: var(--avanti-bg);
+    border: 1px solid var(--avanti-border);
+    border-radius: 14px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
     text-align: left;
-    color: #fff;
-    font-size: 14px;
     font-family: inherit;
 }
 
 .avanti-quick-action:hover {
-    border-color: #F4B41A;
+    border-color: var(--avanti-primary);
+    background: #fffbeb;
     transform: translateX(4px);
 }
 
 .avanti-quick-action .icon {
-    font-size: 18px;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.avanti-quick-action span:not(.icon):not(.arrow) {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--avanti-text);
 }
 
 .avanti-quick-action .arrow {
-    margin-left: auto;
-    color: #5a5a6a;
+    color: var(--avanti-text-muted);
+    font-size: 18px;
+    transition: transform 0.2s;
 }
 
-/* Bottom Navigation */
-.avanti-bottom-nav {
-    display: flex;
-    border-top: 1px solid #2a2a3a;
-    background: #0a0a0f;
-    padding: 8px 0;
+.avanti-quick-action:hover .arrow {
+    transform: translateX(4px);
+    color: var(--avanti-primary);
 }
 
-.avanti-nav-item {
-    flex: 1;
+/* Search Box */
+.avanti-search-box {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 4px;
-    padding: 10px;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--avanti-bg-secondary);
+    border: 1px solid var(--avanti-border);
+    border-radius: 14px;
     cursor: pointer;
-    color: #5a5a6a;
-    font-size: 11px;
-    background: none;
-    border: none;
     transition: all 0.2s;
-    font-family: inherit;
-    position: relative;
+    margin-bottom: 20px;
 }
 
-.avanti-nav-item:hover,
-.avanti-nav-item.active {
-    color: #F4B41A;
+.avanti-search-box:hover {
+    border-color: var(--avanti-primary);
+    background: #fffbeb;
 }
 
-.avanti-nav-item .nav-icon {
-    font-size: 20px;
+.avanti-search-box span {
+    color: var(--avanti-text-muted);
+    font-size: 14px;
 }
 
-.avanti-nav-item .nav-badge {
-    position: absolute;
-    top: 6px;
-    right: calc(50% - 18px);
-    width: 8px;
-    height: 8px;
-    background: #ef4444;
-    border-radius: 50%;
-    display: none;
-}
-
-.avanti-nav-item .nav-badge.show {
-    display: block;
-}
+.avanti-search-box .arrow { margin-left: auto; }
 
 /* Chat View */
 .avanti-chat-view {
     display: none;
     flex-direction: column;
     height: 100%;
+    background: var(--avanti-bg);
 }
 
 .avanti-chat-messages {
@@ -441,166 +459,89 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    background: var(--avanti-bg-secondary);
 }
 
-.avanti-chat-input {
-    padding: 12px 16px;
-    border-top: 1px solid #2a2a3a;
-    display: flex;
-    gap: 10px;
-    background: #0a0a0f;
-}
-
-.avanti-chat-input input {
-    flex: 1;
-    background: #1a1a24;
-    border: 1px solid #2a2a3a;
-    border-radius: 24px;
-    padding: 12px 18px;
-    color: #fff;
-    font-size: 14px;
-    font-family: inherit;
-}
-
-.avanti-chat-input input:focus {
-    outline: none;
-    border-color: #F4B41A;
-}
-
-.avanti-chat-input input::placeholder {
-    color: #5a5a6a;
-}
-
-.avanti-chat-input button {
-    background: linear-gradient(135deg, #F4B41A, #E8A830);
-    border: none;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    color: #0a0a0f;
-    transition: all 0.2s;
-}
-
-.avanti-chat-input button:hover {
-    transform: scale(1.05);
-}
-
-/* Messages */
+/* Message Bubbles */
 .avanti-msg {
     padding: 12px 16px;
-    border-radius: 16px;
+    border-radius: 18px;
     font-size: 14px;
     line-height: 1.5;
     max-width: 85%;
-    animation: msgSlide 0.3s ease;
+    animation: msgFadeIn 0.3s ease;
 }
 
-@keyframes msgSlide {
-    from { opacity: 0; transform: translateY(10px); }
+@keyframes msgFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
 .avanti-msg.bot {
-    background: #1a1a24;
-    color: #fff;
+    background: var(--avanti-bg);
+    color: var(--avanti-text);
+    border: 1px solid var(--avanti-border);
+    border-bottom-left-radius: 6px;
     align-self: flex-start;
-    border: 1px solid #2a2a3a;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .avanti-msg.user {
-    background: linear-gradient(135deg, #F4B41A, #E8A830);
-    color: #0a0a0f;
+    background: linear-gradient(135deg, var(--avanti-accent), #8b5cf6);
+    color: #fff;
+    border-bottom-right-radius: 6px;
     align-self: flex-end;
 }
 
-/* FAQ Results */
-.avanti-faq-card {
-    background: #1a1a24;
-    border: 1px solid #2a2a3a;
-    border-radius: 12px;
-    padding: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-bottom: 8px;
-}
-
-.avanti-faq-card:hover {
-    border-color: #F4B41A;
-}
-
-.avanti-faq-card h4 {
-    color: #fff;
-    font-size: 14px;
-    margin: 0;
-    line-height: 1.4;
-}
-
-.avanti-faq-card .category {
-    font-size: 11px;
-    color: #F4B41A;
-    text-transform: uppercase;
-    margin-top: 6px;
-}
-
-/* FAQ Answer */
-.avanti-faq-answer {
-    background: #1a1a24;
-    border: 1px solid #2a2a3a;
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 12px;
-}
-
-.avanti-faq-answer h4 {
-    color: #F4B41A;
-    font-size: 14px;
-    margin: 0 0 10px 0;
-}
-
-.avanti-faq-answer p {
-    color: #d1d1d1;
-    font-size: 13px;
-    line-height: 1.6;
-    margin: 0;
-}
-
-/* Feedback Buttons */
-.avanti-feedback-btns {
+/* Chat Input */
+.avanti-chat-input {
+    padding: 12px 16px;
+    border-top: 1px solid var(--avanti-border);
     display: flex;
-    gap: 10px;
-    margin-top: 10px;
+    align-items: center;
+    gap: 12px;
+    background: var(--avanti-bg);
 }
 
-.avanti-feedback-btn {
+.avanti-chat-input input {
     flex: 1;
-    padding: 10px;
-    border: 1px solid #2a2a3a;
-    background: #1a1a24;
-    border-radius: 8px;
-    cursor: pointer;
-    color: #fff;
-    font-size: 13px;
-    transition: all 0.2s;
+    padding: 12px 16px;
+    background: var(--avanti-bg-secondary);
+    border: 1px solid var(--avanti-border);
+    border-radius: 24px;
+    color: var(--avanti-text);
+    font-size: 14px;
     font-family: inherit;
+    transition: all 0.2s;
 }
 
-.avanti-feedback-btn:hover {
-    border-color: #F4B41A;
+.avanti-chat-input input:focus {
+    outline: none;
+    border-color: var(--avanti-primary);
+    box-shadow: 0 0 0 3px rgba(244, 180, 26, 0.15);
 }
 
-.avanti-feedback-btn.yes:hover {
-    background: rgba(16, 185, 129, 0.2);
-    border-color: #10b981;
+.avanti-chat-input input::placeholder { color: var(--avanti-text-muted); }
+
+.avanti-chat-input button {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--avanti-primary), var(--avanti-primary-dark));
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #0a0a0f;
+    font-size: 18px;
+    transition: all 0.2s;
+    flex-shrink: 0;
 }
 
-.avanti-feedback-btn.no:hover {
-    background: rgba(239, 68, 68, 0.2);
-    border-color: #ef4444;
+.avanti-chat-input button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(244, 180, 26, 0.4);
 }
 
 /* Tickets View */
@@ -608,262 +549,321 @@
     display: none;
     flex-direction: column;
     height: 100%;
+    background: var(--avanti-bg);
 }
 
 .avanti-tickets-header {
     padding: 16px 20px;
-    border-bottom: 1px solid #2a2a3a;
+    border-bottom: 1px solid var(--avanti-border);
 }
 
 .avanti-tickets-header h3 {
-    color: #fff;
     font-size: 18px;
+    font-weight: 700;
+    color: var(--avanti-text);
     margin: 0;
 }
 
 .avanti-tickets-list {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 20px;
+    padding: 12px;
 }
 
 /* Ticket Card */
-.avanti-ticket-card {
-    background: #1a1a24;
-    border: 1px solid #2a2a3a;
-    border-radius: 12px;
+.avanti-ticket {
+    display: flex;
+    align-items: center;
+    gap: 14px;
     padding: 14px;
+    background: var(--avanti-bg);
+    border: 1px solid var(--avanti-border);
+    border-radius: 14px;
     margin-bottom: 10px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
-.avanti-ticket-card:hover {
-    border-color: #F4B41A;
+.avanti-ticket:hover {
+    border-color: var(--avanti-primary);
+    background: #fffbeb;
 }
 
-.avanti-ticket-card .ticket-header {
+.avanti-ticket .ticket-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    justify-content: center;
+    font-size: 22px;
 }
 
-.avanti-ticket-card .ticket-id {
-    font-family: 'Space Mono', monospace;
-    color: #F4B41A;
-    font-size: 13px;
+.avanti-ticket .ticket-info { flex: 1; min-width: 0; }
+
+.avanti-ticket .ticket-subject {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--avanti-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
 }
 
-.avanti-ticket-card .status {
-    font-size: 11px;
+.avanti-ticket .ticket-meta {
+    font-size: 12px;
+    color: var(--avanti-text-muted);
+}
+
+.avanti-ticket .ticket-status {
     padding: 4px 10px;
     border-radius: 20px;
-    text-transform: capitalize;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
 }
 
-.avanti-ticket-card .status.open {
-    background: rgba(239, 68, 68, 0.2);
-    color: #ef4444;
-}
-
-.avanti-ticket-card .status.in-progress {
-    background: rgba(234, 179, 8, 0.2);
-    color: #eab308;
-}
-
-.avanti-ticket-card .status.resolved {
-    background: rgba(16, 185, 129, 0.2);
-    color: #10b981;
-}
-
-.avanti-ticket-card .status.closed {
-    background: rgba(107, 114, 128, 0.2);
-    color: #9ca3af;
-}
-
-.avanti-ticket-card .status.pending {
-    background: rgba(168, 85, 247, 0.2);
-    color: #a855f7;
-}
-
-.avanti-ticket-card .subject {
-    color: #fff;
-    font-size: 14px;
-    margin-bottom: 6px;
-}
-
-.avanti-ticket-card .meta {
-    color: #5a5a6a;
-    font-size: 12px;
-}
+.avanti-ticket .ticket-status.open { background: #fef2f2; color: #dc2626; }
+.avanti-ticket .ticket-status.in-progress { background: #fefce8; color: #ca8a04; }
+.avanti-ticket .ticket-status.resolved { background: #f0fdf4; color: #16a34a; }
 
 /* Form View */
 .avanti-form-view {
     display: none;
     flex-direction: column;
     height: 100%;
+    background: var(--avanti-bg);
 }
 
 .avanti-form-content {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 20px;
+    padding: 20px;
 }
 
-/* Action Buttons */
-.avanti-action-btns {
-    display: flex;
-    gap: 10px;
-    margin-top: 16px;
-}
+.avanti-form-group { margin-bottom: 18px; }
 
-.avanti-action-btn {
-    flex: 1;
-    padding: 12px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-family: inherit;
-    border: none;
-}
-
-.avanti-action-btn.primary {
-    background: linear-gradient(135deg, #F4B41A, #E8A830);
-    color: #0a0a0f;
-}
-
-.avanti-action-btn.secondary {
-    background: #1a1a24;
-    border: 1px solid #2a2a3a;
-    color: #fff;
-}
-
-.avanti-action-btn:hover {
-    transform: translateY(-2px);
-}
-
-/* User Info Display */
-.avanti-user-info {
-    background: #1a1a24;
-    border: 1px solid #2a2a3a;
-    border-radius: 12px;
-    padding: 14px;
-    margin-bottom: 16px;
-}
-
-.avanti-user-info .user-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-    color: #10b981;
+.avanti-form-group label {
+    display: block;
     font-size: 13px;
+    font-weight: 600;
+    color: var(--avanti-text);
+    margin-bottom: 8px;
+}
+
+.avanti-form-group input,
+.avanti-form-group select,
+.avanti-form-group textarea {
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--avanti-bg-secondary);
+    border: 1px solid var(--avanti-border);
+    border-radius: 12px;
+    color: var(--avanti-text);
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s;
+    box-sizing: border-box;
+}
+
+.avanti-form-group input:focus,
+.avanti-form-group select:focus,
+.avanti-form-group textarea:focus {
+    outline: none;
+    border-color: var(--avanti-primary);
+    box-shadow: 0 0 0 3px rgba(244, 180, 26, 0.15);
+}
+
+.avanti-form-group textarea { min-height: 100px; resize: vertical; }
+
+/* User Info Card */
+.avanti-user-info {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    border: 1px solid #86efac;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 20px;
 }
 
 .avanti-user-row {
     display: flex;
     justify-content: space-between;
-    padding: 6px 0;
-    border-bottom: 1px solid #2a2a3a;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
     font-size: 13px;
 }
 
-.avanti-user-row:last-child {
-    border-bottom: none;
-}
+.avanti-user-row:last-child { border-bottom: none; }
 
-.avanti-user-row span:first-child {
-    color: #8a8a9a;
-}
-
-.avanti-user-row span:last-child {
-    color: #fff;
-}
-
-/* Form Styles */
-.avanti-form-group {
-    margin-bottom: 14px;
-}
-
-.avanti-form-group label {
-    display: block;
-    color: #8a8a9a;
-    font-size: 12px;
-    margin-bottom: 6px;
-}
-
-.avanti-form-group input,
-.avanti-form-group textarea,
-.avanti-form-group select {
-    width: 100%;
-    padding: 12px 14px;
-    background: #1a1a24;
-    border: 1px solid #2a2a3a;
-    border-radius: 10px;
-    color: #fff;
-    font-size: 14px;
-    font-family: inherit;
-}
-
-.avanti-form-group input:focus,
-.avanti-form-group textarea:focus,
-.avanti-form-group select:focus {
-    outline: none;
-    border-color: #F4B41A;
-}
-
-.avanti-form-group textarea {
-    min-height: 100px;
-    resize: vertical;
-}
-
-.avanti-form-group input:disabled {
-    background: #0a0a0f;
-    color: #8a8a9a;
-}
-
+/* Action Buttons */
+.avanti-action-btn,
 .avanti-submit-btn {
-    width: 100%;
-    background: linear-gradient(135deg, #F4B41A, #E8A830);
-    color: #0a0a0f;
-    border: none;
-    padding: 14px;
-    border-radius: 10px;
-    font-size: 15px;
+    padding: 14px 20px;
+    border-radius: 12px;
+    font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
     font-family: inherit;
+    border: none;
+    width: 100%;
+    margin-top: 8px;
 }
 
+.avanti-action-btn.primary,
+.avanti-submit-btn {
+    background: linear-gradient(135deg, var(--avanti-primary), var(--avanti-primary-dark));
+    color: #0a0a0f;
+}
+
+.avanti-action-btn.primary:hover,
 .avanti-submit-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(244, 180, 26, 0.3);
+    box-shadow: 0 4px 12px rgba(244, 180, 26, 0.4);
 }
 
-.avanti-submit-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-    transform: none;
+.avanti-action-btn.secondary {
+    background: var(--avanti-bg-secondary);
+    color: var(--avanti-text);
+    border: 1px solid var(--avanti-border);
+}
+
+/* Success Screen */
+.avanti-success {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.avanti-success .icon { font-size: 64px; margin-bottom: 16px; }
+
+.avanti-success h3 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--avanti-text);
+    margin: 0 0 8px 0;
+}
+
+.avanti-success .ticket-id {
+    display: inline-block;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #92400e;
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.avanti-success p {
+    color: var(--avanti-text-muted);
+    font-size: 14px;
+}
+
+/* Bottom Navigation */
+.avanti-bottom-nav {
+    display: flex;
+    border-top: 1px solid var(--avanti-border);
+    background: var(--avanti-bg);
+    padding: 8px;
+    gap: 4px;
+}
+
+.avanti-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 8px;
+    cursor: pointer;
+    color: var(--avanti-text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    transition: all 0.2s;
+    font-family: inherit;
+    position: relative;
+}
+
+.avanti-nav-item:hover {
+    background: var(--avanti-bg-secondary);
+    color: var(--avanti-text);
+}
+
+.avanti-nav-item.active {
+    background: #fffbeb;
+    color: var(--avanti-primary-dark);
+}
+
+.avanti-nav-item .nav-icon { font-size: 20px; }
+
+.avanti-nav-item .nav-badge {
+    position: absolute;
+    top: 4px;
+    right: calc(50% - 20px);
+    min-width: 18px;
+    height: 18px;
+    background: #ef4444;
+    border-radius: 9px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+}
+
+.avanti-nav-item .nav-badge.show { display: flex; }
+
+/* FAQ Card */
+.avanti-faq-card {
+    background: var(--avanti-bg);
+    border: 1px solid var(--avanti-border);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.avanti-faq-card:hover {
+    border-color: var(--avanti-primary);
+    background: #fffbeb;
+}
+
+.avanti-faq-card h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--avanti-text);
+    margin: 0 0 6px 0;
+}
+
+.avanti-faq-card .category {
+    font-size: 11px;
+    color: var(--avanti-primary-dark);
+    text-transform: uppercase;
+    font-weight: 600;
 }
 
 /* Screenshot Upload */
-.avanti-screenshot-section {
-    margin-bottom: 16px;
-}
+.avanti-screenshot-section { margin-top: 16px; }
 
 .avanti-screenshot-label {
-    color: #8a8a9a;
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--avanti-text);
     margin-bottom: 8px;
+    display: block;
 }
 
 .avanti-screenshot-upload {
-    background: #1a1a24;
-    border: 2px dashed #2a2a3a;
+    border: 2px dashed var(--avanti-border);
     border-radius: 12px;
     padding: 20px;
     text-align: center;
@@ -872,33 +872,20 @@
 }
 
 .avanti-screenshot-upload:hover {
-    border-color: #F4B41A;
-}
-
-.avanti-screenshot-upload .upload-icon {
-    font-size: 28px;
-    margin-bottom: 8px;
-}
-
-.avanti-screenshot-upload .upload-text {
-    color: #8a8a9a;
-    font-size: 13px;
-}
-
-.avanti-screenshot-upload input[type="file"] {
-    display: none;
+    border-color: var(--avanti-primary);
+    background: #fffbeb;
 }
 
 .avanti-screenshot-preview {
-    display: none;
     position: relative;
-    margin-top: 10px;
+    display: none;
+    margin-top: 12px;
 }
 
 .avanti-screenshot-preview img {
     width: 100%;
-    border-radius: 8px;
-    border: 1px solid #2a2a3a;
+    border-radius: 12px;
+    border: 1px solid var(--avanti-border);
 }
 
 .avanti-screenshot-preview .remove-btn {
@@ -907,181 +894,94 @@
     right: 8px;
     width: 28px;
     height: 28px;
+    border-radius: 50%;
     background: #ef4444;
     border: none;
-    border-radius: 50%;
-    color: white;
-    cursor: pointer;
+    color: #fff;
     font-size: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    cursor: pointer;
 }
 
-/* Upload Progress */
 .avanti-upload-progress {
-    background: #1a1a24;
-    border-radius: 8px;
+    margin-top: 12px;
     padding: 12px;
-    margin-top: 10px;
+    background: var(--avanti-bg-secondary);
+    border-radius: 8px;
 }
 
 .avanti-progress-bar {
-    height: 4px;
-    background: #2a2a3a;
-    border-radius: 2px;
+    height: 6px;
+    background: var(--avanti-border);
+    border-radius: 3px;
     overflow: hidden;
+    margin-bottom: 8px;
 }
 
 .avanti-progress-fill {
     height: 100%;
-    background: linear-gradient(135deg, #F4B41A, #E8A830);
+    background: linear-gradient(135deg, var(--avanti-primary), var(--avanti-primary-dark));
+    border-radius: 3px;
     width: 0%;
-    transition: width 0.3s;
-}
-
-.avanti-progress-text {
-    font-size: 12px;
-    color: #8a8a9a;
-    margin-top: 6px;
-    text-align: center;
-}
-
-/* Success View */
-.avanti-success {
-    text-align: center;
-    padding: 40px 20px;
-}
-
-.avanti-success .icon {
-    font-size: 60px;
-    margin-bottom: 16px;
-}
-
-.avanti-success h3 {
-    color: #10b981;
-    font-size: 20px;
-    margin: 0 0 8px 0;
-}
-
-.avanti-success .ticket-id {
-    background: #1a1a24;
-    padding: 12px 24px;
-    border-radius: 10px;
-    font-family: 'Space Mono', monospace;
-    font-size: 18px;
-    color: #F4B41A;
-    margin: 16px 0;
-    display: inline-block;
-    border: 1px solid #2a2a3a;
-}
-
-.avanti-success p {
-    color: #8a8a9a;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-/* Empty State */
-.avanti-empty {
-    text-align: center;
-    padding: 40px 20px;
-    color: #5a5a6a;
-}
-
-.avanti-empty .icon {
-    font-size: 48px;
-    margin-bottom: 12px;
-}
-
-.avanti-empty h4 {
-    color: #8a8a9a;
-    margin: 0 0 8px 0;
+    transition: width 0.3s ease;
 }
 
 /* Loading */
 .avanti-loading {
     display: inline-block;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     border: 2px solid rgba(0,0,0,0.2);
-    border-top-color: #0a0a0f;
+    border-top-color: currentColor;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+    margin-right: 8px;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Notification Toast */
+.avanti-notification-toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 999999;
+    opacity: 0;
+    transition: all 0.3s ease;
+    box-shadow: var(--avanti-shadow);
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid #fde68a;
+    cursor: pointer;
 }
 
-/* MOBILE RESPONSIVE - FIXED */
-@media (max-width: 480px) {
-    .avanti-widget-panel {
-        width: calc(100% - 20px);
-        right: 10px;
-        bottom: 80px;
-        height: 75vh;
-        max-height: 600px;
-        border-radius: 16px;
-    }
-    
-    .avanti-help-btn {
-        width: 56px;
-        height: 56px;
-        right: 16px;
-        bottom: 16px;
-    }
-    
-    .avanti-help-btn .btn-icon {
-        width: 24px;
-        height: 24px;
-    }
-    
-    .avanti-greeting-popup {
-        right: 16px;
-        bottom: 85px;
-        max-width: calc(100% - 90px);
-    }
-    
-    /* FIXED: Mobile close button - larger touch target */
-    .avanti-widget-header {
-        padding: 14px 16px;
-    }
-    
-    .avanti-widget-header .close-btn {
-        width: 48px;
-        height: 48px;
-        min-width: 48px;
-        min-height: 48px;
-        font-size: 28px;
-        font-weight: bold;
-        background: rgba(0,0,0,0.2);
-    }
-    
-    .avanti-widget-header .logo {
-        width: 38px;
-        height: 38px;
-    }
-    
-    .avanti-widget-header h3 {
-        font-size: 15px;
-    }
-    
-    .avanti-widget-header p {
-        font-size: 11px;
-    }
-    
-    .avanti-welcome h2 {
-        font-size: 20px;
-    }
-    
-    .avanti-home-view {
-        padding: 20px 16px;
-    }
+.avanti-notification-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Scrollbar */
+.avanti-chat-messages::-webkit-scrollbar,
+.avanti-tickets-list::-webkit-scrollbar,
+.avanti-form-content::-webkit-scrollbar { width: 6px; }
+
+.avanti-chat-messages::-webkit-scrollbar-track,
+.avanti-tickets-list::-webkit-scrollbar-track,
+.avanti-form-content::-webkit-scrollbar-track { background: transparent; }
+
+.avanti-chat-messages::-webkit-scrollbar-thumb,
+.avanti-tickets-list::-webkit-scrollbar-thumb,
+.avanti-form-content::-webkit-scrollbar-thumb {
+    background: var(--avanti-border);
+    border-radius: 3px;
 }
 
 /* Logo styling */
-.replaced-logo { width: 32px; height: auto; display: inline-block; vertical-align: middle; }
+.replaced-logo { width: 40px; height: auto; display: inline-block; vertical-align: middle; border-radius: 50%; }
 `;
     document.head.appendChild(styleEl);
 
@@ -1114,15 +1014,16 @@
         
         <!-- Widget Panel -->
         <div class="avanti-widget-panel" id="avantiPanel">
-            <!-- Header -->
+            <!-- Header - With Online Status -->
             <div class="avanti-widget-header">
                 <div class="avanti-widget-header-content">
-                    <div class="logo">
+                    <div class="logo avanti-header-avatar">
                         <img src="./logo.png" class="replaced-logo" alt="Avanti Logo" onerror="this.style.display='none';this.parentElement.innerHTML='💬';">
+                        <span class="online-dot"></span>
                     </div>
                     <div>
                         <h3>Avanti Help Desk</h3>
-                        <p>We're here to help!</p>
+                        <p class="status-text">Online</p>
                     </div>
                 </div>
                 <button class="close-btn" onclick="AvantiWidget.close()" aria-label="Close">×</button>
@@ -1727,6 +1628,64 @@
         const userId = this.user.studentId || this.user.email;
         if (!userId) return;
         
+        console.log('[AvantiWidget] Setting up real-time notification listener for:', userId);
+        
+        // Use real-time listener instead of polling for instant notifications
+        try {
+            firebase.firestore().collection('user_notifications')
+                .where('userId', '==', String(userId))
+                .orderBy('createdAt', 'desc')
+                .limit(20)
+                .onSnapshot((snapshot) => {
+                    const readIds = JSON.parse(localStorage.getItem('readTicketNotifications') || '[]');
+                    
+                    // Check for NEW notifications (added since last check)
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === 'added') {
+                            const notif = { id: change.doc.id, ...change.doc.data() };
+                            
+                            // If this is a new notification (not read before)
+                            if (!readIds.includes(notif.id)) {
+                                console.log('[AvantiWidget] 🔔 New notification:', notif.title);
+                                
+                                // Show browser notification
+                                this.showBrowserNotification(
+                                    notif.title || 'Help Desk Update',
+                                    notif.body || notif.message || 'You have a new update on your ticket'
+                                );
+                                
+                                // Show in-app toast
+                                this.showNotificationToast(
+                                    notif.title || 'Help Desk Update',
+                                    notif.body || notif.message || 'You have a new update',
+                                    notif.ticketId
+                                );
+                                
+                                // Play notification sound
+                                this.playNotificationSound();
+                            }
+                        }
+                    });
+                    
+                    // Update unread count
+                    const unread = snapshot.docs.filter(d => !readIds.includes(d.id));
+                    this.unreadNotifications = unread.length;
+                    this.updatePWABadge();
+                    
+                    console.log('[AvantiWidget] ✓ Unread notifications:', this.unreadNotifications);
+                }, (error) => {
+                    console.error('[AvantiWidget] Notification listener error:', error);
+                    // Fallback to polling if listener fails
+                    this.fallbackNotificationPolling(userId);
+                });
+        } catch (err) {
+            console.log('[AvantiWidget] Setting up polling fallback:', err);
+            this.fallbackNotificationPolling(userId);
+        }
+    },
+    
+    // Fallback polling if real-time listener fails
+    fallbackNotificationPolling: function(userId) {
         const fetchUserNotifications = async () => {
             try {
                 const snap = await firebase.firestore().collection('user_notifications')
@@ -1738,17 +1697,12 @@
                 
                 this.unreadNotifications = unread.length;
                 this.updatePWABadge();
-                
-                console.log('[AvantiWidget] ✓ Unread notifications:', this.unreadNotifications);
             } catch (err) {
-                console.log('[AvantiWidget] Notifications error:', err);
+                console.log('[AvantiWidget] Polling error:', err);
             }
         };
         
-        // Initial fetch
         fetchUserNotifications();
-        
-        // ✅ COST FIX: Refresh every 3 minutes instead of 60 seconds (saves ~₹500/month)
         this.userNotificationInterval = setInterval(fetchUserNotifications, 180000);
     },
     
