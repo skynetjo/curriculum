@@ -34704,33 +34704,14 @@ const NotificationManager = {
         if (popup) popup.innerHTML = '';
     },
     
-    // ✅ FIX: Track sending state
-    _isSendingReply: false,
-    
     // Send reply to ticket directly from notification popup
     sendTicketReply: async function(ticketId) {
-        // ✅ FIX: Prevent duplicate submissions
-        if (this._isSendingReply) {
-            console.log('[NotificationManager] Already sending reply, ignoring duplicate click');
-            return;
-        }
-        
         const replyInput = document.getElementById('ticketReplyInput');
         const replyText = replyInput?.value?.trim();
-        const sendBtn = document.querySelector(`[onclick="NotificationManager.sendTicketReply('${ticketId}')"]`);
         
         if (!replyText) {
             alert('Please enter a reply message');
             return;
-        }
-        
-        // ✅ FIX: Set sending state and show loading
-        this._isSendingReply = true;
-        const originalBtnText = sendBtn?.innerHTML;
-        if (sendBtn) {
-            sendBtn.innerHTML = '<span class="sending-spinner"></span> Sending...';
-            sendBtn.disabled = true;
-            sendBtn.style.opacity = '0.7';
         }
         
         try {
@@ -34769,14 +34750,6 @@ const NotificationManager = {
         } catch (e) {
             console.error('Error sending reply:', e);
             alert('Failed to send reply. Please try again.');
-        } finally {
-            // ✅ FIX: Always reset sending state
-            this._isSendingReply = false;
-            if (sendBtn) {
-                sendBtn.innerHTML = originalBtnText || 'Send Reply';
-                sendBtn.disabled = false;
-                sendBtn.style.opacity = '1';
-            }
         }
     },
     
@@ -34935,6 +34908,5 @@ window.addEventListener('appinstalled', () => {
   deferredPrompt = null;
 });
 </script>
-<script src="avanti-widget.js"></script>
 </body>
 </html>
