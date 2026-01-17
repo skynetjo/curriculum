@@ -1637,8 +1637,6 @@ if (welcomeScroll && !this._welcomeHTML) {
         searchBox.onclick = () => this.showFAQs();
     }
 },
-
-        },
         
         showChat: function() {
             this.setActiveView('chatView');
