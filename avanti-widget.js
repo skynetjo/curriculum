@@ -1625,11 +1625,21 @@ if (welcomeScroll && !this._welcomeHTML) {
         showWelcome: function() {
     this.setActiveView('welcomeView');
     this.setActiveNav('navWelcome');
+    const userName =
+    this.user?.name ||
+    this.user?.displayName ||
+    this.user?.fullName ||
+    'there';
+
 
     const container = document.querySelector('.avanti-welcome-scroll');
     if (container && this._welcomeHTML) {
         container.innerHTML = this._welcomeHTML;
     }
+    const heading = container.querySelector('h2');
+if (heading) {
+    heading.innerText = `Namaste ${userName}! How can we help you?`;
+}
 
     // Re-attach FAQ search click
     const searchBox = container?.querySelector('.avanti-search-box');
@@ -1712,6 +1722,7 @@ if (welcomeScroll && !this._welcomeHTML) {
                     console.log('[AvantiWidget] ✓ FAQs:', this.faqs.length);
                 })
                 .catch(e => console.log('[AvantiWidget] FAQ error:', e));
+            console.log('[FAQs loaded]', this.faqs);
             if (this.currentView === 'faqView') {
     this.showFAQs();
 }
