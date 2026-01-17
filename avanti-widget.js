@@ -1720,16 +1720,105 @@
                 return;
             }
 
-            container.innerHTML = `<div class="avanti-section-label">FAQs</div>`;
-            
+            // Group FAQs by category
+            const categories = {};
             this.faqs.forEach(faq => {
-                container.innerHTML += `
-                    <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${faq.id}')">
-                        <h4>${faq.question}</h4>
-                        <div class="category">${faq.category || 'General'}</div>
+                const cat = faq.category || 'General';
+                if (!categories[cat]) categories[cat] = [];
+                categories[cat].push(faq);
+            });
+
+            let faqsHTML = '';
+            
+            // Build FAQ cards grouped by category
+            Object.keys(categories).forEach(category => {
+                faqsHTML += `<div style="font-size: 12px; font-weight: 700; color: var(--km-primary); text-transform: uppercase; letter-spacing: 0.5px; margin: 16px 0 10px 0;">${category}</div>`;
+                
+                categories[category].forEach(faq => {
+                    faqsHTML += `
+                        <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${faq.id}')" style="background: #FFFFFF; border: 1px solid var(--km-border); border-radius: 12px; padding: 16px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <h4 style="font-size: 14px; font-weight: 600; color: var(--km-text); margin: 0; flex: 1;">${faq.question}</h4>
+                                <span style="color: var(--km-primary); font-size: 18px; margin-left: 12px;">›</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+
+            container.innerHTML = `
+                <div style="margin-bottom: 16px;">
+                    <h2 style="font-size: 20px; font-weight: 700; color: var(--km-text); margin-bottom: 4px;">Frequently Asked Questions</h2>
+                    <p style="font-size: 13px; color: var(--km-text-muted);">Find answers to common questions</p>
+                </div>
+                
+                <div style="position: relative; margin-bottom: 16px;">
+                    <input type="text" id="faqSearchInput" placeholder="Search FAQs..." 
+                        style="width: 100%; padding: 12px 16px 12px 40px; border: 1px solid var(--km-border); border-radius: 12px; font-size: 14px; background: #FFFFFF;"
+                        oninput="AvantiWidget.filterFAQs(this.value)">
+                    <span style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--km-text-muted);">🔍</span>
+                </div>
+                
+                <div id="faqListContent">
+                    ${faqsHTML}
+                </div>
+                
+                <div style="margin-top: 20px; padding: 16px; background: #F3F4F6; border-radius: 12px; text-align: center;">
+                    <p style="font-size: 13px; color: var(--km-text-secondary); margin-bottom: 10px;">
+                        Can't find what you're looking for?
+                    </p>
+                    <button class="avanti-btn-primary" onclick="AvantiWidget.showForm()" style="width: auto; padding: 10px 20px;">
+                        🎫 Raise a Ticket
+                    </button>
+                </div>
+            `;
+        },
+        
+        // Filter FAQs based on search
+        filterFAQs: function(query) {
+            const q = query.toLowerCase().trim();
+            const container = document.getElementById('faqListContent');
+            if (!container) return;
+            
+            if (!q) {
+                // Show all FAQs
+                this.showFAQs();
+                return;
+            }
+            
+            // Filter FAQs
+            const filtered = this.faqs.filter(faq => 
+                faq.question.toLowerCase().includes(q) || 
+                faq.answer.toLowerCase().includes(q) ||
+                (faq.category && faq.category.toLowerCase().includes(q))
+            );
+            
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="avanti-empty" style="padding: 30px 0;">
+                        <div class="avanti-empty-icon">🔍</div>
+                        <p>No FAQs found for "${query}"</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            filtered.forEach(faq => {
+                html += `
+                    <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${faq.id}')" style="background: #FFFFFF; border: 1px solid var(--km-border); border-radius: 12px; padding: 16px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="flex: 1;">
+                                <h4 style="font-size: 14px; font-weight: 600; color: var(--km-text); margin: 0 0 4px 0;">${faq.question}</h4>
+                                <span style="font-size: 11px; color: var(--km-primary);">${faq.category || 'General'}</span>
+                            </div>
+                            <span style="color: var(--km-primary); font-size: 18px; margin-left: 12px;">›</span>
+                        </div>
                     </div>
                 `;
             });
+            
+            container.innerHTML = html;
         },
         
         showTickets: function() {
@@ -1832,16 +1921,40 @@
             const faq = this.faqs.find(f => f.id === id);
             if (!faq) return;
             
-            const m = document.getElementById('chatMessages');
-            m.innerHTML += `
-                <div class="avanti-message user">
-                    <div class="avanti-message-bubble">${faq.question}</div>
+            // Show answer in the FAQ view itself, not in chat
+            const container = document.getElementById('faqList');
+            if (!container) return;
+            
+            container.innerHTML = `
+                <button class="avanti-back-btn" onclick="AvantiWidget.showFAQs()">← Back to FAQs</button>
+                
+                <div style="background: linear-gradient(135deg, #5D5FEF 0%, #7C3AED 100%); border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+                    <div style="font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+                        ${faq.category || 'General'}
+                    </div>
+                    <h3 style="font-size: 18px; font-weight: 700; color: #FFFFFF; line-height: 1.4;">
+                        ${faq.question}
+                    </h3>
                 </div>
-                <div class="avanti-message bot">
-                    <div class="avanti-message-bubble">${faq.answer}</div>
+                
+                <div style="background: #FFFFFF; border-radius: 16px; padding: 20px; border: 1px solid var(--km-border);">
+                    <div style="font-size: 12px; font-weight: 600; color: var(--km-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+                        Answer
+                    </div>
+                    <div style="font-size: 15px; color: var(--km-text); line-height: 1.7;">
+                        ${faq.answer}
+                    </div>
+                </div>
+                
+                <div style="margin-top: 24px; padding: 16px; background: #FEF3C7; border-radius: 12px; text-align: center;">
+                    <p style="font-size: 14px; color: #92400E; margin-bottom: 12px;">
+                        Didn't find what you were looking for?
+                    </p>
+                    <button class="avanti-btn-primary" onclick="AvantiWidget.showForm()">
+                        🎫 Raise a Ticket
+                    </button>
                 </div>
             `;
-            m.scrollTop = m.scrollHeight;
         },
         
         // Send message
