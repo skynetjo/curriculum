@@ -420,44 +420,12 @@
     font-size: 14px;
 }
 
-/* Info Card */
-.avanti-info-card {
-    background: #FFFFFF;
-    border-radius: 20px;
-    padding: 24px;
-    margin-bottom: 20px;
+/* Help Text */
+.avanti-help-text {
     text-align: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.avanti-info-text {
+    padding: 16px 0;
     color: var(--km-text-secondary);
-    font-size: 15px;
-    margin-bottom: 20px;
-}
-
-/* Send Message Button - Purple Pill */
-.avanti-message-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px 32px;
-    background: var(--km-primary);
-    color: #FFFFFF;
-    border: none;
-    border-radius: 50px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    width: 100%;
-    max-width: 280px;
-}
-
-.avanti-message-btn:hover {
-    background: var(--km-primary-dark);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(93, 95, 239, 0.4);
+    font-size: 14px;
 }
 
 /* Quick Actions Section */
@@ -1235,7 +1203,7 @@
         <!-- Greeting -->
         <div class="avanti-greeting" id="avantiGreeting">
             <button class="avanti-greeting-close" onclick="event.stopPropagation(); AvantiWidget.hideGreeting()">×</button>
-            <div class="avanti-greeting-text">
+            <div class="avanti-greeting-text" id="greetingBubbleText">
                 🙏 <strong>Namaste!</strong> Need help with the Curriculum Tracker?
             </div>
         </div>
@@ -1276,8 +1244,8 @@
                         <!-- Hero Card -->
                         <div class="avanti-hero-card">
                             <span class="avanti-hero-emoji">👋</span>
-                            <div class="avanti-hero-label">HELLO</div>
-                            <div class="avanti-hero-title">How can we help you?</div>
+                            <div class="avanti-hero-label" id="heroLabel">GOOD MORNING</div>
+                            <div class="avanti-hero-title" id="heroTitle">Namaste! How can we help you?</div>
                             
                             <div class="avanti-search-box" onclick="AvantiWidget.showChat()">
                                 <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
@@ -1285,12 +1253,9 @@
                             </div>
                         </div>
                         
-                        <!-- Info Card -->
-                        <div class="avanti-info-card">
-                            <p class="avanti-info-text">We're here to help you get instant answers.</p>
-                            <button class="avanti-message-btn" onclick="AvantiWidget.showChat()">
-                                Send us a message
-                            </button>
+                        <!-- Help Text -->
+                        <div class="avanti-help-text">
+                            We're here to help you get instant answers.
                         </div>
                         
                         <!-- Quick Help -->
@@ -1415,6 +1380,18 @@
         unreadNotifications: 0,
         isUploadingScreenshot: false,
         
+        // Get time-based greeting
+        getGreeting: function() {
+            const hour = new Date().getHours();
+            if (hour < 12) {
+                return { label: 'GOOD MORNING', emoji: '🌅' };
+            } else if (hour < 17) {
+                return { label: 'GOOD AFTERNOON', emoji: '☀️' };
+            } else {
+                return { label: 'GOOD EVENING', emoji: '🌙' };
+            }
+        },
+        
         // Initialize
         init: function() {
             console.log('[AvantiWidget] v7.0 Kommunicate Exact - Starting...');
@@ -1425,10 +1402,45 @@
             setTimeout(() => this.showGreeting(), 8000);
             setTimeout(() => this.updateNotificationBadge(), 500);
             
+            // Update welcome text after a short delay to allow user detection
+            setTimeout(() => this.updateWelcomeText(), 100);
+            
             this.ensureVisible();
             setInterval(() => this.ensureVisible(), 2000);
             
             console.log('[AvantiWidget] Init complete');
+        },
+        
+        // Update welcome text with user name and time-based greeting
+        updateWelcomeText: function() {
+            const greeting = this.getGreeting();
+            const userName = this.user?.name || '';
+            
+            // Update hero label
+            const heroLabel = document.getElementById('heroLabel');
+            if (heroLabel) {
+                heroLabel.textContent = greeting.label;
+            }
+            
+            // Update hero title with Namaste + username
+            const heroTitle = document.getElementById('heroTitle');
+            if (heroTitle) {
+                if (userName) {
+                    heroTitle.textContent = `Namaste ${userName}! How can we help you?`;
+                } else {
+                    heroTitle.textContent = 'Namaste! How can we help you?';
+                }
+            }
+            
+            // Update greeting bubble
+            const greetingText = document.getElementById('greetingBubbleText');
+            if (greetingText) {
+                if (userName) {
+                    greetingText.innerHTML = `🙏 <strong>Namaste ${userName}!</strong> Need help with the Curriculum Tracker?`;
+                } else {
+                    greetingText.innerHTML = `🙏 <strong>Namaste!</strong> Need help with the Curriculum Tracker?`;
+                }
+            }
         },
         
         ensureVisible: function() {
@@ -1485,6 +1497,8 @@
                                 grade: p.grade || p.class || ''
                             };
                             console.log('[AvantiWidget] ✓ Student:', this.user.name);
+                            // Update welcome text with student name
+                            setTimeout(() => this.updateWelcomeText(), 50);
                             return;
                         }
                     }
@@ -1515,6 +1529,9 @@
                 school: ''
             };
             
+            // Update welcome text with teacher name
+            this.updateWelcomeText();
+            
             try {
                 firebase.firestore().collection('teachers')
                     .where('email', '==', u.email)
@@ -1525,6 +1542,8 @@
                             const t = snap.docs[0].data();
                             this.user.name = t.name || this.user.name;
                             this.user.school = t.school || t.center || '';
+                            // Update again with full name from Firestore
+                            this.updateWelcomeText();
                         }
                     }).catch(() => {});
             } catch (e) {}
