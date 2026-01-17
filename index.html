@@ -7643,16 +7643,21 @@ function AssignAssetModal({ asset, students, onAssign, onClose, onSelectCopy, cu
     }
   };
 
+  // Handle student selection with touch-friendly click
+  const handleStudentClick = (studentId) => {
+    setSelectedStudent(studentId);
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
+      <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">📤 Assign Asset</h3>
-          <button onClick={onClose} className="text-2xl text-gray-500">✕</button>
+          <h3 className="text-xl font-bold">📚 Assign Asset</h3>
+          <button onClick={onClose} className="text-2xl text-gray-500 hover:text-gray-700 w-10 h-10 flex items-center justify-center">✕</button>
         </div>
 
         <div className="bg-blue-50 p-4 rounded-xl mb-4">
-          <p className="font-bold">{currentAsset.title}</p>
+          <p className="font-bold text-gray-800">{currentAsset.title}</p>
           <p className="text-sm text-gray-600">
             {currentAsset.assetType === 'book' ? '📚 Book' : '💻 Chromebook'} 
             {currentAsset.copyNumber && ` • Copy #${currentAsset.copyNumber}`}
@@ -7662,11 +7667,11 @@ function AssignAssetModal({ asset, students, onAssign, onClose, onSelectCopy, cu
         {/* Copy Selection if multiple available */}
         {hasMultipleCopies && (
           <div className="mb-4">
-            <label className="block text-sm font-bold mb-2">Select Copy ({asset.availableCopies.length} available)</label>
+            <label className="block text-sm font-bold mb-2 text-gray-700">Select Copy ({asset.availableCopies.length} available)</label>
             <select 
               value={selectedCopy} 
               onChange={(e) => setSelectedCopy(e.target.value)} 
-              className="w-full border-2 px-4 py-3 rounded-xl bg-green-50"
+              className="w-full border-2 px-4 py-3 rounded-xl bg-green-50 text-base"
             >
               {asset.availableCopies.map(copy => (
                 <option key={copy.docId} value={copy.docId}>
@@ -7677,37 +7682,141 @@ function AssignAssetModal({ asset, students, onAssign, onClose, onSelectCopy, cu
           </div>
         )}
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-bold mb-2">Search Student</label>
-            <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by name or ID..." className="w-full border-2 px-4 py-3 rounded-xl" />
+        <div className="space-y-3">
+          {/* Search and Filter Row - Compact Layout */}
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <input 
+                type="text" 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+                placeholder="🔍 Search name or ID..." 
+                className="w-full border-2 px-3 py-2.5 rounded-xl text-base"
+              />
+            </div>
+            <div className="w-32">
+              <select 
+                value={selectedGrade} 
+                onChange={(e) => setSelectedGrade(e.target.value)} 
+                className="w-full border-2 px-2 py-2.5 rounded-xl bg-yellow-50 text-base"
+              >
+                <option value="all">All</option>
+                {availableGrades.map(grade => (
+                  <option key={grade} value={grade}>Class {grade}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
+          {/* Student List - Touch-Friendly Cards */}
           <div>
-            <label className="block text-sm font-bold mb-2">Filter by Grade</label>
-            <select value={selectedGrade} onChange={(e) => setSelectedGrade(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl bg-yellow-50">
-              <option value="all">All Grades</option>
-              {availableGrades.map(grade => (
-                <option key={grade} value={grade}>Class {grade}</option>
-              ))}
-            </select>
+            <label className="block text-sm font-bold mb-2 text-gray-700">
+              Select Student * 
+              <span className="font-normal text-gray-500 ml-1">({filteredStudents.length} students)</span>
+            </label>
+            
+            <div 
+              className="border-2 rounded-xl overflow-hidden"
+              style={{ 
+                maxHeight: '280px', 
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch'
+              }}
+            >
+              {filteredStudents.length === 0 ? (
+                <div className="p-4 text-center text-gray-500">
+                  No students found. Try adjusting your search or filter.
+                </div>
+              ) : (
+                filteredStudents.map((student, index) => {
+                  const studentId = student.studentId || student.id;
+                  const isSelected = selectedStudent === studentId;
+                  return (
+                    <div
+                      key={studentId}
+                      onClick={() => handleStudentClick(studentId)}
+                      onTouchEnd={(e) => { e.preventDefault(); handleStudentClick(studentId); }}
+                      className={`
+                        cursor-pointer transition-all duration-150 select-none
+                        ${isSelected 
+                          ? 'bg-green-100 border-l-4 border-green-500' 
+                          : 'bg-white hover:bg-gray-50 border-l-4 border-transparent'
+                        }
+                        ${index !== filteredStudents.length - 1 ? 'border-b border-gray-100' : ''}
+                      `}
+                      style={{ 
+                        padding: '14px 16px',
+                        minHeight: '60px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px'
+                      }}
+                    >
+                      {/* Selection Indicator */}
+                      <div 
+                        className={`
+                          w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0
+                          ${isSelected 
+                            ? 'bg-green-500 border-green-500' 
+                            : 'border-gray-300 bg-white'
+                          }
+                        `}
+                      >
+                        {isSelected && (
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
+                          </svg>
+                        )}
+                      </div>
+                      
+                      {/* Student Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-semibold truncate ${isSelected ? 'text-green-800' : 'text-gray-800'}`}>
+                          {student.name}
+                        </p>
+                        <p className="text-sm text-gray-500 truncate">
+                          Class {student.grade || student.class} • {studentId}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            
+            {/* Selected Student Confirmation */}
+            {selectedStudent && (
+              <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                <p className="text-sm text-green-700 font-medium">
+                  ✓ Selected: {students.find(s => (s.studentId || s.id) === selectedStudent)?.name}
+                </p>
+              </div>
+            )}
           </div>
 
-          <div>
-            <label className="block text-sm font-bold mb-2">Select Student * ({filteredStudents.length} students)</label>
-            <select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)} className="w-full border-2 px-4 py-3 rounded-xl" size={6}>
-              <option value="">-- Select --</option>
-              {filteredStudents.map(student => (
-                <option key={student.studentId || student.id} value={student.studentId || student.id}>
-                  {student.name} (Class {student.grade || student.class}) - {student.studentId || student.id}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-3 bg-gray-200 rounded-xl font-semibold">Cancel</button>
-            <button type="button" onClick={handleAssign} className="flex-1 px-4 py-3 bg-green-500 text-white rounded-xl font-semibold">Assign</button>
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-3">
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="flex-1 px-4 py-3.5 bg-gray-100 hover:bg-gray-200 rounded-xl font-semibold text-gray-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              type="button" 
+              onClick={handleAssign} 
+              disabled={!selectedStudent}
+              className={`
+                flex-1 px-4 py-3.5 rounded-xl font-semibold transition-colors
+                ${selectedStudent 
+                  ? 'bg-green-500 hover:bg-green-600 text-white' 
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }
+              `}
+            >
+              {selectedStudent ? '✓ Assign' : 'Select Student'}
+            </button>
           </div>
         </div>
       </div>
