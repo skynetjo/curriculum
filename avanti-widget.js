@@ -1373,12 +1373,6 @@
                     <span class="avanti-nav-label">Tickets</span>
                     <span class="avanti-nav-badge" id="ticketsBadge"></span>
                 </button>
-                <button class="avanti-nav-btn" id="navMinimize" onclick="AvantiWidget.close()">
-                    <div class="avanti-nav-icon">
-                        <svg viewBox="0 0 24 24"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
-                    </div>
-                    <span class="avanti-nav-label">Minimize</span>
-                </button>
             </div>
         </div>
     </div>
@@ -2099,6 +2093,10 @@
                 `).join('');
             }
             
+            // Determine status display and actions
+            const isResolved = t.status === 'resolved';
+            const statusColor = isResolved ? '#10B981' : (t.status === 'in-progress' ? '#F59E0B' : '#3B82F6');
+            
             fc.innerHTML = `
                 <button class="avanti-back-btn" onclick="AvantiWidget.showTickets()">← Back</button>
                 
@@ -2132,40 +2130,114 @@
                     </div>
                 ` : ''}
                 
-                ${t.status !== 'resolved' ? `
+                ${!isResolved ? `
                     <div class="avanti-form-group">
                         <label class="avanti-form-label">Add Reply</label>
                         <textarea class="avanti-form-textarea" id="ticketReply" placeholder="Type your reply..."></textarea>
                     </div>
                     <button class="avanti-btn-primary" onclick="AvantiWidget.sendTicketReply('${docId}')">Send Reply</button>
+                    
+                    <button class="avanti-btn-secondary" style="background: #FEE2E2; color: #DC2626; border-color: #FECACA;" onclick="AvantiWidget.closeTicket('${docId}')">
+                        ✕ Close Ticket
+                    </button>
                 ` : `
-                    <div style="text-align: center; padding: 20px; background: #D1FAE5; border-radius: 12px;">
+                    <div style="text-align: center; padding: 20px; background: #D1FAE5; border-radius: 12px; margin-bottom: 12px;">
                         <span style="font-size: 24px;">✅</span>
                         <p style="color: #065F46; font-weight: 600; margin-top: 8px;">Ticket resolved</p>
                     </div>
+                    
+                    <button class="avanti-btn-secondary" style="background: #DBEAFE; color: #2563EB; border-color: #BFDBFE;" onclick="AvantiWidget.reopenTicket('${docId}')">
+                        🔄 Reopen Ticket
+                    </button>
                 `}
             `;
         },
         
         sendTicketReply: async function(docId) {
-            const reply = document.getElementById('ticketReply')?.value.trim();
+            const replyInput = document.getElementById('ticketReply');
+            const reply = replyInput?.value.trim();
             if (!reply) return alert('Please enter a reply');
+            
+            // Disable input while sending
+            if (replyInput) replyInput.disabled = true;
+            
+            const newReply = {
+                message: reply,
+                isAdmin: false,
+                userName: this.user?.name || 'User',
+                timestamp: new Date().toISOString()
+            };
             
             try {
                 await firebase.firestore().collection('helpdesk_tickets').doc(docId).update({
-                    replies: firebase.firestore.FieldValue.arrayUnion({
-                        message: reply,
-                        isAdmin: false,
-                        userName: this.user?.name || 'User',
-                        timestamp: new Date().toISOString()
-                    }),
+                    replies: firebase.firestore.FieldValue.arrayUnion(newReply),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 
-                this.loadTickets();
+                // Update local ticket data immediately for instant feedback
+                const ticket = this.tickets.find(t => t.docId === docId);
+                if (ticket) {
+                    if (!ticket.replies) ticket.replies = [];
+                    ticket.replies.push(newReply);
+                }
+                
+                // Re-render the ticket view with updated data
                 this.viewTicket(docId);
+                this.showToast('Reply sent! ✓');
+                
             } catch (e) {
+                console.log('[AvantiWidget] Reply error:', e);
                 alert('Failed to send reply');
+                if (replyInput) replyInput.disabled = false;
+            }
+        },
+        
+        // Close ticket by user
+        closeTicket: async function(docId) {
+            if (!confirm('Are you sure you want to close this ticket?')) return;
+            
+            try {
+                await firebase.firestore().collection('helpdesk_tickets').doc(docId).update({
+                    status: 'resolved',
+                    resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    resolvedBy: 'user',
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Update local data
+                const ticket = this.tickets.find(t => t.docId === docId);
+                if (ticket) ticket.status = 'resolved';
+                
+                this.viewTicket(docId);
+                this.updateTicketsBadge();
+                this.showToast('Ticket closed ✓');
+                
+            } catch (e) {
+                console.log('[AvantiWidget] Close ticket error:', e);
+                alert('Failed to close ticket');
+            }
+        },
+        
+        // Reopen ticket by user
+        reopenTicket: async function(docId) {
+            try {
+                await firebase.firestore().collection('helpdesk_tickets').doc(docId).update({
+                    status: 'open',
+                    reopenedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Update local data
+                const ticket = this.tickets.find(t => t.docId === docId);
+                if (ticket) ticket.status = 'open';
+                
+                this.viewTicket(docId);
+                this.updateTicketsBadge();
+                this.showToast('Ticket reopened ✓');
+                
+            } catch (e) {
+                console.log('[AvantiWidget] Reopen ticket error:', e);
+                alert('Failed to reopen ticket');
             }
         },
         
