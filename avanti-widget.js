@@ -1335,6 +1335,10 @@
                     </div>
                     <div class="avanti-tickets-list" id="ticketsList"></div>
                 </div>
+                <!-- FAQ View -->
+<div class="avanti-view" id="faqView">
+    <div class="avanti-welcome-scroll" id="faqList"></div>
+</div>
                 
                 <!-- Form View -->
                 <div class="avanti-view" id="formView">
@@ -1654,17 +1658,14 @@ if (welcomeScroll && !this._welcomeHTML) {
             setTimeout(() => document.getElementById('chatInput')?.focus(), 100);
         },
         
-        showFAQs: function() {
-    this.setActiveView('welcomeView');
+        showFAQs: function () {
+    this.setActiveView('faqView');
     this.setActiveNav('navFaqs');
 
-    const container = document.querySelector('.avanti-welcome-scroll');
-
+    const container = document.getElementById('faqList');
     if (!container) return;
 
-    container.innerHTML = `
-        <div class="avanti-section-label">FAQs</div>
-    `;
+    container.innerHTML = `<div class="avanti-section-label">FAQs</div>`;
 
     if (!this.faqs || this.faqs.length === 0) {
         container.innerHTML += `
@@ -1713,6 +1714,9 @@ if (welcomeScroll && !this._welcomeHTML) {
                     console.log('[AvantiWidget] ✓ FAQs:', this.faqs.length);
                 })
                 .catch(e => console.log('[AvantiWidget] FAQ error:', e));
+            if (this.currentView === 'faqView') {
+    this.showFAQs();
+}
         },
         
         // Search
@@ -1859,6 +1863,10 @@ if (welcomeScroll && !this._welcomeHTML) {
         
         // Tickets
         loadTickets: function() {
+            if (!this.user) {
+    setTimeout(() => this.loadTickets(), 500);
+    return;
+}
             const list = document.getElementById('ticketsList');
             
             if (!this.firebaseReady) {
