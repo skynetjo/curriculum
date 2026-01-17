@@ -1550,34 +1550,35 @@ if (welcomeScroll && !this._welcomeHTML) {
         },
         
         setTeacherUser: function(u) {
-            this.user = {
-                type: 'teacher',
-                name: u.displayName || u.email?.split('@')[0] || '',
-                email: u.email || '',
-                school: ''
-            };
-            this._userNameCache = this.user.name || '';
-        }
-            
-            // Update welcome text with teacher name
-            this.updateWelcomeText();
-            
-            try {
-                firebase.firestore().collection('teachers')
-                    .where('email', '==', u.email)
-                    .limit(1)
-                    .get()
-                    .then(snap => {
-                        if (!snap.empty) {
-                            const t = snap.docs[0].data();
-                            this.user.name = t.name || this.user.name;
-                            this.user.school = t.school || t.center || '';
-                            // Update again with full name from Firestore
-                            this.updateWelcomeText();
-                        }
-                    }).catch(() => {});
-            } catch (e) {}
-        },
+    this.user = {
+        type: 'teacher',
+        name: u.displayName || u.email?.split('@')[0] || '',
+        email: u.email || '',
+        school: ''
+    };
+
+    this._userNameCache = this.user.name || '';
+
+    // Update welcome text with teacher name
+    this.updateWelcomeText();
+
+    try {
+        firebase.firestore().collection('teachers')
+            .where('email', '==', u.email)
+            .limit(1)
+            .get()
+            .then(snap => {
+                if (!snap.empty) {
+                    const t = snap.docs[0].data();
+                    this.user.name = t.name || this.user.name;
+                    this.user.school = t.school || t.center || '';
+                    this._userNameCache = this.user.name || '';
+                    this.updateWelcomeText();
+                }
+            })
+            .catch(() => {});
+    } catch (e) {}
+},
         
         // Greeting
         showGreeting: function() {
