@@ -1641,11 +1641,13 @@
 
     const container = document.querySelector('.avanti-welcome-scroll');
 
+    if (!container) return;
+
     container.innerHTML = `
         <div class="avanti-section-label">FAQs</div>
     `;
 
-    if (this.faqs.length === 0) {
+    if (!this.faqs || this.faqs.length === 0) {
         container.innerHTML += `
             <div class="avanti-empty">
                 <div class="avanti-empty-icon">😕</div>
@@ -1667,17 +1669,6 @@
         `;
     });
 },
-            } else {
-                m.innerHTML += `
-                    <div class="avanti-message bot">
-                        <div class="avanti-message-bubble">
-                            No FAQs available yet. Please raise a ticket for help!
-                        </div>
-                    </div>
-                    <button class="avanti-btn-primary" style="margin: 8px 0; max-width: 85%;" onclick="AvantiWidget.showForm()">🎫 Raise a Ticket</button>
-                `;
-            }
-        },
         
         showTickets: function() {
             this.setActiveView('ticketsView');
