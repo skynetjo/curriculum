@@ -1709,11 +1709,15 @@
                     return;
                 }
                 
+                // Show error if there was one
+                const errorMsg = this._faqError ? `<p style="font-size: 11px; color: #999; margin-top: 8px;">Error: ${this._faqError}</p>` : '';
+                
                 container.innerHTML = `
                     <div class="avanti-section-label">FAQs</div>
                     <div class="avanti-empty">
                         <div class="avanti-empty-icon">😕</div>
                         <p>No FAQs available yet.</p>
+                        ${errorMsg}
                     </div>
                     <button class="avanti-btn-primary" onclick="AvantiWidget.showForm()">
                         🎫 Raise a Ticket
@@ -1753,13 +1757,23 @@
                 return;
             }
             
+            console.log('[AvantiWidget] Loading FAQs from helpdesk_faqs collection...');
+            
+            // Simple query without orderBy to avoid index issues
             firebase.firestore().collection('helpdesk_faqs')
-                .orderBy('order', 'asc')
-                .limit(20)
+                .limit(50)
                 .get()
                 .then(snap => {
                     this.faqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    console.log('[AvantiWidget] ✓ FAQs loaded:', this.faqs.length);
+                    
+                    // Sort client-side by 'order' field (if exists) or by question
+                    this.faqs.sort((a, b) => {
+                        const orderA = a.order ?? 999;
+                        const orderB = b.order ?? 999;
+                        return orderA - orderB;
+                    });
+                    
+                    console.log('[AvantiWidget] ✓ FAQs loaded:', this.faqs.length, this.faqs);
                     
                     // If user is currently viewing FAQs, refresh the display
                     if (this.currentView === 'faqView') {
@@ -1767,7 +1781,14 @@
                     }
                 })
                 .catch(e => {
-                    console.log('[AvantiWidget] FAQ error:', e);
+                    console.log('[AvantiWidget] FAQ error:', e.code, e.message || e);
+                    this.faqs = [];
+                    this._faqError = e.message || 'Unknown error';
+                    
+                    // If user is viewing FAQs, show error
+                    if (this.currentView === 'faqView') {
+                        this.showFAQs();
+                    }
                 });
         },
         
@@ -1942,31 +1963,56 @@
             
             list.innerHTML = '<div class="avanti-empty"><div class="avanti-empty-icon">⏳</div><p>Loading tickets...</p></div>';
             
-            let query = firebase.firestore().collection('helpdesk_tickets')
-                .orderBy('createdAt', 'desc')
-                .limit(20);
+            console.log('[AvantiWidget] Loading tickets for user:', this.user);
             
-            if (this.user) {
-                if (this.user.type === 'student' && this.user.studentId) {
-                    query = query.where('studentId', '==', String(this.user.studentId));
-                } else if (this.user.type === 'teacher' && this.user.email) {
-                    query = query.where('userEmail', '==', this.user.email);
-                }
-            }
-            
-            query.get()
+            // First try: Simple query without any filters (to test if collection is accessible)
+            firebase.firestore().collection('helpdesk_tickets')
+                .limit(50)
+                .get()
                 .then(snap => {
-                    this.tickets = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+                    console.log('[AvantiWidget] Total tickets in collection:', snap.size);
+                    
+                    // Filter client-side based on user
+                    let userTickets = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+                    
+                    // Filter by user
+                    if (this.user.type === 'student' && this.user.studentId) {
+                        const studentIdStr = String(this.user.studentId);
+                        userTickets = userTickets.filter(t => 
+                            String(t.studentId) === studentIdStr
+                        );
+                        console.log('[AvantiWidget] Filtered for student ID:', studentIdStr, '- Found:', userTickets.length);
+                    } else if (this.user.type === 'teacher' && this.user.email) {
+                        userTickets = userTickets.filter(t => 
+                            t.userEmail === this.user.email
+                        );
+                        console.log('[AvantiWidget] Filtered for email:', this.user.email, '- Found:', userTickets.length);
+                    } else if (this.user.name) {
+                        userTickets = userTickets.filter(t => 
+                            t.userName === this.user.name
+                        );
+                        console.log('[AvantiWidget] Filtered for name:', this.user.name, '- Found:', userTickets.length);
+                    }
+                    
+                    // Sort by createdAt (newest first)
+                    userTickets.sort((a, b) => {
+                        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+                        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+                        return dateB - dateA;
+                    });
+                    
+                    this.tickets = userTickets;
                     console.log('[AvantiWidget] ✓ Tickets loaded:', this.tickets.length);
                     this.renderTicketsList(this.tickets);
                     this.updateTicketsBadge();
                 })
                 .catch(e => {
-                    console.log('[AvantiWidget] Tickets error:', e);
+                    console.log('[AvantiWidget] Tickets error:', e.code, e.message);
                     list.innerHTML = `
                         <div class="avanti-empty">
                             <div class="avanti-empty-icon">😕</div>
                             <p>Could not load tickets</p>
+                            <p style="font-size: 11px; color: #999; margin-top: 8px;">${e.code || ''}: ${e.message || 'Unknown error'}</p>
                         </div>
                         <button class="avanti-btn-primary" style="margin: 20px 16px; width: calc(100% - 32px);" onclick="AvantiWidget.showForm()">🎫 Raise a Ticket</button>
                     `;
