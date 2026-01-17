@@ -26,37 +26,24 @@
     // ============================================
     const styleEl = document.createElement('style');
     styleEl.id = 'avanti-widget-styles';
-    /* ============================================
-   BLINKING YELLOW RING FOR CHAT WIDGET
-   ============================================ */
-
+    styleEl.textContent = `
+    /* BLINKING YELLOW RING */
 .avanti-fab::before {
     content: "";
     position: absolute;
-    top: -10px;
-    left: -10px;
-    width: 80px;
-    height: 80px;
+    inset: -10px;
     border-radius: 50%;
     border: 3px solid #FFD400;
     animation: avantiBlink 1.5s infinite;
+    pointer-events: none;
 }
 
 @keyframes avantiBlink {
-    0% {
-        transform: scale(0.8);
-        opacity: 0.3;
-    }
-    50% {
-        transform: scale(1.1);
-        opacity: 0.8;
-    }
-    100% {
-        transform: scale(1.4);
-        opacity: 0;
-    }
+    0% { transform: scale(0.8); opacity: 0.3; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+    100% { transform: scale(1.4); opacity: 0; }
 }
-    styleEl.textContent = `
+
 /* ============================================
    AVANTI WIDGET v7.0 - KOMMUNICATE EXACT
    ============================================ */
