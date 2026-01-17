@@ -1523,6 +1523,7 @@ if (welcomeScroll && !this._welcomeHTML) {
                                 school: p.school || p.schoolName || p.center || '',
                                 grade: p.grade || p.class || ''
                             };
+                            this._userNameCache = this.user.name || '';
                             console.log('[AvantiWidget] ✓ Student:', this.user.name);
                             // Update welcome text with student name
                             setTimeout(() => this.updateWelcomeText(), 50);
@@ -1555,6 +1556,8 @@ if (welcomeScroll && !this._welcomeHTML) {
                 email: u.email || '',
                 school: ''
             };
+            this._userNameCache = this.user.name || '';
+        }
             
             // Update welcome text with teacher name
             this.updateWelcomeText();
