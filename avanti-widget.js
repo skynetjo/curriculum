@@ -1264,7 +1264,7 @@
                             <div class="avanti-hero-label" id="heroLabel">GOOD MORNING</div>
                             <div class="avanti-hero-title" id="heroTitle">Namaste! How can we help you?</div>
                             
-                            <div class="avanti-search-box" onclick="AvantiWidget.showChat()">
+                            <div class="avanti-search-box" <div class="avanti-search-box" onclick="AvantiWidget.showFAQs()">>
                                 <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
                                 <span>Search in FAQs...</span>
                             </div>
@@ -1350,7 +1350,7 @@
                     </div>
                     <span class="avanti-nav-label">Welcome</span>
                 </button>
-                <button class="avanti-nav-btn" id="navConversations" onclick="AvantiWidget.showChat()">
+                <button class="avanti-nav-btn" id="navConversations" <div class="avanti-search-box" onclick="AvantiWidget.showFAQs()">>
                     <div class="avanti-nav-icon">
                         <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
                     </div>
@@ -1636,27 +1636,37 @@
         },
         
         showFAQs: function() {
-            this.setActiveView('chatView');
-            this.setActiveNav('navFaqs');
-            
-            const m = document.getElementById('chatMessages');
-            m.innerHTML = `
-                <div class="avanti-message bot">
-                    <div class="avanti-message-bubble">
-                        Here are the most common questions. Click any to see the answer!
-                    </div>
-                </div>
-            `;
-            
-            if (this.faqs.length > 0) {
-                this.faqs.slice(0, 8).forEach(faq => {
-                    m.innerHTML += `
-                        <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${faq.id}')">
-                            <h4>${faq.question}</h4>
-                            <div class="category">${faq.category || 'General'}</div>
-                        </div>
-                    `;
-                });
+    this.setActiveView('welcomeView');
+    this.setActiveNav('navFaqs');
+
+    const container = document.querySelector('.avanti-welcome-scroll');
+
+    container.innerHTML = `
+        <div class="avanti-section-label">FAQs</div>
+    `;
+
+    if (this.faqs.length === 0) {
+        container.innerHTML += `
+            <div class="avanti-empty">
+                <div class="avanti-empty-icon">😕</div>
+                <p>No FAQs available yet.</p>
+            </div>
+            <button class="avanti-btn-primary" onclick="AvantiWidget.showForm()">
+                🎫 Raise a Ticket
+            </button>
+        `;
+        return;
+    }
+
+    this.faqs.forEach(faq => {
+        container.innerHTML += `
+            <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${faq.id}')">
+                <h4>${faq.question}</h4>
+                <div class="category">${faq.category || 'General'}</div>
+            </div>
+        `;
+    });
+},
             } else {
                 m.innerHTML += `
                     <div class="avanti-message bot">
@@ -1860,7 +1870,7 @@
             
             if (this.user) {
                 if (this.user.type === 'student' && this.user.studentId) {
-                    query = query.where('studentId', '==', this.user.studentId);
+                    query = query.where('studentId', '==', String(this.user.studentId));
                 } else if (this.user.type === 'teacher' && this.user.email) {
                     query = query.where('userEmail', '==', this.user.email);
                 }
