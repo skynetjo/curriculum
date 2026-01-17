@@ -1426,6 +1426,12 @@
             setInterval(() => this.ensureVisible(), 2000);
             
             console.log('[AvantiWidget] Init complete');
+            // Save original welcome content
+const welcomeScroll = document.querySelector('.avanti-welcome-scroll');
+if (welcomeScroll && !this._welcomeHTML) {
+    this._welcomeHTML = welcomeScroll.innerHTML;
+}
+
         },
         
         // Update welcome text with user name and time-based greeting
@@ -1613,8 +1619,21 @@
         },
         
         showWelcome: function() {
-            this.setActiveView('welcomeView');
-            this.setActiveNav('navWelcome');
+    this.setActiveView('welcomeView');
+    this.setActiveNav('navWelcome');
+
+    const container = document.querySelector('.avanti-welcome-scroll');
+    if (container && this._welcomeHTML) {
+        container.innerHTML = this._welcomeHTML;
+    }
+
+    // Re-attach FAQ search click
+    const searchBox = container?.querySelector('.avanti-search-box');
+    if (searchBox) {
+        searchBox.onclick = () => this.showFAQs();
+    }
+},
+
         },
         
         showChat: function() {
