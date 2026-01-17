@@ -1,9 +1,9 @@
 /**
  * ============================================
- * AVANTI HELP DESK WIDGET v6.0 - KOMMUNICATE STYLE
+ * AVANTI HELP DESK WIDGET v7.0 - KOMMUNICATE EXACT
  * ============================================
  * 
- * Modern, beautiful chat widget inspired by Kommunicate.io
+ * Exact replica of Kommunicate.io design
  * Standalone widget - Include with:
  * <script src="avanti-widget.js"></script>
  * 
@@ -22,48 +22,40 @@
     document.head.appendChild(fontLink);
 
     // ============================================
-    // INJECT CSS STYLES - KOMMUNICATE INSPIRED
+    // INJECT CSS STYLES - KOMMUNICATE EXACT
     // ============================================
     const styleEl = document.createElement('style');
     styleEl.id = 'avanti-widget-styles';
     styleEl.textContent = `
 /* ============================================
-   AVANTI WIDGET v6.0 - KOMMUNICATE STYLE
-   Modern, Beautiful, Professional
+   AVANTI WIDGET v7.0 - KOMMUNICATE EXACT
    ============================================ */
 
 :root {
-    --avanti-primary: #F4B41A;
-    --avanti-primary-dark: #E8A317;
-    --avanti-primary-light: #FFF7E0;
-    --avanti-gradient: linear-gradient(135deg, #F4B41A 0%, #FF9800 100%);
-    --avanti-accent: #6366F1;
-    --avanti-accent-light: #EEF2FF;
-    --avanti-bg: #FFFFFF;
-    --avanti-bg-soft: #F8FAFC;
-    --avanti-bg-card: #FFFFFF;
-    --avanti-text: #1A1D26;
-    --avanti-text-secondary: #6B7280;
-    --avanti-text-muted: #9CA3AF;
-    --avanti-border: #E5E7EB;
-    --avanti-border-light: #F3F4F6;
-    --avanti-success: #10B981;
-    --avanti-error: #EF4444;
-    --avanti-warning: #F59E0B;
-    --avanti-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-    --avanti-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-    --avanti-shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-    --avanti-shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    --avanti-radius: 16px;
-    --avanti-radius-lg: 24px;
-    --avanti-radius-full: 9999px;
+    --km-primary: #5D5FEF;
+    --km-primary-dark: #4F46E5;
+    --km-primary-light: #EEF2FF;
+    --km-header-bg: linear-gradient(135deg, #5D5FEF 0%, #7C3AED 100%);
+    --km-accent: #5D5FEF;
+    --km-bg: #FFFFFF;
+    --km-bg-gray: #F7F8FA;
+    --km-text: #1F2937;
+    --km-text-secondary: #6B7280;
+    --km-text-muted: #9CA3AF;
+    --km-border: #E5E7EB;
+    --km-success: #10B981;
+    --km-error: #EF4444;
+    --km-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    --km-radius: 16px;
+    --km-radius-lg: 24px;
 }
 
-/* Reset for widget */
+/* Reset */
 .avanti-widget-container * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 /* ============================================
@@ -75,8 +67,8 @@
     right: 24px;
     width: 60px;
     height: 60px;
-    border-radius: var(--avanti-radius-full);
-    background: var(--avanti-gradient);
+    border-radius: 50%;
+    background: linear-gradient(135deg, #F4B41A 0%, #FF9800 100%);
     border: none;
     cursor: pointer;
     box-shadow: 0 8px 32px rgba(244, 180, 26, 0.4);
@@ -85,16 +77,11 @@
     align-items: center;
     justify-content: center;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
 }
 
 .avanti-fab:hover {
     transform: scale(1.08);
     box-shadow: 0 12px 40px rgba(244, 180, 26, 0.5);
-}
-
-.avanti-fab:active {
-    transform: scale(0.95);
 }
 
 .avanti-fab svg {
@@ -105,7 +92,7 @@
 }
 
 .avanti-fab.open svg.icon-chat { display: none; }
-.avanti-fab.open svg.icon-close { display: block; transform: rotate(0deg); }
+.avanti-fab.open svg.icon-close { display: block; }
 .avanti-fab svg.icon-close { display: none; }
 
 /* Notification Badge */
@@ -115,8 +102,8 @@
     right: -4px;
     min-width: 22px;
     height: 22px;
-    background: var(--avanti-error);
-    border-radius: var(--avanti-radius-full);
+    background: var(--km-error);
+    border-radius: 50%;
     border: 3px solid #fff;
     display: none;
     align-items: center;
@@ -124,17 +111,9 @@
     font-size: 11px;
     font-weight: 700;
     color: #fff;
-    font-family: 'Inter', sans-serif;
-    animation: badgePop 0.3s ease;
 }
 
 .avanti-fab-badge.show { display: flex; }
-
-@keyframes badgePop {
-    0% { transform: scale(0); }
-    50% { transform: scale(1.2); }
-    100% { transform: scale(1); }
-}
 
 /* ============================================
    GREETING BUBBLE
@@ -143,18 +122,17 @@
     position: fixed;
     bottom: 100px;
     right: 24px;
-    background: var(--avanti-bg);
-    border-radius: var(--avanti-radius);
+    background: var(--km-bg);
+    border-radius: var(--km-radius);
     padding: 16px 20px;
     max-width: 280px;
-    box-shadow: var(--avanti-shadow-xl);
+    box-shadow: var(--km-shadow);
     z-index: 99985;
     opacity: 0;
     visibility: hidden;
     transform: translateY(10px) scale(0.95);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid var(--avanti-border-light);
-    font-family: 'Inter', sans-serif;
+    transition: all 0.3s ease;
+    border: 1px solid var(--km-border);
 }
 
 .avanti-greeting::after {
@@ -164,10 +142,10 @@
     right: 28px;
     width: 16px;
     height: 16px;
-    background: var(--avanti-bg);
+    background: var(--km-bg);
     transform: rotate(45deg);
-    border-right: 1px solid var(--avanti-border-light);
-    border-bottom: 1px solid var(--avanti-border-light);
+    border-right: 1px solid var(--km-border);
+    border-bottom: 1px solid var(--km-border);
 }
 
 .avanti-greeting.show {
@@ -183,42 +161,36 @@
     width: 24px;
     height: 24px;
     border: none;
-    background: var(--avanti-bg-soft);
-    border-radius: var(--avanti-radius-full);
+    background: var(--km-bg-gray);
+    border-radius: 50%;
     cursor: pointer;
-    color: var(--avanti-text-muted);
+    color: var(--km-text-muted);
     font-size: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s;
-}
-
-.avanti-greeting-close:hover {
-    background: var(--avanti-border);
-    color: var(--avanti-text);
 }
 
 .avanti-greeting-text {
     font-size: 14px;
     line-height: 1.5;
-    color: var(--avanti-text);
+    color: var(--km-text);
     padding-right: 20px;
 }
 
 /* ============================================
-   MAIN PANEL
+   MAIN PANEL - KOMMUNICATE STYLE
    ============================================ */
 .avanti-panel {
     position: fixed;
     bottom: 100px;
     right: 24px;
-    width: 400px;
-    height: 620px;
+    width: 380px;
+    height: 600px;
     max-height: calc(100vh - 120px);
-    background: var(--avanti-bg-soft);
-    border-radius: var(--avanti-radius-lg);
-    box-shadow: var(--avanti-shadow-xl);
+    background: var(--km-bg);
+    border-radius: var(--km-radius-lg);
+    box-shadow: var(--km-shadow);
     z-index: 99995;
     display: flex;
     flex-direction: column;
@@ -226,9 +198,7 @@
     opacity: 0;
     visibility: hidden;
     transform: translateY(20px) scale(0.95);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    font-family: 'Inter', sans-serif;
-    border: 1px solid var(--avanti-border-light);
+    transition: all 0.3s ease;
 }
 
 .avanti-panel.open {
@@ -237,7 +207,7 @@
     transform: translateY(0) scale(1);
 }
 
-/* Mobile Responsive */
+/* Mobile */
 @media (max-width: 480px) {
     .avanti-fab {
         bottom: 80px;
@@ -265,10 +235,10 @@
 }
 
 /* ============================================
-   HEADER
+   HEADER - KOMMUNICATE PURPLE
    ============================================ */
 .avanti-header {
-    background: var(--avanti-gradient);
+    background: var(--km-header-bg);
     padding: 16px 20px;
     display: flex;
     align-items: center;
@@ -285,7 +255,7 @@
 .avanti-header-avatar {
     width: 44px;
     height: 44px;
-    border-radius: var(--avanti-radius-full);
+    border-radius: 50%;
     background: rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
@@ -297,25 +267,25 @@
 .avanti-header-avatar img {
     width: 36px;
     height: 36px;
-    border-radius: var(--avanti-radius-full);
+    border-radius: 50%;
     object-fit: cover;
 }
 
-.avanti-header-avatar .online-indicator {
+.avanti-header-avatar .online-dot {
     position: absolute;
     bottom: 2px;
     right: 2px;
     width: 10px;
     height: 10px;
-    background: var(--avanti-success);
-    border-radius: var(--avanti-radius-full);
-    border: 2px solid #F4B41A;
+    background: var(--km-success);
+    border-radius: 50%;
+    border: 2px solid #5D5FEF;
 }
 
 .avanti-header-info h1 {
     font-size: 16px;
     font-weight: 700;
-    color: #1A1D26;
+    color: #FFFFFF;
     margin-bottom: 2px;
 }
 
@@ -324,26 +294,26 @@
     align-items: center;
     gap: 6px;
     font-size: 13px;
-    color: rgba(26, 29, 38, 0.7);
+    color: rgba(255, 255, 255, 0.85);
 }
 
 .avanti-header-status::before {
     content: '';
     width: 8px;
     height: 8px;
-    background: var(--avanti-success);
-    border-radius: var(--avanti-radius-full);
+    background: #4ADE80;
+    border-radius: 50%;
 }
 
 .avanti-header-close {
     width: 36px;
     height: 36px;
-    border-radius: var(--avanti-radius);
+    border-radius: 10px;
     background: rgba(255, 255, 255, 0.2);
     border: none;
     cursor: pointer;
-    color: #1A1D26;
-    font-size: 20px;
+    color: #FFFFFF;
+    font-size: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -355,236 +325,218 @@
 }
 
 /* ============================================
-   BODY CONTAINER
+   BODY
    ============================================ */
 .avanti-body {
     flex: 1;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    background: var(--avanti-bg-soft);
+    background: var(--km-bg-gray);
 }
 
 /* ============================================
-   WELCOME VIEW - KOMMUNICATE STYLE
+   VIEWS
    ============================================ */
 .avanti-view {
     display: none;
     flex-direction: column;
     height: 100%;
-    animation: viewFadeIn 0.3s ease;
 }
 
 .avanti-view.active {
     display: flex;
 }
 
-@keyframes viewFadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.avanti-welcome-view {
-    padding: 20px;
+/* ============================================
+   WELCOME VIEW - KOMMUNICATE EXACT
+   ============================================ */
+.avanti-welcome-scroll {
+    flex: 1;
     overflow-y: auto;
+    padding: 20px;
+    background: var(--km-bg-gray);
 }
 
-/* Hero Card */
+/* Hero Card - Purple */
 .avanti-hero-card {
-    background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
-    border-radius: var(--avanti-radius-lg);
-    padding: 28px 24px;
-    margin-bottom: 24px;
-    position: relative;
-    overflow: hidden;
-}
-
-.avanti-hero-card::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    right: -50%;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-    pointer-events: none;
+    background: var(--km-header-bg);
+    border-radius: 20px;
+    padding: 32px 24px;
+    margin-bottom: 20px;
+    text-align: left;
+    box-shadow: 0 4px 20px rgba(93, 95, 239, 0.3);
 }
 
 .avanti-hero-emoji {
-    font-size: 40px;
-    margin-bottom: 12px;
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
 }
 
-.avanti-hero-title {
+.avanti-hero-label {
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 700;
     color: rgba(255, 255, 255, 0.9);
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
     margin-bottom: 8px;
 }
 
-.avanti-hero-text {
-    font-size: 24px;
+.avanti-hero-title {
+    font-size: 26px;
     font-weight: 700;
-    color: #fff;
+    color: #FFFFFF;
     line-height: 1.3;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
 }
 
-/* Search Box in Hero */
+/* Search Box */
 .avanti-search-box {
     display: flex;
     align-items: center;
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: var(--avanti-radius-full);
-    padding: 12px 18px;
+    background: #FFFFFF;
+    border-radius: 50px;
+    padding: 14px 20px;
     cursor: pointer;
     transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .avanti-search-box:hover {
-    background: #fff;
-    box-shadow: var(--avanti-shadow);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .avanti-search-box svg {
     width: 20px;
     height: 20px;
-    fill: var(--avanti-text-muted);
+    fill: var(--km-text-muted);
     margin-right: 12px;
     flex-shrink: 0;
 }
 
 .avanti-search-box span {
-    color: var(--avanti-text-muted);
+    color: var(--km-text-muted);
     font-size: 14px;
-    flex: 1;
 }
 
-/* Section Title */
-.avanti-section-title {
-    font-size: 12px;
+/* Info Card */
+.avanti-info-card {
+    background: #FFFFFF;
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 20px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.avanti-info-text {
+    color: var(--km-text-secondary);
+    font-size: 15px;
+    margin-bottom: 20px;
+}
+
+/* Send Message Button - Purple Pill */
+.avanti-message-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 32px;
+    background: var(--km-primary);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 50px;
+    font-size: 15px;
     font-weight: 600;
-    color: var(--avanti-text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    max-width: 280px;
+}
+
+.avanti-message-btn:hover {
+    background: var(--km-primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(93, 95, 239, 0.4);
+}
+
+/* Quick Actions Section */
+.avanti-section-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--km-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 12px;
     padding-left: 4px;
 }
 
-/* Help Text Below Hero */
-.avanti-help-text {
-    text-align: center;
-    padding: 16px 0;
-    color: var(--avanti-text-secondary);
-    font-size: 14px;
-}
-
-/* Quick Action Cards */
-.avanti-quick-cards {
+.avanti-quick-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 
-.avanti-quick-card {
+.avanti-quick-item {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 14px 16px;
-    background: var(--avanti-bg-card);
-    border: 1px solid var(--avanti-border-light);
-    border-radius: var(--avanti-radius);
+    padding: 16px;
+    background: #FFFFFF;
+    border: none;
+    border-radius: 16px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s;
     text-align: left;
-    font-family: inherit;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.avanti-quick-card:hover {
-    border-color: var(--avanti-primary);
-    background: var(--avanti-primary-light);
+.avanti-quick-item:hover {
     transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-.avanti-quick-card-icon {
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
+.avanti-quick-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 24px;
     flex-shrink: 0;
 }
 
-.avanti-quick-card-icon.login { background: linear-gradient(135deg, #FEE2E2, #FECACA); }
-.avanti-quick-card-icon.attendance { background: linear-gradient(135deg, #E0F2FE, #BAE6FD); }
-.avanti-quick-card-icon.curriculum { background: linear-gradient(135deg, #F0FDF4, #BBF7D0); }
-.avanti-quick-card-icon.ticket { background: linear-gradient(135deg, #FEF3C7, #FDE68A); }
+.avanti-quick-icon.login { background: linear-gradient(135deg, #FEE2E2, #FECACA); }
+.avanti-quick-icon.attendance { background: linear-gradient(135deg, #DBEAFE, #BFDBFE); }
+.avanti-quick-icon.curriculum { background: linear-gradient(135deg, #D1FAE5, #A7F3D0); }
+.avanti-quick-icon.ticket { background: linear-gradient(135deg, #FEF3C7, #FDE68A); }
 
-.avanti-quick-card-content {
+.avanti-quick-content {
     flex: 1;
-    min-width: 0;
 }
 
-.avanti-quick-card-title {
-    font-size: 14px;
+.avanti-quick-title {
+    font-size: 15px;
     font-weight: 600;
-    color: var(--avanti-text);
+    color: var(--km-text);
     margin-bottom: 2px;
 }
 
-.avanti-quick-card-desc {
-    font-size: 12px;
-    color: var(--avanti-text-muted);
+.avanti-quick-desc {
+    font-size: 13px;
+    color: var(--km-text-muted);
 }
 
-.avanti-quick-card-arrow {
-    color: var(--avanti-text-muted);
-    font-size: 18px;
-    transition: all 0.2s;
-}
-
-.avanti-quick-card:hover .avanti-quick-card-arrow {
-    color: var(--avanti-primary-dark);
-    transform: translateX(4px);
-}
-
-/* View Conversations Button */
-.avanti-conversations-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    padding: 14px 20px;
-    background: var(--avanti-accent);
-    color: #fff;
-    border: none;
-    border-radius: var(--avanti-radius-full);
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-top: 20px;
-    font-family: inherit;
-}
-
-.avanti-conversations-btn:hover {
-    background: #4F46E5;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+.avanti-quick-arrow {
+    color: var(--km-text-muted);
+    font-size: 20px;
+    font-weight: 300;
 }
 
 /* ============================================
    CHAT VIEW
    ============================================ */
-.avanti-chat-view {
-    background: var(--avanti-bg);
-}
-
 .avanti-chat-messages {
     flex: 1;
     overflow-y: auto;
@@ -592,10 +544,9 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    background: var(--avanti-bg-soft);
+    background: var(--km-bg-gray);
 }
 
-/* Message Bubbles */
 .avanti-message {
     max-width: 85%;
     animation: msgSlide 0.3s ease;
@@ -606,43 +557,38 @@
     to { opacity: 1; transform: translateY(0); }
 }
 
-.avanti-message.bot {
-    align-self: flex-start;
-}
-
-.avanti-message.user {
-    align-self: flex-end;
-}
+.avanti-message.bot { align-self: flex-start; }
+.avanti-message.user { align-self: flex-end; }
 
 .avanti-message-bubble {
-    padding: 12px 16px;
-    border-radius: 18px;
+    padding: 14px 18px;
+    border-radius: 20px;
     font-size: 14px;
     line-height: 1.5;
 }
 
 .avanti-message.bot .avanti-message-bubble {
-    background: var(--avanti-bg-card);
-    color: var(--avanti-text);
-    border: 1px solid var(--avanti-border-light);
+    background: #FFFFFF;
+    color: var(--km-text);
+    border: 1px solid var(--km-border);
     border-bottom-left-radius: 6px;
 }
 
 .avanti-message.user .avanti-message-bubble {
-    background: linear-gradient(135deg, var(--avanti-accent), #8B5CF6);
-    color: #fff;
+    background: var(--km-primary);
+    color: #FFFFFF;
     border-bottom-right-radius: 6px;
 }
 
-/* Typing Indicator */
+/* Typing */
 .avanti-typing {
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 16px;
-    background: var(--avanti-bg-card);
-    border: 1px solid var(--avanti-border-light);
-    border-radius: 18px;
+    padding: 16px 18px;
+    background: #FFFFFF;
+    border: 1px solid var(--km-border);
+    border-radius: 20px;
     border-bottom-left-radius: 6px;
     width: fit-content;
 }
@@ -650,24 +596,24 @@
 .avanti-typing-dot {
     width: 8px;
     height: 8px;
-    background: var(--avanti-text-muted);
-    border-radius: var(--avanti-radius-full);
-    animation: typingBounce 1.4s ease-in-out infinite;
+    background: var(--km-text-muted);
+    border-radius: 50%;
+    animation: bounce 1.4s ease-in-out infinite;
 }
 
 .avanti-typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .avanti-typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
-@keyframes typingBounce {
+@keyframes bounce {
     0%, 60%, 100% { transform: translateY(0); }
     30% { transform: translateY(-6px); }
 }
 
 /* Chat Input */
-.avanti-chat-input-wrapper {
+.avanti-chat-input-area {
     padding: 12px 16px;
-    background: var(--avanti-bg);
-    border-top: 1px solid var(--avanti-border-light);
+    background: #FFFFFF;
+    border-top: 1px solid var(--km-border);
     display: flex;
     align-items: center;
     gap: 12px;
@@ -675,31 +621,30 @@
 
 .avanti-chat-input {
     flex: 1;
-    padding: 12px 18px;
-    background: var(--avanti-bg-soft);
-    border: 1px solid var(--avanti-border);
-    border-radius: var(--avanti-radius-full);
+    padding: 14px 20px;
+    background: var(--km-bg-gray);
+    border: 2px solid transparent;
+    border-radius: 50px;
     font-size: 14px;
-    font-family: inherit;
-    color: var(--avanti-text);
+    color: var(--km-text);
     transition: all 0.2s;
 }
 
 .avanti-chat-input:focus {
     outline: none;
-    border-color: var(--avanti-primary);
-    box-shadow: 0 0 0 3px rgba(244, 180, 26, 0.15);
+    border-color: #F4B41A;
+    background: #FFFFFF;
 }
 
 .avanti-chat-input::placeholder {
-    color: var(--avanti-text-muted);
+    color: var(--km-text-muted);
 }
 
 .avanti-chat-send {
-    width: 44px;
-    height: 44px;
-    border-radius: var(--avanti-radius-full);
-    background: var(--avanti-gradient);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #F4B41A 0%, #FF9800 100%);
     border: none;
     cursor: pointer;
     display: flex;
@@ -711,41 +656,41 @@
 
 .avanti-chat-send:hover {
     transform: scale(1.08);
-    box-shadow: 0 4px 12px rgba(244, 180, 26, 0.4);
+    box-shadow: 0 4px 16px rgba(244, 180, 26, 0.4);
 }
 
 .avanti-chat-send svg {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     fill: #1A1D26;
 }
 
-/* FAQ Card in Chat */
+/* FAQ Card */
 .avanti-faq-card {
-    background: var(--avanti-bg-card);
-    border: 1px solid var(--avanti-border-light);
-    border-radius: var(--avanti-radius);
-    padding: 14px 16px;
+    background: #FFFFFF;
+    border: 1px solid var(--km-border);
+    border-radius: 16px;
+    padding: 16px;
     cursor: pointer;
     transition: all 0.2s;
     margin-bottom: 8px;
 }
 
 .avanti-faq-card:hover {
-    border-color: var(--avanti-primary);
-    background: var(--avanti-primary-light);
+    border-color: var(--km-primary);
+    background: var(--km-primary-light);
 }
 
 .avanti-faq-card h4 {
     font-size: 14px;
     font-weight: 600;
-    color: var(--avanti-text);
+    color: var(--km-text);
     margin-bottom: 4px;
 }
 
 .avanti-faq-card .category {
     font-size: 11px;
-    color: var(--avanti-primary-dark);
+    color: var(--km-primary);
     text-transform: uppercase;
     font-weight: 600;
     letter-spacing: 0.5px;
@@ -754,51 +699,48 @@
 /* ============================================
    TICKETS VIEW
    ============================================ */
-.avanti-tickets-view {
-    background: var(--avanti-bg);
-}
-
 .avanti-tickets-header {
     padding: 20px;
-    border-bottom: 1px solid var(--avanti-border-light);
+    background: #FFFFFF;
+    border-bottom: 1px solid var(--km-border);
 }
 
 .avanti-tickets-header h2 {
     font-size: 20px;
     font-weight: 700;
-    color: var(--avanti-text);
+    color: var(--km-text);
 }
 
 .avanti-tickets-list {
     flex: 1;
     overflow-y: auto;
-    padding: 12px 16px;
+    padding: 16px;
+    background: var(--km-bg-gray);
 }
 
-/* Ticket Card */
 .avanti-ticket-card {
     display: flex;
     align-items: flex-start;
     gap: 14px;
     padding: 16px;
-    background: var(--avanti-bg-card);
-    border: 1px solid var(--avanti-border-light);
-    border-radius: var(--avanti-radius);
-    margin-bottom: 10px;
+    background: #FFFFFF;
+    border-radius: 16px;
+    margin-bottom: 12px;
     cursor: pointer;
     transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .avanti-ticket-card:hover {
-    border-color: var(--avanti-primary);
-    background: var(--avanti-primary-light);
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .avanti-ticket-icon {
     width: 48px;
     height: 48px;
     border-radius: 12px;
-    background: linear-gradient(135deg, #E0F2FE, #BAE6FD);
+    background: linear-gradient(135deg, #DBEAFE, #BFDBFE);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -806,12 +748,9 @@
     flex-shrink: 0;
 }
 
-.avanti-ticket-content {
-    flex: 1;
-    min-width: 0;
-}
+.avanti-ticket-content { flex: 1; min-width: 0; }
 
-.avanti-ticket-header {
+.avanti-ticket-top {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -822,16 +761,15 @@
     font-family: 'SF Mono', 'Consolas', monospace;
     font-size: 12px;
     font-weight: 600;
-    color: var(--avanti-text);
+    color: var(--km-text);
 }
 
 .avanti-ticket-status {
-    padding: 3px 8px;
-    border-radius: var(--avanti-radius-full);
+    padding: 3px 10px;
+    border-radius: 50px;
     font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
 }
 
 .avanti-ticket-status.open { background: #FEE2E2; color: #DC2626; }
@@ -841,7 +779,7 @@
 .avanti-ticket-subject {
     font-size: 14px;
     font-weight: 600;
-    color: var(--avanti-text);
+    color: var(--km-text);
     margin-bottom: 4px;
     white-space: nowrap;
     overflow: hidden;
@@ -850,51 +788,73 @@
 
 .avanti-ticket-meta {
     font-size: 12px;
-    color: var(--avanti-text-muted);
+    color: var(--km-text-muted);
 }
 
 /* Empty State */
-.avanti-empty-state {
+.avanti-empty {
     text-align: center;
     padding: 48px 24px;
 }
 
-.avanti-empty-state .icon {
+.avanti-empty-icon {
     font-size: 56px;
     margin-bottom: 16px;
-    opacity: 0.5;
 }
 
-.avanti-empty-state p {
-    color: var(--avanti-text-muted);
+.avanti-empty p {
+    color: var(--km-text-muted);
     font-size: 14px;
+    margin-bottom: 20px;
 }
 
 /* ============================================
    FORM VIEW
    ============================================ */
-.avanti-form-view {
-    background: var(--avanti-bg);
-}
-
 .avanti-form-scroll {
     flex: 1;
     overflow-y: auto;
     padding: 20px;
+    background: var(--km-bg-gray);
 }
 
-/* User Info Card */
+.avanti-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: #FFFFFF;
+    border: 1px solid var(--km-border);
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--km-text);
+    cursor: pointer;
+    margin-bottom: 20px;
+    transition: all 0.2s;
+}
+
+.avanti-back-btn:hover {
+    background: var(--km-bg-gray);
+}
+
+.avanti-form-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--km-text);
+    margin-bottom: 20px;
+}
+
+/* User Card */
 .avanti-user-card {
     background: linear-gradient(135deg, #D1FAE5, #A7F3D0);
-    border: 1px solid #6EE7B7;
-    border-radius: var(--avanti-radius);
+    border-radius: 16px;
     padding: 16px;
     margin-bottom: 20px;
 }
 
 .avanti-user-card-title {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
     color: #065F46;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -910,20 +870,17 @@
 }
 
 .avanti-user-row:last-child { border-bottom: none; }
-
-.avanti-user-row .label { color: #047857; font-weight: 500; }
+.avanti-user-row .label { color: #047857; }
 .avanti-user-row .value { color: #065F46; font-weight: 600; }
 
-/* Form Group */
-.avanti-form-group {
-    margin-bottom: 18px;
-}
+/* Form */
+.avanti-form-group { margin-bottom: 18px; }
 
 .avanti-form-label {
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: var(--avanti-text);
+    color: var(--km-text);
     margin-bottom: 8px;
 }
 
@@ -931,13 +888,12 @@
 .avanti-form-select,
 .avanti-form-textarea {
     width: 100%;
-    padding: 12px 16px;
-    background: var(--avanti-bg-soft);
-    border: 1px solid var(--avanti-border);
+    padding: 14px 16px;
+    background: #FFFFFF;
+    border: 1px solid var(--km-border);
     border-radius: 12px;
     font-size: 14px;
-    font-family: inherit;
-    color: var(--avanti-text);
+    color: var(--km-text);
     transition: all 0.2s;
 }
 
@@ -945,8 +901,8 @@
 .avanti-form-select:focus,
 .avanti-form-textarea:focus {
     outline: none;
-    border-color: var(--avanti-primary);
-    box-shadow: 0 0 0 3px rgba(244, 180, 26, 0.15);
+    border-color: var(--km-primary);
+    box-shadow: 0 0 0 3px rgba(93, 95, 239, 0.1);
 }
 
 .avanti-form-textarea {
@@ -954,34 +910,24 @@
     resize: vertical;
 }
 
-/* Screenshot Upload */
-.avanti-screenshot-area {
-    margin-top: 8px;
-}
-
-.avanti-screenshot-dropzone {
-    border: 2px dashed var(--avanti-border);
+/* Screenshot */
+.avanti-screenshot-zone {
+    border: 2px dashed var(--km-border);
     border-radius: 12px;
     padding: 24px;
     text-align: center;
     cursor: pointer;
     transition: all 0.2s;
+    background: #FFFFFF;
 }
 
-.avanti-screenshot-dropzone:hover {
-    border-color: var(--avanti-primary);
-    background: var(--avanti-primary-light);
+.avanti-screenshot-zone:hover {
+    border-color: var(--km-primary);
+    background: var(--km-primary-light);
 }
 
-.avanti-screenshot-dropzone .icon {
-    font-size: 32px;
-    margin-bottom: 8px;
-}
-
-.avanti-screenshot-dropzone p {
-    color: var(--avanti-text-muted);
-    font-size: 13px;
-}
+.avanti-screenshot-zone .icon { font-size: 32px; margin-bottom: 8px; }
+.avanti-screenshot-zone p { color: var(--km-text-muted); font-size: 13px; }
 
 .avanti-screenshot-preview {
     position: relative;
@@ -992,7 +938,7 @@
 .avanti-screenshot-preview img {
     width: 100%;
     border-radius: 12px;
-    border: 1px solid var(--avanti-border);
+    border: 1px solid var(--km-border);
 }
 
 .avanti-screenshot-remove {
@@ -1001,8 +947,8 @@
     right: 8px;
     width: 28px;
     height: 28px;
-    border-radius: var(--avanti-radius-full);
-    background: var(--avanti-error);
+    border-radius: 50%;
+    background: var(--km-error);
     border: none;
     color: #fff;
     font-size: 16px;
@@ -1012,18 +958,18 @@
     justify-content: center;
 }
 
-/* Progress Bar */
-.avanti-upload-progress {
+/* Progress */
+.avanti-progress {
     margin-top: 12px;
     padding: 12px;
-    background: var(--avanti-bg-soft);
+    background: #FFFFFF;
     border-radius: 8px;
     display: none;
 }
 
 .avanti-progress-bar {
     height: 6px;
-    background: var(--avanti-border);
+    background: var(--km-border);
     border-radius: 3px;
     overflow: hidden;
     margin-bottom: 8px;
@@ -1031,36 +977,34 @@
 
 .avanti-progress-fill {
     height: 100%;
-    background: var(--avanti-gradient);
-    border-radius: 3px;
+    background: linear-gradient(135deg, #F4B41A, #FF9800);
     width: 0%;
-    transition: width 0.3s ease;
+    transition: width 0.3s;
 }
 
 .avanti-progress-text {
     font-size: 12px;
-    color: var(--avanti-text-muted);
+    color: var(--km-text-muted);
 }
 
 /* Submit Button */
 .avanti-submit-btn {
     width: 100%;
-    padding: 14px 24px;
-    background: var(--avanti-gradient);
+    padding: 16px 24px;
+    background: linear-gradient(135deg, #F4B41A 0%, #FF9800 100%);
     color: #1A1D26;
     border: none;
     border-radius: 12px;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 700;
     cursor: pointer;
     transition: all 0.2s;
-    font-family: inherit;
     margin-top: 8px;
 }
 
 .avanti-submit-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(244, 180, 26, 0.4);
+    box-shadow: 0 4px 16px rgba(244, 180, 26, 0.4);
 }
 
 .avanti-submit-btn:disabled {
@@ -1069,11 +1013,11 @@
     transform: none;
 }
 
-/* Action Buttons */
+/* Buttons */
 .avanti-btn-primary {
     width: 100%;
     padding: 14px 24px;
-    background: var(--avanti-gradient);
+    background: linear-gradient(135deg, #F4B41A 0%, #FF9800 100%);
     color: #1A1D26;
     border: none;
     border-radius: 12px;
@@ -1081,67 +1025,52 @@
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
-    font-family: inherit;
-}
-
-.avanti-btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(244, 180, 26, 0.4);
 }
 
 .avanti-btn-secondary {
     width: 100%;
     padding: 14px 24px;
-    background: var(--avanti-bg-soft);
-    color: var(--avanti-text);
-    border: 1px solid var(--avanti-border);
+    background: #FFFFFF;
+    color: var(--km-text);
+    border: 1px solid var(--km-border);
     border-radius: 12px;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
-    font-family: inherit;
     margin-top: 10px;
 }
 
-.avanti-btn-secondary:hover {
-    background: var(--avanti-border-light);
-}
-
-/* Success Screen */
-.avanti-success-screen {
+/* Success */
+.avanti-success {
     text-align: center;
     padding: 48px 24px;
 }
 
-.avanti-success-screen .icon {
-    font-size: 72px;
-    margin-bottom: 20px;
-}
+.avanti-success .icon { font-size: 72px; margin-bottom: 20px; }
 
-.avanti-success-screen h3 {
+.avanti-success h3 {
     font-size: 24px;
     font-weight: 700;
-    color: var(--avanti-text);
+    color: var(--km-text);
     margin-bottom: 12px;
 }
 
-.avanti-success-screen .ticket-id {
+.avanti-success .ticket-id {
     display: inline-block;
     padding: 8px 16px;
-    background: var(--avanti-primary-light);
+    background: #FEF3C7;
     color: #92400E;
-    font-family: 'SF Mono', 'Consolas', monospace;
+    font-family: monospace;
     font-size: 14px;
     font-weight: 600;
     border-radius: 8px;
     margin-bottom: 16px;
 }
 
-.avanti-success-screen p {
-    color: var(--avanti-text-muted);
+.avanti-success p {
+    color: var(--km-text-muted);
     font-size: 14px;
-    line-height: 1.5;
     margin-bottom: 24px;
 }
 
@@ -1150,10 +1079,9 @@
    ============================================ */
 .avanti-bottom-nav {
     display: flex;
-    background: var(--avanti-bg);
-    border-top: 1px solid var(--avanti-border-light);
-    padding: 8px 12px;
-    gap: 4px;
+    background: #FFFFFF;
+    border-top: 1px solid var(--km-border);
+    padding: 8px 4px;
 }
 
 .avanti-nav-btn {
@@ -1162,80 +1090,77 @@
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    padding: 10px 8px;
+    padding: 8px 4px;
     background: transparent;
     border: none;
     border-radius: 12px;
     cursor: pointer;
     transition: all 0.2s;
-    font-family: inherit;
     position: relative;
 }
 
 .avanti-nav-btn:hover {
-    background: var(--avanti-bg-soft);
+    background: var(--km-bg-gray);
 }
 
 .avanti-nav-btn.active {
-    background: var(--avanti-accent-light);
-}
-
-.avanti-nav-btn.active .avanti-nav-icon {
-    color: var(--avanti-accent);
-}
-
-.avanti-nav-btn.active .avanti-nav-label {
-    color: var(--avanti-accent);
+    background: var(--km-primary-light);
 }
 
 .avanti-nav-icon {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 8px;
+}
+
+.avanti-nav-btn.active .avanti-nav-icon {
+    background: var(--km-primary);
 }
 
 .avanti-nav-icon svg {
-    width: 22px;
-    height: 22px;
-    fill: var(--avanti-text-muted);
-    transition: all 0.2s;
+    width: 20px;
+    height: 20px;
+    fill: var(--km-text-muted);
 }
 
 .avanti-nav-btn.active .avanti-nav-icon svg {
-    fill: var(--avanti-accent);
+    fill: #FFFFFF;
 }
 
 .avanti-nav-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
-    color: var(--avanti-text-muted);
-    transition: all 0.2s;
+    color: var(--km-text-muted);
+}
+
+.avanti-nav-btn.active .avanti-nav-label {
+    color: var(--km-primary);
+    font-weight: 600;
 }
 
 .avanti-nav-badge {
     position: absolute;
-    top: 4px;
-    right: calc(50% - 18px);
-    min-width: 18px;
-    height: 18px;
-    background: var(--avanti-error);
-    border-radius: var(--avanti-radius-full);
-    font-size: 10px;
+    top: 2px;
+    right: calc(50% - 16px);
+    min-width: 16px;
+    height: 16px;
+    background: var(--km-error);
+    border-radius: 50%;
+    font-size: 9px;
     font-weight: 700;
     color: #fff;
     display: none;
     align-items: center;
     justify-content: center;
-    padding: 0 4px;
 }
 
 .avanti-nav-badge.show { display: flex; }
 
 /* ============================================
-   NOTIFICATION TOAST
+   TOAST
    ============================================ */
 .avanti-toast {
     position: fixed;
@@ -1248,13 +1173,12 @@
     font-weight: 500;
     z-index: 999999;
     opacity: 0;
-    transition: all 0.3s ease;
-    box-shadow: var(--avanti-shadow-lg);
-    background: var(--avanti-primary-light);
+    transition: all 0.3s;
+    box-shadow: var(--km-shadow);
+    background: #FEF3C7;
     color: #92400E;
-    border: 1px solid var(--avanti-primary);
+    border: 1px solid #FDE68A;
     cursor: pointer;
-    font-family: 'Inter', sans-serif;
 }
 
 .avanti-toast.show {
@@ -1262,52 +1186,41 @@
     transform: translateX(-50%) translateY(0);
 }
 
-/* ============================================
-   LOADING SPINNER
-   ============================================ */
+/* Spinner */
 .avanti-spinner {
     display: inline-block;
     width: 16px;
     height: 16px;
     border: 2px solid rgba(0,0,0,0.2);
     border-top-color: currentColor;
-    border-radius: var(--avanti-radius-full);
+    border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin-right: 8px;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ============================================
-   CUSTOM SCROLLBAR
-   ============================================ */
+/* Scrollbar */
+.avanti-welcome-scroll::-webkit-scrollbar,
 .avanti-chat-messages::-webkit-scrollbar,
 .avanti-tickets-list::-webkit-scrollbar,
-.avanti-form-scroll::-webkit-scrollbar,
-.avanti-welcome-view::-webkit-scrollbar {
+.avanti-form-scroll::-webkit-scrollbar {
     width: 6px;
 }
 
-.avanti-chat-messages::-webkit-scrollbar-track,
-.avanti-tickets-list::-webkit-scrollbar-track,
-.avanti-form-scroll::-webkit-scrollbar-track,
-.avanti-welcome-view::-webkit-scrollbar-track {
-    background: transparent;
-}
-
+.avanti-welcome-scroll::-webkit-scrollbar-thumb,
 .avanti-chat-messages::-webkit-scrollbar-thumb,
 .avanti-tickets-list::-webkit-scrollbar-thumb,
-.avanti-form-scroll::-webkit-scrollbar-thumb,
-.avanti-welcome-view::-webkit-scrollbar-thumb {
-    background: var(--avanti-border);
+.avanti-form-scroll::-webkit-scrollbar-thumb {
+    background: var(--km-border);
     border-radius: 3px;
 }
 
-/* Logo Image */
+/* Logo */
 .avanti-logo-img {
     width: 36px;
     height: 36px;
-    border-radius: var(--avanti-radius-full);
+    border-radius: 50%;
     object-fit: cover;
 }
 `;
@@ -1319,15 +1232,15 @@
     const widgetContainer = document.createElement('div');
     widgetContainer.innerHTML = `
     <div class="avanti-widget-container">
-        <!-- Greeting Bubble -->
+        <!-- Greeting -->
         <div class="avanti-greeting" id="avantiGreeting">
             <button class="avanti-greeting-close" onclick="event.stopPropagation(); AvantiWidget.hideGreeting()">×</button>
-            <div class="avanti-greeting-text" id="greetingText">
+            <div class="avanti-greeting-text">
                 🙏 <strong>Namaste!</strong> Need help with the Curriculum Tracker?
             </div>
         </div>
         
-        <!-- Floating Action Button -->
+        <!-- FAB -->
         <button class="avanti-fab" id="avantiFab" onclick="AvantiWidget.toggle()">
             <svg class="icon-chat" viewBox="0 0 24 24">
                 <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
@@ -1338,14 +1251,14 @@
             <span class="avanti-fab-badge" id="fabBadge"></span>
         </button>
         
-        <!-- Main Panel -->
+        <!-- Panel -->
         <div class="avanti-panel" id="avantiPanel">
             <!-- Header -->
             <div class="avanti-header">
                 <div class="avanti-header-left">
                     <div class="avanti-header-avatar">
-                        <img src="./logo.png" class="avanti-logo-img" alt="Avanti" onerror="this.style.display='none'; this.parentElement.innerHTML='<span style=font-size:24px>💬</span><span class=online-indicator></span>';">
-                        <span class="online-indicator"></span>
+                        <img src="./logo.png" class="avanti-logo-img" alt="Avanti" onerror="this.style.display='none'; this.parentElement.innerHTML='<span style=font-size:24px>💬</span><span class=online-dot></span>';">
+                        <span class="online-dot"></span>
                     </div>
                     <div class="avanti-header-info">
                         <h1>Avanti Help Desk</h1>
@@ -1358,75 +1271,74 @@
             <!-- Body -->
             <div class="avanti-body" id="avantiBody">
                 <!-- Welcome View -->
-                <div class="avanti-view avanti-welcome-view active" id="welcomeView">
-                    <!-- Hero Card -->
-                    <div class="avanti-hero-card">
-                        <div class="avanti-hero-emoji">👋</div>
-                        <div class="avanti-hero-title" id="heroTitle">HELLO</div>
-                        <div class="avanti-hero-text" id="heroText">How can we help you?</div>
+                <div class="avanti-view active" id="welcomeView">
+                    <div class="avanti-welcome-scroll">
+                        <!-- Hero Card -->
+                        <div class="avanti-hero-card">
+                            <span class="avanti-hero-emoji">👋</span>
+                            <div class="avanti-hero-label">HELLO</div>
+                            <div class="avanti-hero-title">How can we help you?</div>
+                            
+                            <div class="avanti-search-box" onclick="AvantiWidget.showChat()">
+                                <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                                <span>Search in FAQs...</span>
+                            </div>
+                        </div>
                         
-                        <!-- Search Box -->
-                        <div class="avanti-search-box" onclick="AvantiWidget.showChat()">
-                            <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-                            <span>Search in FAQs...</span>
+                        <!-- Info Card -->
+                        <div class="avanti-info-card">
+                            <p class="avanti-info-text">We're here to help you get instant answers.</p>
+                            <button class="avanti-message-btn" onclick="AvantiWidget.showChat()">
+                                Send us a message
+                            </button>
+                        </div>
+                        
+                        <!-- Quick Help -->
+                        <div class="avanti-section-label">QUICK HELP</div>
+                        <div class="avanti-quick-list">
+                            <button class="avanti-quick-item" onclick="AvantiWidget.searchTopic('login')">
+                                <div class="avanti-quick-icon login">🔐</div>
+                                <div class="avanti-quick-content">
+                                    <div class="avanti-quick-title">Login Issues</div>
+                                    <div class="avanti-quick-desc">Password, OTP problems</div>
+                                </div>
+                                <span class="avanti-quick-arrow">›</span>
+                            </button>
+                            
+                            <button class="avanti-quick-item" onclick="AvantiWidget.searchTopic('attendance')">
+                                <div class="avanti-quick-icon attendance">📅</div>
+                                <div class="avanti-quick-content">
+                                    <div class="avanti-quick-title">Attendance Help</div>
+                                    <div class="avanti-quick-desc">Mark, view attendance</div>
+                                </div>
+                                <span class="avanti-quick-arrow">›</span>
+                            </button>
+                            
+                            <button class="avanti-quick-item" onclick="AvantiWidget.searchTopic('curriculum')">
+                                <div class="avanti-quick-icon curriculum">📚</div>
+                                <div class="avanti-quick-content">
+                                    <div class="avanti-quick-title">Curriculum & Progress</div>
+                                    <div class="avanti-quick-desc">Syllabus, chapters</div>
+                                </div>
+                                <span class="avanti-quick-arrow">›</span>
+                            </button>
+                            
+                            <button class="avanti-quick-item" onclick="AvantiWidget.showForm()">
+                                <div class="avanti-quick-icon ticket">🎫</div>
+                                <div class="avanti-quick-content">
+                                    <div class="avanti-quick-title">Raise a Ticket</div>
+                                    <div class="avanti-quick-desc">Get personalized support</div>
+                                </div>
+                                <span class="avanti-quick-arrow">›</span>
+                            </button>
                         </div>
                     </div>
-                    
-                    <!-- Help Text -->
-                    <div class="avanti-help-text">
-                        We're here to help you get instant answers.
-                    </div>
-                    
-                    <!-- Quick Actions -->
-                    <div class="avanti-section-title">Quick Help</div>
-                    <div class="avanti-quick-cards">
-                        <button class="avanti-quick-card" onclick="AvantiWidget.searchTopic('login')">
-                            <div class="avanti-quick-card-icon login">🔐</div>
-                            <div class="avanti-quick-card-content">
-                                <div class="avanti-quick-card-title">Login Issues</div>
-                                <div class="avanti-quick-card-desc">Password, OTP problems</div>
-                            </div>
-                            <span class="avanti-quick-card-arrow">›</span>
-                        </button>
-                        
-                        <button class="avanti-quick-card" onclick="AvantiWidget.searchTopic('attendance')">
-                            <div class="avanti-quick-card-icon attendance">📅</div>
-                            <div class="avanti-quick-card-content">
-                                <div class="avanti-quick-card-title">Attendance Help</div>
-                                <div class="avanti-quick-card-desc">Mark, view attendance</div>
-                            </div>
-                            <span class="avanti-quick-card-arrow">›</span>
-                        </button>
-                        
-                        <button class="avanti-quick-card" onclick="AvantiWidget.searchTopic('curriculum')">
-                            <div class="avanti-quick-card-icon curriculum">📚</div>
-                            <div class="avanti-quick-card-content">
-                                <div class="avanti-quick-card-title">Curriculum & Progress</div>
-                                <div class="avanti-quick-card-desc">Syllabus, chapters</div>
-                            </div>
-                            <span class="avanti-quick-card-arrow">›</span>
-                        </button>
-                        
-                        <button class="avanti-quick-card" onclick="AvantiWidget.showForm()">
-                            <div class="avanti-quick-card-icon ticket">🎫</div>
-                            <div class="avanti-quick-card-content">
-                                <div class="avanti-quick-card-title">Raise a Ticket</div>
-                                <div class="avanti-quick-card-desc">Get personalized support</div>
-                            </div>
-                            <span class="avanti-quick-card-arrow">›</span>
-                        </button>
-                    </div>
-                    
-                    <!-- View Conversations Button -->
-                    <button class="avanti-conversations-btn" onclick="AvantiWidget.showTickets()">
-                        <span>📨</span> View conversations
-                    </button>
                 </div>
                 
                 <!-- Chat View -->
-                <div class="avanti-view avanti-chat-view" id="chatView">
+                <div class="avanti-view" id="chatView">
                     <div class="avanti-chat-messages" id="chatMessages"></div>
-                    <div class="avanti-chat-input-wrapper">
+                    <div class="avanti-chat-input-area">
                         <input type="text" class="avanti-chat-input" id="chatInput" placeholder="Type your question..." onkeypress="if(event.key==='Enter' && !event.repeat)AvantiWidget.sendMessage()">
                         <button class="avanti-chat-send" onclick="AvantiWidget.sendMessage()">
                             <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
@@ -1435,7 +1347,7 @@
                 </div>
                 
                 <!-- Tickets View -->
-                <div class="avanti-view avanti-tickets-view" id="ticketsView">
+                <div class="avanti-view" id="ticketsView">
                     <div class="avanti-tickets-header">
                         <h2>Your Tickets</h2>
                     </div>
@@ -1443,16 +1355,16 @@
                 </div>
                 
                 <!-- Form View -->
-                <div class="avanti-view avanti-form-view" id="formView">
+                <div class="avanti-view" id="formView">
                     <div class="avanti-form-scroll" id="formContent"></div>
                 </div>
             </div>
             
-            <!-- Bottom Navigation -->
+            <!-- Bottom Nav -->
             <div class="avanti-bottom-nav">
                 <button class="avanti-nav-btn active" id="navWelcome" onclick="AvantiWidget.showWelcome()">
                     <div class="avanti-nav-icon">
-                        <svg viewBox="0 0 24 24"><path d="M12 5.69l5 4.5V18h-2v-6H9v6H7v-7.81l5-4.5M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z"/></svg>
+                        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0-6c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 7c-2.67 0-8 1.34-8 4v3h16v-3c0-2.66-5.33-4-8-4z"/></svg>
                     </div>
                     <span class="avanti-nav-label">Welcome</span>
                 </button>
@@ -1503,57 +1415,31 @@
         unreadNotifications: 0,
         isUploadingScreenshot: false,
         
-        // Get time-based greeting
-        getGreeting: function(name) {
-            const hour = new Date().getHours();
-            const nameStr = name ? `, ${name}` : '';
-            
-            if (hour < 12) {
-                return { title: 'GOOD MORNING' + nameStr.toUpperCase(), emoji: '🌅' };
-            } else if (hour < 17) {
-                return { title: 'GOOD AFTERNOON' + nameStr.toUpperCase(), emoji: '☀️' };
-            } else {
-                return { title: 'GOOD EVENING' + nameStr.toUpperCase(), emoji: '🌙' };
-            }
-        },
-        
         // Initialize
         init: function() {
-            console.log('[AvantiWidget] Starting initialization v6.0 Kommunicate Style...');
+            console.log('[AvantiWidget] v7.0 Kommunicate Exact - Starting...');
             
-            // Get user from localStorage first (students)
             this.getUserFromLocalStorage();
-            
-            // Update welcome text
-            this.updateWelcomeText();
-            
-            // Wait for Firebase
             this.waitForFirebase();
             
-            // Show greeting popup after delay
-            setTimeout(() => this.showGreeting(), 8000 + Math.random() * 2000);
-            
-            // Initialize notification badge
+            setTimeout(() => this.showGreeting(), 8000);
             setTimeout(() => this.updateNotificationBadge(), 500);
             
-            // Ensure widget button is always visible
-            this.ensureWidgetVisible();
-            setInterval(() => this.ensureWidgetVisible(), 2000);
+            this.ensureVisible();
+            setInterval(() => this.ensureVisible(), 2000);
             
             console.log('[AvantiWidget] Init complete');
         },
         
-        // Ensure widget button is always visible
-        ensureWidgetVisible: function() {
+        ensureVisible: function() {
             const fab = document.getElementById('avantiFab');
             if (fab) {
                 fab.style.display = 'flex';
-                fab.style.opacity = '1';
                 fab.style.visibility = 'visible';
             }
         },
         
-        // Wait for Firebase
+        // Firebase
         waitForFirebase: function() {
             this.initAttempts++;
             
@@ -1561,146 +1447,110 @@
                 try {
                     firebase.firestore();
                     this.firebaseReady = true;
-                    console.log('[AvantiWidget] ✓ Firebase ready!');
+                    console.log('[AvantiWidget] ✓ Firebase ready');
                     
                     this.getTeacherFromFirebase();
                     this.loadFAQs();
-                    setTimeout(() => this.loadTickets(), 1000);
-                    setTimeout(() => this.loadUserNotifications(), 1500);
+                    setTimeout(() => this.loadTickets(), 500);
                     return;
                 } catch (e) {
-                    console.log('[AvantiWidget] Waiting for Firebase... attempt:', this.initAttempts);
+                    console.log('[AvantiWidget] Firebase check attempt:', this.initAttempts);
                 }
             }
             
             if (this.initAttempts < 30) {
                 setTimeout(() => this.waitForFirebase(), 500);
             } else {
-                console.log('[AvantiWidget] Firebase not available - running in offline mode');
+                console.log('[AvantiWidget] Firebase not available');
+                // Show empty states properly
+                this.renderTicketsList([]);
             }
         },
         
-        // Get user from localStorage (students)
+        // User detection
         getUserFromLocalStorage: function() {
-            const possibleKeys = ['studentSession', 'student', 'studentData', 'currentStudent', 'loggedInStudent'];
+            const keys = ['studentSession', 'student', 'studentData', 'currentStudent', 'loggedInStudent'];
             
-            for (const key of possibleKeys) {
+            for (const key of keys) {
                 try {
                     const data = localStorage.getItem(key);
                     if (data) {
-                        const parsed = JSON.parse(data);
-                        if (parsed && (parsed.name || parsed.studentId || parsed.id)) {
-                            const studentId = parsed.studentId || parsed.id || parsed.student_id || '';
+                        const p = JSON.parse(data);
+                        if (p && (p.name || p.studentId || p.id)) {
                             this.user = {
                                 type: 'student',
-                                name: parsed.name || parsed.studentName || parsed.student_name || '',
-                                studentId: studentId ? String(studentId) : '',
-                                school: parsed.school || parsed.schoolName || parsed.center || parsed.school_name || '',
-                                grade: parsed.grade || parsed.class || ''
+                                name: p.name || p.studentName || '',
+                                studentId: String(p.studentId || p.id || ''),
+                                school: p.school || p.schoolName || p.center || '',
+                                grade: p.grade || p.class || ''
                             };
-                            console.log('[AvantiWidget] ✓ Found student:', this.user.name);
+                            console.log('[AvantiWidget] ✓ Student:', this.user.name);
                             return;
                         }
                     }
                 } catch (e) {}
             }
-            console.log('[AvantiWidget] No student in localStorage');
         },
         
-        // Get teacher from Firebase Auth
         getTeacherFromFirebase: function() {
             if (!this.firebaseReady || this.user) return;
             
             try {
                 const currentUser = firebase.auth().currentUser;
-                if (currentUser) {
-                    this.setTeacherUser(currentUser);
-                }
+                if (currentUser) this.setTeacherUser(currentUser);
                 
                 firebase.auth().onAuthStateChanged(u => {
                     if (u && (!this.user || this.user.type !== 'student')) {
                         this.setTeacherUser(u);
                     }
                 });
-            } catch (e) {
-                console.log('[AvantiWidget] Firebase auth error:', e);
-            }
+            } catch (e) {}
         },
         
-        // Set teacher user data
-        setTeacherUser: function(firebaseUser) {
+        setTeacherUser: function(u) {
             this.user = {
                 type: 'teacher',
-                name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || '',
-                email: firebaseUser.email || '',
+                name: u.displayName || u.email?.split('@')[0] || '',
+                email: u.email || '',
                 school: ''
             };
             
-            console.log('[AvantiWidget] ✓ Found teacher:', this.user.email);
-            
             try {
                 firebase.firestore().collection('teachers')
-                    .where('email', '==', firebaseUser.email)
+                    .where('email', '==', u.email)
                     .limit(1)
                     .get()
                     .then(snap => {
                         if (!snap.empty) {
                             const t = snap.docs[0].data();
                             this.user.name = t.name || this.user.name;
-                            this.user.school = t.school || t.center || t.schoolName || '';
-                            this.updateWelcomeText();
+                            this.user.school = t.school || t.center || '';
                         }
-                    })
-                    .catch(e => {});
+                    }).catch(() => {});
             } catch (e) {}
-            
-            this.updateWelcomeText();
         },
         
-        // Update welcome text
-        updateWelcomeText: function() {
-            const greeting = this.getGreeting(this.user?.name);
-            const heroTitle = document.getElementById('heroTitle');
-            const heroText = document.getElementById('heroText');
-            
-            if (heroTitle) {
-                heroTitle.textContent = greeting.title;
-            }
-            if (heroText) {
-                heroText.textContent = 'How can we help you?';
-            }
-        },
-        
-        // Show greeting bubble
+        // Greeting
         showGreeting: function() {
-            const greetingEl = document.getElementById('avantiGreeting');
-            const panel = document.getElementById('avantiPanel');
+            const g = document.getElementById('avantiGreeting');
+            const p = document.getElementById('avantiPanel');
             
-            if (greetingEl && !panel.classList.contains('open')) {
-                greetingEl.classList.add('show');
-                greetingEl.onclick = () => this.open();
-                
-                setTimeout(() => {
-                    greetingEl.classList.remove('show');
-                }, 10000);
+            if (g && p && !p.classList.contains('open')) {
+                g.classList.add('show');
+                g.onclick = () => this.open();
+                setTimeout(() => g.classList.remove('show'), 10000);
             }
         },
         
-        // Hide greeting
         hideGreeting: function() {
             document.getElementById('avantiGreeting')?.classList.remove('show');
         },
         
-        // Toggle widget
+        // Panel
         toggle: function() {
-            if (this.isOpen) {
-                this.close();
-            } else {
-                this.open();
-            }
+            this.isOpen ? this.close() : this.open();
         },
         
-        // Open widget
         open: function() {
             this.isOpen = true;
             document.getElementById('avantiPanel').classList.add('open');
@@ -1708,23 +1558,22 @@
             this.hideGreeting();
         },
         
-        // Close widget
         close: function() {
             this.isOpen = false;
             document.getElementById('avantiPanel').classList.remove('open');
             document.getElementById('avantiFab').classList.remove('open');
         },
         
-        // Navigation methods
-        setActiveNav: function(navId) {
-            document.querySelectorAll('.avanti-nav-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(navId)?.classList.add('active');
+        // Navigation
+        setActiveNav: function(id) {
+            document.querySelectorAll('.avanti-nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(id)?.classList.add('active');
         },
         
-        setActiveView: function(viewId) {
-            document.querySelectorAll('.avanti-view').forEach(view => view.classList.remove('active'));
-            document.getElementById(viewId)?.classList.add('active');
-            this.currentView = viewId;
+        setActiveView: function(id) {
+            document.querySelectorAll('.avanti-view').forEach(v => v.classList.remove('active'));
+            document.getElementById(id)?.classList.add('active');
+            this.currentView = id;
         },
         
         showWelcome: function() {
@@ -1736,28 +1585,26 @@
             this.setActiveView('chatView');
             this.setActiveNav('navConversations');
             
-            const messages = document.getElementById('chatMessages');
-            if (!messages.innerHTML.trim()) {
-                messages.innerHTML = `
+            const m = document.getElementById('chatMessages');
+            if (!m.innerHTML.trim()) {
+                m.innerHTML = `
                     <div class="avanti-message bot">
                         <div class="avanti-message-bubble">
-                            Hello! 👋 How can I help you today? You can search for help or type your question below.
+                            Hello! 👋 How can I help you today?
                         </div>
                     </div>
                 `;
             }
             
-            setTimeout(() => {
-                document.getElementById('chatInput')?.focus();
-            }, 100);
+            setTimeout(() => document.getElementById('chatInput')?.focus(), 100);
         },
         
         showFAQs: function() {
-            this.showChat();
+            this.setActiveView('chatView');
             this.setActiveNav('navFaqs');
             
-            const messages = document.getElementById('chatMessages');
-            messages.innerHTML = `
+            const m = document.getElementById('chatMessages');
+            m.innerHTML = `
                 <div class="avanti-message bot">
                     <div class="avanti-message-bubble">
                         Here are the most common questions. Click any to see the answer!
@@ -1767,7 +1614,7 @@
             
             if (this.faqs.length > 0) {
                 this.faqs.slice(0, 8).forEach(faq => {
-                    messages.innerHTML += `
+                    m.innerHTML += `
                         <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${faq.id}')">
                             <h4>${faq.question}</h4>
                             <div class="category">${faq.category || 'General'}</div>
@@ -1775,12 +1622,13 @@
                     `;
                 });
             } else {
-                messages.innerHTML += `
+                m.innerHTML += `
                     <div class="avanti-message bot">
                         <div class="avanti-message-bubble">
                             No FAQs available yet. Please raise a ticket for help!
                         </div>
                     </div>
+                    <button class="avanti-btn-primary" style="margin: 8px 0; max-width: 85%;" onclick="AvantiWidget.showForm()">🎫 Raise a Ticket</button>
                 `;
             }
         },
@@ -1805,18 +1653,18 @@
                 .limit(20)
                 .get()
                 .then(snap => {
-                    this.faqs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    console.log('[AvantiWidget] ✓ Loaded', this.faqs.length, 'FAQs');
+                    this.faqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    console.log('[AvantiWidget] ✓ FAQs:', this.faqs.length);
                 })
-                .catch(e => console.log('[AvantiWidget] FAQ load error:', e));
+                .catch(e => console.log('[AvantiWidget] FAQ error:', e));
         },
         
-        // Search topic
+        // Search
         searchTopic: function(topic) {
             this.showChat();
             
-            const messages = document.getElementById('chatMessages');
-            messages.innerHTML = `
+            const m = document.getElementById('chatMessages');
+            m.innerHTML = `
                 <div class="avanti-message bot">
                     <div class="avanti-message-bubble">
                         Here's what I found for <strong>${topic}</strong>:
@@ -1832,7 +1680,7 @@
             
             if (filtered.length > 0) {
                 filtered.slice(0, 5).forEach(faq => {
-                    messages.innerHTML += `
+                    m.innerHTML += `
                         <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${faq.id}')">
                             <h4>${faq.question}</h4>
                             <div class="category">${faq.category || 'General'}</div>
@@ -1840,26 +1688,25 @@
                     `;
                 });
             } else {
-                messages.innerHTML += `
+                m.innerHTML += `
                     <div class="avanti-message bot">
                         <div class="avanti-message-bubble">
-                            No specific FAQs found. Would you like to raise a ticket?
+                            No specific FAQs found for "${topic}". Would you like to raise a ticket?
                         </div>
                     </div>
                     <button class="avanti-btn-primary" style="margin: 8px 0; max-width: 85%;" onclick="AvantiWidget.showForm()">🎫 Raise a Ticket</button>
                 `;
             }
             
-            messages.scrollTop = messages.scrollHeight;
+            m.scrollTop = m.scrollHeight;
         },
         
-        // Show FAQ answer
-        showFAQAnswer: function(faqId) {
-            const faq = this.faqs.find(f => f.id === faqId);
+        showFAQAnswer: function(id) {
+            const faq = this.faqs.find(f => f.id === id);
             if (!faq) return;
             
-            const messages = document.getElementById('chatMessages');
-            messages.innerHTML += `
+            const m = document.getElementById('chatMessages');
+            m.innerHTML += `
                 <div class="avanti-message user">
                     <div class="avanti-message-bubble">${faq.question}</div>
                 </div>
@@ -1867,77 +1714,57 @@
                     <div class="avanti-message-bubble">${faq.answer}</div>
                 </div>
             `;
-            
-            messages.scrollTop = messages.scrollHeight;
+            m.scrollTop = m.scrollHeight;
         },
         
         // Send message
         sendMessage: function() {
             const input = document.getElementById('chatInput');
-            const query = input.value.trim();
-            if (!query) return;
+            const q = input.value.trim();
+            if (!q) return;
             
-            const messages = document.getElementById('chatMessages');
+            const m = document.getElementById('chatMessages');
             
-            // Add user message
-            messages.innerHTML += `
+            m.innerHTML += `
                 <div class="avanti-message user">
-                    <div class="avanti-message-bubble">${this.escapeHtml(query)}</div>
+                    <div class="avanti-message-bubble">${this.escapeHtml(q)}</div>
                 </div>
             `;
             
             input.value = '';
-            messages.scrollTop = messages.scrollHeight;
+            m.scrollTop = m.scrollHeight;
             
-            // Show typing indicator
-            messages.innerHTML += `
+            m.innerHTML += `
                 <div class="avanti-typing" id="typing">
                     <div class="avanti-typing-dot"></div>
                     <div class="avanti-typing-dot"></div>
                     <div class="avanti-typing-dot"></div>
                 </div>
             `;
-            messages.scrollTop = messages.scrollHeight;
+            m.scrollTop = m.scrollHeight;
             
-            // Process message
             setTimeout(() => {
                 document.getElementById('typing')?.remove();
-                this.processQuery(query);
+                this.processQuery(q);
             }, 800);
         },
         
-        // Process query
         processQuery: function(query) {
             const q = query.toLowerCase().trim();
-            const messages = document.getElementById('chatMessages');
+            const m = document.getElementById('chatMessages');
             
-            // Greeting
             if (/^(hi|hello|hey|namaste)$/i.test(q)) {
-                messages.innerHTML += `
-                    <div class="avanti-message bot">
-                        <div class="avanti-message-bubble">
-                            Namaste! 🙏 How can I help you today?
-                        </div>
-                    </div>
-                `;
-                messages.scrollTop = messages.scrollHeight;
+                m.innerHTML += `<div class="avanti-message bot"><div class="avanti-message-bubble">Namaste! 🙏 How can I help you today?</div></div>`;
+                m.scrollTop = m.scrollHeight;
                 return;
             }
             
-            // Thank you
             if (q.includes('thank')) {
-                messages.innerHTML += `
-                    <div class="avanti-message bot">
-                        <div class="avanti-message-bubble">
-                            You're welcome! 😊 Happy to help. Let me know if you need anything else.
-                        </div>
-                    </div>
-                `;
-                messages.scrollTop = messages.scrollHeight;
+                m.innerHTML += `<div class="avanti-message bot"><div class="avanti-message-bubble">You're welcome! 😊 Happy to help.</div></div>`;
+                m.scrollTop = m.scrollHeight;
                 return;
             }
             
-            // Search FAQs
             const words = q.split(/\s+/).filter(w => w.length > 2);
             const results = this.faqs.filter(f => {
                 const text = `${f.question} ${f.answer}`.toLowerCase();
@@ -1945,16 +1772,9 @@
             }).slice(0, 3);
             
             if (results.length > 0) {
-                messages.innerHTML += `
-                    <div class="avanti-message bot">
-                        <div class="avanti-message-bubble">
-                            Here's what I found:
-                        </div>
-                    </div>
-                `;
-                
+                m.innerHTML += `<div class="avanti-message bot"><div class="avanti-message-bubble">Here's what I found:</div></div>`;
                 results.forEach(faq => {
-                    messages.innerHTML += `
+                    m.innerHTML += `
                         <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${faq.id}')">
                             <h4>${faq.question}</h4>
                             <div class="category">${faq.category || 'General'}</div>
@@ -1962,44 +1782,49 @@
                     `;
                 });
             } else {
-                messages.innerHTML += `
+                m.innerHTML += `
                     <div class="avanti-message bot">
                         <div class="avanti-message-bubble">
-                            I couldn't find a specific answer for that. Would you like to raise a support ticket for personalized help?
+                            I couldn't find a specific answer. Would you like to raise a support ticket?
                         </div>
                     </div>
                     <button class="avanti-btn-primary" style="margin: 8px 0; max-width: 85%;" onclick="AvantiWidget.showForm()">🎫 Raise a Ticket</button>
                 `;
             }
             
-            messages.scrollTop = messages.scrollHeight;
+            m.scrollTop = m.scrollHeight;
         },
         
-        // Escape HTML
-        escapeHtml: function(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+        escapeHtml: function(t) {
+            const d = document.createElement('div');
+            d.textContent = t;
+            return d.innerHTML;
         },
         
-        // Load tickets
+        // Tickets
         loadTickets: function() {
+            const list = document.getElementById('ticketsList');
+            
             if (!this.firebaseReady) {
-                this.renderTicketsList([]);
+                list.innerHTML = `
+                    <div class="avanti-empty">
+                        <div class="avanti-empty-icon">🎫</div>
+                        <p>No tickets yet. Raise one if you need help!</p>
+                    </div>
+                    <button class="avanti-btn-primary" style="margin: 0 16px; width: calc(100% - 32px);" onclick="AvantiWidget.showForm()">🎫 Raise a Ticket</button>
+                `;
                 return;
             }
             
-            const list = document.getElementById('ticketsList');
-            list.innerHTML = '<div class="avanti-empty-state"><div class="icon">⏳</div><p>Loading tickets...</p></div>';
+            list.innerHTML = '<div class="avanti-empty"><div class="avanti-empty-icon">⏳</div><p>Loading tickets...</p></div>';
             
             let query = firebase.firestore().collection('helpdesk_tickets')
                 .orderBy('createdAt', 'desc')
                 .limit(20);
             
-            // Filter by user
             if (this.user) {
                 if (this.user.type === 'student' && this.user.studentId) {
-                    query = query.where('studentId', '==', String(this.user.studentId));
+                    query = query.where('studentId', '==', this.user.studentId);
                 } else if (this.user.type === 'teacher' && this.user.email) {
                     query = query.where('userEmail', '==', this.user.email);
                 }
@@ -2007,27 +1832,32 @@
             
             query.get()
                 .then(snap => {
-                    this.tickets = snap.docs.map(doc => ({ docId: doc.id, ...doc.data() }));
+                    this.tickets = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
                     this.renderTicketsList(this.tickets);
                     this.updateTicketsBadge();
                 })
                 .catch(e => {
-                    console.log('[AvantiWidget] Ticket load error:', e);
-                    list.innerHTML = '<div class="avanti-empty-state"><div class="icon">😕</div><p>Could not load tickets</p></div>';
+                    console.log('[AvantiWidget] Tickets error:', e);
+                    list.innerHTML = `
+                        <div class="avanti-empty">
+                            <div class="avanti-empty-icon">😕</div>
+                            <p>Could not load tickets</p>
+                        </div>
+                        <button class="avanti-btn-primary" style="margin: 20px 16px; width: calc(100% - 32px);" onclick="AvantiWidget.showForm()">🎫 Raise a Ticket</button>
+                    `;
                 });
         },
         
-        // Render tickets list
         renderTicketsList: function(tickets) {
             const list = document.getElementById('ticketsList');
             
             if (!tickets || tickets.length === 0) {
                 list.innerHTML = `
-                    <div class="avanti-empty-state">
-                        <div class="icon">🎫</div>
+                    <div class="avanti-empty">
+                        <div class="avanti-empty-icon">🎫</div>
                         <p>No tickets yet. Raise one if you need help!</p>
                     </div>
-                    <button class="avanti-btn-primary" style="margin: 20px 16px; width: calc(100% - 32px);" onclick="AvantiWidget.showForm()">🎫 Raise a Ticket</button>
+                    <button class="avanti-btn-primary" style="margin: 0 16px; width: calc(100% - 32px);" onclick="AvantiWidget.showForm()">🎫 Raise a Ticket</button>
                 `;
                 return;
             }
@@ -2036,7 +1866,7 @@
                 <div class="avanti-ticket-card" onclick="AvantiWidget.viewTicket('${t.docId}')">
                     <div class="avanti-ticket-icon">🎫</div>
                     <div class="avanti-ticket-content">
-                        <div class="avanti-ticket-header">
+                        <div class="avanti-ticket-top">
                             <span class="avanti-ticket-id">#${t.ticketId || t.docId.substring(0, 8)}</span>
                             <span class="avanti-ticket-status ${t.status}">${t.status}</span>
                         </div>
@@ -2049,14 +1879,13 @@
             `).join('');
         },
         
-        // Update tickets badge
         updateTicketsBadge: function() {
-            const openCount = this.tickets.filter(t => t.status === 'open' || t.status === 'in-progress').length;
+            const open = this.tickets.filter(t => t.status === 'open' || t.status === 'in-progress').length;
             const badge = document.getElementById('ticketsBadge');
             
             if (badge) {
-                if (openCount > 0) {
-                    badge.textContent = openCount;
+                if (open > 0) {
+                    badge.textContent = open;
                     badge.classList.add('show');
                 } else {
                     badge.classList.remove('show');
@@ -2064,10 +1893,9 @@
             }
         },
         
-        // Format date
-        formatDate: function(timestamp) {
-            if (!timestamp) return '';
-            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        formatDate: function(ts) {
+            if (!ts) return '';
+            const date = ts.toDate ? ts.toDate() : new Date(ts);
             const now = new Date();
             const diff = Math.floor((now - date) / 1000);
             
@@ -2079,91 +1907,78 @@
             return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
         },
         
-        // View ticket
         viewTicket: function(docId) {
-            const ticket = this.tickets.find(t => t.docId === docId);
-            if (!ticket) return;
+            const t = this.tickets.find(x => x.docId === docId);
+            if (!t) return;
             
-            const formContent = document.getElementById('formContent');
             this.setActiveView('formView');
+            const fc = document.getElementById('formContent');
             
-            let repliesHtml = '';
-            if (ticket.replies && ticket.replies.length > 0) {
-                repliesHtml = ticket.replies.map(r => `
+            let replies = '';
+            if (t.replies && t.replies.length > 0) {
+                replies = t.replies.map(r => `
                     <div class="avanti-message ${r.isAdmin ? 'bot' : 'user'}">
                         <div class="avanti-message-bubble">
                             ${r.message}
                             <div style="font-size: 11px; opacity: 0.7; margin-top: 6px;">
-                                ${r.isAdmin ? 'Support Team' : 'You'} • ${this.formatDate(r.timestamp)}
+                                ${r.isAdmin ? 'Support' : 'You'} • ${this.formatDate(r.timestamp)}
                             </div>
                         </div>
                     </div>
                 `).join('');
             }
             
-            formContent.innerHTML = `
+            fc.innerHTML = `
+                <button class="avanti-back-btn" onclick="AvantiWidget.showTickets()">← Back</button>
+                
                 <div style="margin-bottom: 20px;">
-                    <button class="avanti-btn-secondary" onclick="AvantiWidget.showTickets()" style="width: auto; padding: 10px 16px;">
-                        ← Back to Tickets
-                    </button>
-                </div>
-                
-                <div class="avanti-ticket-header" style="padding: 0; border: none; margin-bottom: 20px;">
-                    <div class="avanti-ticket-header" style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
-                        <span class="avanti-ticket-id" style="font-size: 16px;">#${ticket.ticketId || docId.substring(0, 8)}</span>
-                        <span class="avanti-ticket-status ${ticket.status}">${ticket.status}</span>
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                        <span class="avanti-ticket-id" style="font-size: 16px;">#${t.ticketId || docId.substring(0, 8)}</span>
+                        <span class="avanti-ticket-status ${t.status}">${t.status}</span>
                     </div>
-                    <h2 style="font-size: 18px; font-weight: 700; color: var(--avanti-text);">${ticket.subject || 'No subject'}</h2>
-                    <p style="font-size: 13px; color: var(--avanti-text-muted); margin-top: 4px;">
-                        Created ${this.formatDate(ticket.createdAt)}
+                    <h2 style="font-size: 18px; font-weight: 700; color: var(--km-text);">${t.subject || 'No subject'}</h2>
+                    <p style="font-size: 13px; color: var(--km-text-muted); margin-top: 4px;">
+                        Created ${this.formatDate(t.createdAt)}
                     </p>
                 </div>
                 
-                <div style="background: var(--avanti-bg-soft); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-                    <p style="font-size: 14px; color: var(--avanti-text); line-height: 1.6;">
-                        ${ticket.description || 'No description'}
+                <div style="background: #FFFFFF; border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid var(--km-border);">
+                    <p style="font-size: 14px; color: var(--km-text); line-height: 1.6;">
+                        ${t.description || 'No description'}
                     </p>
                 </div>
                 
-                ${ticket.screenshotUrl ? `
+                ${t.screenshotUrl ? `
                     <div style="margin-bottom: 20px;">
-                        <img src="${ticket.screenshotUrl}" style="width: 100%; border-radius: 12px; border: 1px solid var(--avanti-border);" alt="Screenshot">
+                        <img src="${t.screenshotUrl}" style="width: 100%; border-radius: 12px; border: 1px solid var(--km-border);" alt="Screenshot">
                     </div>
                 ` : ''}
                 
-                ${repliesHtml ? `
+                ${replies ? `
                     <div style="margin-bottom: 20px;">
-                        <h3 style="font-size: 14px; font-weight: 600; color: var(--avanti-text); margin-bottom: 12px;">Conversation</h3>
-                        ${repliesHtml}
+                        <h3 style="font-size: 14px; font-weight: 600; color: var(--km-text); margin-bottom: 12px;">Conversation</h3>
+                        ${replies}
                     </div>
                 ` : ''}
                 
-                ${ticket.status !== 'resolved' ? `
+                ${t.status !== 'resolved' ? `
                     <div class="avanti-form-group">
                         <label class="avanti-form-label">Add Reply</label>
                         <textarea class="avanti-form-textarea" id="ticketReply" placeholder="Type your reply..."></textarea>
                     </div>
-                    <button class="avanti-btn-primary" onclick="AvantiWidget.sendTicketReply('${docId}')">
-                        Send Reply
-                    </button>
+                    <button class="avanti-btn-primary" onclick="AvantiWidget.sendTicketReply('${docId}')">Send Reply</button>
                 ` : `
                     <div style="text-align: center; padding: 20px; background: #D1FAE5; border-radius: 12px;">
                         <span style="font-size: 24px;">✅</span>
-                        <p style="color: #065F46; font-weight: 600; margin-top: 8px;">This ticket has been resolved</p>
+                        <p style="color: #065F46; font-weight: 600; margin-top: 8px;">Ticket resolved</p>
                     </div>
                 `}
             `;
         },
         
-        // Send ticket reply
         sendTicketReply: async function(docId) {
-            const replyInput = document.getElementById('ticketReply');
-            const reply = replyInput?.value.trim();
-            
-            if (!reply) {
-                alert('Please enter a reply');
-                return;
-            }
+            const reply = document.getElementById('ticketReply')?.value.trim();
+            if (!reply) return alert('Please enter a reply');
             
             try {
                 await firebase.firestore().collection('helpdesk_tickets').doc(docId).update({
@@ -2179,18 +1994,17 @@
                 this.loadTickets();
                 this.viewTicket(docId);
             } catch (e) {
-                console.error(e);
                 alert('Failed to send reply');
             }
         },
         
-        // Render form
+        // Form
         renderForm: function() {
-            const formContent = document.getElementById('formContent');
+            const fc = document.getElementById('formContent');
             
-            let userInfoHtml = '';
+            let userInfo = '';
             if (this.user) {
-                userInfoHtml = `
+                userInfo = `
                     <div class="avanti-user-card">
                         <div class="avanti-user-card-title">Your Information</div>
                         <div class="avanti-user-row">
@@ -2209,38 +2023,29 @@
                 `;
             }
             
-            formContent.innerHTML = `
-                <div style="margin-bottom: 20px;">
-                    <button class="avanti-btn-secondary" onclick="AvantiWidget.showWelcome()" style="width: auto; padding: 10px 16px;">
-                        ← Back
-                    </button>
-                </div>
+            fc.innerHTML = `
+                <button class="avanti-back-btn" onclick="AvantiWidget.showWelcome()">← Back</button>
                 
-                <h2 style="font-size: 20px; font-weight: 700; color: var(--avanti-text); margin-bottom: 20px;">
-                    🎫 Raise a Ticket
-                </h2>
+                <h2 class="avanti-form-title">🎫 Raise a Ticket</h2>
                 
-                ${userInfoHtml}
+                ${userInfo}
                 
                 ${!this.user ? `
                     <div class="avanti-form-group">
                         <label class="avanti-form-label">Your Name *</label>
                         <input type="text" class="avanti-form-input" id="formName" placeholder="Enter your name">
                     </div>
-                    
                     <div class="avanti-form-group">
                         <label class="avanti-form-label">Student ID (if student)</label>
                         <input type="text" class="avanti-form-input" id="formStudentId" placeholder="Enter student ID">
                     </div>
-                    
                     <div class="avanti-form-group">
                         <label class="avanti-form-label">Email (if teacher)</label>
-                        <input type="email" class="avanti-form-input" id="formEmail" placeholder="Enter your email">
+                        <input type="email" class="avanti-form-input" id="formEmail" placeholder="Enter email">
                     </div>
-                    
                     <div class="avanti-form-group">
                         <label class="avanti-form-label">School *</label>
-                        <input type="text" class="avanti-form-input" id="formSchool" placeholder="Enter your school name">
+                        <input type="text" class="avanti-form-input" id="formSchool" placeholder="Enter school name">
                     </div>
                 ` : ''}
                 
@@ -2257,86 +2062,76 @@
                 
                 <div class="avanti-form-group">
                     <label class="avanti-form-label">Subject *</label>
-                    <input type="text" class="avanti-form-input" id="formSubject" placeholder="Brief description of the issue">
+                    <input type="text" class="avanti-form-input" id="formSubject" placeholder="Brief description">
                 </div>
                 
                 <div class="avanti-form-group">
                     <label class="avanti-form-label">Description *</label>
-                    <textarea class="avanti-form-textarea" id="formDesc" placeholder="Please describe your issue in detail..."></textarea>
+                    <textarea class="avanti-form-textarea" id="formDesc" placeholder="Describe your issue..."></textarea>
                 </div>
                 
-                <div class="avanti-screenshot-area">
+                <div class="avanti-form-group">
                     <label class="avanti-form-label">Screenshot (optional)</label>
-                    <div class="avanti-screenshot-dropzone" onclick="document.getElementById('screenshotInput').click()">
+                    <div class="avanti-screenshot-zone" onclick="document.getElementById('ssInput').click()">
                         <div class="icon">📷</div>
-                        <p>Click to upload a screenshot</p>
+                        <p>Click to upload</p>
                     </div>
-                    <input type="file" id="screenshotInput" accept="image/*" style="display: none;" onchange="AvantiWidget.handleScreenshot(this)">
+                    <input type="file" id="ssInput" accept="image/*" style="display: none;" onchange="AvantiWidget.handleScreenshot(this)">
                     
-                    <div class="avanti-screenshot-preview" id="screenshotPreview">
-                        <img id="screenshotImg" src="">
+                    <div class="avanti-screenshot-preview" id="ssPreview">
+                        <img id="ssImg" src="">
                         <button class="avanti-screenshot-remove" onclick="AvantiWidget.removeScreenshot()">×</button>
                     </div>
                     
-                    <div class="avanti-upload-progress" id="uploadProgress">
+                    <div class="avanti-progress" id="ssProgress">
                         <div class="avanti-progress-bar">
-                            <div class="avanti-progress-fill" id="progressFill"></div>
+                            <div class="avanti-progress-fill" id="ssFill"></div>
                         </div>
-                        <div class="avanti-progress-text" id="progressText">Processing...</div>
+                        <div class="avanti-progress-text" id="ssText">Processing...</div>
                     </div>
                 </div>
                 
-                <button class="avanti-submit-btn" id="formSubmitBtn" onclick="AvantiWidget.${this.user ? 'submitTicket' : 'submitTicketManual'}()">
+                <button class="avanti-submit-btn" id="submitBtn" onclick="AvantiWidget.${this.user ? 'submitTicket' : 'submitTicketManual'}()">
                     🎫 Submit Ticket
                 </button>
             `;
         },
         
-        // Handle screenshot upload
         handleScreenshot: function(input) {
             const file = input.files[0];
             if (!file) return;
             
-            // Validate
-            if (!file.type.startsWith('image/')) {
-                alert('Please select an image file');
-                return;
-            }
-            
-            if (file.size > 5 * 1024 * 1024) {
-                alert('Image must be less than 5MB');
-                return;
-            }
+            if (!file.type.startsWith('image/')) return alert('Please select an image');
+            if (file.size > 5 * 1024 * 1024) return alert('Image must be less than 5MB');
             
             this.isUploadingScreenshot = true;
             
-            const progressEl = document.getElementById('uploadProgress');
-            const progressFill = document.getElementById('progressFill');
-            const progressText = document.getElementById('progressText');
+            const prog = document.getElementById('ssProgress');
+            const fill = document.getElementById('ssFill');
+            const text = document.getElementById('ssText');
             
-            progressEl.style.display = 'block';
-            progressFill.style.width = '0%';
-            progressText.textContent = 'Processing...';
+            prog.style.display = 'block';
+            fill.style.width = '0%';
+            text.textContent = 'Processing...';
             
-            // Compress and preview
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
                 img.onload = () => {
-                    progressFill.style.width = '50%';
-                    progressText.textContent = 'Compressing...';
+                    fill.style.width = '50%';
+                    text.textContent = 'Compressing...';
                     
                     const canvas = document.createElement('canvas');
-                    const maxSize = 1200;
+                    const max = 1200;
                     let { width, height } = img;
                     
-                    if (width > maxSize || height > maxSize) {
+                    if (width > max || height > max) {
                         if (width > height) {
-                            height = (height / width) * maxSize;
-                            width = maxSize;
+                            height = (height / width) * max;
+                            width = max;
                         } else {
-                            width = (width / height) * maxSize;
-                            height = maxSize;
+                            width = (width / height) * max;
+                            height = max;
                         }
                     }
                     
@@ -2348,14 +2143,14 @@
                         this.screenshotFile = new File([blob], 'screenshot.jpg', { type: 'image/jpeg' });
                         this.screenshotDataUrl = canvas.toDataURL('image/jpeg', 0.85);
                         
-                        document.getElementById('screenshotImg').src = this.screenshotDataUrl;
-                        document.getElementById('screenshotPreview').style.display = 'block';
+                        document.getElementById('ssImg').src = this.screenshotDataUrl;
+                        document.getElementById('ssPreview').style.display = 'block';
                         
-                        progressFill.style.width = '100%';
-                        progressText.textContent = '✓ Ready!';
+                        fill.style.width = '100%';
+                        text.textContent = '✓ Ready!';
                         
                         setTimeout(() => {
-                            progressEl.style.display = 'none';
+                            prog.style.display = 'none';
                             this.isUploadingScreenshot = false;
                         }, 500);
                     }, 'image/jpeg', 0.85);
@@ -2365,67 +2160,43 @@
             reader.readAsDataURL(file);
         },
         
-        // Remove screenshot
         removeScreenshot: function() {
             this.screenshotFile = null;
             this.screenshotDataUrl = null;
-            document.getElementById('screenshotPreview').style.display = 'none';
-            document.getElementById('screenshotInput').value = '';
-            document.getElementById('uploadProgress').style.display = 'none';
+            document.getElementById('ssPreview').style.display = 'none';
+            document.getElementById('ssInput').value = '';
+            document.getElementById('ssProgress').style.display = 'none';
         },
         
-        // Upload screenshot to Firebase
         uploadScreenshot: async function(ticketId) {
             if (!this.screenshotFile) return null;
-            
-            if (!this.firebaseReady) {
-                return this.screenshotDataUrl || null;
-            }
+            if (!this.firebaseReady) return this.screenshotDataUrl || null;
             
             try {
-                const storageRef = firebase.storage().ref();
-                const safeTicketId = String(ticketId).replace(/[^a-zA-Z0-9]/g, '_');
-                const fileRef = storageRef.child(`helpdesk_screenshots/${safeTicketId}_${Date.now()}.jpg`);
-                
-                const uploadTask = fileRef.put(this.screenshotFile);
+                const ref = firebase.storage().ref();
+                const fileRef = ref.child(`helpdesk_screenshots/${ticketId}_${Date.now()}.jpg`);
                 
                 return new Promise((resolve, reject) => {
-                    uploadTask.on('state_changed',
-                        null,
-                        reject,
-                        async () => {
-                            const url = await fileRef.getDownloadURL();
-                            resolve(url);
-                        }
+                    fileRef.put(this.screenshotFile).on('state_changed',
+                        null, reject,
+                        async () => resolve(await fileRef.getDownloadURL())
                     );
                 });
             } catch (e) {
-                console.error('[AvantiWidget] Screenshot upload error:', e);
                 return this.screenshotDataUrl || null;
             }
         },
         
-        // Submit ticket (logged in user)
         submitTicket: async function() {
-            if (this.isUploadingScreenshot) {
-                alert('Please wait for screenshot to finish processing...');
-                return;
-            }
+            if (this.isUploadingScreenshot) return alert('Wait for screenshot...');
+            if (!this.firebaseReady) return alert('Connecting...');
             
-            if (!this.firebaseReady) {
-                alert('Please wait, connecting to server...');
-                return;
-            }
-            
-            const btn = document.getElementById('formSubmitBtn');
+            const btn = document.getElementById('submitBtn');
             const subject = document.getElementById('formSubject').value.trim();
             const desc = document.getElementById('formDesc').value.trim();
             const category = document.getElementById('formCategory').value;
             
-            if (!subject || !desc) {
-                alert('Please fill in all required fields');
-                return;
-            }
+            if (!subject || !desc) return alert('Fill all required fields');
             
             btn.disabled = true;
             btn.innerHTML = '<span class="avanti-spinner"></span> Submitting...';
@@ -2433,24 +2204,22 @@
             try {
                 const ticketId = 'AV' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase();
                 
-                let screenshotUrl = null;
+                let ssUrl = null;
                 if (this.screenshotFile) {
-                    btn.innerHTML = '<span class="avanti-spinner"></span> Uploading screenshot...';
-                    screenshotUrl = await this.uploadScreenshot(ticketId);
+                    btn.innerHTML = '<span class="avanti-spinner"></span> Uploading...';
+                    ssUrl = await this.uploadScreenshot(ticketId);
                 }
                 
                 await firebase.firestore().collection('helpdesk_tickets').add({
                     ticketId,
                     userName: this.user.name,
                     userEmail: this.user.email || '',
-                    studentId: this.user.studentId ? String(this.user.studentId) : null,
+                    studentId: this.user.studentId || null,
                     school: this.user.school,
                     userRole: this.user.type === 'student' ? 'Student' : 'Teacher',
                     userGrade: this.user.grade || null,
-                    category,
-                    subject,
-                    description: desc,
-                    screenshotUrl,
+                    category, subject, description: desc,
+                    screenshotUrl: ssUrl,
                     status: 'open',
                     priority: 'medium',
                     replies: [],
@@ -2460,27 +2229,18 @@
                 
                 this.loadTickets();
                 this.showSuccess(ticketId);
-            } catch (err) {
-                console.error(err);
-                alert('Failed to submit. Please try again.');
+            } catch (e) {
+                alert('Failed to submit');
                 btn.disabled = false;
                 btn.innerHTML = '🎫 Submit Ticket';
             }
         },
         
-        // Submit ticket (manual entry)
         submitTicketManual: async function() {
-            if (this.isUploadingScreenshot) {
-                alert('Please wait for screenshot to finish processing...');
-                return;
-            }
+            if (this.isUploadingScreenshot) return alert('Wait for screenshot...');
+            if (!this.firebaseReady) return alert('Connecting...');
             
-            if (!this.firebaseReady) {
-                alert('Please wait, connecting to server...');
-                return;
-            }
-            
-            const btn = document.getElementById('formSubmitBtn');
+            const btn = document.getElementById('submitBtn');
             const name = document.getElementById('formName').value.trim();
             const studentId = document.getElementById('formStudentId').value.trim();
             const email = document.getElementById('formEmail').value.trim();
@@ -2489,10 +2249,7 @@
             const desc = document.getElementById('formDesc').value.trim();
             const category = document.getElementById('formCategory').value;
             
-            if (!name || !school || !subject || !desc) {
-                alert('Please fill in all required fields');
-                return;
-            }
+            if (!name || !school || !subject || !desc) return alert('Fill all required fields');
             
             btn.disabled = true;
             btn.innerHTML = '<span class="avanti-spinner"></span> Submitting...';
@@ -2500,10 +2257,10 @@
             try {
                 const ticketId = 'AV' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 5).toUpperCase();
                 
-                let screenshotUrl = null;
+                let ssUrl = null;
                 if (this.screenshotFile) {
-                    btn.innerHTML = '<span class="avanti-spinner"></span> Uploading screenshot...';
-                    screenshotUrl = await this.uploadScreenshot(ticketId);
+                    btn.innerHTML = '<span class="avanti-spinner"></span> Uploading...';
+                    ssUrl = await this.uploadScreenshot(ticketId);
                 }
                 
                 await firebase.firestore().collection('helpdesk_tickets').add({
@@ -2513,10 +2270,8 @@
                     studentId: studentId || null,
                     school,
                     userRole: studentId ? 'Student' : (email ? 'Teacher' : 'Unknown'),
-                    category,
-                    subject,
-                    description: desc,
-                    screenshotUrl,
+                    category, subject, description: desc,
+                    screenshotUrl: ssUrl,
                     status: 'open',
                     priority: 'medium',
                     replies: [],
@@ -2525,34 +2280,26 @@
                 });
                 
                 this.showSuccess(ticketId);
-            } catch (err) {
-                console.error(err);
-                alert('Failed to submit. Please try again.');
+            } catch (e) {
+                alert('Failed to submit');
                 btn.disabled = false;
                 btn.innerHTML = '🎫 Submit Ticket';
             }
         },
         
-        // Show success screen
         showSuccess: function(ticketId) {
-            const formContent = document.getElementById('formContent');
-            formContent.innerHTML = `
-                <div class="avanti-success-screen">
+            document.getElementById('formContent').innerHTML = `
+                <div class="avanti-success">
                     <div class="icon">✅</div>
                     <h3>Ticket Submitted!</h3>
                     <div class="ticket-id">${ticketId}</div>
-                    <p>We've received your ticket and will get back to you soon. You'll be notified when there's an update.</p>
-                    <button class="avanti-btn-primary" onclick="AvantiWidget.showTickets()">
-                        View My Tickets
-                    </button>
-                    <button class="avanti-btn-secondary" onclick="AvantiWidget.showWelcome()">
-                        Back to Home
-                    </button>
+                    <p>We'll notify you when there's an update.</p>
+                    <button class="avanti-btn-primary" onclick="AvantiWidget.showTickets()">View Tickets</button>
+                    <button class="avanti-btn-secondary" onclick="AvantiWidget.showWelcome()">Back to Home</button>
                 </div>
             `;
         },
         
-        // Update notification badge
         updateNotificationBadge: function() {
             const badge = document.getElementById('fabBadge');
             if (badge && this.unreadNotifications > 0) {
@@ -2563,14 +2310,7 @@
             }
         },
         
-        // Load user notifications
-        loadUserNotifications: function() {
-            // Placeholder - notifications system
-            console.log('[AvantiWidget] Notifications loaded');
-        },
-        
-        // Show toast
-        showToast: function(message, duration = 4000) {
+        showToast: function(msg, duration = 4000) {
             let toast = document.querySelector('.avanti-toast');
             if (!toast) {
                 toast = document.createElement('div');
@@ -2578,14 +2318,13 @@
                 document.body.appendChild(toast);
             }
             
-            toast.textContent = message;
+            toast.textContent = msg;
             toast.classList.add('show');
-            
             setTimeout(() => toast.classList.remove('show'), duration);
         }
     };
 
-    // Initialize when DOM is ready
+    // Init
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => AvantiWidget.init());
     } else {
