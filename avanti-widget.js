@@ -31,10 +31,10 @@
 .avanti-fab::before {
     content: "";
     position: absolute;
-    inset: -10px;
+    inset: -5px;                 /* smaller ring */
     border-radius: 50%;
-    border: 3px solid #FFD400;
-    animation: avantiBlink 1.5s infinite;
+    border: 2px solid #FFD400;   /* thinner ring */
+    animation: avantiBlink 3s infinite; /* slower animation */
     pointer-events: none;
 }
 
