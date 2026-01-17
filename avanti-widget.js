@@ -1429,13 +1429,13 @@
             this.ensureVisible();
             setInterval(() => this.ensureVisible(), 2000);
             
+            // Save original welcome content BEFORE personalization (save structure only)
+            const welcomeScroll = document.querySelector('.avanti-welcome-scroll');
+            if (welcomeScroll && !this._welcomeHTML) {
+                this._welcomeHTML = welcomeScroll.innerHTML;
+            }
+            
             console.log('[AvantiWidget] Init complete');
-            // Save original welcome content
-const welcomeScroll = document.querySelector('.avanti-welcome-scroll');
-if (welcomeScroll && !this._welcomeHTML) {
-    this._welcomeHTML = welcomeScroll.innerHTML;
-}
-
         },
         
         // Update welcome text with user name and time-based greeting
@@ -1550,35 +1550,34 @@ if (welcomeScroll && !this._welcomeHTML) {
         },
         
         setTeacherUser: function(u) {
-    this.user = {
-        type: 'teacher',
-        name: u.displayName || u.email?.split('@')[0] || '',
-        email: u.email || '',
-        school: ''
-    };
-
-    this._userNameCache = this.user.name || '';
-
-    // Update welcome text with teacher name
-    this.updateWelcomeText();
-
-    try {
-        firebase.firestore().collection('teachers')
-            .where('email', '==', u.email)
-            .limit(1)
-            .get()
-            .then(snap => {
-                if (!snap.empty) {
-                    const t = snap.docs[0].data();
-                    this.user.name = t.name || this.user.name;
-                    this.user.school = t.school || t.center || '';
-                    this._userNameCache = this.user.name || '';
-                    this.updateWelcomeText();
-                }
-            })
-            .catch(() => {});
-    } catch (e) {}
-},
+            this.user = {
+                type: 'teacher',
+                name: u.displayName || u.email?.split('@')[0] || '',
+                email: u.email || '',
+                school: ''
+            };
+            this._userNameCache = this.user.name || '';
+            
+            // Update welcome text with teacher name
+            this.updateWelcomeText();
+            
+            try {
+                firebase.firestore().collection('teachers')
+                    .where('email', '==', u.email)
+                    .limit(1)
+                    .get()
+                    .then(snap => {
+                        if (!snap.empty) {
+                            const t = snap.docs[0].data();
+                            this.user.name = t.name || this.user.name;
+                            this.user.school = t.school || t.center || '';
+                            this._userNameCache = this.user.name || '';
+                            // Update again with full name from Firestore
+                            this.updateWelcomeText();
+                        }
+                    }).catch(() => {});
+            } catch (e) {}
+        },
         
         // Greeting
         showGreeting: function() {
@@ -1627,30 +1626,43 @@ if (welcomeScroll && !this._welcomeHTML) {
         },
         
         showWelcome: function() {
-    this.setActiveView('welcomeView');
-    this.setActiveNav('navWelcome');
-    const userName =
-    this.user?.name ||
-    this.user?.displayName ||
-    this.user?.fullName ||
-    'there';
-
-
-    const container = document.querySelector('.avanti-welcome-scroll');
-    if (container && this._welcomeHTML) {
-        container.innerHTML = this._welcomeHTML;
-    }
-    const heading = container.querySelector('h2');
-if (heading) {
-    heading.innerText = `Namaste ${userName}! How can we help you?`;
-}
-
-    // Re-attach FAQ search click
-    const searchBox = container?.querySelector('.avanti-search-box');
-    if (searchBox) {
-        searchBox.onclick = () => this.showFAQs();
-    }
-},
+            this.setActiveView('welcomeView');
+            this.setActiveNav('navWelcome');
+            
+            // Get fresh greeting based on current time
+            const greeting = this.getGreeting();
+            
+            // Get username from user object or cache
+            const userName = this.user?.name || this._userNameCache || '';
+            
+            // Restore original HTML structure if needed
+            const container = document.querySelector('.avanti-welcome-scroll');
+            if (container && this._welcomeHTML) {
+                container.innerHTML = this._welcomeHTML;
+            }
+            
+            // Update the greeting label (GOOD MORNING/AFTERNOON/EVENING)
+            const heroLabel = document.getElementById('heroLabel');
+            if (heroLabel) {
+                heroLabel.textContent = greeting.label;
+            }
+            
+            // Update the main hero title with Namaste + username
+            const heroTitle = document.getElementById('heroTitle');
+            if (heroTitle) {
+                if (userName) {
+                    heroTitle.textContent = `Namaste ${userName}! How can we help you?`;
+                } else {
+                    heroTitle.textContent = 'Namaste! How can we help you?';
+                }
+            }
+            
+            // Re-attach FAQ search click
+            const searchBox = container?.querySelector('.avanti-search-box');
+            if (searchBox) {
+                searchBox.onclick = () => this.showFAQs();
+            }
+        },
         
         showChat: function() {
             this.setActiveView('chatView');
@@ -1671,36 +1683,56 @@ if (heading) {
         },
         
         showFAQs: function () {
-    this.setActiveView('faqView');
-    this.setActiveNav('navFaqs');
+            this.setActiveView('faqView');
+            this.setActiveNav('navFaqs');
 
-    const container = document.getElementById('faqList');
-    if (!container) return;
+            const container = document.getElementById('faqList');
+            if (!container) return;
 
-    container.innerHTML = `<div class="avanti-section-label">FAQs</div>`;
+            // Show loading if FAQs haven't loaded yet
+            if (!this.faqs || this.faqs.length === 0) {
+                // Check if we're still waiting for Firebase
+                if (!this.firebaseReady) {
+                    container.innerHTML = `
+                        <div class="avanti-section-label">FAQs</div>
+                        <div class="avanti-empty">
+                            <div class="avanti-empty-icon">⏳</div>
+                            <p>Loading FAQs...</p>
+                        </div>
+                    `;
+                    // Retry loading FAQs
+                    setTimeout(() => {
+                        if (this.firebaseReady && this.currentView === 'faqView') {
+                            this.loadFAQs();
+                        }
+                    }, 1000);
+                    return;
+                }
+                
+                container.innerHTML = `
+                    <div class="avanti-section-label">FAQs</div>
+                    <div class="avanti-empty">
+                        <div class="avanti-empty-icon">😕</div>
+                        <p>No FAQs available yet.</p>
+                    </div>
+                    <button class="avanti-btn-primary" onclick="AvantiWidget.showForm()">
+                        🎫 Raise a Ticket
+                    </button>
+                `;
+                return;
+            }
 
-    if (!this.faqs || this.faqs.length === 0) {
-        container.innerHTML += `
-            <div class="avanti-empty">
-                <div class="avanti-empty-icon">😕</div>
-                <p>No FAQs available yet.</p>
-            </div>
-            <button class="avanti-btn-primary" onclick="AvantiWidget.showForm()">
-                🎫 Raise a Ticket
-            </button>
-        `;
-        return;
-    }
-
-    this.faqs.forEach(faq => {
-        container.innerHTML += `
-            <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${faq.id}')">
-                <h4>${faq.question}</h4>
-                <div class="category">${faq.category || 'General'}</div>
-            </div>
-        `;
-    });
-},
+            container.innerHTML = `<div class="avanti-section-label">FAQs</div>`;
+            
+            this.faqs.forEach(faq => {
+                container.innerHTML += `
+                    <div class="avanti-faq-card" onclick="AvantiWidget.showFAQAnswer('${faq.id}')">
+                        <h4>${faq.question}</h4>
+                        <div class="category">${faq.category || 'General'}</div>
+                    </div>
+                `;
+            });
+        },
         
         showTickets: function() {
             this.setActiveView('ticketsView');
@@ -1715,7 +1747,11 @@ if (heading) {
         
         // Load FAQs
         loadFAQs: function() {
-            if (!this.firebaseReady) return;
+            if (!this.firebaseReady) {
+                console.log('[AvantiWidget] Firebase not ready, retrying FAQs load...');
+                setTimeout(() => this.loadFAQs(), 500);
+                return;
+            }
             
             firebase.firestore().collection('helpdesk_faqs')
                 .orderBy('order', 'asc')
@@ -1723,13 +1759,16 @@ if (heading) {
                 .get()
                 .then(snap => {
                     this.faqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                    console.log('[AvantiWidget] ✓ FAQs:', this.faqs.length);
+                    console.log('[AvantiWidget] ✓ FAQs loaded:', this.faqs.length);
+                    
+                    // If user is currently viewing FAQs, refresh the display
+                    if (this.currentView === 'faqView') {
+                        this.showFAQs();
+                    }
                 })
-                .catch(e => console.log('[AvantiWidget] FAQ error:', e));
-            console.log('[FAQs loaded]', this.faqs);
-            if (this.currentView === 'faqView') {
-    this.showFAQs();
-}
+                .catch(e => {
+                    console.log('[AvantiWidget] FAQ error:', e);
+                });
         },
         
         // Search
@@ -1876,11 +1915,19 @@ if (heading) {
         
         // Tickets
         loadTickets: function() {
-            if (!this.user) {
-    setTimeout(() => this.loadTickets(), 500);
-    return;
-}
             const list = document.getElementById('ticketsList');
+            
+            // Wait for user detection
+            if (!this.user) {
+                list.innerHTML = `
+                    <div class="avanti-empty">
+                        <div class="avanti-empty-icon">⏳</div>
+                        <p>Loading your tickets...</p>
+                    </div>
+                `;
+                setTimeout(() => this.loadTickets(), 500);
+                return;
+            }
             
             if (!this.firebaseReady) {
                 list.innerHTML = `
@@ -1910,6 +1957,7 @@ if (heading) {
             query.get()
                 .then(snap => {
                     this.tickets = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+                    console.log('[AvantiWidget] ✓ Tickets loaded:', this.tickets.length);
                     this.renderTicketsList(this.tickets);
                     this.updateTicketsBadge();
                 })
