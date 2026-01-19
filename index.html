@@ -5,6 +5,51 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
   
+  <!-- ✅ CRITICAL: Clear old buggy service worker caches IMMEDIATELY -->
+  <!-- This runs before anything else to fix CORS issues -->
+  <script>
+    (function() {
+      var SW_VERSION = '3.9.0';
+      var storedVersion = localStorage.getItem('swVersion');
+      
+      // If version mismatch, clear everything
+      if (storedVersion !== SW_VERSION) {
+        console.log('[Boot] Clearing old service worker caches...');
+        
+        // Clear all caches
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            names.forEach(function(name) {
+              caches.delete(name);
+              console.log('[Boot] Deleted cache:', name);
+            });
+          });
+        }
+        
+        // Unregister all service workers
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            registrations.forEach(function(registration) {
+              registration.unregister();
+              console.log('[Boot] Unregistered service worker');
+            });
+          });
+        }
+        
+        // Store new version
+        localStorage.setItem('swVersion', SW_VERSION);
+        
+        // Reload after clearing (only once)
+        if (!sessionStorage.getItem('swCleared')) {
+          sessionStorage.setItem('swCleared', 'true');
+          setTimeout(function() {
+            window.location.reload(true);
+          }, 100);
+        }
+      }
+    })();
+  </script>
+  
   <!-- ✅ PERFORMANCE: Resource hints for faster connections -->
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
@@ -23,6 +68,12 @@
        ======================================== */
     
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    /* ✅ FIX: Ensure all interactive elements are clickable */
+    button, a, input, select, textarea, [role="button"], [onclick] {
+      pointer-events: auto !important;
+      cursor: pointer;
+    }
     
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -1498,13 +1549,104 @@
   </script>
   
   <!-- React (required for app) -->
-  <!-- ✅ FIX: Using crossorigin="anonymous" explicitly to avoid CORS credential issues -->
-  <script crossorigin="anonymous" src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin="anonymous" src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- Tailwind CSS - with crossorigin to avoid CORS issues -->
-  <script src="https://cdn.tailwindcss.com" crossorigin="anonymous"></script>
+  <!-- Tailwind CSS -->
+  <!-- ✅ FIX: Load without crossorigin to avoid CORS issues with service worker -->
+  <script>
+    // Load Tailwind with error handling and fallback
+    (function() {
+      var tw = document.createElement('script');
+      tw.src = 'https://cdn.tailwindcss.com';
+      tw.onerror = function() {
+        console.error('[Tailwind] Failed to load - applying fallback styles');
+        window.tailwindFailed = true;
+        // Apply critical fallback styles
+        var style = document.createElement('style');
+        style.textContent = `
+          .flex { display: flex; }
+          .flex-col { flex-direction: column; }
+          .items-center { align-items: center; }
+          .justify-center { justify-content: center; }
+          .justify-between { justify-content: space-between; }
+          .gap-2 { gap: 0.5rem; }
+          .gap-4 { gap: 1rem; }
+          .p-2 { padding: 0.5rem; }
+          .p-4 { padding: 1rem; }
+          .p-6 { padding: 1.5rem; }
+          .px-4 { padding-left: 1rem; padding-right: 1rem; }
+          .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+          .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+          .m-2 { margin: 0.5rem; }
+          .m-4 { margin: 1rem; }
+          .mb-2 { margin-bottom: 0.5rem; }
+          .mb-4 { margin-bottom: 1rem; }
+          .mt-4 { margin-top: 1rem; }
+          .ml-auto { margin-left: auto; }
+          .w-full { width: 100%; }
+          .h-full { height: 100%; }
+          .min-h-screen { min-height: 100vh; }
+          .text-center { text-align: center; }
+          .text-sm { font-size: 0.875rem; }
+          .text-lg { font-size: 1.125rem; }
+          .text-xl { font-size: 1.25rem; }
+          .text-2xl { font-size: 1.5rem; }
+          .font-bold { font-weight: 700; }
+          .font-semibold { font-weight: 600; }
+          .text-white { color: white; }
+          .text-gray-400 { color: #9ca3af; }
+          .text-gray-500 { color: #6b7280; }
+          .text-gray-600 { color: #4b5563; }
+          .text-green-400 { color: #4ade80; }
+          .text-green-500 { color: #22c55e; }
+          .text-red-500 { color: #ef4444; }
+          .bg-white { background-color: white; }
+          .bg-gray-100 { background-color: #f3f4f6; }
+          .bg-gray-200 { background-color: #e5e7eb; }
+          .rounded { border-radius: 0.25rem; }
+          .rounded-lg { border-radius: 0.5rem; }
+          .rounded-xl { border-radius: 0.75rem; }
+          .rounded-2xl { border-radius: 1rem; }
+          .rounded-full { border-radius: 9999px; }
+          .shadow { box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+          .shadow-lg { box-shadow: 0 10px 15px rgba(0,0,0,0.1); }
+          .border { border-width: 1px; }
+          .border-2 { border-width: 2px; }
+          .border-gray-200 { border-color: #e5e7eb; }
+          .border-gray-300 { border-color: #d1d5db; }
+          .cursor-pointer { cursor: pointer; }
+          .overflow-hidden { overflow: hidden; }
+          .overflow-y-auto { overflow-y: auto; }
+          .grid { display: grid; }
+          .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+          .hidden { display: none; }
+          .block { display: block; }
+          .inline-block { display: inline-block; }
+          .relative { position: relative; }
+          .absolute { position: absolute; }
+          .fixed { position: fixed; }
+          .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+          .top-0 { top: 0; }
+          .right-0 { right: 0; }
+          .left-0 { left: 0; }
+          .z-50 { z-index: 50; }
+          .transition { transition: all 0.2s; }
+          .hover\\:bg-gray-100:hover { background-color: #f3f4f6; }
+          .space-y-2 > * + * { margin-top: 0.5rem; }
+          .space-y-4 > * + * { margin-top: 1rem; }
+        `;
+        document.head.appendChild(style);
+      };
+      tw.onload = function() {
+        console.log('[Tailwind] Loaded successfully');
+        window.tailwindFailed = false;
+      };
+      document.head.appendChild(tw);
+    })();
+  </script>
   
   <!-- ✅ PERFORMANCE FIX: Defer non-critical scripts -->
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
@@ -3107,6 +3249,8 @@ body.has-install-banner .sidebar {
   padding: 2px 6px;
   border-radius: 4px;
   transition: all 0.2s;
+  pointer-events: auto !important;
+  z-index: 10;
 }
 
 .online-status-card .close-btn:hover {
@@ -34199,7 +34343,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.8.1'; // ✅ Smart Hybrid Sync: 40-50% cost reduction, tiered refresh, visibility API
+  const CURRENT_VERSION = '3.9.0'; // ✅ Fixed CDN CORS issues, Tailwind loading, button clicks
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
