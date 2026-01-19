@@ -1162,8 +1162,8 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   
-  <!-- ✅ CRITICAL FIX: Initialize Firebase IMMEDIATELY after SDK loads -->
-  <!-- This prevents "No Firebase App" errors from race conditions -->
+  <!-- ✅ CRITICAL FIX: Initialize Firebase AND Firestore settings IMMEDIATELY -->
+  <!-- Settings must be applied before ANY Firestore operations -->
   <script>
     (function() {
       const firebaseConfig = {
@@ -1181,6 +1181,37 @@
           firebase.initializeApp(firebaseConfig);
           console.log('✅ Firebase initialized early');
           window._firebaseEarlyInit = true;
+          
+          // ✅ CRITICAL: Configure Firestore settings IMMEDIATELY after init
+          // This MUST happen before any other Firestore operations
+          const db = firebase.firestore();
+          
+          // Set cache size for offline support
+          db.settings({ 
+            cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+            merge: true // Merge with existing settings if any
+          });
+          
+          // Enable persistence for offline support
+          db.enablePersistence({ synchronizeTabs: true })
+            .then(() => {
+              console.log('✅ Offline persistence enabled');
+              window._firestoreInitialized = true;
+            })
+            .catch((err) => {
+              window._firestoreInitialized = true;
+              if (err.code === 'failed-precondition') {
+                console.log('ℹ️ Persistence limited to one tab');
+              } else if (err.code === 'unimplemented') {
+                console.log('ℹ️ Browser does not support persistence');
+              } else {
+                console.warn('Persistence error:', err.message);
+              }
+            });
+            
+          // Store db reference globally for later use
+          window._earlyDb = db;
+          
         } catch (e) {
           console.error('Firebase early init error:', e);
         }
@@ -1190,24 +1221,31 @@
   
   <!-- ✅ COST FIX: Enable offline persistence early -->
   <script>
-    window._firestoreInitialized = false;
+    window._firestoreInitialized = window._firestoreInitialized || false;
     window._enableOfflinePersistence = function(db) {
-      if (window._firestoreInitialized) return;
+      // ✅ FIX: Skip if already initialized in early init block
+      if (window._firestoreInitialized) {
+        console.log('ℹ️ Firestore already configured in early init');
+        return;
+      }
       window._firestoreInitialized = true;
       
-      // Enable unlimited cache for offline support
-      db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
-      
-      // Enable persistence - reduces Firebase reads by caching locally
-      db.enablePersistence({ synchronizeTabs: true })
-        .then(() => console.log('✅ Offline persistence enabled - reduces Firebase costs'))
-        .catch((err) => {
-          if (err.code === 'failed-precondition') {
-            console.log('Persistence limited to one tab');
-          } else if (err.code === 'unimplemented') {
-            console.log('Browser does not support persistence');
-          }
-        });
+      // Only configure if not done early (fallback)
+      try {
+        db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+        db.enablePersistence({ synchronizeTabs: true })
+          .then(() => console.log('✅ Offline persistence enabled (fallback)'))
+          .catch((err) => {
+            if (err.code === 'failed-precondition') {
+              console.log('Persistence limited to one tab');
+            } else if (err.code === 'unimplemented') {
+              console.log('Browser does not support persistence');
+            }
+          });
+      } catch (settingsErr) {
+        // Settings already applied - this is fine
+        console.log('ℹ️ Firestore settings already applied');
+      }
     };
     
     // ========================================
@@ -4050,7 +4088,13 @@ if (!firebaseInitialized) {
 }
 
 // ✅ FIX: Helper to safely get Firestore instance
+// Uses early initialized db if available to avoid settings conflicts
 const getFirestore = () => {
+  // Use the early-initialized db if available
+  if (window._earlyDb) {
+    return window._earlyDb;
+  }
+  
   if (!firebaseInitialized || !firebase.apps.length) {
     console.warn('Firebase not initialized, attempting to initialize...');
     if (!firebase.apps.length) {
@@ -4062,8 +4106,9 @@ const getFirestore = () => {
 
 const db = getFirestore();
 
-// ✅ COST FIX: Enable offline persistence - reduces Firebase reads by caching locally
-if (window._enableOfflinePersistence) {
+// ✅ COST FIX: Enable offline persistence - only if not already done
+// The early init block should have already done this
+if (window._enableOfflinePersistence && !window._firestoreInitialized) {
   window._enableOfflinePersistence(db);
 }
 
