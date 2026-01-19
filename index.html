@@ -3579,7 +3579,59 @@ document.addEventListener('click', function initSound() {
 }, { once: true });
 
 // Default schools - will be overridden by dynamic schools from Firebase
+// ✅ FIX: Start with empty array, will be populated from Firebase or curriculum data
 let SCHOOLS=['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal','JNV Bharuch'];
+let ALL_SCHOOLS_COUNT = 0; // ✅ Track total schools separately for dashboard display
+
+// ✅ FIX: Extract unique schools from curriculum data (fallback when schoolsList fails)
+function extractSchoolsFromCurriculum(curriculum) {
+  const schools = new Set();
+  Object.keys(curriculum).forEach(docId => {
+    // docId format: "School Name_Subject_Grade"
+    const parts = docId.split('_');
+    if (parts.length >= 3) {
+      // School name might have underscores, so everything except last 2 parts
+      const schoolName = parts.slice(0, -2).join('_');
+      if (schoolName) schools.add(schoolName);
+    }
+  });
+  return Array.from(schools).sort();
+}
+
+// ✅ FIX: Get cached schools from localStorage as immediate fallback
+function getCachedSchools() {
+  try {
+    const cached = localStorage.getItem('curriculum_schools_cache');
+    if (cached) {
+      const data = JSON.parse(cached);
+      // Cache valid for 24 hours
+      if (data.timestamp && Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
+        return data.schools || [];
+      }
+    }
+  } catch (e) {}
+  return [];
+}
+
+// ✅ FIX: Save schools to cache
+function cacheSchools(schools) {
+  try {
+    localStorage.setItem('curriculum_schools_cache', JSON.stringify({
+      schools: schools,
+      timestamp: Date.now()
+    }));
+  } catch (e) {}
+}
+
+// ✅ Initialize from cache immediately (prevents showing 6 schools on slow load)
+(function() {
+  const cachedSchools = getCachedSchools();
+  if (cachedSchools.length > 0) {
+    SCHOOLS = cachedSchools;
+    ALL_SCHOOLS_COUNT = cachedSchools.length;
+    console.log('📊 [Schools] Loaded', cachedSchools.length, 'schools from cache');
+  }
+})();
 
 // ========================================
 // HIERARCHY ROLE CONSTANTS (4-Level)
@@ -11953,12 +12005,34 @@ useEffect(() => {
       
       // Note: Managers already set in critical data load above
       
-      // Process dynamic schools list - ✅ FIX: Add null safety
+      // Process dynamic schools list - ✅ FIX: Add null safety and curriculum fallback
       if (schoolsSnap && schoolsSnap.docs && schoolsSnap.docs.length > 0) {
         const schoolsData = schoolsSnap.docs.map(d => d.data().name).filter(Boolean);
         if (schoolsData.length > 0) {
           SCHOOLS = schoolsData; // Update global SCHOOLS array
+          ALL_SCHOOLS_COUNT = schoolsData.length;
+          cacheSchools(schoolsData); // ✅ Cache for offline/slow loads
+          console.log('📊 [Schools] Loaded', schoolsData.length, 'schools from Firebase schoolsList');
         }
+      } else {
+        // ✅ FIX: Fallback to extracting schools from curriculum data
+        console.log('⚠️ [Schools] schoolsList empty or failed - using curriculum fallback');
+        const curriculumSchools = extractSchoolsFromCurriculum(currMap);
+        if (curriculumSchools.length > SCHOOLS.length) {
+          SCHOOLS = curriculumSchools;
+          ALL_SCHOOLS_COUNT = curriculumSchools.length;
+          cacheSchools(curriculumSchools);
+          console.log('📊 [Schools] Extracted', curriculumSchools.length, 'schools from curriculum');
+        }
+      }
+      
+      // ✅ ADDITIONAL FIX: Also check curriculum for any missing schools
+      const curriculumSchools = extractSchoolsFromCurriculum(currMap);
+      if (curriculumSchools.length > SCHOOLS.length) {
+        console.log('📊 [Schools] Found additional schools in curriculum:', curriculumSchools.length, 'vs', SCHOOLS.length);
+        SCHOOLS = curriculumSchools;
+        ALL_SCHOOLS_COUNT = curriculumSchools.length;
+        cacheSchools(curriculumSchools);
       }
       
       // Note: Academic year settings already set in critical data load above
@@ -16724,7 +16798,7 @@ const schoolRankings=useMemo(()=>{
 {/* Profile Completion Card - Shows when profile incomplete */}
 <ProfileCompletionCard currentUser={currentUser} onNavigateToProfile={onNavigateToProfile} />
 
-<div className="grid md:grid-cols-4 gap-4"><div className="stat-card avanti-gradient text-white"><div className="text-sm opacity-90">Your School Rank</div><div className="text-5xl font-bold">#{mySchoolRank}</div><div className="text-sm mt-2">Out of {SCHOOLS.length} schools</div></div><div className="stat-card bg-gradient-to-br from-green-500 to-emerald-600 text-white"><div className="text-sm opacity-90">Best Performing School</div><div className="text-2xl font-bold mt-2">{schoolRankings[0]?.school}</div><div className="text-sm mt-2">{schoolRankings[0]?.percentage}% completed</div></div><div className="stat-card bg-gradient-to-br from-orange-500 to-red-600 text-white"><div className="text-sm opacity-90">Lagging Subject (Your School)</div><div className="text-2xl font-bold mt-2">{laggingSubject?.subject}</div><div className="text-sm mt-2">{laggingSubject?.percentage}% completed</div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">🏆 School Rankings</h3><div className="space-y-3">{schoolRankings.map((rank,index)=><div key={rank.school} className={`ranking-card ${index===0?'ranking-1':index===1?'ranking-2':index===2?'ranking-3':''} ${rank.school===mySchool?'bg-yellow-50':''}`}><div className="flex justify-between items-center"><div className="flex items-center gap-4"><div className="text-2xl font-bold text-gray-400">#{index+1}</div><div><div className="font-bold text-lg">{rank.school} {rank.school===mySchool&&'⭐'}</div><div className="text-sm text-gray-600">{rank.completed} / {rank.total} chapters completed</div></div></div><div className="text-3xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div></div>)}</div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">📚 Subject Performance in {mySchool}</h3><div className="grid md:grid-cols-2 gap-4">{subjectRankings.map(rank=><div key={rank.subject} className="border-2 rounded-xl p-4"><div className="flex justify-between items-center mb-2"><div className="font-bold text-lg">{rank.subject}</div><div className="text-2xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div><div className="h-2 bg-gray-200 rounded-full"><div className="h-2 avanti-gradient rounded-full" style={{width:`${rank.percentage}%`}}/></div><div className="text-sm text-gray-600 mt-2">{rank.completed} / {rank.total} chapters</div></div>)}</div></div><div className="stat-card bg-gradient-to-br from-purple-500 to-pink-600 text-white">
+<div className="grid md:grid-cols-4 gap-4"><div className="stat-card avanti-gradient text-white"><div className="text-sm opacity-90">Your School Rank</div><div className="text-5xl font-bold">#{mySchoolRank}</div><div className="text-sm mt-2">Out of {schoolRankings.length || SCHOOLS.length} schools</div></div><div className="stat-card bg-gradient-to-br from-green-500 to-emerald-600 text-white"><div className="text-sm opacity-90">Best Performing School</div><div className="text-2xl font-bold mt-2">{schoolRankings[0]?.school}</div><div className="text-sm mt-2">{schoolRankings[0]?.percentage}% completed</div></div><div className="stat-card bg-gradient-to-br from-orange-500 to-red-600 text-white"><div className="text-sm opacity-90">Lagging Subject (Your School)</div><div className="text-2xl font-bold mt-2">{laggingSubject?.subject}</div><div className="text-sm mt-2">{laggingSubject?.percentage}% completed</div></div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">🏆 School Rankings</h3><div className="space-y-3">{schoolRankings.map((rank,index)=><div key={rank.school} className={`ranking-card ${index===0?'ranking-1':index===1?'ranking-2':index===2?'ranking-3':''} ${rank.school===mySchool?'bg-yellow-50':''}`}><div className="flex justify-between items-center"><div className="flex items-center gap-4"><div className="text-2xl font-bold text-gray-400">#{index+1}</div><div><div className="font-bold text-lg">{rank.school} {rank.school===mySchool&&'⭐'}</div><div className="text-sm text-gray-600">{rank.completed} / {rank.total} chapters completed</div></div></div><div className="text-3xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div></div>)}</div></div><div className="bg-white p-6 rounded-2xl shadow-lg"><h3 className="text-2xl font-bold mb-4">📚 Subject Performance in {mySchool}</h3><div className="grid md:grid-cols-2 gap-4">{subjectRankings.map(rank=><div key={rank.subject} className="border-2 rounded-xl p-4"><div className="flex justify-between items-center mb-2"><div className="font-bold text-lg">{rank.subject}</div><div className="text-2xl font-bold" style={{color:'var(--avanti-red)'}}>{rank.percentage}%</div></div><div className="h-2 bg-gray-200 rounded-full"><div className="h-2 avanti-gradient rounded-full" style={{width:`${rank.percentage}%`}}/></div><div className="text-sm text-gray-600 mt-2">{rank.completed} / {rank.total} chapters</div></div>)}</div></div><div className="stat-card bg-gradient-to-br from-purple-500 to-pink-600 text-white">
   <div className="text-sm opacity-90">My Attendance (This Month)</div>
   <div className="text-2xl font-bold mt-2">
     {teacherAttendance.filter(a=>a.teacherId===currentUser.afid&&getMonthYear(a.date)===getMonthYear(getTodayDate())).length} days
@@ -32868,7 +32942,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.7.4'; // ✅ FIX: Removed bottom nav + Firebase index fallback + Better student loading
+  const CURRENT_VERSION = '3.7.5'; // ✅ FIX: School rankings showing all schools + Notification badge mark all read fix
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
@@ -34555,7 +34629,27 @@ const NotificationManager = {
     
     updateUnreadCount: function() {
         const readIds = JSON.parse(localStorage.getItem('readNotifications') || '[]');
-        this.unreadCount = this.notifications.filter(n => !readIds.includes(n.id)).length;
+        // ✅ FIX: Also check markAllRead timestamp
+        const markAllReadTime = parseInt(localStorage.getItem('notificationMarkAllReadTime') || '0');
+        
+        this.unreadCount = this.notifications.filter(n => {
+            // If notification ID is explicitly marked as read, it's read
+            if (readIds.includes(n.id)) return false;
+            
+            // ✅ FIX: If notification was created BEFORE markAllRead time, consider it read
+            // This prevents old notifications from showing as unread after IDs change
+            if (markAllReadTime > 0) {
+                const notificationTime = n.createdAt?.toDate?.() || n.createdAt;
+                if (notificationTime) {
+                    const notifTimestamp = notificationTime instanceof Date 
+                        ? notificationTime.getTime() 
+                        : new Date(notificationTime).getTime();
+                    if (notifTimestamp <= markAllReadTime) return false;
+                }
+            }
+            
+            return true; // Notification is unread
+        }).length;
         
         const badge = document.getElementById('notificationBadge');
         if (badge) {
@@ -34572,6 +34666,9 @@ const NotificationManager = {
         if (!list) return;
         
         const readIds = JSON.parse(localStorage.getItem('readNotifications') || '[]');
+        // ✅ FIX: Also check markAllRead timestamp
+        const markAllReadTime = parseInt(localStorage.getItem('notificationMarkAllReadTime') || '0');
+        
         const permissionBanner = Notification.permission !== 'granted' ? 
             '<div class="enable-notifications-banner"><span class="text">🔔 Enable push notifications to get instant updates</span><button class="btn" onclick="NotificationManager.requestPermission()">Enable</button></div>' : '';
         
@@ -34581,7 +34678,20 @@ const NotificationManager = {
         }
         
         list.innerHTML = permissionBanner + this.notifications.map(n => {
-            const isUnread = !readIds.includes(n.id);
+            // ✅ FIX: Check both explicit readIds AND markAllRead timestamp
+            let isUnread = !readIds.includes(n.id);
+            
+            // If notification was created before markAllRead time, it's read
+            if (isUnread && markAllReadTime > 0) {
+                const notificationTime = n.createdAt?.toDate?.() || n.createdAt;
+                if (notificationTime) {
+                    const notifTimestamp = notificationTime instanceof Date 
+                        ? notificationTime.getTime() 
+                        : new Date(notificationTime).getTime();
+                    if (notifTimestamp <= markAllReadTime) isUnread = false;
+                }
+            }
+            
             const time = n.createdAt?.toDate?.() || new Date();
             const timeAgo = this.timeAgo(time);
             const isTicket = n.source === 'ticket' || n.type === 'ticket_update';
@@ -34698,11 +34808,19 @@ const NotificationManager = {
     markAllRead: function() {
         const readIds = this.notifications.map(n => n.id);
         localStorage.setItem('readNotifications', JSON.stringify(readIds));
+        
+        // ✅ FIX: Also save the timestamp of when "mark all read" was clicked
+        // Any notification older than this timestamp is considered read
+        // This prevents the issue where notification IDs change but appear as unread
+        localStorage.setItem('notificationMarkAllReadTime', String(Date.now()));
+        
         this.updateUnreadCount();
         this.renderNotifications();
         
         // Auto-hide bell if all read
         this.checkAutoHideBell();
+        
+        console.log('[NotificationManager] Marked all notifications as read at:', new Date().toLocaleString());
     },
     
     // Check if bell should auto-hide when all read
