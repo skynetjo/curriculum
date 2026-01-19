@@ -1,11 +1,11 @@
 // ========================================
 // CURRICULUM TRACKER - OPTIMIZED SERVICE WORKER
 // App Shell Architecture for Instant Loading
-// Version: 3.8.0
+// Version: 3.8.1
 // ========================================
 
-const CACHE_NAME = 'curriculum-tracker-v3.8.0';
-const APP_SHELL_CACHE = 'app-shell-v3.8.0';
+const CACHE_NAME = 'curriculum-tracker-v3.8.1';
+const APP_SHELL_CACHE = 'app-shell-v3.8.1';
 const DATA_CACHE = 'data-cache-v1';
 
 // App Shell - These files are cached FIRST and served from cache always
@@ -27,7 +27,7 @@ const EXTERNAL_RESOURCES = [
 
 // Install Event - Cache App Shell immediately
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing Service Worker v3.8.0');
+  console.log('[SW] Installing Service Worker v3.8.1');
   
   event.waitUntil(
     Promise.all([
@@ -60,7 +60,7 @@ self.addEventListener('install', (event) => {
 
 // Activate Event - Clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating Service Worker v3.8.0');
+  console.log('[SW] Activating Service Worker v3.8.1');
   
   event.waitUntil(
     caches.keys().then((cacheNames) => {
