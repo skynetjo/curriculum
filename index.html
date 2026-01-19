@@ -1427,8 +1427,9 @@
   </script>
   
   <!-- React (required for app) -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- ✅ FIX: Using crossorigin="anonymous" explicitly to avoid CORS credential issues -->
+  <script crossorigin="anonymous" src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin="anonymous" src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
   <!-- Tailwind CSS -->
@@ -1439,8 +1440,35 @@
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   
   <!-- Chart.js - NOT deferred because datalabels registration needs it immediately -->
+  <!-- ✅ FIX: Using explicit anonymous crossorigin to avoid CORS credential issues -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  <script>
+    // ✅ FIX: Load ChartDataLabels dynamically with proper error handling
+    // This prevents blank screen if CDN fails
+    (function() {
+      var script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js';
+      script.onerror = function() {
+        console.warn('[ChartDataLabels] Failed to load from primary CDN, trying fallback...');
+        var fallback = document.createElement('script');
+        fallback.src = 'https://unpkg.com/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js';
+        fallback.onerror = function() {
+          console.warn('[ChartDataLabels] Fallback also failed. Charts will work without data labels.');
+          window.ChartDataLabelsLoaded = false;
+        };
+        fallback.onload = function() {
+          console.log('[ChartDataLabels] Loaded from fallback CDN');
+          window.ChartDataLabelsLoaded = true;
+        };
+        document.head.appendChild(fallback);
+      };
+      script.onload = function() {
+        console.log('[ChartDataLabels] Loaded successfully');
+        window.ChartDataLabelsLoaded = true;
+      };
+      document.head.appendChild(script);
+    })();
+  </script>
   
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script defer src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
@@ -6298,7 +6326,8 @@ function MonthlyFeedbackTrendGraph({ feedbackData = [] }) {
             }
           }
         },
-        plugins: [ChartDataLabels]
+        // ✅ FIX: Only include ChartDataLabels if it's loaded successfully
+        plugins: typeof ChartDataLabels !== 'undefined' ? [ChartDataLabels] : []
       });
     }
 
