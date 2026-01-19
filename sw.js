@@ -2,7 +2,7 @@
 // SERVICE WORKER - Curriculum Tracker PWA
 // Version 4.0.0 - Fixed Icon References
 // ========================================
-const VERSION = '3.7.4';
+const VERSION = '3.7.5';
 const STATIC_CACHE = 'static-v' + VERSION;
 const DYNAMIC_CACHE = 'dynamic-v' + VERSION;
 const OFFLINE_CACHE = 'offline-v' + VERSION;
