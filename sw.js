@@ -1,90 +1,45 @@
 // ========================================
-// CURRICULUM TRACKER - OPTIMIZED SERVICE WORKER
-// App Shell Architecture for Instant Loading
-// Version: 3.8.1 - Fixed CORS and extension handling
+// CURRICULUM TRACKER - SERVICE WORKER
+// Version: 3.9.0 - Fixed CDN CORS issues
 // ========================================
 
-const CACHE_NAME = 'curriculum-tracker-v3.8.1';
-const APP_SHELL_CACHE = 'app-shell-v3.8.1';
-const DATA_CACHE = 'data-cache-v1';
+const CACHE_NAME = 'curriculum-tracker-v3.9.0';
+const APP_SHELL_CACHE = 'app-shell-v3.9.0';
 
-// ✅ Helper function for safe caching (prevents errors with unsupported schemes)
-async function safeCache(cacheName, request, response) {
-  try {
-    // Only cache http/https requests
-    const url = new URL(request.url);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-      return;
-    }
-    const cache = await caches.open(cacheName);
-    await cache.put(request, response);
-  } catch (error) {
-    console.warn('[SW] Cache put failed:', error.message);
-  }
-}
-
-// App Shell - These files are cached FIRST and served from cache always
+// App Shell - Only cache our own files, NOT external CDNs
 const APP_SHELL_FILES = [
   '/',
   '/index.html',
-  '/manifest.json',
-  '/pwa-manager.js'
+  '/manifest.json'
 ];
 
-// External resources to cache
-const EXTERNAL_RESOURCES = [
-  'https://cdn.tailwindcss.com',
-  'https://unpkg.com/react@18/umd/react.production.min.js',
-  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-  'https://cdn.jsdelivr.net/npm/chart.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
-];
-
-// Install Event - Cache App Shell immediately
+// Install Event - Cache App Shell only
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing Service Worker v3.8.1');
+  console.log('[SW] Installing Service Worker v3.9.0');
   
   event.waitUntil(
-    Promise.all([
-      // Cache App Shell (critical for instant load)
-      caches.open(APP_SHELL_CACHE).then((cache) => {
-        console.log('[SW] Caching App Shell');
-        return cache.addAll(APP_SHELL_FILES);
-      }),
-      // Cache external resources
-      caches.open(CACHE_NAME).then((cache) => {
-        console.log('[SW] Caching external resources');
-        return Promise.all(
-          EXTERNAL_RESOURCES.map(url => {
-            return fetch(url, { mode: 'cors' })
-              .then(response => {
-                if (response.ok) {
-                  return cache.put(url, response);
-                }
-              })
-              .catch(err => console.log('[SW] Failed to cache:', url));
-          })
-        );
-      })
-    ]).then(() => {
-      console.log('[SW] Installation complete - App Shell cached');
-      return self.skipWaiting(); // Activate immediately
+    caches.open(APP_SHELL_CACHE).then((cache) => {
+      console.log('[SW] Caching App Shell');
+      return cache.addAll(APP_SHELL_FILES).catch(err => {
+        console.warn('[SW] Some app shell files failed to cache:', err);
+      });
+    }).then(() => {
+      console.log('[SW] Installation complete');
+      return self.skipWaiting();
     })
   );
 });
 
 // Activate Event - Clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating Service Worker v3.8.1');
+  console.log('[SW] Activating Service Worker v3.9.0');
   
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          // Delete old version caches
-          if (cacheName !== CACHE_NAME && 
-              cacheName !== APP_SHELL_CACHE && 
-              cacheName !== DATA_CACHE) {
+          // Delete ALL old caches to ensure clean slate
+          if (cacheName !== CACHE_NAME && cacheName !== APP_SHELL_CACHE) {
             console.log('[SW] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
@@ -92,55 +47,40 @@ self.addEventListener('activate', (event) => {
       );
     }).then(() => {
       console.log('[SW] Activation complete');
-      return self.clients.claim(); // Take control immediately
+      return self.clients.claim();
     })
   );
 });
 
-// Fetch Event - Serve from cache, then network
+// Fetch Event - Minimal interception to avoid CORS issues
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
   
-  // ✅ FIX: Skip chrome-extension, browser-extension, and other unsupported schemes
-  if (url.protocol === 'chrome-extension:' || 
-      url.protocol === 'moz-extension:' ||
-      url.protocol === 'safari-extension:' ||
-      url.protocol === 'ms-browser-extension:') {
+  // ✅ CRITICAL: Skip ALL external domains - let browser handle them normally
+  // This prevents CORS issues with CDNs like Tailwind, React, Chart.js, etc.
+  if (url.origin !== self.location.origin) {
+    return; // Don't intercept - let browser fetch normally
+  }
+  
+  // Skip chrome-extension and other special protocols
+  if (!url.protocol.startsWith('http')) {
     return;
   }
   
-  // Skip Firebase and API requests (always network)
-  if (url.hostname.includes('firestore.googleapis.com') ||
-      url.hostname.includes('firebase') ||
-      url.hostname.includes('identitytoolkit') ||
-      url.hostname.includes('googleapis.com')) {
-    return;
-  }
-  
-  // ✅ FIX: Skip Google Drive and other external services that require auth
-  if (url.hostname.includes('drive.google.com') ||
-      url.hostname.includes('docs.google.com')) {
-    return;
-  }
-  
-  // APP SHELL STRATEGY: Cache first, then network
-  // This makes the app feel instant - UI loads from cache immediately
+  // Only handle requests to our own origin
+  // APP SHELL: Cache first for index.html
   if (url.pathname === '/' || url.pathname === '/index.html') {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
-        // Return cached version immediately
         if (cachedResponse) {
-          console.log('[SW] Serving App Shell from cache');
-          
-          // Update cache in background (stale-while-revalidate)
+          // Return cached version, update in background
           fetch(event.request).then((networkResponse) => {
-            if (networkResponse.ok) {
+            if (networkResponse && networkResponse.ok) {
               caches.open(APP_SHELL_CACHE).then((cache) => {
                 cache.put(event.request, networkResponse);
-                console.log('[SW] App Shell cache updated');
               });
             }
           }).catch(() => {});
@@ -150,7 +90,7 @@ self.addEventListener('fetch', (event) => {
         
         // No cache - fetch from network
         return fetch(event.request).then((response) => {
-          if (response.ok) {
+          if (response && response.ok) {
             const responseClone = response.clone();
             caches.open(APP_SHELL_CACHE).then((cache) => {
               cache.put(event.request, responseClone);
@@ -158,61 +98,22 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         });
-      })
-    );
-    return;
-  }
-  
-  // STATIC ASSETS: Cache first strategy
-  if (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2)$/)) {
-    event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        return fetch(event.request).then((response) => {
-          if (response.ok) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
-            });
-          }
-          return response;
+      }).catch(() => {
+        // Network failed and no cache - return offline page or error
+        return new Response('Offline - Please check your connection', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain' }
         });
       })
     );
     return;
   }
   
-  // CDN RESOURCES: Cache first strategy
-  if (url.hostname.includes('cdn') || 
-      url.hostname.includes('unpkg') || 
-      url.hostname.includes('cdnjs') ||
-      url.hostname.includes('jsdelivr')) {
-    event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        return fetch(event.request, { mode: 'cors' }).then((response) => {
-          if (response.ok) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
-            });
-          }
-          return response;
-        });
-      })
-    );
-    return;
-  }
-  
-  // DEFAULT: Network first, fallback to cache
+  // For other same-origin requests: Network first, cache fallback
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        if (response.ok) {
+        if (response && response.ok) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseClone);
@@ -226,37 +127,22 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Background Sync - Queue offline actions
+// Background Sync
 self.addEventListener('sync', (event) => {
   console.log('[SW] Background sync:', event.tag);
   
-  if (event.tag === 'sync-attendance') {
-    event.waitUntil(syncAttendance());
-  }
-  if (event.tag === 'sync-curriculum') {
-    event.waitUntil(syncCurriculum());
+  if (event.tag === 'sync-attendance' || event.tag === 'sync-curriculum') {
+    event.waitUntil(
+      self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({ type: 'SYNC_' + event.tag.toUpperCase() });
+        });
+      })
+    );
   }
 });
 
-// Sync functions
-async function syncAttendance() {
-  console.log('[SW] Syncing attendance data...');
-  // Dispatch event to main app
-  const clients = await self.clients.matchAll();
-  clients.forEach(client => {
-    client.postMessage({ type: 'SYNC_ATTENDANCE' });
-  });
-}
-
-async function syncCurriculum() {
-  console.log('[SW] Syncing curriculum data...');
-  const clients = await self.clients.matchAll();
-  clients.forEach(client => {
-    client.postMessage({ type: 'SYNC_CURRICULUM' });
-  });
-}
-
-// Message handler - for communication with main app
+// Message handler
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
@@ -271,4 +157,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-console.log('[SW] Service Worker loaded - App Shell Architecture enabled');
+console.log('[SW] Service Worker v3.9.0 loaded');
