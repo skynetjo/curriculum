@@ -9,7 +9,7 @@
   <!-- This runs before anything else to fix CORS issues -->
   <script>
     (function() {
-      var SW_VERSION = '3.10.0';
+      var SW_VERSION = '3.11.0';
       var storedVersion = localStorage.getItem('swVersion');
       
       // If version mismatch, clear everything
@@ -73,6 +73,21 @@
     button, a, input, select, textarea, [role="button"], [onclick] {
       pointer-events: auto !important;
       cursor: pointer;
+      -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+      touch-action: manipulation;
+    }
+    
+    /* ✅ FIX: Ensure buttons have proper z-index and are not covered */
+    button {
+      position: relative;
+      z-index: 10;
+    }
+    
+    /* ✅ FIX: Close buttons must always be clickable */
+    .close-btn, [class*="close"], button[onclick*="close"], button[onclick*="setIsVisible"] {
+      pointer-events: auto !important;
+      z-index: 9999 !important;
+      position: relative !important;
     }
     
     body {
@@ -358,10 +373,7 @@
     /* Mobile Responsive */
     @media (max-width: 768px) {
       .shell-sidebar {
-        width: 100%;
-        height: auto;
-        position: relative;
-        padding: 10px;
+        display: none !important; /* ✅ FIX: Completely hide sidebar on mobile */
       }
       
       .shell-nav {
@@ -378,8 +390,10 @@
       }
       
       .shell-main {
-        margin-left: 0;
+        margin-left: 0 !important;
         padding: 16px;
+        padding-top: 70px; /* Space for mobile header */
+        padding-bottom: 80px; /* Space for bottom nav */
       }
       
       .shell-title {
@@ -392,6 +406,27 @@
       
       .shell-stat-value {
         font-size: 28px;
+      }
+      
+      /* ✅ FIX: Show mobile header in app shell */
+      .shell-mobile-header {
+        display: flex !important;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 56px;
+        background: #1a1a2e;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      }
+      
+      .shell-mobile-header .shell-logo {
+        padding: 0;
+        border: none;
+        margin: 0;
       }
     }
     
@@ -2179,18 +2214,24 @@
       position: absolute;
       top: 8px;
       right: 8px;
-      background: rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.25);
       border: none;
       border-radius: 50%;
-      width: 28px;
-      height: 28px;
-      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
+      min-height: 32px;
+      cursor: pointer !important;
       color: white;
-      font-size: 18px;
+      font-size: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: background 0.2s;
+      pointer-events: auto !important;
+      z-index: 10000 !important;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: rgba(255,255,255,0.3);
     }
     .floating-celebration-card .close-btn:hover {
       background: rgba(255,255,255,0.3);
@@ -2961,19 +3002,22 @@ body.has-install-banner .sidebar {
   gap: 10px;
   width: 100%;
   padding: 0.85rem 1rem;
-  min-height: 48px;
-  background: rgba(239, 68, 68, 0.15);
+  min-height: 52px;
+  background: rgba(239, 68, 68, 0.2);
   color: #f87171;
-  border: none;
+  border: 2px solid rgba(239, 68, 68, 0.3);
   border-radius: 10px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 500;
+  cursor: pointer !important;
+  font-size: 0.95rem;
+  font-weight: 600;
   transition: all 0.2s;
   pointer-events: auto !important;
   position: relative;
-  z-index: 100;
+  z-index: 1000 !important;
   -webkit-tap-highlight-color: rgba(239, 68, 68, 0.3);
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .sidebar-logout:hover {
@@ -3067,8 +3111,10 @@ body.has-install-banner .sidebar {
   .main-content.sidebar-collapsed {
     margin-left: 0 !important;
     padding-top: 70px; /* Space for mobile header */
-    padding-bottom: 20px;
+    padding-bottom: 85px; /* ✅ FIX: Increased space for bottom nav */
     width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
   }
   
   .mobile-sidebar-overlay.active {
@@ -3260,26 +3306,29 @@ body.has-install-banner .sidebar {
   position: absolute;
   top: 6px;
   right: 6px;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.15);
   border: none;
-  color: #888;
-  cursor: pointer;
-  font-size: 16px;
+  color: #fff;
+  cursor: pointer !important;
+  font-size: 18px;
   font-weight: bold;
   padding: 0;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
   border-radius: 50%;
   transition: all 0.2s;
   pointer-events: auto !important;
-  z-index: 100;
+  z-index: 10000 !important;
   display: flex;
   align-items: center;
   justify-content: center;
-  -webkit-tap-highlight-color: rgba(255,255,255,0.2);
+  -webkit-tap-highlight-color: rgba(255,255,255,0.3);
+  touch-action: manipulation;
   line-height: 1;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .online-status-card .close-btn:hover {
@@ -4052,6 +4101,8 @@ body.has-install-banner .sidebar {
     const appShell = document.getElementById('app-shell');
     if (appShell) {
       appShell.classList.add('react-ready');
+      appShell.style.display = 'none';
+      appShell.style.visibility = 'hidden';
       console.log('✅ [App Shell] Hiding - React app is ready');
     }
     
@@ -4067,6 +4118,13 @@ body.has-install-banner .sidebar {
       }, 300);
     }
   };
+  
+  // ✅ NEW: Force hide app shell after 5 seconds no matter what
+  // This ensures the shell never blocks the UI indefinitely
+  window._forceHideTimeout = setTimeout(function() {
+    console.log('⏱️ [App Shell] Force hiding after timeout');
+    window.hideInstantLoader();
+  }, 5000);
   
   // ✅ APP SHELL: Update loading status indicator
   // This shows users what's happening while the app loads
@@ -11570,7 +11628,7 @@ function OnlineStatusCard({ currentUser }) {
   
   return (
     <div className="online-status-card">
-      <button className="close-btn" onClick={() => setIsVisible(false)}>✕</button>
+      <button className="close-btn" onClick={(e) => { e.stopPropagation(); e.preventDefault(); setIsVisible(false); }}>✕</button>
       <div className="text-xs text-gray-400 mb-2 font-semibold">TEAM STATUS</div>
       <div className="status-row">
         <div className="status-dot online"></div>
@@ -13546,6 +13604,14 @@ const foundStudent = { ...doc.data(), docId: doc.id };
 };
 const handleLogout=async()=>{
   console.log('🚪 Logout button clicked');
+  
+  // ✅ FIX: Show visual feedback immediately
+  const logoutBtns = document.querySelectorAll('.sidebar-logout');
+  logoutBtns.forEach(btn => {
+    btn.innerHTML = '<span>🔄</span> <span>Logging out...</span>';
+    btn.style.pointerEvents = 'none';
+  });
+  
   try{
     // Clear student session from localStorage
     // ✅ iOS FIX: Use safe storage wrapper
@@ -34377,7 +34443,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.9.0'; // ✅ Fixed CDN CORS issues, Tailwind loading, button clicks
+  const CURRENT_VERSION = '3.11.0'; // ✅ Fixed logout, notifications, close buttons, mobile view
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
@@ -34761,14 +34827,19 @@ ReactDOM.render(<App/>,document.getElementById('root'));
     background: #12121a;
     border: 1px solid #2a2a3a;
     border-radius: 50%;
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
+    cursor: pointer !important;
     transition: all 0.3s;
     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    pointer-events: auto !important;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(244, 180, 26, 0.3);
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 /* Hide bell when all notifications are read */
@@ -35069,16 +35140,16 @@ ReactDOM.render(<App/>,document.getElementById('root'));
 </style>
 
 <!-- Notification Bell -->
-<div class="notification-bell" id="notificationBell" onclick="NotificationManager.togglePanel()">
+<div class="notification-bell" id="notificationBell" onclick="event.stopPropagation(); NotificationManager.togglePanel();" role="button" tabindex="0">
     <span class="bell-icon">🔔</span>
     <span class="badge" id="notificationBadge">0</span>
 </div>
 
 <!-- Notification Panel -->
-<div class="notification-panel" id="notificationPanel">
+<div class="notification-panel" id="notificationPanel" onclick="event.stopPropagation();">
     <div class="notification-panel-header">
         <h3>🔔 Notifications</h3>
-        <button onclick="NotificationManager.markAllRead()">Mark all read</button>
+        <button onclick="event.stopPropagation(); NotificationManager.markAllRead();">Mark all read</button>
     </div>
     <div class="notification-panel-body" id="notificationList">
         <!-- Notifications loaded here -->
