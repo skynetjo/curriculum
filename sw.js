@@ -1,12 +1,27 @@
 // ========================================
 // CURRICULUM TRACKER - OPTIMIZED SERVICE WORKER
 // App Shell Architecture for Instant Loading
-// Version: 3.8.1
+// Version: 3.8.1 - Fixed CORS and extension handling
 // ========================================
 
 const CACHE_NAME = 'curriculum-tracker-v3.8.1';
 const APP_SHELL_CACHE = 'app-shell-v3.8.1';
 const DATA_CACHE = 'data-cache-v1';
+
+// ✅ Helper function for safe caching (prevents errors with unsupported schemes)
+async function safeCache(cacheName, request, response) {
+  try {
+    // Only cache http/https requests
+    const url = new URL(request.url);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return;
+    }
+    const cache = await caches.open(cacheName);
+    await cache.put(request, response);
+  } catch (error) {
+    console.warn('[SW] Cache put failed:', error.message);
+  }
+}
 
 // App Shell - These files are cached FIRST and served from cache always
 const APP_SHELL_FILES = [
@@ -89,10 +104,25 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
   
+  // ✅ FIX: Skip chrome-extension, browser-extension, and other unsupported schemes
+  if (url.protocol === 'chrome-extension:' || 
+      url.protocol === 'moz-extension:' ||
+      url.protocol === 'safari-extension:' ||
+      url.protocol === 'ms-browser-extension:') {
+    return;
+  }
+  
   // Skip Firebase and API requests (always network)
   if (url.hostname.includes('firestore.googleapis.com') ||
       url.hostname.includes('firebase') ||
-      url.hostname.includes('identitytoolkit')) {
+      url.hostname.includes('identitytoolkit') ||
+      url.hostname.includes('googleapis.com')) {
+    return;
+  }
+  
+  // ✅ FIX: Skip Google Drive and other external services that require auth
+  if (url.hostname.includes('drive.google.com') ||
+      url.hostname.includes('docs.google.com')) {
     return;
   }
   
