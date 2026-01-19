@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
   
-  <!-- ✅ PERFORMANCE FIX: Resource hints for faster connections -->
+  <!-- ✅ PERFORMANCE: Resource hints for faster connections -->
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
   <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
@@ -13,9 +13,346 @@
   <link rel="dns-prefetch" href="https://firestore.googleapis.com">
   <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com">
   
-  <!-- ✅ PERFORMANCE FIX: Critical CSS inline for instant loading screen -->
+  <!-- ✅ APP SHELL ARCHITECTURE: Critical CSS inline for INSTANT UI display -->
+  <!-- This CSS loads the entire UI structure before any JavaScript runs -->
   <style id="critical-css">
-    /* Instant loading screen - shows before any JS loads */
+    /* ========================================
+       APP SHELL - INSTANT LOAD UI
+       This shows the actual app structure immediately,
+       just like Instagram and Twitter do.
+       ======================================== */
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+    }
+    
+    /* App Shell Container - shows immediately */
+    .app-shell {
+      display: flex;
+      min-height: 100vh;
+      opacity: 1;
+      transition: opacity 0.3s ease;
+    }
+    
+    .app-shell.hidden {
+      display: none;
+    }
+    
+    /* Sidebar Shell */
+    .shell-sidebar {
+      width: 220px;
+      background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+      padding: 20px 0;
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      height: 100vh;
+      z-index: 100;
+    }
+    
+    .shell-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 20px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 20px;
+    }
+    
+    .shell-logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #F4B41A 0%, #C8342E 100%);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    
+    .shell-logo-text {
+      color: white;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    
+    .shell-nav {
+      flex: 1;
+      padding: 0 10px;
+    }
+    
+    .shell-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+    
+    .shell-nav-item.active {
+      background: rgba(244, 180, 26, 0.2);
+      color: #F4B41A;
+    }
+    
+    .shell-nav-icon {
+      width: 20px;
+      text-align: center;
+    }
+    
+    /* Main Content Shell */
+    .shell-main {
+      flex: 1;
+      margin-left: 220px;
+      padding: 24px;
+      min-height: 100vh;
+    }
+    
+    /* Header Shell */
+    .shell-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    
+    .shell-title {
+      font-size: 28px;
+      font-weight: bold;
+      color: #1a1a2e;
+    }
+    
+    .shell-user {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .shell-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #F4B41A 0%, #C8342E 100%);
+    }
+    
+    /* ========================================
+       SKELETON LOADING ANIMATIONS
+       These pulse to show content is loading
+       ======================================== */
+    
+    @keyframes skeleton-pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+    }
+    
+    @keyframes skeleton-shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    
+    .skeleton {
+      background: linear-gradient(90deg, #e0e0e0 25%, #f0f0f0 50%, #e0e0e0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-shimmer 1.5s ease-in-out infinite;
+      border-radius: 8px;
+    }
+    
+    .skeleton-text {
+      height: 14px;
+      margin-bottom: 8px;
+      border-radius: 4px;
+    }
+    
+    .skeleton-text.short { width: 60%; }
+    .skeleton-text.medium { width: 80%; }
+    .skeleton-text.long { width: 100%; }
+    
+    /* Stats Cards Skeleton */
+    .shell-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    
+    .shell-stat-card {
+      padding: 20px;
+      border-radius: 16px;
+      color: white;
+      min-height: 120px;
+    }
+    
+    .shell-stat-card.yellow {
+      background: linear-gradient(135deg, #F4B41A 0%, #E8A000 100%);
+    }
+    
+    .shell-stat-card.green {
+      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    }
+    
+    .shell-stat-card.red {
+      background: linear-gradient(135deg, #f97316 0%, #dc2626 100%);
+    }
+    
+    .shell-stat-label {
+      font-size: 12px;
+      opacity: 0.9;
+      margin-bottom: 8px;
+    }
+    
+    .shell-stat-value {
+      font-size: 36px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    
+    .shell-stat-sub {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+    
+    /* Content Cards Skeleton */
+    .shell-card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    .shell-card-title {
+      font-size: 20px;
+      font-weight: bold;
+      color: #1a1a2e;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    /* Rankings Skeleton */
+    .shell-ranking-item {
+      display: flex;
+      align-items: center;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 8px;
+      background: #f9f9f9;
+    }
+    
+    .shell-ranking-num {
+      width: 32px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #999;
+    }
+    
+    .shell-ranking-info {
+      flex: 1;
+    }
+    
+    .shell-ranking-percent {
+      font-size: 24px;
+      font-weight: bold;
+      color: #C8342E;
+    }
+    
+    /* Loading Status Indicator */
+    .shell-loading-status {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1a1a2e;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 30px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      z-index: 1000;
+      transition: all 0.3s ease;
+    }
+    
+    .shell-loading-status.success {
+      background: #22c55e;
+    }
+    
+    .shell-loading-status.hidden {
+      opacity: 0;
+      transform: translateY(20px);
+      pointer-events: none;
+    }
+    
+    .shell-loading-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+      .shell-sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+        padding: 10px;
+      }
+      
+      .shell-nav {
+        display: flex;
+        overflow-x: auto;
+        gap: 8px;
+        padding: 10px 0;
+      }
+      
+      .shell-nav-item {
+        flex-shrink: 0;
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+      
+      .shell-main {
+        margin-left: 0;
+        padding: 16px;
+      }
+      
+      .shell-title {
+        font-size: 22px;
+      }
+      
+      .shell-stats-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .shell-stat-value {
+        font-size: 28px;
+      }
+    }
+    
+    /* Hide app shell when React is ready */
+    .app-shell.react-ready {
+      display: none !important;
+    }
+    
+    /* ========================================
+       LEGACY LOADING SCREEN (fallback)
+       Only shows if app shell fails to render
+       ======================================== */
     .instant-loader {
       position: fixed;
       top: 0;
@@ -23,12 +360,17 @@
       width: 100%;
       height: 100%;
       background: linear-gradient(135deg, #F4B41A 0%, #E8B039 50%, #C8342E 100%);
-      display: flex;
+      display: none; /* Hidden by default - app shell shows instead */
       flex-direction: column;
       align-items: center;
       justify-content: center;
       z-index: 99999;
     }
+    
+    .instant-loader.show-fallback {
+      display: flex;
+    }
+    
     .instant-loader-logo {
       width: 80px;
       height: 80px;
@@ -2938,8 +3280,159 @@ body.has-install-banner .sidebar {
   </style>
 </head>
 <body>
-  <!-- ✅ PERFORMANCE FIX: Instant loading screen - shows before ANY JavaScript loads -->
-  <!-- This dramatically improves First Contentful Paint (FCP) -->
+  <!-- ========================================
+       APP SHELL - INSTANT UI DISPLAY
+       This shows the actual app interface IMMEDIATELY,
+       just like Instagram, Twitter, and modern apps.
+       Users see the real UI with skeleton placeholders,
+       not a loading spinner!
+       ======================================== -->
+  
+  <!-- App Shell - Shows instantly before JavaScript loads -->
+  <div id="app-shell" class="app-shell">
+    <!-- Sidebar -->
+    <aside class="shell-sidebar">
+      <div class="shell-logo">
+        <div class="shell-logo-icon">📚</div>
+        <div class="shell-logo-text">Curriculum<br/>Tracker</div>
+      </div>
+      <nav class="shell-nav">
+        <div class="shell-nav-item active">
+          <span class="shell-nav-icon">📊</span>
+          <span>Dashboard</span>
+        </div>
+        <div class="shell-nav-item">
+          <span class="shell-nav-icon">📈</span>
+          <span>Analytics</span>
+        </div>
+        <div class="shell-nav-item">
+          <span class="shell-nav-icon">📖</span>
+          <span>Class 11</span>
+        </div>
+        <div class="shell-nav-item">
+          <span class="shell-nav-icon">📖</span>
+          <span>Class 12</span>
+        </div>
+        <div class="shell-nav-item">
+          <span class="shell-nav-icon">👥</span>
+          <span>Directory</span>
+        </div>
+        <div class="shell-nav-item">
+          <span class="shell-nav-icon">✅</span>
+          <span>Attendance</span>
+        </div>
+      </nav>
+    </aside>
+    
+    <!-- Main Content with Skeleton Placeholders -->
+    <main class="shell-main">
+      <!-- Header -->
+      <div class="shell-header">
+        <h1 class="shell-title">Dashboard Overview</h1>
+        <div class="shell-user">
+          <div class="shell-avatar"></div>
+        </div>
+      </div>
+      
+      <!-- Stats Cards - Skeleton with gradient backgrounds -->
+      <div class="shell-stats-grid">
+        <div class="shell-stat-card yellow">
+          <div class="shell-stat-label">Your School Rank</div>
+          <div class="shell-stat-value">#--</div>
+          <div class="shell-stat-sub">Loading schools...</div>
+        </div>
+        <div class="shell-stat-card green">
+          <div class="shell-stat-label">Best Performing School</div>
+          <div class="shell-stat-value" style="font-size: 18px;">Loading...</div>
+          <div class="shell-stat-sub">--% completed</div>
+        </div>
+        <div class="shell-stat-card red">
+          <div class="shell-stat-label">Lagging Subject</div>
+          <div class="shell-stat-value" style="font-size: 18px;">Loading...</div>
+          <div class="shell-stat-sub">--% completed</div>
+        </div>
+      </div>
+      
+      <!-- School Rankings Card - Skeleton -->
+      <div class="shell-card">
+        <div class="shell-card-title">🏆 School Rankings</div>
+        <div class="shell-ranking-item">
+          <div class="shell-ranking-num">#1</div>
+          <div class="shell-ranking-info">
+            <div class="skeleton skeleton-text medium"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+          <div class="shell-ranking-percent">--</div>
+        </div>
+        <div class="shell-ranking-item">
+          <div class="shell-ranking-num">#2</div>
+          <div class="shell-ranking-info">
+            <div class="skeleton skeleton-text medium"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+          <div class="shell-ranking-percent">--</div>
+        </div>
+        <div class="shell-ranking-item">
+          <div class="shell-ranking-num">#3</div>
+          <div class="shell-ranking-info">
+            <div class="skeleton skeleton-text medium"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+          <div class="shell-ranking-percent">--</div>
+        </div>
+        <div class="shell-ranking-item">
+          <div class="shell-ranking-num">#4</div>
+          <div class="shell-ranking-info">
+            <div class="skeleton skeleton-text medium"></div>
+            <div class="skeleton skeleton-text short"></div>
+          </div>
+          <div class="shell-ranking-percent">--</div>
+        </div>
+      </div>
+      
+      <!-- Subject Performance Card - Skeleton -->
+      <div class="shell-card">
+        <div class="shell-card-title">📚 Subject Performance</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+          <div style="padding: 16px; border: 2px solid #eee; border-radius: 12px;">
+            <div class="skeleton skeleton-text short"></div>
+            <div style="height: 8px; background: #eee; border-radius: 4px; margin-top: 12px;">
+              <div class="skeleton" style="width: 60%; height: 100%; border-radius: 4px;"></div>
+            </div>
+          </div>
+          <div style="padding: 16px; border: 2px solid #eee; border-radius: 12px;">
+            <div class="skeleton skeleton-text short"></div>
+            <div style="height: 8px; background: #eee; border-radius: 4px; margin-top: 12px;">
+              <div class="skeleton" style="width: 45%; height: 100%; border-radius: 4px;"></div>
+            </div>
+          </div>
+          <div style="padding: 16px; border: 2px solid #eee; border-radius: 12px;">
+            <div class="skeleton skeleton-text short"></div>
+            <div style="height: 8px; background: #eee; border-radius: 4px; margin-top: 12px;">
+              <div class="skeleton" style="width: 75%; height: 100%; border-radius: 4px;"></div>
+            </div>
+          </div>
+          <div style="padding: 16px; border: 2px solid #eee; border-radius: 12px;">
+            <div class="skeleton skeleton-text short"></div>
+            <div style="height: 8px; background: #eee; border-radius: 4px; margin-top: 12px;">
+              <div class="skeleton" style="width: 55%; height: 100%; border-radius: 4px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+    
+    <!-- Loading Status Badge (bottom right) -->
+    <div id="shell-loading-status" class="shell-loading-status">
+      <div class="shell-loading-spinner"></div>
+      <span id="shell-status-text">Loading data...</span>
+    </div>
+  </div>
+  
+  <!-- ========================================
+       FALLBACK LOADER (legacy - hidden by default)
+       Only shows if app shell fails
+       ======================================== -->
   <div id="instant-loader" class="instant-loader">
     <div class="instant-loader-logo">📚</div>
     <div class="instant-loader-text">Curriculum Tracker</div>
@@ -2972,12 +3465,21 @@ body.has-install-banner .sidebar {
 </div>
   
   <script>
-  // ✅ PERFORMANCE FIX: Hide instant loader once React app renders
+  // ✅ APP SHELL ARCHITECTURE: Hide app shell once React app renders
+  // This function is called when the React app is ready to show
   window.hideInstantLoader = function() {
     // ✅ iOS FIX: Clear timeout handlers
     if (window._loaderTimeoutId) clearTimeout(window._loaderTimeoutId);
     if (window._forceHideTimeout) clearTimeout(window._forceHideTimeout);
     
+    // Hide the App Shell with smooth transition
+    const appShell = document.getElementById('app-shell');
+    if (appShell) {
+      appShell.classList.add('react-ready');
+      console.log('✅ [App Shell] Hiding - React app is ready');
+    }
+    
+    // Also hide legacy loader if visible
     const loader = document.getElementById('instant-loader');
     if (loader) {
       loader.style.transition = 'opacity 0.3s ease';
@@ -2989,6 +3491,46 @@ body.has-install-banner .sidebar {
       }, 300);
     }
   };
+  
+  // ✅ APP SHELL: Update loading status indicator
+  // This shows users what's happening while the app loads
+  window.updateShellStatus = function(message, isComplete = false) {
+    const statusEl = document.getElementById('shell-loading-status');
+    const textEl = document.getElementById('shell-status-text');
+    
+    if (textEl) {
+      textEl.textContent = message;
+    }
+    
+    if (statusEl && isComplete) {
+      statusEl.classList.add('success');
+      statusEl.querySelector('.shell-loading-spinner')?.remove();
+      setTimeout(() => {
+        statusEl.classList.add('hidden');
+      }, 1500);
+    }
+  };
+  
+  // ✅ APP SHELL: Update skeleton data with cached values
+  // This fills in the skeleton placeholders with cached data instantly
+  window.updateShellWithCache = function() {
+    try {
+      const cachedAppData = localStorage.getItem('cachedAppData');
+      if (cachedAppData) {
+        const data = JSON.parse(cachedAppData);
+        const statusText = document.getElementById('shell-status-text');
+        if (statusText) {
+          statusText.textContent = 'Loading from cache...';
+        }
+        console.log('✅ [App Shell] Loaded cached data for instant display');
+      }
+    } catch (e) {
+      console.log('[App Shell] No cached data available');
+    }
+  };
+  
+  // Load cached data immediately when page loads
+  window.updateShellWithCache();
   </script>
   
   <script>
@@ -3579,7 +4121,6 @@ document.addEventListener('click', function initSound() {
 }, { once: true });
 
 // Default schools - will be overridden by dynamic schools from Firebase
-// ✅ FIX: Start with empty array, will be populated from Firebase or curriculum data
 let SCHOOLS=['CoE Barwani','CoE Cuttak','CoE Bundi','CoE Mahisagar','EMRS Bhopal','JNV Bharuch'];
 let ALL_SCHOOLS_COUNT = 0; // ✅ Track total schools separately for dashboard display
 
@@ -11654,6 +12195,7 @@ useEffect(() => {
       // ✅ PERFORMANCE FIX: Fetch CRITICAL data first (teachers, curriculum, managers)
       // These are needed to display the main UI
       console.log('📊 Fetching critical data...');
+      if (window.updateShellStatus) window.updateShellStatus('Loading teachers...');
       const criticalStartTime = Date.now();
       
       // ✅ FIX: Helper function to handle index errors gracefully
@@ -11795,6 +12337,7 @@ useEffect(() => {
       
       // ✅ STAGE 2: Secondary data (load in background)
       console.log('📊 Fetching secondary data...');
+      if (window.updateShellStatus) window.updateShellStatus('Loading curriculum...');
       
       let progressQuery, studentAttQuery, teacherAttQuery;
       
@@ -12038,6 +12581,7 @@ useEffect(() => {
       // Note: Academic year settings already set in critical data load above
       
       console.log('✅ All data loaded successfully');
+      if (window.updateShellStatus) window.updateShellStatus('✓ Ready!', true);
 
     } catch (e) {
       console.error('Data fetch error:', e);
@@ -32942,7 +33486,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.7.5'; // ✅ FIX: School rankings showing all schools + Notification badge mark all read fix
+  const CURRENT_VERSION = '3.8.0'; // ✅ MAJOR: App Shell Architecture for instant loading like Instagram/Twitter
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
@@ -34691,7 +35235,6 @@ const NotificationManager = {
                     if (notifTimestamp <= markAllReadTime) isUnread = false;
                 }
             }
-            
             const time = n.createdAt?.toDate?.() || new Date();
             const timeAgo = this.timeAgo(time);
             const isTicket = n.source === 'ticket' || n.type === 'ticket_update';
