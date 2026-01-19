@@ -9,7 +9,7 @@
   <!-- This runs before anything else to fix CORS issues -->
   <script>
     (function() {
-      var SW_VERSION = '3.11.0';
+      var SW_VERSION = '3.12.0';
       var storedVersion = localStorage.getItem('swVersion');
       
       // If version mismatch, clear everything
@@ -83,11 +83,31 @@
       z-index: 10;
     }
     
-    /* ✅ FIX: Close buttons must always be clickable */
-    .close-btn, [class*="close"], button[onclick*="close"], button[onclick*="setIsVisible"] {
+    /* ✅ CRITICAL FIX: These buttons must ALWAYS be clickable no matter what */
+    /* Override any disabled state or pointer-events blocking */
+    .close-btn,
+    .sidebar-logout,
+    .notification-bell,
+    .floating-celebration-card .close-btn,
+    .online-status-card .close-btn,
+    [class*="close-btn"],
+    button[onclick*="close"],
+    button[onclick*="Logout"],
+    button[onclick*="setIsVisible"] {
       pointer-events: auto !important;
-      z-index: 9999 !important;
+      z-index: 10001 !important;
       position: relative !important;
+      opacity: 1 !important;
+      cursor: pointer !important;
+    }
+    
+    /* ✅ Override the global saving disabled class for critical buttons */
+    .close-btn.__global_saving_disabled,
+    .sidebar-logout.__global_saving_disabled,
+    .notification-bell.__global_saving_disabled {
+      pointer-events: auto !important;
+      opacity: 1 !important;
+      cursor: pointer !important;
     }
     
     body {
@@ -11628,7 +11648,7 @@ function OnlineStatusCard({ currentUser }) {
   
   return (
     <div className="online-status-card">
-      <button className="close-btn" onClick={(e) => { e.stopPropagation(); e.preventDefault(); setIsVisible(false); }}>✕</button>
+      <button className="close-btn" data-allow-during-saving="true" onClick={(e) => { e.stopPropagation(); e.preventDefault(); setIsVisible(false); }}>✕</button>
       <div className="text-xs text-gray-400 mb-2 font-semibold">TEAM STATUS</div>
       <div className="status-row">
         <div className="status-dot online"></div>
@@ -15049,8 +15069,11 @@ function TeacherView({
       {floatingCelebration && (
         <div className={`floating-celebration-card ${floatingCelebration.type === 'anniversary' ? 'anniversary' : ''}`}>
           <button 
-            className="close-btn" 
-            onClick={() => {
+            className="close-btn"
+            data-allow-during-saving="true"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
               localStorage.setItem('floatingCelebrationDismissed_' + new Date().toDateString(), 'true');
               setFloatingCelebration(null);
             }}
@@ -15216,7 +15239,7 @@ function TeacherView({
               )}
             </div>
           )}
-          <button onClick={handleLogout} className="sidebar-logout">
+          <button onClick={handleLogout} className="sidebar-logout" data-allow-during-saving="true">
             <i className="fa-solid fa-right-from-bracket"></i>
             <span>Logout</span>
           </button>
@@ -17922,8 +17945,11 @@ function AdminView({
       {floatingCelebration && (
         <div className={`floating-celebration-card ${floatingCelebration.type === 'anniversary' ? 'anniversary' : ''}`}>
           <button 
-            className="close-btn" 
-            onClick={() => {
+            className="close-btn"
+            data-allow-during-saving="true"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
               localStorage.setItem('floatingCelebrationDismissed_' + new Date().toDateString(), 'true');
               setFloatingCelebration(null);
             }}
@@ -18042,7 +18068,7 @@ function AdminView({
               Access: {availableSchools.length} Schools
             </div>
           )}
-          <button onClick={handleLogout} className="sidebar-logout">
+          <button onClick={handleLogout} className="sidebar-logout" data-allow-during-saving="true">
             <i className="fa-solid fa-right-from-bracket"></i>
             <span>Logout</span>
           </button>
@@ -34443,7 +34469,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.11.0'; // ✅ Fixed logout, notifications, close buttons, mobile view
+  const CURRENT_VERSION = '3.12.0'; // ✅ CRITICAL FIX: Removed button disabling during saves
 
   // Immediately check for updates on every page load
   (async function immediateUpdateCheck() {
@@ -34632,10 +34658,10 @@ ReactDOM.render(<App/>,document.getElementById('root'));
 }
 @keyframes __spin { to { transform: rotate(360deg); } }
 
-/* disabled appearance when saving */
+/* ✅ REMOVED: pointer-events: none was breaking all buttons */
+/* disabled appearance when saving - ONLY opacity, NOT pointer-events */
 .__global_saving_disabled {
-  pointer-events: none !important;
-  opacity: 0.6 !important;
+  opacity: 0.7 !important;
 }
 </style>
 
@@ -34650,32 +34676,77 @@ ReactDOM.render(<App/>,document.getElementById('root'));
   if (!window || !document) return;
   const overlay = document.getElementById('__global_saving_overlay');
   let activeWrites = 0;
+  let safetyTimeoutId = null;
+  
+  // ✅ FIX: List of selectors for critical buttons that should NEVER be disabled
+  const CRITICAL_BUTTONS = [
+    '.close-btn',
+    '.sidebar-logout',
+    '.notification-bell',
+    '[class*="close"]',
+    '[onclick*="close"]',
+    '[onclick*="setIsVisible"]',
+    '[onclick*="Logout"]',
+    '[onclick*="logout"]',
+    'button[class*="Close"]'
+  ];
+  
+  function isCriticalButton(el) {
+    // Check if this element matches any critical button selector
+    for (const selector of CRITICAL_BUTTONS) {
+      try {
+        if (el.matches && el.matches(selector)) return true;
+      } catch(e) {}
+    }
+    // Also check for data attribute
+    if (el.dataset && el.dataset.allowDuringSaving === "true") return true;
+    // Check if it's inside a modal header or card header (close buttons)
+    if (el.closest && (el.closest('.online-status-card') || el.closest('.floating-celebration-card') || el.closest('.notification-bell') || el.closest('.sidebar-footer'))) {
+      return true;
+    }
+    return false;
+  }
+  
   function updateUI(){
     if (activeWrites > 0) {
       overlay.style.display = 'flex';
-      // disable interactive elements except those marked data-allow-during-saving="true"
-      const selectors = 'button, input[type="button"], input[type="submit"], a[role="button"], select, textarea';
-      document.querySelectorAll(selectors).forEach(el=>{
-        if (el.dataset.allowDuringSaving === "true") return;
-        el.__wasDisabledBySaving = el.disabled || false;
-        try { el.disabled = true; } catch(e){}
-        el.classList.add('__global_saving_disabled');
-      });
+      // ✅ FIX: Only add visual indicator, DON'T disable buttons
+      // This was causing all buttons to become unclickable
     } else {
       overlay.style.display = 'none';
-      const selectors = 'button, input[type="button"], input[type="submit"], a[role="button"], select, textarea';
-      document.querySelectorAll(selectors).forEach(el=>{
-        try {
-          // restore original disabled state only if we changed it
-          if (el.__wasDisabledBySaving !== undefined) el.disabled = !!el.__wasDisabledBySaving;
-        } catch(e){}
+      // ✅ FIX: Remove disabled class from all elements
+      document.querySelectorAll('.__global_saving_disabled').forEach(el => {
         el.classList.remove('__global_saving_disabled');
       });
     }
   }
 
-  function startWrite(){ activeWrites++; updateUI(); }
-  function endWrite(){ activeWrites = Math.max(0, activeWrites-1); updateUI(); }
+  function startWrite(){ 
+    activeWrites++; 
+    updateUI(); 
+    
+    // ✅ FIX: Safety timeout - force end write after 10 seconds
+    // This prevents buttons from staying disabled forever
+    if (safetyTimeoutId) clearTimeout(safetyTimeoutId);
+    safetyTimeoutId = setTimeout(() => {
+      if (activeWrites > 0) {
+        console.warn('[SaveIndicator] Safety timeout - forcing reset after 10s');
+        activeWrites = 0;
+        updateUI();
+      }
+    }, 10000);
+  }
+  
+  function endWrite(){ 
+    activeWrites = Math.max(0, activeWrites-1); 
+    updateUI(); 
+    
+    // Clear safety timeout if all writes are done
+    if (activeWrites === 0 && safetyTimeoutId) {
+      clearTimeout(safetyTimeoutId);
+      safetyTimeoutId = null;
+    }
+  }
 
   // Wrap common Firestore write methods if firebase is present.
   function tryWrapFirestore(firebase){
