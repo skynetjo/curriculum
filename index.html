@@ -1503,8 +1503,8 @@
   <script crossorigin="anonymous" src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind CSS - with crossorigin to avoid CORS issues -->
+  <script src="https://cdn.tailwindcss.com" crossorigin="anonymous"></script>
   
   <!-- ✅ PERFORMANCE FIX: Defer non-critical scripts -->
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
@@ -2816,6 +2816,9 @@ body.has-install-banner .sidebar {
   font-size: 0.9rem;
   font-weight: 500;
   transition: all 0.2s;
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 100;
 }
 
 .sidebar-logout:hover {
@@ -13364,19 +13367,22 @@ const foundStudent = { ...doc.data(), docId: doc.id };
   }
 };
 const handleLogout=async()=>{
+  console.log('🚪 Logout button clicked');
   try{
     // Clear student session from localStorage
     // ✅ iOS FIX: Use safe storage wrapper
     if (typeof window.safeStorage !== 'undefined') {
       window.safeStorage.removeItem('studentSession');
-      window.safeStorage.removeItem('teacherSession'); // ✅ NEW: Clear teacher cache too
+      window.safeStorage.removeItem('teacherSession');
     } else {
       try { 
         localStorage.removeItem('studentSession'); 
-        localStorage.removeItem('teacherSession'); // ✅ NEW
-      } catch(e) {}
+        localStorage.removeItem('teacherSession');
+      } catch(e) {
+        console.warn('localStorage clear error:', e);
+      }
     }
-    // ✅ NEW: Clear from IndexedDB too
+    // Clear from IndexedDB too
     if (window.persistentStorage) {
       window.persistentStorage.removeItem('studentSession').catch(() => {});
       window.persistentStorage.removeItem('teacherSession').catch(() => {});
@@ -13390,6 +13396,7 @@ const handleLogout=async()=>{
     setLoginProgress('');
     // For teachers/admins who use Firebase Auth
     if(auth.currentUser){
+      console.log('🔐 Signing out from Firebase Auth');
       await auth.signOut();
     }
     // Reset state for all users (including students)
@@ -13397,8 +13404,19 @@ const handleLogout=async()=>{
     setIsAdmin(false);
     setActiveTab('overview');
     setLoginForm({loginType:'teacher',email:'',password:'',studentId:''});
+    console.log('✅ Logout successful');
   }catch(e){
     console.error('logout error',e);
+    // ✅ FIX: Even if there's an error, still try to reset the UI
+    try {
+      setCurrentUser(null);
+      setIsAdmin(false);
+      setActiveTab('overview');
+    } catch(resetError) {
+      console.error('Reset error:', resetError);
+      // Last resort - reload the page
+      window.location.reload();
+    }
   }
 };
 
@@ -34548,7 +34566,7 @@ ReactDOM.render(<App/>,document.getElementById('root'));
 </script>
 
 <!-- Avanti Help Desk Widget - Standalone File -->
-<script src="avanti-widget.js"></script>
+<script src="avanti-widget.js" onerror="console.warn('⚠️ avanti-widget.js failed to load - chatbot disabled')"></script>
 
 
 <!-- ============================================
