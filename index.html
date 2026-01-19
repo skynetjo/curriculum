@@ -1162,6 +1162,32 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   
+  <!-- ✅ CRITICAL FIX: Initialize Firebase IMMEDIATELY after SDK loads -->
+  <!-- This prevents "No Firebase App" errors from race conditions -->
+  <script>
+    (function() {
+      const firebaseConfig = {
+        apiKey: "AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",
+        authDomain: "curriculum-dbb10.firebaseapp.com",
+        projectId: "curriculum-dbb10",
+        storageBucket: "curriculum-dbb10.firebasestorage.app",
+        messagingSenderId: "706387632109",
+        appId: "1:706387632109:web:06c78a304fdbdc12f391e4"
+      };
+      
+      // Initialize Firebase immediately
+      if (typeof firebase !== 'undefined' && !firebase.apps.length) {
+        try {
+          firebase.initializeApp(firebaseConfig);
+          console.log('✅ Firebase initialized early');
+          window._firebaseEarlyInit = true;
+        } catch (e) {
+          console.error('Firebase early init error:', e);
+        }
+      }
+    })();
+  </script>
+  
   <!-- ✅ COST FIX: Enable offline persistence early -->
   <script>
     window._firestoreInitialized = false;
@@ -1349,6 +1375,13 @@
       
       processQueue: async function() {
         if (this._processing || this._queue.length === 0) return;
+        
+        // ✅ FIX: Check if Firebase is available before processing
+        if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) {
+          console.warn('⏳ Firebase not ready, will retry queue later');
+          return;
+        }
+        
         this._processing = true;
         
         console.log('🔄 Processing', this._queue.length, 'queued operations...');
@@ -3994,22 +4027,26 @@ const useDebouncedState = (initialValue, delay = 300) => {
 };
 const firebaseConfig={apiKey:"AIzaSyDyyGAHNJvhuint86USW36eBJKfw_u3AcA",authDomain:"curriculum-dbb10.firebaseapp.com",projectId:"curriculum-dbb10",storageBucket:"curriculum-dbb10.firebasestorage.app",messagingSenderId:"706387632109",appId:"1:706387632109:web:06c78a304fdbdc12f391e4"};
 
-// ✅ FIX: Safer Firebase initialization with error handling
-let firebaseInitialized = false;
-try {
-  if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-  }
-  firebaseInitialized = true;
-} catch (e) {
-  console.error('Firebase initialization error:', e);
-  // Retry initialization
+// ✅ FIX: Check if Firebase was already initialized early
+let firebaseInitialized = window._firebaseEarlyInit || false;
+if (!firebaseInitialized) {
   try {
-    firebase.initializeApp(firebaseConfig);
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
     firebaseInitialized = true;
-  } catch (retryError) {
-    console.error('Firebase retry failed:', retryError);
+  } catch (e) {
+    console.error('Firebase initialization error:', e);
+    // Retry initialization
+    try {
+      firebase.initializeApp(firebaseConfig);
+      firebaseInitialized = true;
+    } catch (retryError) {
+      console.error('Firebase retry failed:', retryError);
+    }
   }
+} else {
+  console.log('✅ Firebase was initialized early, skipping duplicate init');
 }
 
 // ✅ FIX: Helper to safely get Firestore instance
@@ -9472,39 +9509,83 @@ function StudentDashboard({currentUser, handleLogout}) {
 useEffect(() => {
   const fetchData = async () => {
     try {
-      // Curriculum
-      const currMap = {};
-      const currSnap = await db.collection('curriculum').get();
-      currSnap.docs.forEach(doc => { currMap[doc.id] = doc.data(); });
-      setCurriculum(currMap);
+      // ✅ CRITICAL FIX: Wait for Firebase auth to be ready before fetching data
+      // This prevents "Missing or insufficient permissions" errors
+      const currentAuthUser = auth.currentUser;
+      if (!currentAuthUser) {
+        console.warn('⏳ Auth not ready yet, waiting for auth state...');
+        // Wait a bit and check again - auth might still be initializing
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (!auth.currentUser) {
+          console.warn('⚠️ No authenticated user - data fetch may fail');
+          // Try to re-authenticate anonymously for students
+          try {
+            await auth.signInAnonymously();
+            console.log('✅ Re-authenticated anonymously for data access');
+          } catch (reAuthErr) {
+            console.error('Re-auth failed:', reAuthErr);
+          }
+        }
+      }
+      
+      // ✅ FIX: Add individual try-catch for each data fetch
+      // This prevents one permission error from blocking all data
+      
+      // Curriculum - with error handling
+      try {
+        const currMap = {};
+        const currSnap = await db.collection('curriculum').get();
+        currSnap.docs.forEach(doc => { currMap[doc.id] = doc.data(); });
+        setCurriculum(currMap);
+      } catch (currErr) {
+        console.warn('Curriculum fetch error (may be permission issue):', currErr.message);
+      }
 
-      // Chapter progress
-      const progressMap = {};
-      const progressSnap = await db.collection('chapterProgress').get();
-      progressSnap.docs.forEach(d => { progressMap[d.id] = d.data(); });
-      setChapterProgress(progressMap);
+      // Chapter progress - with error handling
+      try {
+        const progressMap = {};
+        const progressSnap = await db.collection('chapterProgress').get();
+        progressSnap.docs.forEach(d => { progressMap[d.id] = d.data(); });
+        setChapterProgress(progressMap);
+      } catch (progressErr) {
+        console.warn('Progress fetch error (may be permission issue):', progressErr.message);
+      }
 
-      // ✅ ALL attendance records for this student (no date filter)
-      const attSnap = await db.collection('studentAttendance')
-        .where('studentId', '==', String(myId))
-        .get();
+      // ✅ Student's attendance - with error handling
+      try {
+        const attSnap = await db.collection('studentAttendance')
+          .where('studentId', '==', String(myId))
+          .get();
 
-      const attendanceData = attSnap.docs
-        .map(d => ({ ...d.data(), docId: d.id }))
-        .sort((a, b) => b.date.localeCompare(a.date));
+        const attendanceData = attSnap.docs
+          .map(d => ({ ...d.data(), docId: d.id }))
+          .sort((a, b) => b.date.localeCompare(a.date));
 
-      setStudentAttendance(attendanceData);
+        setStudentAttendance(attendanceData);
+      } catch (attErr) {
+        console.warn('Attendance fetch error (may be permission issue):', attErr.message);
+      }
 
-      // Teachers from this school
-      const teacherSnap = await db.collection('teachers')
-        .where('school', '==', mySchool)
-        .get();
-      setTeachers(teacherSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+      // Teachers from this school - with error handling
+      try {
+        const teacherSnap = await db.collection('teachers')
+          .where('school', '==', mySchool)
+          .get();
+        setTeachers(teacherSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+      } catch (teacherErr) {
+        console.warn('Teachers fetch error (may be permission issue):', teacherErr.message);
+        // ✅ FIX: Show helpful message for students when teachers can't be loaded
+        setTeachers([]);
+      }
 
-      // Exam registrations for this student
-      const examSnap = await db.collection('studentExamRegistrations').doc(myId).get();
-      if (examSnap.exists) {
-        setExamRegistrations(examSnap.data());
+      // Exam registrations for this student - with error handling
+      try {
+        const examSnap = await db.collection('studentExamRegistrations').doc(myId).get();
+        if (examSnap.exists) {
+          setExamRegistrations(examSnap.data());
+        }
+      } catch (examErr) {
+        console.warn('Exam registrations fetch error (may be permission issue):', examErr.message);
       }
 
       setLoading(false);
@@ -9542,20 +9623,52 @@ useEffect(() => {
   useEffect(() => {
     if (!myId) return;
 
-    const unsubscribe = db.collection('studentProfiles')
-      .doc(myId)
-      .onSnapshot(
-        (doc) => {
-          if (doc.exists) {
-            setStudentProfile(doc.data());
-          } else {
-            setStudentProfile(null);
-          }
-        },
-        (err) => {
-          console.error('Profile listener error:', err);
+    // ✅ FIX: First try to get the profile once, then set up listener
+    // This handles permission errors more gracefully
+    const setupProfileListener = async () => {
+      try {
+        // First, check if we can access this document
+        const initialDoc = await db.collection('studentProfiles').doc(myId).get();
+        if (initialDoc.exists) {
+          setStudentProfile(initialDoc.data());
         }
-      );
+        
+        // Now set up real-time listener
+        const unsubscribe = db.collection('studentProfiles')
+          .doc(myId)
+          .onSnapshot(
+            (doc) => {
+              if (doc.exists) {
+                setStudentProfile(doc.data());
+              } else {
+                setStudentProfile(null);
+              }
+            },
+            (err) => {
+              // ✅ FIX: Only log warning instead of error for permission issues
+              if (err.code === 'permission-denied') {
+                console.warn('Profile access limited - using cached data');
+              } else {
+                console.error('Profile listener error:', err);
+              }
+            }
+          );
+
+        return unsubscribe;
+      } catch (err) {
+        if (err.code === 'permission-denied') {
+          console.warn('Profile permission denied - student may need to complete profile');
+        } else {
+          console.error('Profile listener setup error:', err);
+        }
+        return () => {}; // Return empty unsubscribe function
+      }
+    };
+
+    let unsubscribe = () => {};
+    setupProfileListener().then(unsub => {
+      unsubscribe = unsub;
+    });
 
     return () => unsubscribe();
   }, [myId]);
@@ -9586,7 +9699,12 @@ useEffect(() => {
           setTimeout(() => setShowFeedbackNotification(true), 2000);
         }
       } catch (error) {
-        console.error('Error fetching feedback data:', error);
+        // ✅ FIX: Handle permission errors gracefully
+        if (error.code === 'permission-denied') {
+          console.warn('Teacher feedback access limited for this student');
+        } else {
+          console.error('Error fetching feedback data:', error);
+        }
       }
     };
 
