@@ -25351,71 +25351,80 @@ function SchoolInfoView({currentUser,schoolInfo,setSchoolInfo}){
   };
 
   const handleSubmit = async () => {
-  // Validation for mandatory fields
-  const requiredFields = [
-    { field: 'principalName', label: 'Principal Name' },
-    { field: 'principalPhone', label: 'Principal Phone Number' },
-    { field: 'principalEmail', label: 'Principal Email ID' },
-    { field: 'vicePrincipalName', label: 'Vice Principal Name' },
-    { field: 'vicePrincipalPhone', label: 'Vice Principal Phone Number' },
-    { field: 'vicePrincipalEmail', label: 'Vice Principal Email ID' },
-    { field: 'coordinatorName', label: 'Avanti Coordinator Name' },
-    { field: 'coordinatorPhone', label: 'Avanti Coordinator Phone Number' },
-    { field: 'coordinatorEmail', label: 'Avanti Coordinator Email ID' }
-  ];
+  // ✅ FIX: Check if school information exists in database
+  // If it exists, skip validation (meeting notes can be added without re-validating school info)
+  const docId = mySchool.replace(/\s+/g, '_');
+  const existingDoc = await db.collection('schoolInformation').doc(docId).get();
+  const schoolInfoExists = existingDoc.exists && existingDoc.data().principalName;
   
-  const missingFields = [];
-  for (const { field, label } of requiredFields) {
-    if (!formData[field] || formData[field].toString().trim() === '') {
-      missingFields.push(label);
+  // Only validate school information fields if they don't exist in database yet
+  if (!schoolInfoExists) {
+    // Validation for mandatory fields
+    const requiredFields = [
+      { field: 'principalName', label: 'Principal Name' },
+      { field: 'principalPhone', label: 'Principal Phone Number' },
+      { field: 'principalEmail', label: 'Principal Email ID' },
+      { field: 'vicePrincipalName', label: 'Vice Principal Name' },
+      { field: 'vicePrincipalPhone', label: 'Vice Principal Phone Number' },
+      { field: 'vicePrincipalEmail', label: 'Vice Principal Email ID' },
+      { field: 'coordinatorName', label: 'Avanti Coordinator Name' },
+      { field: 'coordinatorPhone', label: 'Avanti Coordinator Phone Number' },
+      { field: 'coordinatorEmail', label: 'Avanti Coordinator Email ID' }
+    ];
+    
+    const missingFields = [];
+    for (const { field, label } of requiredFields) {
+      if (!formData[field] || formData[field].toString().trim() === '') {
+        missingFields.push(label);
+      }
     }
-  }
-  
-  // Validate phone numbers (10 digits)
-  const phoneFields = [
-    { field: 'principalPhone', label: 'Principal Phone' },
-    { field: 'vicePrincipalPhone', label: 'Vice Principal Phone' },
-    { field: 'coordinatorPhone', label: 'Coordinator Phone' }
-  ];
-  
-  const invalidPhones = [];
-  for (const { field, label } of phoneFields) {
-    const phone = formData[field]?.toString().replace(/\D/g, '');
-    if (phone && phone.length !== 10) {
-      invalidPhones.push(label + ' (must be 10 digits)');
+    
+    // Validate phone numbers (10 digits)
+    const phoneFields = [
+      { field: 'principalPhone', label: 'Principal Phone' },
+      { field: 'vicePrincipalPhone', label: 'Vice Principal Phone' },
+      { field: 'coordinatorPhone', label: 'Coordinator Phone' }
+    ];
+    
+    const invalidPhones = [];
+    for (const { field, label } of phoneFields) {
+      const phone = formData[field]?.toString().replace(/\D/g, '');
+      if (phone && phone.length !== 10) {
+        invalidPhones.push(label + ' (must be 10 digits)');
+      }
     }
-  }
-  
-  // Validate email format
-  const emailFields = [
-    { field: 'principalEmail', label: 'Principal Email' },
-    { field: 'vicePrincipalEmail', label: 'Vice Principal Email' },
-    { field: 'coordinatorEmail', label: 'Coordinator Email' }
-  ];
-  
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const invalidEmails = [];
-  for (const { field, label } of emailFields) {
-    if (formData[field] && !emailRegex.test(formData[field])) {
-      invalidEmails.push(label + ' (invalid format)');
+    
+    // Validate email format
+    const emailFields = [
+      { field: 'principalEmail', label: 'Principal Email' },
+      { field: 'vicePrincipalEmail', label: 'Vice Principal Email' },
+      { field: 'coordinatorEmail', label: 'Coordinator Email' }
+    ];
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalidEmails = [];
+    for (const { field, label } of emailFields) {
+      if (formData[field] && !emailRegex.test(formData[field])) {
+        invalidEmails.push(label + ' (invalid format)');
+      }
     }
-  }
-  
-  // Show all validation errors
-  let errorMessage = '';
-  if (missingFields.length > 0) {
-    errorMessage += '❌ Missing required fields:\n• ' + missingFields.join('\n• ') + '\n\n';
-  }
-  if (invalidPhones.length > 0) {
-    errorMessage += '❌ Invalid phone numbers:\n• ' + invalidPhones.join('\n• ') + '\n\n';
-  }
-  if (invalidEmails.length > 0) {
-    errorMessage += '❌ Invalid email addresses:\n• ' + invalidEmails.join('\n• ');
-  }
-  
-  if (errorMessage) {
-    alert(errorMessage);
-    return;
+    
+    // Show all validation errors
+    let errorMessage = '';
+    if (missingFields.length > 0) {
+      errorMessage += '❌ Missing required fields:\n• ' + missingFields.join('\n• ') + '\n\n';
+    }
+    if (invalidPhones.length > 0) {
+      errorMessage += '❌ Invalid phone numbers:\n• ' + invalidPhones.join('\n• ') + '\n\n';
+    }
+    if (invalidEmails.length > 0) {
+      errorMessage += '❌ Invalid email addresses:\n• ' + invalidEmails.join('\n• ');
+    }
+    
+    if (errorMessage) {
+      alert(errorMessage);
+      return;
+    }
   }
   
   setIsSaving(true);
@@ -30574,6 +30583,47 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
     }
   };
   
+  // ✅ NEW: Bulk approve all pending timesheets
+  const handleApproveAll = async () => {
+    if (pendingApprovals.length === 0) {
+      alert('No pending approvals to process');
+      return;
+    }
+    
+    const confirmBulk = confirm(`⚠️ Approve All Entries\n\nAre you sure you want to approve all ${pendingApprovals.length} pending timesheet entries?\n\nThis action will:\n• Approve ${pendingApprovals.length} timesheet logs\n• Mark them as approved by ${currentUser.name}\n\nClick OK to proceed.`);
+    
+    if (!confirmBulk) return;
+    
+    try {
+      // Create batch for efficient bulk update
+      const batch = db.batch();
+      
+      pendingApprovals.forEach(entry => {
+        const entryRef = db.collection('timesheetEntries').doc(entry.id);
+        batch.update(entryRef, {
+          status: 'approved',
+          approvedBy: currentUser.name,
+          approvedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      
+      // Commit all updates at once
+      await batch.commit();
+      
+      // Update local state
+      const approvedIds = pendingApprovals.map(e => e.id);
+      setPendingApprovals([]);
+      setTimesheetEntries(prev => prev.map(e => 
+        approvedIds.includes(e.id) ? { ...e, status: 'approved' } : e
+      ));
+      
+      alert(`✅ Successfully approved all ${approvedIds.length} timesheet entries!`);
+    } catch (error) {
+      console.error('Error bulk approving:', error);
+      alert('❌ Error approving entries. Some entries may have been approved. Please refresh and try again.');
+    }
+  };
+  
   // Delete timesheet entry (for Managers/APMs only)
   const handleDeleteEntry = async (entryId, teacherName) => {
     if (!isAdmin) {
@@ -31498,6 +31548,22 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
               <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm ml-2">View Only</span>
             )}
           </h2>
+          
+          {/* ✅ NEW: Approve All Button */}
+          {!isViewOnly && pendingApprovals.length > 0 && (
+            <div className="mb-4 p-4 bg-green-50 border-2 border-green-200 rounded-xl flex items-center justify-between">
+              <div>
+                <p className="text-green-800 font-bold">⚡ Quick Action</p>
+                <p className="text-sm text-green-600">Approve all {pendingApprovals.length} pending entries at once</p>
+              </div>
+              <button
+                onClick={handleApproveAll}
+                className="px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600 shadow-lg"
+              >
+                ✅ Approve All ({pendingApprovals.length})
+              </button>
+            </div>
+          )}
           
           {/* Directors (view-only) see a notice instead of approval buttons */}
           {isViewOnly && pendingApprovals.length > 0 && (
