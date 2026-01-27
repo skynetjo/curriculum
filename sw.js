@@ -3,8 +3,8 @@
 // Version: 3.12.0 - CRITICAL: Fixed button disabling issue
 // ========================================
 
-const CACHE_NAME = 'curriculum-tracker-v3.12.0';
-const APP_SHELL_CACHE = 'app-shell-v3.12.0';
+const CACHE_NAME = 'curriculum-tracker-v3.13.0';
+const APP_SHELL_CACHE = 'app-shell-v3.13.0';
 
 // App Shell - Only cache our own files, NOT external CDNs
 const APP_SHELL_FILES = [
@@ -15,7 +15,7 @@ const APP_SHELL_FILES = [
 
 // Install Event - Cache App Shell only
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing Service Worker v3.12.0');
+  console.log('[SW] Installing Service Worker v3.13.0');
   
   event.waitUntil(
     caches.open(APP_SHELL_CACHE).then((cache) => {
@@ -32,7 +32,7 @@ self.addEventListener('install', (event) => {
 
 // Activate Event - Clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating Service Worker v3.12.0');
+  console.log('[SW] Activating Service Worker v3.13.0');
   
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -157,4 +157,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-console.log('[SW] Service Worker v3.12.0 loaded');
+console.log('[SW] Service Worker v3.13.0 loaded');
