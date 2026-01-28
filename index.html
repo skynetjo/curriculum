@@ -30659,6 +30659,79 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
     });
   }, [timesheetEntries, filterSchool, filterTeacher, filterMonth]);
   
+  // ✅ Export timesheet entries to CSV (for Managers)
+  const handleExportTimesheet = () => {
+    if (filteredEntries.length === 0) {
+      alert('No entries to export. Try adjusting your filters.');
+      return;
+    }
+    
+    // CSV Headers
+    const headers = [
+      'Date',
+      'Teacher Name',
+      'Teacher AFID',
+      'School',
+      'Subject',
+      'Activity Type',
+      'Class',
+      'Chapter',
+      'Topic',
+      'Start Time',
+      'End Time',
+      'Hours',
+      'Notes',
+      'Status',
+      'Approved By',
+      'Line Manager'
+    ];
+    
+    // Get activity label helper
+    const getActivityLabel = (activityId) => {
+      const activity = ACTIVITY_TYPES.find(t => t.id === activityId);
+      return activity ? activity.label.replace(/[^\w\s]/g, '').trim() : activityId;
+    };
+    
+    // Convert entries to CSV rows
+    const rows = filteredEntries.map(entry => [
+      entry.date || '',
+      entry.teacherName || '',
+      entry.teacherAfid || '',
+      entry.school || '',
+      entry.subject || '',
+      getActivityLabel(entry.activityType),
+      entry.class || '',
+      entry.chapter || '',
+      entry.topic || '',
+      entry.startTime || '',
+      entry.endTime || '',
+      entry.hours || '',
+      (entry.notes || '').replace(/"/g, '""').replace(/\n/g, ' '), // Escape quotes and newlines
+      entry.status || 'pending',
+      entry.approvedBy || '',
+      entry.lineManagerName || ''
+    ]);
+    
+    // Build CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const monthName = new Date(filterMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+    const fileName = `Timesheet_${filterSchool === 'All' ? 'AllSchools' : filterSchool}_${monthName.replace(' ', '_')}.csv`;
+    
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    link.click();
+    
+    // Cleanup
+    URL.revokeObjectURL(link.href);
+  };
+  
   // Calculate stats for chart
   const chartData = useMemo(() => {
     const byType = {};
@@ -30871,10 +30944,16 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                   type="date"
                   value={selectedDate}
                   onChange={e => setSelectedDate(e.target.value)}
+                  min={(() => {
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    return yesterday.toISOString().split('T')[0];
+                  })()}
                   max={new Date().toISOString().split('T')[0]}
                   className="w-full border-2 border-gray-200 px-5 py-4 rounded-xl text-lg focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 transition-all"
                   required
                 />
+                <p className="text-xs text-gray-500 mt-2">📌 You can only log activities for today or yesterday</p>
               </div>
               
               {/* Activity Type Selection */}
@@ -31644,7 +31723,7 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
           </h2>
           
           {/* Filters */}
-          <div className="bg-gray-50 p-4 rounded-xl mb-6 flex flex-wrap gap-4">
+          <div className="bg-gray-50 p-4 rounded-xl mb-6 flex flex-wrap gap-4 items-end">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Month</label>
               <input
@@ -31679,6 +31758,16 @@ function TimesheetPage({ currentUser, teachers, curriculum, isAdmin = false, isS
                   <option key={t.afid} value={t.afid}>{t.name}</option>
                 ))}
               </select>
+            </div>
+            {/* Export Button */}
+            <div className="ml-auto">
+              <button
+                onClick={handleExportTimesheet}
+                className="px-4 py-2 bg-green-500 text-white rounded-lg font-semibold hover:bg-green-600 flex items-center gap-2 shadow-md"
+                title="Export filtered entries to CSV"
+              >
+                <i className="fa-solid fa-download"></i> Export CSV
+              </button>
             </div>
           </div>
           
