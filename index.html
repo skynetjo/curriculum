@@ -9,7 +9,7 @@
   <!-- This runs before anything else to fix CORS issues -->
   <script>
     (function() {
-      var SW_VERSION = '3.13.0';
+      var SW_VERSION = '3.15.0';
       var storedVersion = localStorage.getItem('swVersion');
       
       // If version mismatch, clear everything
@@ -7685,7 +7685,7 @@ function InstallPrompt(){
 // ========================================
 // STUDENT PROFILE FORM COMPONENT
 // ========================================
-function StudentProfileForm({ currentUser }) {
+function StudentProfileForm({ currentUser, onProfileUpdated }) {
   const myId = currentUser.studentId || currentUser.id;
 
   const [profile, setProfile] = useState({
@@ -7729,7 +7729,19 @@ function StudentProfileForm({ currentUser }) {
         setLoading(true);
         const docSnap = await db.collection('studentProfiles').doc(myId).get();
         if (docSnap.exists) {
-          setProfile(prev => ({ ...prev, ...docSnap.data() }));
+          const profileData = docSnap.data();
+          // ✅ FIX: Create the full merged profile first
+          const fullProfile = { 
+            ...profile, // defaults
+            grade: currentUser.grade || '',
+            school: currentUser.school || '',
+            ...profileData // actual data from Firebase
+          };
+          setProfile(fullProfile);
+          // ✅ FIX: Notify parent with the complete profile
+          if (onProfileUpdated) {
+            onProfileUpdated(fullProfile);
+          }
         }
         setLoading(false);
       } catch (e) {
@@ -7755,11 +7767,16 @@ function StudentProfileForm({ currentUser }) {
 
   const handleSave = async () => {
     try {
-      await db.collection('studentProfiles').doc(myId).set({
+      const savedProfile = {
         ...profile,
         studentId: myId,
         updatedAt: new Date().toISOString()
-      });
+      };
+      await db.collection('studentProfiles').doc(myId).set(savedProfile);
+      // ✅ FIX: Notify parent component so banner updates
+      if (onProfileUpdated) {
+        onProfileUpdated(savedProfile);
+      }
       alert('✅ Profile saved successfully!');
       return true;
     } catch (error) {
@@ -9963,111 +9980,118 @@ function StudentDashboard({currentUser, handleLogout}) {
 useEffect(() => {
   const fetchData = async () => {
     try {
-      // ✅ CRITICAL FIX: Wait for Firebase auth to be ready before fetching data
-      // This prevents "Missing or insufficient permissions" errors
+      // ✅ STEP 1: Load ALL cached data INSTANTLY (before any Firebase calls)
+      console.log('⚡ Loading cached data instantly...');
+      
+      // Load teachers from cache
+      const teacherCacheKey = `teachers_${mySchool}`;
+      try {
+        const cachedTeachers = localStorage.getItem(teacherCacheKey);
+        if (cachedTeachers) {
+          const parsed = JSON.parse(cachedTeachers);
+          if (parsed.data && Array.isArray(parsed.data)) {
+            setTeachers(parsed.data);
+            console.log('✅ Teachers from cache:', parsed.data.length);
+          }
+        }
+      } catch (e) { /* ignore */ }
+      
+      // Load curriculum from cache
+      try {
+        const cachedCurr = localStorage.getItem(`curriculum_${mySchool}_${myGrade}`);
+        if (cachedCurr) {
+          const parsed = JSON.parse(cachedCurr);
+          if (parsed.data) {
+            setCurriculum(parsed.data);
+            console.log('✅ Curriculum from cache');
+          }
+        }
+      } catch (e) { /* ignore */ }
+      
+      // Load attendance from cache
+      try {
+        const cachedAtt = localStorage.getItem(`attendance_${myId}`);
+        if (cachedAtt) {
+          const parsed = JSON.parse(cachedAtt);
+          if (parsed.data) {
+            setStudentAttendance(parsed.data);
+            console.log('✅ Attendance from cache');
+          }
+        }
+      } catch (e) { /* ignore */ }
+      
+      // ✅ Mark as loaded early so UI shows cached data immediately
+      setLoading(false);
+      
+      // ✅ STEP 2: Check Firebase auth
       const currentAuthUser = auth.currentUser;
       if (!currentAuthUser) {
-        console.warn('⏳ Auth not ready yet, waiting for auth state...');
-        // Wait a bit and check again - auth might still be initializing
+        console.warn('⏳ Auth not ready, waiting...');
         await new Promise(resolve => setTimeout(resolve, 500));
         if (!auth.currentUser) {
-          console.warn('⚠️ No authenticated user - data fetch may fail');
-          // Try to re-authenticate anonymously for students
           try {
             await auth.signInAnonymously();
-            console.log('✅ Re-authenticated anonymously for data access');
+            console.log('✅ Re-authenticated anonymously');
           } catch (reAuthErr) {
             console.error('Re-auth failed:', reAuthErr);
           }
         }
       }
       
-      // ✅ FIX: Add individual try-catch for each data fetch
-      // This prevents one permission error from blocking all data
+      // ✅ STEP 3: Fetch ALL data in PARALLEL (much faster than sequential)
+      console.log('🔄 Fetching fresh data in parallel...');
       
-      // Curriculum - with error handling
-      try {
-        const currMap = {};
-        const currSnap = await db.collection('curriculum').get();
-        currSnap.docs.forEach(doc => { currMap[doc.id] = doc.data(); });
-        setCurriculum(currMap);
-      } catch (currErr) {
-        console.warn('Curriculum fetch error (may be permission issue):', currErr.message);
-      }
-
-      // Chapter progress - with error handling
-      try {
-        const progressMap = {};
-        const progressSnap = await db.collection('chapterProgress').get();
-        progressSnap.docs.forEach(d => { progressMap[d.id] = d.data(); });
-        setChapterProgress(progressMap);
-      } catch (progressErr) {
-        console.warn('Progress fetch error (may be permission issue):', progressErr.message);
-      }
-
-      // ✅ Student's attendance - with error handling
-      try {
-        const attSnap = await db.collection('studentAttendance')
-          .where('studentId', '==', String(myId))
-          .get();
-
-        const attendanceData = attSnap.docs
-          .map(d => ({ ...d.data(), docId: d.id }))
-          .sort((a, b) => b.date.localeCompare(a.date));
-
-        setStudentAttendance(attendanceData);
-      } catch (attErr) {
-        console.warn('Attendance fetch error (may be permission issue):', attErr.message);
-      }
-
-      // Teachers from this school - with caching for fast loading
-      try {
-        // ✅ FIX: Load from cache first for instant display
-        const cacheKey = `teachers_${mySchool}`;
-        const cachedTeachers = localStorage.getItem(cacheKey);
-        if (cachedTeachers) {
-          try {
-            const parsed = JSON.parse(cachedTeachers);
-            if (parsed.data && Array.isArray(parsed.data)) {
-              setTeachers(parsed.data);
-              console.log('✅ Teachers loaded from cache:', parsed.data.length);
-            }
-          } catch (e) { /* ignore parse errors */ }
-        }
-        
-        // Then fetch fresh data in background
-        const teacherSnap = await db.collection('teachers')
-          .where('school', '==', mySchool)
-          .get();
-        const teachersData = teacherSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
-        setTeachers(teachersData);
-        
-        // ✅ Cache for next time (with timestamp for freshness check)
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify({
-            data: teachersData,
-            timestamp: Date.now(),
-            school: mySchool
-          }));
-          console.log('✅ Teachers cached:', teachersData.length);
-        } catch (e) { /* ignore storage errors */ }
-      } catch (teacherErr) {
-        console.warn('Teachers fetch error (may be permission issue):', teacherErr.message);
-        // ✅ FIX: Show helpful message for students when teachers can't be loaded
-        setTeachers([]);
-      }
-
-      // Exam registrations for this student - with error handling
-      try {
-        const examSnap = await db.collection('studentExamRegistrations').doc(myId).get();
-        if (examSnap.exists) {
-          setExamRegistrations(examSnap.data());
-        }
-      } catch (examErr) {
-        console.warn('Exam registrations fetch error (may be permission issue):', examErr.message);
-      }
-
-      setLoading(false);
+      const fetchPromises = [];
+      
+      // Curriculum fetch
+      fetchPromises.push(
+        db.collection('curriculum').get().then(snap => {
+          const currMap = {};
+          snap.docs.forEach(doc => { currMap[doc.id] = doc.data(); });
+          setCurriculum(currMap);
+          try { localStorage.setItem(`curriculum_${mySchool}_${myGrade}`, JSON.stringify({ data: currMap, timestamp: Date.now() })); } catch(e) {}
+        }).catch(e => console.warn('Curriculum error:', e.message))
+      );
+      
+      // Chapter progress fetch
+      fetchPromises.push(
+        db.collection('chapterProgress').get().then(snap => {
+          const progressMap = {};
+          snap.docs.forEach(d => { progressMap[d.id] = d.data(); });
+          setChapterProgress(progressMap);
+        }).catch(e => console.warn('Progress error:', e.message))
+      );
+      
+      // Attendance fetch
+      fetchPromises.push(
+        db.collection('studentAttendance').where('studentId', '==', String(myId)).get().then(snap => {
+          const attendanceData = snap.docs.map(d => ({ ...d.data(), docId: d.id })).sort((a, b) => b.date.localeCompare(a.date));
+          setStudentAttendance(attendanceData);
+          try { localStorage.setItem(`attendance_${myId}`, JSON.stringify({ data: attendanceData, timestamp: Date.now() })); } catch(e) {}
+        }).catch(e => console.warn('Attendance error:', e.message))
+      );
+      
+      // Teachers fetch
+      fetchPromises.push(
+        db.collection('teachers').where('school', '==', mySchool).get().then(snap => {
+          const teachersData = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
+          setTeachers(teachersData);
+          try { localStorage.setItem(teacherCacheKey, JSON.stringify({ data: teachersData, timestamp: Date.now(), school: mySchool })); } catch(e) {}
+          console.log('✅ Teachers refreshed:', teachersData.length);
+        }).catch(e => { console.warn('Teachers error:', e.message); setTeachers([]); })
+      );
+      
+      // Exam registrations fetch
+      fetchPromises.push(
+        db.collection('studentExamRegistrations').doc(myId).get().then(snap => {
+          if (snap.exists) setExamRegistrations(snap.data());
+        }).catch(e => console.warn('Exams error:', e.message))
+      );
+      
+      // Wait for all to complete (they run in parallel)
+      await Promise.all(fetchPromises);
+      console.log('✅ All data refreshed');
+      
     } catch (e) {
       console.error('Data fetch error:', e);
       setLoading(false);
@@ -10095,88 +10119,49 @@ useEffect(() => {
 
     return Math.round((filled / requiredFields.length) * 100);
   };
-    // 🔄 Keep student profile in sync so banner and card match
+    // 🔄 Load student profile - simplified for reliability
   useEffect(() => {
     if (!myId) return;
 
-    // ✅ FIX: Load from cache immediately for instant display
-    const cacheKey = `studentProfile_${myId}`;
-    try {
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed.data) {
-          setStudentProfile(prev => ({ ...prev, ...parsed.data }));
-          setProfileLoaded(true); // ✅ Mark as loaded from cache
-          console.log('✅ Profile loaded from cache');
-        }
-      }
-    } catch (e) { /* ignore parse errors */ }
-
-    // ✅ FIX: First try to get the profile once, then set up listener
-    // This handles permission errors more gracefully
-    const setupProfileListener = async () => {
+    const loadProfile = async () => {
+      const cacheKey = `studentProfile_${myId}`;
+      
+      // ✅ Step 1: Load from cache INSTANTLY
       try {
-        // First, check if we can access this document
-        const initialDoc = await db.collection('studentProfiles').doc(myId).get();
-        if (initialDoc.exists) {
-          const profileData = initialDoc.data();
-          // ✅ FIX: Merge with existing defaults to ensure all fields are tracked
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed.data) {
+            setStudentProfile(prev => ({ ...prev, ...parsed.data }));
+            setProfileLoaded(true);
+            console.log('✅ Profile loaded from cache instantly');
+          }
+        }
+      } catch (e) { /* ignore */ }
+      
+      // ✅ Step 2: Fetch fresh data from Firebase
+      try {
+        const docSnap = await db.collection('studentProfiles').doc(myId).get();
+        if (docSnap.exists) {
+          const profileData = docSnap.data();
           setStudentProfile(prev => ({ ...prev, ...profileData }));
-          setProfileLoaded(true); // ✅ Mark as loaded
-          // Cache for next time
+          setProfileLoaded(true);
+          // Update cache
           try {
             localStorage.setItem(cacheKey, JSON.stringify({ data: profileData, timestamp: Date.now() }));
-          } catch (e) { /* ignore storage errors */ }
+          } catch (e) { /* ignore */ }
+          console.log('✅ Profile loaded from Firebase');
         } else {
-          setProfileLoaded(true); // ✅ Still mark as loaded (profile doesn't exist yet)
+          // Profile doesn't exist yet - that's okay for new students
+          setProfileLoaded(true);
         }
-        
-        // Now set up real-time listener
-        const unsubscribe = db.collection('studentProfiles')
-          .doc(myId)
-          .onSnapshot(
-            (doc) => {
-              if (doc.exists) {
-                const profileData = doc.data();
-                // ✅ FIX: Merge data instead of replacing to preserve defaults
-                setStudentProfile(prev => ({ ...prev, ...profileData }));
-                setProfileLoaded(true);
-                // Update cache
-                try {
-                  localStorage.setItem(cacheKey, JSON.stringify({ data: profileData, timestamp: Date.now() }));
-                } catch (e) { /* ignore storage errors */ }
-              }
-            },
-            (err) => {
-              // ✅ FIX: Only log warning instead of error for permission issues
-              if (err.code === 'permission-denied') {
-                console.warn('Profile access limited - using cached data');
-              } else {
-                console.error('Profile listener error:', err);
-              }
-              setProfileLoaded(true); // ✅ Still mark as loaded on error
-            }
-          );
-
-        return unsubscribe;
       } catch (err) {
-        if (err.code === 'permission-denied') {
-          console.warn('Profile permission denied - student may need to complete profile');
-        } else {
-          console.error('Profile listener setup error:', err);
-        }
-        setProfileLoaded(true); // ✅ Still mark as loaded on error
-        return () => {}; // Return empty unsubscribe function
+        console.warn('Profile fetch error:', err.message);
+        setProfileLoaded(true); // Still mark as loaded so UI isn't stuck
       }
     };
 
-    let unsubscribe = () => {};
-    setupProfileListener().then(unsub => {
-      unsubscribe = unsub;
-    });
-
-    return () => unsubscribe();
+    loadProfile();
   }, [myId]);
 
   // Fetch teacher feedbacks and check if notification needed
@@ -10442,7 +10427,11 @@ useEffect(() => {
 {activeTab === 'profile' && (
   <StudentProfileForm
     currentUser={currentUser}
-    onProfileUpdated={(updatedProfile) => setStudentProfile(updatedProfile)}
+    onProfileUpdated={(updatedProfile) => {
+      // ✅ FIX: Merge with existing data and mark as loaded
+      setStudentProfile(prev => ({ ...prev, ...updatedProfile }));
+      setProfileLoaded(true);
+    }}
   />
 )}
 
