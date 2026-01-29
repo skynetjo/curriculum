@@ -5,18 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
   
-  <!-- ✅ VERSION 5.0.0 - PRE-COMPILED JSX (No more Babel runtime!) -->
-  <!-- This version loads 10x faster because JSX is pre-compiled -->
+  <!-- ✅ VERSION 5.0.1 - PRE-COMPILED JSX (Fixed function order) -->
   <script>
     window.__PERF_START = performance.now();
-    console.log('🚀 Curriculum Tracker v5.0.0 - Pre-compiled JSX');
+    console.log('🚀 Curriculum Tracker v5.0.1 - Pre-compiled JSX');
   </script>
   
   <!-- ✅ CRITICAL: Clear old buggy service worker caches IMMEDIATELY -->
   <!-- This runs before anything else to fix CORS issues -->
   <script>
     (function() {
-      var SW_VERSION = '5.0.0';
+      var SW_VERSION = '5.0.1';
       var storedVersion = localStorage.getItem('swVersion');
       
       // If version mismatch, clear everything
@@ -1613,7 +1612,7 @@
   <!-- React (required for app) -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- ✅ REMOVED: Babel Standalone (1.5MB) - JSX is now pre-compiled! -->
+  <!-- ✅ REMOVED: Babel Standalone - JSX is pre-compiled (v5.0.1) -->
   
   <!-- Tailwind CSS -->
   <!-- ✅ FIX: Load without crossorigin to avoid CORS issues with service worker -->
@@ -4279,8 +4278,7 @@ const CHART_COLORS = {
 };
 </script>
   <script>
-// ✅ PRE-COMPILED JAVASCRIPT - No more Babel runtime compilation!
-// This code was compiled from JSX at build time, not in the browser
+// ✅ PRE-COMPILED JAVASCRIPT v5.0.1 - Fixed function order
 const {
   useState,
   useEffect,
@@ -13025,6 +13023,57 @@ function App() {
       }
     };
   }, [currentUser]);
+  const computeAndSaveRankings = useCallback(async () => {
+    try {
+      console.log('📊 Computing school rankings...');
+      const [currSnap, progSnap] = await Promise.all([db.collection('curriculum').get(), db.collection('chapterProgress').get()]);
+      const currMap = {};
+      currSnap.docs.forEach(doc => {
+        currMap[doc.id] = doc.data();
+      });
+      const progMap = {};
+      progSnap.docs.forEach(doc => {
+        progMap[doc.id] = doc.data();
+      });
+      const rankings = SCHOOLS.map(school => {
+        let total = 0,
+          completed = 0;
+        SUBJECTS.forEach(subject => {
+          ['11', '12'].forEach(grade => {
+            const docId = `${school}_${subject}_${grade}`;
+            const chapters = currMap[docId]?.chapters || [];
+            chapters.forEach(ch => {
+              total++;
+              const progressId = `${school}_${ch.id}`;
+              const prog = progMap[progressId] || {};
+              if (prog.completed === 'Yes') completed++;
+            });
+          });
+        });
+        return {
+          school,
+          total,
+          completed,
+          percentage: total ? Math.round(completed / total * 100) : 0
+        };
+      });
+      rankings.sort((a, b) => b.percentage - a.percentage);
+      await db.collection('system').doc('schoolRankings').set({
+        rankings: rankings,
+        updatedAt: new Date().toISOString(),
+        totalSchools: SCHOOLS.length
+      });
+      console.log('✅ Rankings saved successfully');
+      setPrecomputedRankings({
+        rankings,
+        updatedAt: new Date().toISOString()
+      });
+      return rankings;
+    } catch (e) {
+      console.error('Rankings computation error:', e);
+      return null;
+    }
+  }, []);
   useEffect(() => {
     if (currentUser && !loading && precomputedRankings === null) {
       const isAdmin = currentUser.email === 'admin@avantifellows.org' || currentUser.role === 'super_admin' || currentUser.role === 'program_head' || currentUser.role === 'program_manager' || currentUser.role === 'associate_program_manager';
@@ -13297,57 +13346,6 @@ function App() {
     setCurrentUser(null);
     setIsAdmin(false);
   };
-  const computeAndSaveRankings = useCallback(async () => {
-    try {
-      console.log('📊 Computing school rankings...');
-      const [currSnap, progSnap] = await Promise.all([db.collection('curriculum').get(), db.collection('chapterProgress').get()]);
-      const currMap = {};
-      currSnap.docs.forEach(doc => {
-        currMap[doc.id] = doc.data();
-      });
-      const progMap = {};
-      progSnap.docs.forEach(doc => {
-        progMap[doc.id] = doc.data();
-      });
-      const rankings = SCHOOLS.map(school => {
-        let total = 0,
-          completed = 0;
-        SUBJECTS.forEach(subject => {
-          ['11', '12'].forEach(grade => {
-            const docId = `${school}_${subject}_${grade}`;
-            const chapters = currMap[docId]?.chapters || [];
-            chapters.forEach(ch => {
-              total++;
-              const progressId = `${school}_${ch.id}`;
-              const prog = progMap[progressId] || {};
-              if (prog.completed === 'Yes') completed++;
-            });
-          });
-        });
-        return {
-          school,
-          total,
-          completed,
-          percentage: total ? Math.round(completed / total * 100) : 0
-        };
-      });
-      rankings.sort((a, b) => b.percentage - a.percentage);
-      await db.collection('system').doc('schoolRankings').set({
-        rankings: rankings,
-        updatedAt: new Date().toISOString(),
-        totalSchools: SCHOOLS.length
-      });
-      console.log('✅ Rankings saved successfully');
-      setPrecomputedRankings({
-        rankings,
-        updatedAt: new Date().toISOString()
-      });
-      return rankings;
-    } catch (e) {
-      console.error('Rankings computation error:', e);
-      return null;
-    }
-  }, []);
   const updateChapterProgress = useCallback(async (school, chapterId, field, value) => {
     try {
       const progressId = `${school}_${chapterId}`;
