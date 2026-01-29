@@ -9934,11 +9934,21 @@ function BookRequestModal({ availableBooks, onSubmit, onClose }) {
 function StudentDashboard({currentUser, handleLogout}) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);  // ⬅️ ADD THIS LINE
+  const [profileLoaded, setProfileLoaded] = useState(false); // ✅ Track if profile was loaded
   const [curriculum, setCurriculum] = useState({});
   const [chapterProgress, setChapterProgress] = useState({});
   const [studentAttendance, setStudentAttendance] = useState([]);
   const [teachers, setTeachers] = useState([]);
-  const [studentProfile, setStudentProfile] = useState(null);
+  // ✅ FIX: Initialize with default structure (matching StudentProfilePage) 
+  // This ensures profile completion calculates correctly even before Firebase loads
+  const [studentProfile, setStudentProfile] = useState({
+    firstName: '', lastName: '', email: '', phone: '', dob: '', 
+    grade: '', category: '', stream: '', school: '', 
+    fatherName: '', motherName: '', fatherOccupation: '', motherOccupation: '',
+    fatherEducation: '', motherEducation: '', familyIncome: '',
+    address: '', state: '', district: '', pincode: '', 
+    whatsappNumber: '', percentage10th: ''
+  });
   const [examRegistrations, setExamRegistrations] = useState(null);
   const [teacherFeedbacks, setTeacherFeedbacks] = useState([]);
   const [selectedTeacher, setSelectedTeacher] = useState(null);
@@ -10010,12 +10020,37 @@ useEffect(() => {
         console.warn('Attendance fetch error (may be permission issue):', attErr.message);
       }
 
-      // Teachers from this school - with error handling
+      // Teachers from this school - with caching for fast loading
       try {
+        // ✅ FIX: Load from cache first for instant display
+        const cacheKey = `teachers_${mySchool}`;
+        const cachedTeachers = localStorage.getItem(cacheKey);
+        if (cachedTeachers) {
+          try {
+            const parsed = JSON.parse(cachedTeachers);
+            if (parsed.data && Array.isArray(parsed.data)) {
+              setTeachers(parsed.data);
+              console.log('✅ Teachers loaded from cache:', parsed.data.length);
+            }
+          } catch (e) { /* ignore parse errors */ }
+        }
+        
+        // Then fetch fresh data in background
         const teacherSnap = await db.collection('teachers')
           .where('school', '==', mySchool)
           .get();
-        setTeachers(teacherSnap.docs.map(d => ({ ...d.data(), docId: d.id })));
+        const teachersData = teacherSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
+        setTeachers(teachersData);
+        
+        // ✅ Cache for next time (with timestamp for freshness check)
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({
+            data: teachersData,
+            timestamp: Date.now(),
+            school: mySchool
+          }));
+          console.log('✅ Teachers cached:', teachersData.length);
+        } catch (e) { /* ignore storage errors */ }
       } catch (teacherErr) {
         console.warn('Teachers fetch error (may be permission issue):', teacherErr.message);
         // ✅ FIX: Show helpful message for students when teachers can't be loaded
@@ -10045,11 +10080,8 @@ useEffect(() => {
 
     // Calculate profile completion (same logic as Profile page)
   const calculateCompletion = () => {
-    const baseProfile = studentProfile || {
-      grade: myGrade,
-      school: mySchool
-    };
-
+    // ✅ FIX: Use studentProfile directly since it now has defaults
+    // No need for fallback - the state is already initialized with empty fields
     const requiredFields = [
       'firstName', 'lastName', 'email', 'phone', 'dob', 'grade', 'category',
       'stream', 'school', 'fatherName', 'motherName', 'fatherOccupation',
@@ -10058,7 +10090,7 @@ useEffect(() => {
     ];
 
     const filled = requiredFields.filter(
-      field => baseProfile[field] && String(baseProfile[field]).trim() !== ''
+      field => studentProfile[field] && String(studentProfile[field]).trim() !== ''
     ).length;
 
     return Math.round((filled / requiredFields.length) * 100);
@@ -10067,6 +10099,20 @@ useEffect(() => {
   useEffect(() => {
     if (!myId) return;
 
+    // ✅ FIX: Load from cache immediately for instant display
+    const cacheKey = `studentProfile_${myId}`;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.data) {
+          setStudentProfile(prev => ({ ...prev, ...parsed.data }));
+          setProfileLoaded(true); // ✅ Mark as loaded from cache
+          console.log('✅ Profile loaded from cache');
+        }
+      }
+    } catch (e) { /* ignore parse errors */ }
+
     // ✅ FIX: First try to get the profile once, then set up listener
     // This handles permission errors more gracefully
     const setupProfileListener = async () => {
@@ -10074,7 +10120,16 @@ useEffect(() => {
         // First, check if we can access this document
         const initialDoc = await db.collection('studentProfiles').doc(myId).get();
         if (initialDoc.exists) {
-          setStudentProfile(initialDoc.data());
+          const profileData = initialDoc.data();
+          // ✅ FIX: Merge with existing defaults to ensure all fields are tracked
+          setStudentProfile(prev => ({ ...prev, ...profileData }));
+          setProfileLoaded(true); // ✅ Mark as loaded
+          // Cache for next time
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify({ data: profileData, timestamp: Date.now() }));
+          } catch (e) { /* ignore storage errors */ }
+        } else {
+          setProfileLoaded(true); // ✅ Still mark as loaded (profile doesn't exist yet)
         }
         
         // Now set up real-time listener
@@ -10083,9 +10138,14 @@ useEffect(() => {
           .onSnapshot(
             (doc) => {
               if (doc.exists) {
-                setStudentProfile(doc.data());
-              } else {
-                setStudentProfile(null);
+                const profileData = doc.data();
+                // ✅ FIX: Merge data instead of replacing to preserve defaults
+                setStudentProfile(prev => ({ ...prev, ...profileData }));
+                setProfileLoaded(true);
+                // Update cache
+                try {
+                  localStorage.setItem(cacheKey, JSON.stringify({ data: profileData, timestamp: Date.now() }));
+                } catch (e) { /* ignore storage errors */ }
               }
             },
             (err) => {
@@ -10095,6 +10155,7 @@ useEffect(() => {
               } else {
                 console.error('Profile listener error:', err);
               }
+              setProfileLoaded(true); // ✅ Still mark as loaded on error
             }
           );
 
@@ -10105,6 +10166,7 @@ useEffect(() => {
         } else {
           console.error('Profile listener setup error:', err);
         }
+        setProfileLoaded(true); // ✅ Still mark as loaded on error
         return () => {}; // Return empty unsubscribe function
       }
     };
@@ -10226,8 +10288,8 @@ useEffect(() => {
         </div>
       </nav>
 
-      {/* Profile Completion Warning */}
-      {profileCompletion < 100 && (
+      {/* Profile Completion Warning - Only show after profile has loaded */}
+      {profileLoaded && profileCompletion < 100 && (
         <div className="bg-red-500 text-white text-center py-3 px-4">
           <p className="font-bold">
             ⚠️ Your profile is {profileCompletion}% complete. Please complete your profile!
