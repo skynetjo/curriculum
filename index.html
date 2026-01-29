@@ -5,11 +5,20 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
   
+  <!-- ✅ PERFORMANCE OPTIMIZATION v4.0.0 - January 2026 -->
+  <!-- Changes: Deferred React/Babel, Progressive loading, Better caching -->
+  <script>
+    // Performance tracking
+    window.__PERF_START = performance.now();
+    window.__APP_VERSION = '4.0.0';
+    console.log('🚀 Curriculum Tracker v4.0.0 - Performance Optimized');
+  </script>
+  
   <!-- ✅ CRITICAL: Clear old buggy service worker caches IMMEDIATELY -->
   <!-- This runs before anything else to fix CORS issues -->
   <script>
     (function() {
-      var SW_VERSION = '3.13.0';
+      var SW_VERSION = '4.0.0';
       var storedVersion = localStorage.getItem('swVersion');
       
       // If version mismatch, clear everything
@@ -1603,10 +1612,72 @@
     console.log('✅ Modern performance enhancements loaded');
   </script>
   
-  <!-- React (required for app) -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- ✅ PERFORMANCE FIX v4.0: React and Babel with DEFER -->
+  <!-- This allows the app shell to show instantly while scripts load in background -->
+  <script defer src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script defer src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script defer src="https://unpkg.com/@babel/standalone/babel.min.js" 
+    onload="console.log('✅ Babel loaded'); window.__babelReady = true; window.__tryInitApp && window.__tryInitApp();"></script>
+  
+  <!-- ✅ PERFORMANCE: App Initialization Manager -->
+  <script>
+  (function() {
+    'use strict';
+    var PERF_START = performance.now();
+    var MAX_WAIT = 20000; // 20 seconds max
+    window.__appInitialized = false;
+    
+    // Try to initialize the app
+    window.__tryInitApp = function() {
+      if (window.__appInitialized) return;
+      
+      // Check timeout
+      if (performance.now() - PERF_START > MAX_WAIT) {
+        console.error('❌ App initialization timed out after 20s');
+        window.updateShellStatus && window.updateShellStatus('Loading took too long. Please refresh the page.', false);
+        return;
+      }
+      
+      // Check if dependencies are ready
+      var reactReady = typeof React !== 'undefined' && typeof ReactDOM !== 'undefined';
+      var babelReady = typeof Babel !== 'undefined';
+      
+      if (!reactReady || !babelReady) {
+        console.log('⏳ Waiting for dependencies... React:', reactReady, 'Babel:', babelReady);
+        setTimeout(window.__tryInitApp, 150);
+        return;
+      }
+      
+      // All dependencies ready!
+      window.__appInitialized = true;
+      var loadTime = ((performance.now() - PERF_START) / 1000).toFixed(2);
+      console.log('🚀 Dependencies loaded in ' + loadTime + 's, transforming Babel scripts...');
+      window.updateShellStatus && window.updateShellStatus('Starting app...');
+      
+      // Transform Babel scripts
+      try {
+        Babel.transformScriptTags();
+        console.log('✅ Babel transformation complete');
+      } catch (e) {
+        console.error('❌ Babel transformation error:', e);
+      }
+    };
+    
+    // Start checking when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(window.__tryInitApp, 200);
+      });
+    } else {
+      setTimeout(window.__tryInitApp, 200);
+    }
+    
+    // Backup trigger on window load
+    window.addEventListener('load', function() {
+      setTimeout(window.__tryInitApp, 300);
+    });
+  })();
+  </script>
   
   <!-- Tailwind CSS -->
   <!-- ✅ FIX: Load without crossorigin to avoid CORS issues with service worker -->
@@ -1707,35 +1778,46 @@
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   
-  <!-- Chart.js - NOT deferred because datalabels registration needs it immediately -->
-  <!-- ✅ FIX: Using explicit anonymous crossorigin to avoid CORS credential issues -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <!-- Chart.js - Now deferred for better LCP -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js" 
+    onload="window.__chartJsReady = true; window.__registerChartPlugins && window.__registerChartPlugins();"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"
+    onload="window.__chartDataLabelsReady = true; window.__registerChartPlugins && window.__registerChartPlugins();"></script>
+  
+  <!-- Chart.js Plugin Registration (runs when both are loaded) -->
   <script>
-    // ✅ FIX: Load ChartDataLabels dynamically with proper error handling
-    // This prevents blank screen if CDN fails
-    (function() {
-      var script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js';
-      script.onerror = function() {
-        console.warn('[ChartDataLabels] Failed to load from primary CDN, trying fallback...');
-        var fallback = document.createElement('script');
-        fallback.src = 'https://unpkg.com/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js';
-        fallback.onerror = function() {
-          console.warn('[ChartDataLabels] Fallback also failed. Charts will work without data labels.');
-          window.ChartDataLabelsLoaded = false;
-        };
-        fallback.onload = function() {
-          console.log('[ChartDataLabels] Loaded from fallback CDN');
-          window.ChartDataLabelsLoaded = true;
-        };
-        document.head.appendChild(fallback);
-      };
-      script.onload = function() {
-        console.log('[ChartDataLabels] Loaded successfully');
-        window.ChartDataLabelsLoaded = true;
-      };
-      document.head.appendChild(script);
-    })();
+    window.__registerChartPlugins = function() {
+      if (!window.__chartJsReady || !window.__chartDataLabelsReady) return;
+      if (window.__chartPluginsRegistered) return;
+      
+      try {
+        if (typeof Chart !== 'undefined' && typeof ChartDataLabels !== 'undefined') {
+          Chart.register(ChartDataLabels);
+          
+          if (Chart.defaults && Chart.defaults.plugins) {
+            Chart.defaults.plugins.datalabels = {
+              anchor: 'center',
+              align: 'center',
+              offset: 0,
+              formatter: function(value, ctx) {
+                var type = ctx.chart.config.type;
+                if (type === 'pie' || type === 'doughnut') {
+                  return value > 0 ? value : '';
+                }
+                return value;
+              },
+              color: '#fff',
+              font: { weight: '700', size: 14 }
+            };
+          }
+          
+          window.__chartPluginsRegistered = true;
+          console.log('✅ Chart.js plugins registered');
+        }
+      } catch (e) {
+        console.warn('ChartDataLabels registration failed:', e);
+      }
+    };
   </script>
   
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -4139,12 +4221,12 @@ body.has-install-banner .sidebar {
     }
   };
   
-  // ✅ NEW: Force hide app shell after 5 seconds no matter what
-  // This ensures the shell never blocks the UI indefinitely
+  // ✅ PERFORMANCE FIX: Force hide app shell after 10 seconds
+  // Increased from 5s to 10s to accommodate deferred script loading
   window._forceHideTimeout = setTimeout(function() {
     console.log('⏱️ [App Shell] Force hiding after timeout');
     window.hideInstantLoader();
-  }, 5000);
+  }, 10000);
   
   // ✅ APP SHELL: Update loading status indicator
   // This shows users what's happening while the app loads
@@ -4188,61 +4270,75 @@ body.has-install-banner .sidebar {
   </script>
   
   <script>
-  // Register Chart.js datalabels plugin safely
-if (typeof ChartDataLabels !== 'undefined' && typeof Chart !== 'undefined') {
-  try {
-    Chart.register(ChartDataLabels);
+  // ✅ PERFORMANCE FIX: Chart.js registration now handles deferred loading
+  // This function will be called when Chart.js is ready (or immediately if already loaded)
+  function setupChartDefaults() {
+    if (typeof Chart === 'undefined') {
+      // Chart.js not loaded yet, wait for it
+      setTimeout(setupChartDefaults, 200);
+      return;
+    }
     
-    if (Chart.defaults && Chart.defaults.plugins) {
-      Chart.defaults.plugins.datalabels = {
-        anchor: 'center',
-        align: 'center',
-        offset: 0,
-        formatter: (value, ctx) => {
-          const type = ctx.chart.config.type;
-          if (type === 'pie' || type === 'doughnut') {
-            // Show the actual number inside the slice
-            return value > 0 ? value : '';
-          }
-          return value;
-        },
+    // Register datalabels if available
+    if (typeof ChartDataLabels !== 'undefined' && !window.__chartPluginsRegistered) {
+      try {
+        Chart.register(ChartDataLabels);
+        
+        if (Chart.defaults && Chart.defaults.plugins) {
+          Chart.defaults.plugins.datalabels = {
+            anchor: 'center',
+            align: 'center',
+            offset: 0,
+            formatter: (value, ctx) => {
+              const type = ctx.chart.config.type;
+              if (type === 'pie' || type === 'doughnut') {
+                return value > 0 ? value : '';
+              }
+              return value;
+            },
+            color: '#fff',
+            font: { weight: '700', size: 14 },
+            textShadow: true
+          };
+        }
+        window.__chartPluginsRegistered = true;
+        console.log('✅ Chart.js datalabels registered');
+      } catch (e) {
+        console.warn('ChartDataLabels plugin registration failed:', e);
+      }
+    }
+
+    // Optional overrides per chart type
+    if (Chart.overrides) {
+      Chart.overrides.bar = Chart.overrides.bar || {};
+      Chart.overrides.bar.plugins = Chart.overrides.bar.plugins || {};
+      Chart.overrides.bar.plugins.datalabels = {
+        color: '#374151',
+        font: { weight: '700', size: 12 },
+        align: 'end',
+        anchor: 'end'
+      };
+
+      Chart.overrides.pie = Chart.overrides.pie || {};
+      Chart.overrides.pie.plugins = Chart.overrides.pie.plugins || {};
+      Chart.overrides.pie.plugins.datalabels = {
         color: '#fff',
         font: { weight: '700', size: 14 },
-        textShadow: true
+        textStrokeColor: 'rgba(0,0,0,0.3)',
+        textStrokeWidth: 2
+      };
+      
+      Chart.overrides.doughnut = Chart.overrides.doughnut || {};
+      Chart.overrides.doughnut.plugins = Chart.overrides.doughnut.plugins || {};
+      Chart.overrides.doughnut.plugins.datalabels = {
+        color: '#fff',
+        font: { weight: '700', size: 14 }
       };
     }
-  } catch (e) {
-    console.warn('ChartDataLabels plugin registration failed:', e);
   }
-}
-
-// Optional overrides per chart type
-if (typeof Chart !== 'undefined' && Chart.overrides) {
-  Chart.overrides.bar = Chart.overrides.bar || {};
-  Chart.overrides.bar.plugins = Chart.overrides.bar.plugins || {};
-  Chart.overrides.bar.plugins.datalabels = {
-    color: '#374151',
-    font: { weight: '700', size: 12 },
-    align: 'end',
-    anchor: 'end'
-  };
-
-  Chart.overrides.pie = Chart.overrides.pie || {};
-  Chart.overrides.pie.plugins = Chart.overrides.pie.plugins || {};
-  Chart.overrides.pie.plugins.datalabels = {
-    color: '#fff',
-    font: { weight: '700', size: 14 },
-    textStrokeColor: 'rgba(0,0,0,0.3)',
-    textStrokeWidth: 2
-  };
   
-  Chart.overrides.doughnut = Chart.overrides.doughnut || {};
-  Chart.overrides.doughnut.plugins = Chart.overrides.doughnut.plugins || {};
-  Chart.overrides.doughnut.plugins.datalabels = {
-    color: '#fff',
-    font: { weight: '700', size: 14 }
-  };
-}
+  // Try to setup immediately, or wait for Chart.js
+  setupChartDefaults();
 
 // ✅ Define consistent chart color palette (muted teal/gray like sample)
 const CHART_COLORS = {
