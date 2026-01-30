@@ -697,6 +697,6 @@
     PWAManager.init();
   }
   
-  console.log('[PWA] ✅ PWA Enhancement Module v4.1.0 loaded');
+  console.log('[PWA] ✅ PWA Enhancement Module v5.0.2 loaded');
   
 })();
