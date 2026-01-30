@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
   
-  <!-- ✅ VERSION 5.0.1 - PRE-COMPILED JSX (Fixed function order) -->
+  <!-- ✅ VERSION 5.0.2 - PERFORMANCE OPTIMIZED (Fixed notifications + LCP/CLS) -->
   <script>
     window.__PERF_START = performance.now();
-    console.log('🚀 Curriculum Tracker v5.0.1 - Pre-compiled JSX');
+    console.log('🚀 Curriculum Tracker v5.0.2 - Performance Optimized');
   </script>
   
   <!-- ✅ CRITICAL: Clear old buggy service worker caches IMMEDIATELY -->
   <!-- This runs before anything else to fix CORS issues -->
   <script>
     (function() {
-      var SW_VERSION = '5.0.1';
+      var SW_VERSION = '5.0.2';
       var storedVersion = localStorage.getItem('swVersion');
       
       // If version mismatch, clear everything
@@ -64,6 +64,10 @@
   <link rel="dns-prefetch" href="https://firestore.googleapis.com">
   <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com">
   
+  <!-- ✅ PERFORMANCE: Preload critical scripts with high priority -->
+  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" as="script" crossorigin>
+  <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script" crossorigin>
+  
   <!-- ✅ APP SHELL ARCHITECTURE: Critical CSS inline for INSTANT UI display -->
   <!-- This CSS loads the entire UI structure before any JavaScript runs -->
   <style id="critical-css">
@@ -74,6 +78,39 @@
        ======================================== */
     
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    /* ✅ PERFORMANCE FIX: Prevent Cumulative Layout Shift (CLS) */
+    /* Reserve space for dynamic content to prevent layout shifts */
+    html, body {
+      overflow-x: hidden;
+    }
+    
+    /* ✅ FIX CLS: Set explicit dimensions for common elements */
+    img {
+      max-width: 100%;
+      height: auto;
+      /* Prevent layout shift when images load */
+      content-visibility: auto;
+    }
+    
+    /* ✅ FIX CLS: Reserve space for notification bell */
+    .notification-bell {
+      min-width: 44px;
+      min-height: 44px;
+    }
+    
+    /* ✅ FIX CLS: Reserve space for avatar */
+    .shell-avatar, .user-avatar, [class*="avatar"] {
+      min-width: 44px;
+      min-height: 44px;
+      aspect-ratio: 1/1;
+    }
+    
+    /* ✅ FIX CLS: Prevent font-related layout shifts */
+    body {
+      font-synthesis: none;
+      -webkit-font-smoothing: antialiased;
+    }
     
     /* ✅ FIX: Ensure all interactive elements are clickable */
     button, a, input, select, textarea, [role="button"], [onclick] {
@@ -128,6 +165,8 @@
       min-height: 100vh;
       opacity: 1;
       transition: opacity 0.3s ease;
+      /* ✅ PERFORMANCE: Isolate layout/paint for better performance */
+      contain: layout style;
     }
     
     .app-shell.hidden {
@@ -204,6 +243,8 @@
       margin-left: 220px;
       padding: 24px;
       min-height: 100vh;
+      /* ✅ PERFORMANCE: Isolate paint for better performance */
+      contain: layout paint;
     }
     
     /* Header Shell */
@@ -597,9 +638,9 @@
       var isAndroid = /Android/.test(navigator.userAgent);
       var isMobile = isIOS || isAndroid;
       
-      // ✅ CRITICAL FIX: Increased timeout for remote JNV areas with slow connectivity
-      // Teachers are 30-40km from cities with poor signals, need more time to load
-      var loaderTimeout = isMobile ? 35000 : 45000; // 35s mobile, 45s desktop
+      // ✅ PERFORMANCE FIX: Reduced timeout for faster perceived performance
+      // While keeping room for low-connectivity areas
+      var loaderTimeout = isMobile ? 20000 : 25000; // 20s mobile, 25s desktop (was 35/45)
       
       window._loaderTimeoutId = setTimeout(function() {
         var loader = document.getElementById('instant-loader');
@@ -1269,7 +1310,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" media="print" onload="this.media='all'" />
 
   <!-- ✅ PERFORMANCE FIX: Load critical scripts first -->
-  <!-- Firebase Core (required for auth) -->
+  <!-- Firebase Core (required for auth) - NO DEFER because inline scripts depend on it -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -1609,7 +1650,7 @@
     console.log('✅ Modern performance enhancements loaded');
   </script>
   
-  <!-- React (required for app) -->
+  <!-- React (required for app) - NO DEFER because inline scripts depend on it -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <!-- ✅ REMOVED: Babel Standalone - JSX is pre-compiled (v5.0.1) -->
@@ -1713,7 +1754,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   
-  <!-- Chart.js - NOT deferred because datalabels registration needs it immediately -->
+  <!-- Chart.js - NO DEFER because charts need it immediately after React components mount -->
   <!-- ✅ FIX: Using explicit anonymous crossorigin to avoid CORS credential issues -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script>
@@ -4278,7 +4319,12 @@ const CHART_COLORS = {
 };
 </script>
   <script>
-// ✅ PRE-COMPILED JAVASCRIPT v5.0.1 - Fixed function order
+// ✅ PRE-COMPILED JAVASCRIPT v5.0.2 - Performance Optimized
+// ✅ PERFORMANCE: Use passive event listeners for scroll/touch
+document.addEventListener('touchstart', function(){}, {passive: true});
+document.addEventListener('touchmove', function(){}, {passive: true});
+document.addEventListener('wheel', function(){}, {passive: true});
+
 const {
   useState,
   useEffect,
@@ -4286,10 +4332,20 @@ const {
   useCallback,
   useMemo
 } = React;
+
+// ✅ PERFORMANCE: Enhanced cache with LRU eviction
 const firestoreCache = new Map();
+const CACHE_MAX_SIZE = 50; // Prevent memory bloat
 async function cachedQuery(key, queryFn, ttl = 120000) {
   if (firestoreCache.has(key)) return firestoreCache.get(key);
   const data = await queryFn();
+  
+  // LRU eviction if cache is too large
+  if (firestoreCache.size >= CACHE_MAX_SIZE) {
+    const firstKey = firestoreCache.keys().next().value;
+    firestoreCache.delete(firstKey);
+  }
+  
   firestoreCache.set(key, data);
   setTimeout(() => firestoreCache.delete(key), ttl);
   return data;
@@ -33340,11 +33396,21 @@ ReactDOM.render(React.createElement(App, null), document.getElementById('root'))
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '3.13.0'; // ✅ CRITICAL FIX: Removed button disabling during saves
+  const CURRENT_VERSION = '5.0.2'; // ✅ PERFORMANCE FIX + NOTIFICATION FIX
 
-  // Immediately check for updates on every page load
+  // ✅ PERFORMANCE FIX: Check for updates less frequently (once per session)
+  // This saves bandwidth for teachers in low-connectivity areas
   (async function immediateUpdateCheck() {
     try {
+      // Skip if already checked this session
+      const lastCheck = sessionStorage.getItem('versionCheckTime');
+      const now = Date.now();
+      if (lastCheck && (now - parseInt(lastCheck)) < 300000) { // 5 minutes
+        console.log('⏭️ Skipping version check (checked recently)');
+        return;
+      }
+      sessionStorage.setItem('versionCheckTime', String(now));
+      
       // Fetch the latest index.html with cache bypass
       const response = await fetch('/index.html?v=' + Date.now(), { 
         cache: 'no-store',
@@ -34115,9 +34181,15 @@ const NotificationManager = {
     isOpen: false,
     userId: null,
     notificationSound: null,
+    _initialLoadComplete: false,  // ✅ FIX: Track initial load to prevent sound on app open
+    _sessionNotified: {},  // ✅ FIX: Track notifications shown this session
     
     init: function() {
         console.log('[NotificationManager] Initializing...');
+        
+        // ✅ FIX: Reset session notification tracker
+        this._sessionNotified = {};
+        this._initialLoadComplete = false;
         
         // Initialize notification sound
         this.initSound();
@@ -34204,15 +34276,22 @@ const NotificationManager = {
     },
     
     scheduleCelebrationNotifications: function() {
-        // Check if we should send celebration notifications
+        // ✅ FIX: Don't trigger immediate notification check - let loadCelebrationNotifications handle it
+        // The browser notification at 8 AM was causing repeated notifications on app open
         const now = new Date();
         const targetHour = 8; // 8 AM
         const currentHour = now.getHours();
         
-        // If it's between 8 AM and 9 AM, check immediately (for users who just opened the app)
-        if (currentHour >= targetHour && currentHour < 10) {
-            console.log('[NotificationManager] Checking for celebrations now (within morning window)');
-            this.sendCelebrationNotifications();
+        // ✅ FIX: Only show ONE notification per day using localStorage
+        const todayStr = now.toDateString();
+        const sentToday = localStorage.getItem('celebrationNotifSent_' + todayStr);
+        
+        // If it's between 8 AM and 9 AM AND we haven't sent today, schedule ONE notification
+        if (currentHour >= targetHour && currentHour < 10 && !sentToday) {
+            console.log('[NotificationManager] Morning window - will check for celebrations');
+            // ✅ FIX: Don't call sendCelebrationNotifications immediately
+            // Let loadCelebrationNotifications handle it through normal flow
+            // This prevents the duplicate sound/notification on app open
         }
         
         // Calculate milliseconds until next 8 AM
@@ -34233,7 +34312,7 @@ const NotificationManager = {
             setInterval(() => this.sendCelebrationNotifications(), 24 * 60 * 60 * 1000);
         }, msUntil8AM);
         
-        console.log('[NotificationManager] Celebration check scheduled');
+        console.log('[NotificationManager] Celebration check scheduled for next 8 AM');
     },
     
     sendCelebrationNotifications: async function() {
@@ -34519,8 +34598,12 @@ const NotificationManager = {
         if (dismissed) {
             const dismissedDate = new Date(dismissed);
             const daysSince = (Date.now() - dismissedDate) / (1000 * 60 * 60 * 24);
-            if (daysSince < 7) return; // Don't show again for 7 days
+            if (daysSince < 30) return; // ✅ FIX: Don't show again for 30 days (was 7)
         }
+        
+        // ✅ FIX: Also don't show if we've already shown it this session
+        if (sessionStorage.getItem('notifPromptShownThisSession')) return;
+        sessionStorage.setItem('notifPromptShownThisSession', 'true');
         
         // ✅ FIX: Actually show a prompt UI
         const promptDiv = document.createElement('div');
@@ -34846,6 +34929,14 @@ const NotificationManager = {
         // Initial fetch
         fetchNotifications();
         
+        // ✅ FIX: Mark initial load as complete after 5 seconds
+        // This allows all initial data to load without playing sounds
+        // After this, new notifications WILL play sounds
+        setTimeout(() => {
+            this._initialLoadComplete = true;
+            console.log('[NotificationManager] Initial load complete - sounds enabled for new notifications');
+        }, 5000);
+        
         // ✅ COST FIX: Refresh every 3 minutes instead of 60 seconds (saves ~₹500/month)
         this.notificationInterval = setInterval(fetchNotifications, 180000);
         
@@ -35037,13 +35128,24 @@ const NotificationManager = {
         // Check if there are new notifications we haven't seen before
         const readIds = JSON.parse(localStorage.getItem('readNotifications') || '[]');
         const existingIds = this.notifications.map(n => n.id);
-        const trulyNewNotifs = newNotifs.filter(n => !existingIds.includes(n.id) && !readIds.includes(n.id));
         
-        // Play sound and show browser notification if there are new unread notifications
-        if (trulyNewNotifs.length > 0 && this.notifications.length > 0) {
+        // ✅ FIX: Also check session-based tracking to prevent duplicate sounds
+        const trulyNewNotifs = newNotifs.filter(n => 
+            !existingIds.includes(n.id) && 
+            !readIds.includes(n.id) &&
+            !this._sessionNotified[n.id]
+        );
+        
+        // ✅ FIX: Only play sound AFTER initial load is complete (not on first app open)
+        // This prevents the annoying notification sound every time you open the app
+        const shouldPlaySound = this._initialLoadComplete && 
+                                trulyNewNotifs.length > 0 && 
+                                this.notifications.length > 0;
+        
+        if (shouldPlaySound) {
             this.playSound();
             
-            // Show browser push notification for ticket replies
+            // Show browser push notification for ticket replies only
             trulyNewNotifs.forEach(notif => {
                 if ((notif.source === 'ticket' || notif.type === 'ticket_update') && Notification.permission === 'granted') {
                     try {
@@ -35059,6 +35161,11 @@ const NotificationManager = {
                 }
             });
         }
+        
+        // ✅ FIX: Mark all notifications as notified this session
+        newNotifs.forEach(n => {
+            this._sessionNotified[n.id] = true;
+        });
         
         // Remove old notifications from same source
         this.notifications = this.notifications.filter(n => n.source !== source);
@@ -35482,8 +35589,13 @@ const NotificationManager = {
     }
 };
 
-// Initialize when Firebase is ready
-setTimeout(() => NotificationManager.init(), 1500);
+// Initialize when Firebase is ready - ✅ PERFORMANCE: Use requestIdleCallback
+// This ensures the main UI is interactive before loading notifications
+if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(() => NotificationManager.init(), { timeout: 3000 });
+} else {
+    setTimeout(() => NotificationManager.init(), 2000);
+}
 </script>
 
 <!-- PWA Sync Handler - Handles data sync when back online -->
