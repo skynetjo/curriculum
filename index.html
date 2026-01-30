@@ -61,12 +61,16 @@
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
   <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
   <link rel="dns-prefetch" href="https://firestore.googleapis.com">
   <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com">
   
   <!-- ✅ PERFORMANCE: Preload critical scripts with high priority -->
-  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" as="script" crossorigin>
-  <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script" crossorigin>
+  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" as="script" crossorigin fetchpriority="high">
+  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js" as="script" crossorigin>
+  <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script" crossorigin fetchpriority="high">
+  <link rel="preload" href="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" as="script" crossorigin>
   
   <!-- ✅ APP SHELL ARCHITECTURE: Critical CSS inline for INSTANT UI display -->
   <!-- This CSS loads the entire UI structure before any JavaScript runs -->
@@ -1756,7 +1760,7 @@
   
   <!-- Chart.js - NO DEFER because charts need it immediately after React components mount -->
   <!-- ✅ FIX: Using explicit anonymous crossorigin to avoid CORS credential issues -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script>
     // ✅ FIX: Load ChartDataLabels dynamically with proper error handling
     // This prevents blank screen if CDN fails
@@ -14183,7 +14187,7 @@ function APCSyllabusView({
   const [priorityFilter, setPriorityFilter] = useState('all');
   const mySchool = currentUser.school;
   const subjects = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
-  const schoolTeachers = teachers.filter(t => t.school === mySchool);
+  const schoolTeachers = teachers.filter(t => t.school === mySchool && !t.isArchived);
   const availableSubjects = [...new Set(schoolTeachers.map(t => t.subject).filter(Boolean))];
   const getChaptersForSubject = subject => {
     const docId = `${mySchool}_${subject}_${grade}`;
@@ -17095,6 +17099,7 @@ function TeacherHistoryView({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSchool, setSelectedSchool] = useState('All');
   const filteredTeachers = teachers.filter(t => {
+    if (t.isArchived) return false;
     if (selectedSchool !== 'All' && t.school !== selectedSchool) return false;
     if (searchQuery && !t.name?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
@@ -17277,7 +17282,7 @@ function AdminView({
     const itemSchoolLower = (itemSchool || '').toString().toLowerCase().trim();
     return allowedSchools.some(s => (s || '').toString().toLowerCase().trim() === itemSchoolLower);
   };
-  const filteredTeachers = hasFullDataAccess ? teachers : teachers.filter(t => schoolMatches(t.school, accessibleSchools));
+  const filteredTeachers = hasFullDataAccess ? teachers.filter(t => !t.isArchived) : teachers.filter(t => schoolMatches(t.school, accessibleSchools) && !t.isArchived);
   const filteredStudents = hasFullDataAccess ? students : students.filter(s => schoolMatches(s.school, accessibleSchools));
   const filteredStudentAttendance = hasFullDataAccess ? studentAttendance : studentAttendance.filter(a => schoolMatches(a.school, accessibleSchools));
   const filteredTeacherAttendance = hasFullDataAccess ? teacherAttendance : teacherAttendance.filter(a => schoolMatches(a.school, accessibleSchools));
@@ -18226,6 +18231,11 @@ function TeacherAnalytics({
   const chartInstances = useRef({});
   const mySchool = currentUser.school;
   const mySubject = currentUser.subject;
+  
+  // EMRS Bhopal batch support for Physics/Chemistry teachers
+  const needsBatchSelector = mySchool === 'EMRS Bhopal' && (mySubject === 'Physics' || mySubject === 'Chemistry');
+  const [selectedBatch, setSelectedBatch] = useState('JEE');
+  
   const myData = useMemo(() => {
     const data = {
       11: {
@@ -18244,11 +18254,15 @@ function TeacherAnalytics({
     let totalDays = 0;
     let chaptersWithDates = 0;
     ['11', '12'].forEach(grade => {
-      const docId = `${mySchool}_${mySubject}_${grade}`;
+      const docId = needsBatchSelector && selectedBatch === 'NEET' 
+        ? `${mySchool}_NEET_${mySubject}_${grade}` 
+        : `${mySchool}_${mySubject}_${grade}`;
       const chapters = curriculum[docId]?.chapters || [];
       chapters.forEach(ch => {
         data[grade].total++;
-        const progressId = `${mySchool}_${ch.id}`;
+        const progressId = needsBatchSelector && selectedBatch === 'NEET' 
+          ? `${mySchool}_NEET_${ch.id}` 
+          : `${mySchool}_${ch.id}`;
         const prog = chapterProgress[progressId] || {};
         if (prog.completed === 'Yes') {
           data[grade].completed++;
@@ -18272,7 +18286,7 @@ function TeacherAnalytics({
       ...data,
       avgDays
     };
-  }, [curriculum, chapterProgress, mySchool, mySubject]);
+  }, [curriculum, chapterProgress, mySchool, mySubject, needsBatchSelector, selectedBatch]);
   const allSchoolsData = useMemo(() => {
     const data = {};
     SCHOOLS.forEach(school => {
@@ -18599,7 +18613,23 @@ function TeacherAnalytics({
   }, "My Analytics - ", mySubject), React.createElement("button", {
     onClick: handleExport,
     className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold"
-  }, "\uD83D\uDCCA Export to Excel")), React.createElement("div", {
+  }, "\uD83D\uDCCA Export to Excel")), needsBatchSelector && React.createElement("div", {
+    className: "bg-gradient-to-r from-pink-50 to-rose-50 p-4 rounded-2xl shadow-lg border-2 border-pink-200 mt-4"
+  }, React.createElement("div", {
+    className: "flex flex-wrap items-center gap-4"
+  }, React.createElement("span", {
+    className: "font-bold text-pink-700"
+  }, "\uD83C\uDFEB EMRS Bhopal Batch:"), React.createElement("div", {
+    className: "flex gap-2"
+  }, React.createElement("button", {
+    onClick: () => setSelectedBatch('JEE'),
+    className: `px-6 py-2 rounded-xl font-bold transition-all ${selectedBatch === 'JEE' ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg' : 'bg-white text-blue-700 border-2 border-blue-300 hover:bg-blue-50'}`
+  }, "\uD83D\uDCDA JEE Batch"), React.createElement("button", {
+    onClick: () => setSelectedBatch('NEET'),
+    className: `px-6 py-2 rounded-xl font-bold transition-all ${selectedBatch === 'NEET' ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white shadow-lg' : 'bg-white text-green-700 border-2 border-green-300 hover:bg-green-50'}`
+  }, "\uD83E\uDE7A NEET Batch")), React.createElement("span", {
+    className: "text-sm text-pink-600"
+  }, "Showing ", selectedBatch, " analytics for ", mySubject))), React.createElement("div", {
     className: "grid grid-cols-2 md:grid-cols-5 gap-4"
   }, React.createElement("div", {
     className: "stat-card"
@@ -18809,7 +18839,16 @@ function TeacherCurriculum({
   const [priorityFilter, setPriorityFilter] = useState('all');
   const mySchool = currentUser.school;
   const mySubject = currentUser.subject;
-  const docId = `${mySchool}_${mySubject}_${grade}`;
+  
+  // EMRS Bhopal batch support - only for Physics and Chemistry
+  const needsBatchSelector = mySchool === 'EMRS Bhopal' && (mySubject === 'Physics' || mySubject === 'Chemistry');
+  const [selectedBatch, setSelectedBatch] = useState('JEE');
+  
+  // For EMRS Bhopal Physics/Chemistry: JEE uses original format, NEET adds batch prefix
+  const docId = needsBatchSelector && selectedBatch === 'NEET' 
+    ? `${mySchool}_NEET_${mySubject}_${grade}`
+    : `${mySchool}_${mySubject}_${grade}`;
+  
   const allChapters = curriculum[docId]?.chapters || [];
   const chapters = priorityFilter === 'all' ? allChapters : allChapters.filter(ch => {
     const chPriority = ch.priority || 'high';
@@ -18821,8 +18860,8 @@ function TeacherCurriculum({
     medium: allChapters.filter(ch => ch.priority === 'medium').length,
     low: allChapters.filter(ch => ch.priority === 'low').length
   };
-  const handleCompletedChange = (chapterId, value) => {
-    updateChapterProgress(mySchool, chapterId, 'completed', value);
+  const handleCompletedChange = (chapterId, value, schoolKey) => {
+    updateChapterProgress(schoolKey || mySchool, chapterId, 'completed', value);
   };
   return React.createElement("div", {
     className: "space-y-6"
@@ -18848,14 +18887,31 @@ function TeacherCurriculum({
   }, "\uD83D\uDFE1 Medium (", priorityCounts.medium, ")"), React.createElement("button", {
     onClick: () => setPriorityFilter('low'),
     className: `px-4 py-2 rounded-xl font-semibold transition-all ${priorityFilter === 'low' ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-lg' : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'}`
-  }, "\uD83D\uDD34 Low (", priorityCounts.low, ")")))), chapters.length === 0 ? React.createElement("div", {
+  }, "\uD83D\uDD34 Low (", priorityCounts.low, ")")))), needsBatchSelector && React.createElement("div", {
+    className: "bg-gradient-to-r from-pink-50 to-rose-50 p-4 rounded-2xl shadow-lg border-2 border-pink-200"
+  }, React.createElement("div", {
+    className: "flex flex-wrap items-center gap-4"
+  }, React.createElement("span", {
+    className: "font-bold text-pink-700"
+  }, "\uD83C\uDFEB EMRS Bhopal Batch:"), React.createElement("div", {
+    className: "flex gap-2"
+  }, React.createElement("button", {
+    onClick: () => setSelectedBatch('JEE'),
+    className: `px-6 py-2 rounded-xl font-bold transition-all ${selectedBatch === 'JEE' ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg' : 'bg-white text-blue-700 border-2 border-blue-300 hover:bg-blue-50'}`
+  }, "\uD83D\uDCDA JEE Batch"), React.createElement("button", {
+    onClick: () => setSelectedBatch('NEET'),
+    className: `px-6 py-2 rounded-xl font-bold transition-all ${selectedBatch === 'NEET' ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white shadow-lg' : 'bg-white text-green-700 border-2 border-green-300 hover:bg-green-50'}`
+  }, "\uD83E\uDE7A NEET Batch")), React.createElement("span", {
+    className: "text-sm text-pink-600"
+  }, "Showing ", selectedBatch, " curriculum for ", mySubject))), chapters.length === 0 ? React.createElement("div", {
     className: "bg-white p-8 rounded-2xl text-center"
   }, React.createElement("p", {
     className: "text-gray-600"
-  }, priorityFilter !== 'all' ? `No ${priorityFilter} priority chapters available.` : 'No chapters available. Contact admin.')) : React.createElement("div", {
+  }, priorityFilter !== 'all' ? `No ${priorityFilter} priority chapters available.` : needsBatchSelector ? `No chapters available for ${selectedBatch} batch. Admin needs to upload ${selectedBatch} curriculum.` : 'No chapters available. Contact admin.')) : React.createElement("div", {
     className: "grid md:grid-cols-2 lg:grid-cols-3 gap-6"
   }, chapters.map(chapter => {
-    const progressId = `${mySchool}_${chapter.id}`;
+    const progressId = needsBatchSelector && selectedBatch === 'NEET' ? `${mySchool}_NEET_${chapter.id}` : `${mySchool}_${chapter.id}`;
+    const progressSchoolKey = needsBatchSelector && selectedBatch === 'NEET' ? `${mySchool}_NEET` : mySchool;
     const prog = chapterProgress[progressId] || {};
     const completedTopics = prog.completedTopics || [];
     const allTopics = chapter.topics || [];
@@ -18923,7 +18979,7 @@ function TeacherCurriculum({
         onChange: e => {
           e.stopPropagation();
           const updated = e.target.checked ? [...completedTopics, topicKey] : completedTopics.filter(t => t !== topicKey && t !== topic);
-          updateChapterProgress(mySchool, chapter.id, 'completedTopics', updated);
+          updateChapterProgress(progressSchoolKey, chapter.id, 'completedTopics', updated);
         }
       }), React.createElement("span", {
         className: `text-sm flex-1 break-words ${checked ? 'line-through text-gray-500' : 'font-medium'}`
@@ -18956,7 +19012,7 @@ function TeacherCurriculum({
       onClick: e => e.stopPropagation(),
       onChange: e => {
         e.stopPropagation();
-        updateChapterProgress(mySchool, chapter.id, 'completionDate', e.target.value);
+        updateChapterProgress(progressSchoolKey, chapter.id, 'completionDate', e.target.value);
       },
       className: "w-full border-2 px-3 py-2 rounded-lg cursor-pointer"
     })), React.createElement("div", {
@@ -18968,7 +19024,7 @@ function TeacherCurriculum({
       onClick: e => e.stopPropagation(),
       onChange: e => {
         e.stopPropagation();
-        updateChapterProgress(mySchool, chapter.id, 'testConducted', e.target.value);
+        updateChapterProgress(progressSchoolKey, chapter.id, 'testConducted', e.target.value);
       },
       className: "w-full border-2 px-3 py-2 rounded-lg cursor-pointer"
     }, React.createElement("option", {
@@ -18984,7 +19040,7 @@ function TeacherCurriculum({
       onClick: e => e.stopPropagation(),
       onChange: e => {
         e.stopPropagation();
-        handleCompletedChange(chapter.id, e.target.value);
+        handleCompletedChange(chapter.id, e.target.value, progressSchoolKey);
       },
       className: "w-full border-2 px-3 py-2 rounded-lg cursor-pointer"
     }, React.createElement("option", {
@@ -19000,7 +19056,7 @@ function TeacherCurriculum({
       onClick: e => e.stopPropagation(),
       onChange: e => {
         e.stopPropagation();
-        updateChapterProgress(mySchool, chapter.id, 'notes', e.target.value);
+        updateChapterProgress(progressSchoolKey, chapter.id, 'notes', e.target.value);
       },
       className: "w-full border-2 px-3 py-2 rounded-lg cursor-text",
       rows: "2",
@@ -20127,6 +20183,7 @@ function AdminCurriculum({
   const [selectedSchool, setSelectedSchool] = useState(SCHOOLS[0]);
   const [selectedSubject, setSelectedSubject] = useState(SUBJECTS[0]);
   const [selectedGrade, setSelectedGrade] = useState('11');
+  const [selectedBatch, setSelectedBatch] = useState('JEE');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingChapter, setEditingChapter] = useState(null);
   const [chapterForm, setChapterForm] = useState({
@@ -20140,10 +20197,16 @@ function AdminCurriculum({
   const [selectedSchoolsForImport, setSelectedSchoolsForImport] = useState([SCHOOLS[0]]);
   const [importSubject, setImportSubject] = useState(SUBJECTS[0]);
   const [importGrade, setImportGrade] = useState('11');
+  const [importBatch, setImportBatch] = useState('JEE');
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [selectedChaptersForDelete, setSelectedChaptersForDelete] = useState([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // EMRS Bhopal batch support - only for Physics and Chemistry
+  const needsBatchSelector = selectedSchool === 'EMRS Bhopal' && (selectedSubject === 'Physics' || selectedSubject === 'Chemistry');
+  const needsBatchSelectorForImport = selectedSchoolsForImport.includes('EMRS Bhopal') && (importSubject === 'Physics' || importSubject === 'Chemistry');
+  
   const toggleSchoolSelection = school => {
     setSelectedSchoolsForImport(prev => prev.includes(school) ? prev.filter(s => s !== school) : [...prev, school]);
   };
@@ -20153,7 +20216,7 @@ function AdminCurriculum({
     setSelectedChaptersForDelete(prev => prev.includes(chapterId) ? prev.filter(id => id !== chapterId) : [...prev, chapterId]);
   };
   const selectAllChapters = () => {
-    const docId = `${selectedSchool}_${selectedSubject}_${selectedGrade}`;
+    const docId = needsBatchSelector && selectedBatch === 'NEET' ? `${selectedSchool}_NEET_${selectedSubject}_${selectedGrade}` : `${selectedSchool}_${selectedSubject}_${selectedGrade}`;
     const chapters = curriculum[docId]?.chapters || [];
     setSelectedChaptersForDelete(chapters.map(ch => ch.id));
   };
@@ -20167,7 +20230,7 @@ function AdminCurriculum({
     if (!confirm(`Are you sure you want to delete ${count} chapter${count > 1 ? 's' : ''}? This action cannot be undone.`)) return;
     setIsDeleting(true);
     try {
-      const docId = `${selectedSchool}_${selectedSubject}_${selectedGrade}`;
+      const docId = needsBatchSelector && selectedBatch === 'NEET' ? `${selectedSchool}_NEET_${selectedSubject}_${selectedGrade}` : `${selectedSchool}_${selectedSubject}_${selectedGrade}`;
       const doc = await db.collection('curriculum').doc(docId).get();
       const existing = doc.exists ? doc.data().chapters || [] : [];
       const updated = existing.filter(ch => !selectedChaptersForDelete.includes(ch.id));
@@ -20185,19 +20248,21 @@ function AdminCurriculum({
   };
   React.useEffect(() => {
     setSelectedChaptersForDelete([]);
-  }, [selectedSchool, selectedSubject, selectedGrade]);
-  const docId = `${selectedSchool}_${selectedSubject}_${selectedGrade}`;
+  }, [selectedSchool, selectedSubject, selectedGrade, selectedBatch]);
+  const docId = needsBatchSelector && selectedBatch === 'NEET' ? `${selectedSchool}_NEET_${selectedSubject}_${selectedGrade}` : `${selectedSchool}_${selectedSubject}_${selectedGrade}`;
   const chapters = curriculum[docId]?.chapters || [];
   const handleSaveChapter = () => {
     if (!chapterForm.name) {
       alert('Chapter name is required');
       return;
     }
+    // For EMRS Bhopal NEET, use modified school name
+    const schoolForSave = needsBatchSelector && selectedBatch === 'NEET' ? `${selectedSchool}_NEET` : selectedSchool;
     if (editingChapter) {
-      updateChapter(selectedSchool, selectedSubject, selectedGrade, editingChapter.id, chapterForm);
+      updateChapter(schoolForSave, selectedSubject, selectedGrade, editingChapter.id, chapterForm);
       setEditingChapter(null);
     } else {
-      addChapter(selectedSchool, selectedSubject, selectedGrade, chapterForm);
+      addChapter(schoolForSave, selectedSubject, selectedGrade, chapterForm);
     }
     setChapterForm({
       name: '',
@@ -20307,8 +20372,12 @@ function AdminCurriculum({
           const failedSchools = [];
           for (const school of selectedSchoolsForImport) {
             try {
+              // For EMRS Bhopal NEET batch with Physics/Chemistry, use modified school name
+              const schoolForImport = school === 'EMRS Bhopal' && (importSubject === 'Physics' || importSubject === 'Chemistry') && importBatch === 'NEET' 
+                ? 'EMRS Bhopal_NEET' 
+                : school;
               for (const chapter of chaptersToAdd) {
-                await addChapter(school, importSubject, importGrade, chapter);
+                await addChapter(schoolForImport, importSubject, importGrade, chapter);
               }
               totalImported++;
             } catch (err) {
@@ -20317,10 +20386,11 @@ function AdminCurriculum({
             }
           }
           setIsImporting(false);
+          const batchInfo = needsBatchSelectorForImport ? ` (${importBatch} batch)` : '';
           if (failedSchools.length > 0) {
-            alert(`Imported ${chaptersToAdd.length} chapters to ${totalImported} schools.\nFailed for: ${failedSchools.join(', ')}`);
+            alert(`Imported ${chaptersToAdd.length} chapters to ${totalImported} schools${batchInfo}.\nFailed for: ${failedSchools.join(', ')}`);
           } else {
-            alert(`✅ Successfully imported ${chaptersToAdd.length} chapters to ${selectedSchoolsForImport.length} school(s):\n${selectedSchoolsForImport.join(', ')}`);
+            alert(`✅ Successfully imported ${chaptersToAdd.length} chapters to ${selectedSchoolsForImport.length} school(s)${batchInfo}:\n${selectedSchoolsForImport.join(', ')}`);
           }
           if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (e) {
@@ -20396,7 +20466,21 @@ function AdminCurriculum({
     value: "11"
   }, "Class 11"), React.createElement("option", {
     value: "12"
-  }, "Class 12")))), React.createElement("div", {
+  }, "Class 12")))), needsBatchSelectorForImport && React.createElement("div", {
+    className: "md:col-span-2 bg-gradient-to-r from-pink-50 to-rose-50 p-4 rounded-xl border-2 border-pink-200"
+  }, React.createElement("label", {
+    className: "block text-sm font-bold mb-2 text-pink-700"
+  }, "\uD83C\uDFEB EMRS Bhopal Batch (Physics/Chemistry)"), React.createElement("div", {
+    className: "flex gap-3"
+  }, React.createElement("button", {
+    onClick: () => setImportBatch('JEE'),
+    className: `px-6 py-2 rounded-xl font-bold transition-all ${importBatch === 'JEE' ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg' : 'bg-white text-blue-700 border-2 border-blue-300 hover:bg-blue-50'}`
+  }, "\uD83D\uDCDA JEE"), React.createElement("button", {
+    onClick: () => setImportBatch('NEET'),
+    className: `px-6 py-2 rounded-xl font-bold transition-all ${importBatch === 'NEET' ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white shadow-lg' : 'bg-white text-green-700 border-2 border-green-300 hover:bg-green-50'}`
+  }, "\uD83E\uDE7A NEET")), React.createElement("p", {
+    className: "text-xs text-pink-600 mt-2"
+  }, "EMRS Bhopal curriculum will be uploaded to: ", importBatch, " batch")), React.createElement("div", {
     className: "flex gap-3"
   }, React.createElement("label", {
     className: `flex-1 px-6 py-4 ${selectedSchoolsForImport.length > 0 && !isImporting ? 'bg-green-600 hover:bg-green-700 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-xl font-semibold text-center transition-all`
@@ -20467,7 +20551,21 @@ function AdminCurriculum({
     value: "11"
   }, "Class 11"), React.createElement("option", {
     value: "12"
-  }, "Class 12")))), React.createElement("div", {
+  }, "Class 12")))), needsBatchSelector && React.createElement("div", {
+    className: "md:col-span-3 bg-gradient-to-r from-pink-50 to-rose-50 p-4 rounded-xl border-2 border-pink-200"
+  }, React.createElement("label", {
+    className: "block text-sm font-bold mb-2 text-pink-700"
+  }, "\uD83C\uDFEB EMRS Bhopal Batch (Physics/Chemistry only)"), React.createElement("div", {
+    className: "flex gap-3"
+  }, React.createElement("button", {
+    onClick: () => setSelectedBatch('JEE'),
+    className: `px-6 py-2 rounded-xl font-bold transition-all ${selectedBatch === 'JEE' ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg' : 'bg-white text-blue-700 border-2 border-blue-300 hover:bg-blue-50'}`
+  }, "\uD83D\uDCDA JEE Curriculum"), React.createElement("button", {
+    onClick: () => setSelectedBatch('NEET'),
+    className: `px-6 py-2 rounded-xl font-bold transition-all ${selectedBatch === 'NEET' ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white shadow-lg' : 'bg-white text-green-700 border-2 border-green-300 hover:bg-green-50'}`
+  }, "\uD83E\uDE7A NEET Curriculum")), React.createElement("p", {
+    className: "text-xs text-pink-600 mt-2"
+  }, "Currently viewing: ", selectedBatch, " curriculum for ", selectedSubject)), React.createElement("div", {
     className: "flex gap-3"
   }, React.createElement("button", {
     onClick: () => {
@@ -20772,9 +20870,14 @@ function AdminAnalytics({
   const [filterSchools, setFilterSchools] = useState(initialSchools);
   const [filterGrade, setFilterGrade] = useState('All');
   const [filterTeachers, setFilterTeachers] = useState([]);
+  const [emrsBatch, setEmrsBatch] = useState('JEE');
+  
+  // Check if EMRS Bhopal is selected for batch selector
+  const showEmrsBatchSelector = filterSchools.includes('EMRS Bhopal');
+  
   const availableTeachers = useMemo(() => {
     if (filterSchools.length === 0) return [];
-    return teachers.filter(t => schoolMatchesFilter(t.school, filterSchools));
+    return teachers.filter(t => schoolMatchesFilter(t.school, filterSchools) && !t.isArchived);
   }, [teachers, filterSchools]);
   React.useEffect(() => {
     const validTeachers = filterTeachers.filter(afid => availableTeachers.some(t => t.afid === afid));
@@ -20816,7 +20919,7 @@ function AdminAnalytics({
     };
     const schoolsToProcess = filterSchools.length > 0 ? filterSchools : [];
     const gradesToProcess = filterGrade === 'All' ? ['11', '12'] : [filterGrade];
-    const teachersFiltered = filterTeachers.length === 0 ? teachers.filter(t => schoolMatchesFilter(t.school, schoolsToProcess)) : teachers.filter(t => filterTeachers.includes(t.afid));
+    const teachersFiltered = filterTeachers.length === 0 ? teachers.filter(t => schoolMatchesFilter(t.school, schoolsToProcess) && !t.isArchived) : teachers.filter(t => filterTeachers.includes(t.afid) && !t.isArchived);
     schoolsToProcess.forEach(school => {
       if (!data.schoolData[school]) {
         data.schoolData[school] = {
@@ -20847,7 +20950,10 @@ function AdminAnalytics({
             };
           }
           const docId = `${school}_${subject}_${grade}`;
-          const chapters = curriculum[docId]?.chapters || [];
+          // For EMRS Bhopal Physics/Chemistry, also check NEET curriculum based on batch selection
+          const isEmrsPhysChem = school === 'EMRS Bhopal' && (subject === 'Physics' || subject === 'Chemistry');
+          const actualDocId = isEmrsPhysChem && emrsBatch === 'NEET' ? `${school}_NEET_${subject}_${grade}` : docId;
+          const chapters = curriculum[actualDocId]?.chapters || [];
           const relevantTeachers = teachersFiltered.filter(t => t.school?.toLowerCase() === school?.toLowerCase() && t.subject === subject);
           if (filterTeachers.length > 0 && relevantTeachers.length === 0) return;
           chapters.forEach(ch => {
@@ -20855,7 +20961,7 @@ function AdminAnalytics({
             data.schoolData[school].total++;
             data.subjectData[subject].total++;
             data.gradeData[grade].total++;
-            const progressId = `${school}_${ch.id}`;
+            const progressId = isEmrsPhysChem && emrsBatch === 'NEET' ? `${school}_NEET_${ch.id}` : `${school}_${ch.id}`;
             const prog = chapterProgress[progressId] || {};
             const status = getChapterStatus(ch, prog);
             if (prog.completed === 'Yes') {
@@ -20906,7 +21012,7 @@ function AdminAnalytics({
       }
     });
     return data;
-  }, [curriculum, chapterProgress, teachers, filterSchools, filterGrade, filterTeachers]);
+  }, [curriculum, chapterProgress, teachers, filterSchools, filterGrade, filterTeachers, emrsBatch]);
   useEffect(() => {
     Object.values(chartInstances.current).forEach(chart => {
       if (chart) chart.destroy();
@@ -21249,7 +21355,7 @@ function AdminAnalytics({
     const wsGrade = XLSX.utils.json_to_sheet(gradeData);
     XLSX.utils.book_append_sheet(wb, wsGrade, "Grade Summary");
     const teacherDetailedData = [];
-    const teachersToExport = filterTeachers.length > 0 ? teachers.filter(t => filterTeachers.includes(t.afid)) : teachers.filter(t => filterSchools.includes(t.school));
+    const teachersToExport = filterTeachers.length > 0 ? teachers.filter(t => filterTeachers.includes(t.afid) && !t.isArchived) : teachers.filter(t => filterSchools.includes(t.school) && !t.isArchived);
     teachersToExport.forEach(teacher => {
       const gradesToProcess = filterGrade === 'All' ? ['11', '12'] : [filterGrade];
       let teacherTotal = 0,
@@ -21392,7 +21498,21 @@ function AdminAnalytics({
     getOptionLabel: t => `${t.name} (${t.school})`,
     getOptionValue: t => t.afid,
     disabled: filterSchools.length === 0
-  }))), filterSchools.length === 0 && React.createElement("p", {
+  }))), showEmrsBatchSelector && React.createElement("div", {
+    className: "md:col-span-3 bg-gradient-to-r from-pink-50 to-rose-50 p-4 rounded-xl border-2 border-pink-200 mt-4"
+  }, React.createElement("label", {
+    className: "block text-sm font-bold mb-2 text-pink-700"
+  }, "\uD83C\uDFEB EMRS Bhopal Batch (for Physics & Chemistry)"), React.createElement("div", {
+    className: "flex gap-3"
+  }, React.createElement("button", {
+    onClick: () => setEmrsBatch('JEE'),
+    className: `px-6 py-2 rounded-xl font-bold transition-all ${emrsBatch === 'JEE' ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white shadow-lg' : 'bg-white text-blue-700 border-2 border-blue-300 hover:bg-blue-50'}`
+  }, "\uD83D\uDCDA JEE Batch"), React.createElement("button", {
+    onClick: () => setEmrsBatch('NEET'),
+    className: `px-6 py-2 rounded-xl font-bold transition-all ${emrsBatch === 'NEET' ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white shadow-lg' : 'bg-white text-green-700 border-2 border-green-300 hover:bg-green-50'}`
+  }, "\uD83E\uDE7A NEET Batch")), React.createElement("p", {
+    className: "text-xs text-pink-600 mt-2"
+  }, "Showing ", emrsBatch, " curriculum data for EMRS Bhopal Physics & Chemistry")), filterSchools.length === 0 && React.createElement("p", {
     className: "text-orange-600 mt-2 text-sm"
   }, "\u26A0\uFE0F Please select at least one school to see data")), React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg"
@@ -26643,8 +26763,9 @@ function TeacherDirectory({
   const [filterSchool, setFilterSchool] = useState('All');
   const [filterSubject, setFilterSubject] = useState('All');
   const [selectedTeacher, setSelectedTeacher] = useState(null);
-  const schools = ['All', ...new Set(teachers.map(t => t.school))];
+  const schools = ['All', ...new Set(teachers.filter(t => !t.isArchived).map(t => t.school))];
   const filteredTeachers = teachers.filter(teacher => {
+    if (teacher.isArchived) return false;
     const matchesSearch = teacher.name?.toLowerCase().includes(searchTerm.toLowerCase()) || teacher.email?.toLowerCase().includes(searchTerm.toLowerCase()) || teacher.phone?.includes(searchTerm);
     const matchesSchool = filterSchool === 'All' || teacher.school === filterSchool;
     const matchesSubject = filterSubject === 'All' || teacher.subject === filterSubject;
@@ -31643,7 +31764,7 @@ function StudentFeedbackView({
   }, []);
   const schoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
   const accessibleFeedback = hasFullDataAccess ? feedbackList : feedbackList.filter(f => accessibleSchools.includes(f.school));
-  const accessibleTeachers = hasFullDataAccess ? teachers : teachers.filter(t => accessibleSchools.includes(t.school));
+  const accessibleTeachers = hasFullDataAccess ? teachers.filter(t => !t.isArchived) : teachers.filter(t => accessibleSchools.includes(t.school) && !t.isArchived);
   const teachersForDropdown = filterSchool === 'All' ? accessibleTeachers : accessibleTeachers.filter(t => t.school === filterSchool);
   const getStudentDetails = studentId => {
     return students.find(s => s.id === studentId) || {};
@@ -33086,6 +33207,7 @@ function AdminClassroomObservations({
     fetchObservations();
   }, []);
   const filteredTeachers = teachers.filter(t => {
+    if (t.isArchived) return false;
     const matchesSearch = t.name?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSchool = filterSchool === 'All' || t.school === filterSchool;
     const matchesSubject = filterSubject === 'All' || t.subject === filterSubject;
@@ -33280,7 +33402,7 @@ function AdminClassroomObservations({
     className: "w-full border-2 px-4 py-2 rounded-xl"
   }, React.createElement("option", {
     value: "All"
-  }, "All Teachers"), teachers.map(t => React.createElement("option", {
+  }, "All Teachers"), teachers.filter(t => !t.isArchived).map(t => React.createElement("option", {
     key: t.afid,
     value: t.afid
   }, t.name)))), React.createElement("div", null, React.createElement("label", {
