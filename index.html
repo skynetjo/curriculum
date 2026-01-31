@@ -5009,7 +5009,7 @@ const DataSyncManager = {
 if (typeof window !== 'undefined') {
   DataSyncManager.init();
 }
-const LEAVE_REASONS = ['Present', 'Personal Leave', 'Sick Leave', 'Weekly Off', 'Public Holiday', 'Organization Holiday', 'School Holiday', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave'];
+const LEAVE_REASONS = ['Present', 'Personal Leave', 'Sick Leave', 'Weekly Off', 'Public Holiday', 'Organization Holiday', 'School Holiday', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Comp Off'];
 const LEAVE_ENTITLEMENTS = {
   'Personal Leave': 35,
   'Sick Leave': 35,
@@ -24330,6 +24330,7 @@ function TeacherAttendanceView({
   const [isDateRange, setIsDateRange] = useState(false);
   const [status, setStatus] = useState('Present');
   const [reason, setReason] = useState('Present');
+  const [compOffWorkedDate, setCompOffWorkedDate] = useState('');
   const [location, setLocation] = useState('');
   const [fetchingLocation, setFetchingLocation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -24370,6 +24371,7 @@ function TeacherAttendanceView({
     if (status === 'Present') {
       setIsDateRange(false);
       setEndDate(selectedDate);
+      setCompOffWorkedDate('');
     }
   }, [status, selectedDate]);
   useEffect(() => {
@@ -24381,6 +24383,11 @@ function TeacherAttendanceView({
       setLocation('');
     }
   }, [status]);
+  useEffect(() => {
+    if (reason !== 'Comp Off') {
+      setCompOffWorkedDate('');
+    }
+  }, [reason]);
   const getLocation = () => {
     setFetchingLocation(true);
     if (navigator.geolocation) {
@@ -24438,6 +24445,10 @@ function TeacherAttendanceView({
       alert('Please select a reason');
       return;
     }
+    if (reason === 'Comp Off' && !compOffWorkedDate) {
+      alert('Please select the date when you worked for Comp Off');
+      return;
+    }
     if (status === 'Present' && !gpsVerified) {
       alert('📍 GPS verification required!\n\nPlease click "Get GPS Location" button to verify your location before marking attendance.');
       return;
@@ -24482,6 +24493,7 @@ function TeacherAttendanceView({
           date: date,
           status,
           reason: status === 'Present' ? 'Present' : reason,
+          compOffWorkedDate: reason === 'Comp Off' ? compOffWorkedDate : null,
           location: location || 'Not provided',
           punchInTime: date === getTodayDate() ? punchInTime : 'Leave applied',
           markedAt: new Date().toISOString(),
@@ -24597,7 +24609,24 @@ function TeacherAttendanceView({
   }, LEAVE_REASONS.filter(r => r !== 'Present').map(r => React.createElement("option", {
     key: r,
     value: r
-  }, r)))), React.createElement("div", {
+  }, r)))), reason === 'Comp Off' && React.createElement("div", {
+    className: "mt-4 p-4 bg-purple-50 rounded-xl border-2 border-purple-200"
+  }, React.createElement("label", {
+    className: "block text-sm font-bold mb-2 text-purple-800"
+  }, "\uD83D\uDCC5 When did you work? ", React.createElement("span", {
+    className: "text-red-500"
+  }, "*")), React.createElement("p", {
+    className: "text-xs text-purple-600 mb-3"
+  }, "Select the date when you worked extra (within last 2 weeks only)"), React.createElement("input", {
+    type: "date",
+    value: compOffWorkedDate,
+    max: getTodayDate(),
+    min: (() => { const d = new Date(); d.setDate(d.getDate() - 14); return d.toISOString().split('T')[0]; })(),
+    onChange: e => setCompOffWorkedDate(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl border-purple-300 focus:border-purple-500 focus:outline-none"
+  }), compOffWorkedDate && React.createElement("p", {
+    className: "text-sm text-purple-700 mt-2"
+  }, "\u2713 Worked on: ", compOffWorkedDate)), React.createElement("div", {
     className: "bg-blue-50 p-4 rounded-xl border-2 border-blue-200"
   }, React.createElement("label", {
     className: "flex items-center gap-3 cursor-pointer"
@@ -24692,7 +24721,7 @@ function TeacherAttendanceView({
     className: "mt-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl"
   }, React.createElement("h4", {
     className: "font-bold text-green-800 mb-2"
-  }, "\u2713 Already Marked for ", selectedDate), React.createElement("p", null, React.createElement("strong", null, "Status:"), " ", todayRecord.status), React.createElement("p", null, React.createElement("strong", null, "Reason:"), " ", todayRecord.reason), React.createElement("p", null, React.createElement("strong", null, "Punch-in Time:"), " \u23F0 ", todayRecord.punchInTime || 'Not recorded'), React.createElement("p", null, React.createElement("strong", null, "Location:"), " ", todayRecord.location), todayRecord.gpsVerified && React.createElement("p", {
+  }, "\u2713 Already Marked for ", selectedDate), React.createElement("p", null, React.createElement("strong", null, "Status:"), " ", todayRecord.status), React.createElement("p", null, React.createElement("strong", null, "Reason:"), " ", todayRecord.reason), todayRecord.compOffWorkedDate && React.createElement("p", null, React.createElement("strong", null, "Comp Off Worked Date:"), " ", todayRecord.compOffWorkedDate), React.createElement("p", null, React.createElement("strong", null, "Punch-in Time:"), " \u23F0 ", todayRecord.punchInTime || 'Not recorded'), React.createElement("p", null, React.createElement("strong", null, "Location:"), " ", todayRecord.location), todayRecord.gpsVerified && React.createElement("p", {
     className: "text-xs text-green-600 mt-1"
   }, "\u2713 GPS Verified")))));
 }
