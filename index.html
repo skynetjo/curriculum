@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
   
-  <!-- ✅ VERSION 5.0.2 - PERFORMANCE OPTIMIZED (Fixed notifications + LCP/CLS) -->
+  <!-- ✅ VERSION 5.0.3 - STUDENT FIX (Firebase permissions + Chart.js + Performance) -->
   <script>
     window.__PERF_START = performance.now();
-    console.log('🚀 Curriculum Tracker v5.0.2 - Performance Optimized');
+    console.log('🚀 Curriculum Tracker v5.0.3 - Student Dashboard Fixed');
   </script>
   
   <!-- ✅ CRITICAL: Clear old buggy service worker caches IMMEDIATELY -->
   <!-- This runs before anything else to fix CORS issues -->
   <script>
     (function() {
-      var SW_VERSION = '5.0.2';
+      var SW_VERSION = '5.0.3';
       var storedVersion = localStorage.getItem('swVersion');
       
       // If version mismatch, clear everything
@@ -1762,30 +1762,48 @@
   <!-- ✅ FIX: Using explicit anonymous crossorigin to avoid CORS credential issues -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script>
-    // ✅ FIX: Load ChartDataLabels dynamically with proper error handling
-    // This prevents blank screen if CDN fails
+    // ✅ v5.0.3 FIX: Load ChartDataLabels ONLY after Chart.js is fully loaded
+    // This fixes "Cannot read properties of undefined (reading 'helpers')" error
     (function() {
-      var script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js';
-      script.onerror = function() {
-        console.warn('[ChartDataLabels] Failed to load from primary CDN, trying fallback...');
-        var fallback = document.createElement('script');
-        fallback.src = 'https://unpkg.com/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js';
-        fallback.onerror = function() {
-          console.warn('[ChartDataLabels] Fallback also failed. Charts will work without data labels.');
-          window.ChartDataLabelsLoaded = false;
+      function loadDataLabelsPlugin() {
+        // Only load if Chart.js is available
+        if (typeof Chart === 'undefined' || !Chart.helpers) {
+          console.log('[ChartDataLabels] Waiting for Chart.js...');
+          setTimeout(loadDataLabelsPlugin, 100);
+          return;
+        }
+        
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js';
+        script.onerror = function() {
+          console.warn('[ChartDataLabels] Failed to load from primary CDN, trying fallback...');
+          var fallback = document.createElement('script');
+          fallback.src = 'https://unpkg.com/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js';
+          fallback.onerror = function() {
+            console.warn('[ChartDataLabels] Fallback also failed. Charts will work without data labels.');
+            window.ChartDataLabelsLoaded = false;
+          };
+          fallback.onload = function() {
+            console.log('[ChartDataLabels] Loaded from fallback CDN');
+            window.ChartDataLabelsLoaded = true;
+          };
+          document.head.appendChild(fallback);
         };
-        fallback.onload = function() {
-          console.log('[ChartDataLabels] Loaded from fallback CDN');
+        script.onload = function() {
+          console.log('[ChartDataLabels] Loaded successfully');
           window.ChartDataLabelsLoaded = true;
         };
-        document.head.appendChild(fallback);
-      };
-      script.onload = function() {
-        console.log('[ChartDataLabels] Loaded successfully');
-        window.ChartDataLabelsLoaded = true;
-      };
-      document.head.appendChild(script);
+        document.head.appendChild(script);
+      }
+      
+      // Start trying to load after a short delay to let Chart.js initialize
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+          setTimeout(loadDataLabelsPlugin, 500);
+        });
+      } else {
+        setTimeout(loadDataLabelsPlugin, 500);
+      }
     })();
   </script>
   
@@ -34309,6 +34327,13 @@ const NotificationManager = {
     init: function() {
         console.log('[NotificationManager] Initializing...');
         
+        // ✅ v5.0.3 FIX: Check if user is a student early
+        const isStudent = !!localStorage.getItem('studentSession');
+        this._isStudent = isStudent;
+        if (isStudent) {
+            console.log('[NotificationManager] Student mode - limited features');
+        }
+        
         // ✅ FIX: Reset session notification tracker
         this._sessionNotified = {};
         this._initialLoadComplete = false;
@@ -34334,10 +34359,18 @@ const NotificationManager = {
         this.initMessaging();
         
         // Load notifications from Firestore
-        setTimeout(() => this.loadNotifications(), 2000);
+        setTimeout(() => {
+            try {
+                this.loadNotifications();
+            } catch (e) {
+                console.warn('[NotificationManager] Load notifications error:', e);
+            }
+        }, 2000);
         
-        // Check for today's birthdays/anniversaries at 8 AM
-        this.scheduleCelebrationNotifications();
+        // Check for today's birthdays/anniversaries at 8 AM (not for students)
+        if (!this._isStudent) {
+            this.scheduleCelebrationNotifications();
+        }
         
         // Close panel when clicking outside
         document.addEventListener('click', (e) => {
@@ -34398,6 +34431,13 @@ const NotificationManager = {
     },
     
     scheduleCelebrationNotifications: function() {
+        // ✅ v5.0.3 FIX: Skip for students who don't have permission to read teacher collections
+        const studentSession = localStorage.getItem('studentSession');
+        if (studentSession) {
+            console.log('[NotificationManager] Skipping celebration scheduling for student');
+            return;
+        }
+        
         // ✅ FIX: Don't trigger immediate notification check - let loadCelebrationNotifications handle it
         // The browser notification at 8 AM was causing repeated notifications on app open
         const now = new Date();
@@ -34439,6 +34479,13 @@ const NotificationManager = {
     
     sendCelebrationNotifications: async function() {
         if (!this.userId || typeof firebase === 'undefined') return;
+        
+        // ✅ v5.0.3 FIX: Skip for students who don't have permission to read teacher collections
+        const studentSession = localStorage.getItem('studentSession');
+        if (studentSession) {
+            console.log('[NotificationManager] Skipping celebration check for student');
+            return;
+        }
         
         const today = new Date();
         const todayStr = today.toDateString();
@@ -35068,8 +35115,17 @@ const NotificationManager = {
     
     // Load birthday and anniversary notifications
     // ✅ COST FIX: Cache celebration data to avoid repeated fetches
+    // ✅ v5.0.3 FIX: Skip for students who don't have permission to read teacher collections
     loadCelebrationNotifications: async function() {
         try {
+            // ✅ FIX: Check if current user is a student - skip celebration queries
+            // Students don't have permission to read teachers/managers/apcs collections
+            const studentSession = localStorage.getItem('studentSession');
+            if (studentSession) {
+                console.log('[NotificationManager] Skipping celebration notifications for student (no permission to read teacher collections)');
+                return; // Exit early - students can't access these collections
+            }
+            
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const todayStr = today.toISOString().split('T')[0];
