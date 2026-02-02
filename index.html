@@ -764,9 +764,9 @@
         _initialized: false,
         _cacheTimestamps: {},
         _dataFreshness: {},
-        _memoryCache: {}, // ✅ PERF: In-memory cache for instant data access
-        CACHE_MAX_AGE: 24 * 60 * 60 * 1000, // 24 hours max cache age
-        STALE_THRESHOLD: 2 * 60 * 1000, // ✅ PERF: Reduced to 2 minutes for fresher data
+        _memoryCache: {},
+        CACHE_MAX_AGE: 24 * 60 * 60 * 1000,
+        STALE_THRESHOLD: 2 * 60 * 1000,
         
         init: async function() {
           if (this._initialized) return;
@@ -779,7 +779,6 @@
           }
         },
         
-        // ✅ PERF: Get from memory cache first (instant)
         getFromMemory: function(key) {
           const cached = this._memoryCache[key];
           if (cached && cached.data && (Date.now() - cached.timestamp) < this.CACHE_MAX_AGE) {
@@ -788,16 +787,12 @@
           return null;
         },
         
-        // ✅ PERF: Save to memory cache
         saveToMemory: function(key, data) {
-          this._memoryCache[key] = { data, timestamp: Date.now() };
+          this._memoryCache[key] = { data: data, timestamp: Date.now() };
         },
         
-        // Save data to IndexedDB cache (also saves to memory for instant access)
         saveToCache: async function(key, data) {
-          // ✅ PERF: Always save to memory first for instant access
           this.saveToMemory(key, data);
-          
           try {
             await this.init();
             const db = window.persistentStorage._db;
@@ -829,15 +824,12 @@
           }
         },
         
-        // Load data from cache (memory first, then IndexedDB)
         loadFromCache: async function(key) {
-          // ✅ PERF: Check memory cache first (instant)
-          const memCached = this.getFromMemory(key);
+          var memCached = this.getFromMemory(key);
           if (memCached) {
             console.log('[DataCache] ✅ Loaded from memory:', key);
             return memCached;
           }
-          
           try {
             await this.init();
             const db = window.persistentStorage._db;
@@ -897,45 +889,11 @@
             store.clear();
             this._cacheTimestamps = {};
             this._dataFreshness = {};
-            this._memoryCache = {}; // ✅ PERF: Also clear memory cache
             console.log('[DataCache] 🗑️ Cleared all cache');
           } catch(e) {
             console.warn('[DataCache] Clear failed:', e);
           }
         }
-      };
-      
-      // ✅ PERF: Debounce utility for preventing excessive Firebase calls
-      window.debounce = function(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-          const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-          };
-          clearTimeout(timeout);
-          timeout = setTimeout(later, wait);
-        };
-      };
-      
-      // ✅ PERF: Throttle utility for rate-limiting frequent operations
-      window.throttle = function(func, limit) {
-        let lastFunc;
-        let lastRan;
-        return function(...args) {
-          if (!lastRan) {
-            func(...args);
-            lastRan = Date.now();
-          } else {
-            clearTimeout(lastFunc);
-            lastFunc = setTimeout(() => {
-              if ((Date.now() - lastRan) >= limit) {
-                func(...args);
-                lastRan = Date.now();
-              }
-            }, limit - (Date.now() - lastRan));
-          }
-        };
       };
       
       // ========================================
@@ -17816,8 +17774,7 @@ function AdminView({
   }), activeTab === 'schoolinfo' && React.createElement(AdminSchoolInfo, {
     schoolInfo: filteredSchoolInfo,
     setSchoolInfo: setSchoolInfo,
-    currentUser: currentUser,
-    accessibleSchools: availableSchools
+    currentUser: currentUser
   }), activeTab === 'assets' && React.createElement(AdminAssetManagement, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
@@ -26605,20 +26562,99 @@ function SchoolInfoView({
 function AdminSchoolInfo({
   schoolInfo,
   setSchoolInfo,
-  currentUser,
-  accessibleSchools
+  currentUser
 }) {
   const [editingSchool, setEditingSchool] = useState(null);
   const [editFormData, setEditFormData] = useState({});
   const [isSaving, setIsSaving] = useState(false);
-  const [addingMeetingFor, setAddingMeetingFor] = useState(null);
-  const [newMeeting, setNewMeeting] = useState({
-    meetingDate: new Date().toISOString().split('T')[0],
-    meetingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }),
-    attendees: '',
-    discussedPoints: '',
-    actionPoints: ''
-  });
+  const [showMeetingForm, setShowMeetingForm] = useState(null);
+  const [newMeeting, setNewMeeting] = useState({ meetingDate: '', meetingTime: '', attendees: '', discussedPoints: '', actionPoints: '' });
+
+  const startEditing = (info) => {
+    setEditingSchool(info.school);
+    setEditFormData({ ...info });
+  };
+
+  const cancelEditing = () => {
+    setEditingSchool(null);
+    setEditFormData({});
+  };
+
+  const saveSchoolInfo = async () => {
+    if (!editFormData.school) return;
+    setIsSaving(true);
+    try {
+      const docId = editFormData.school.replace(/\s+/g, '_');
+      const now = new Date().toISOString();
+      const userId = currentUser?.afid || currentUser?.id || currentUser?.email || 'unknown';
+      const historyEntry = { updatedBy: userId, updatedByName: currentUser?.name || 'Manager', updatedAt: now };
+      await db.collection('schoolInfo').doc(docId).set({
+        ...editFormData,
+        updatedBy: userId,
+        updatedByName: currentUser?.name || 'Manager',
+        updatedAt: now,
+        updateHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry)
+      }, { merge: true });
+      if (setSchoolInfo) {
+        setSchoolInfo(prev => {
+          const idx = prev.findIndex(s => s.school === editFormData.school);
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = { ...editFormData, updatedAt: now, updatedByName: currentUser?.name };
+            return updated;
+          }
+          return prev;
+        });
+      }
+      setEditingSchool(null);
+      setEditFormData({});
+      alert('School information updated!');
+    } catch (e) {
+      alert('Failed to save: ' + e.message);
+    }
+    setIsSaving(false);
+  };
+
+  const addMeetingNote = async (schoolName) => {
+    if (!newMeeting.discussedPoints?.trim()) {
+      alert('Please enter discussion points');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const info = schoolInfo.find(s => s.school === schoolName);
+      const docId = schoolName.replace(/\s+/g, '_');
+      const now = new Date().toISOString();
+      const userId = currentUser?.afid || currentUser?.id || currentUser?.email || 'unknown';
+      const meetingEntry = { ...newMeeting, updatedBy: currentUser?.name || 'Manager', updatedAt: now };
+      const existingMeetings = info?.meetingMinutes || [];
+      const updatedMeetings = [meetingEntry, ...existingMeetings];
+      await db.collection('schoolInfo').doc(docId).set({
+        school: schoolName,
+        meetingMinutes: updatedMeetings,
+        updatedBy: userId,
+        updatedByName: currentUser?.name || 'Manager',
+        updatedAt: now
+      }, { merge: true });
+      if (setSchoolInfo) {
+        setSchoolInfo(prev => {
+          const idx = prev.findIndex(s => s.school === schoolName);
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], meetingMinutes: updatedMeetings, updatedAt: now };
+            return updated;
+          }
+          return [...prev, { school: schoolName, meetingMinutes: updatedMeetings, updatedAt: now }];
+        });
+      }
+      setShowMeetingForm(null);
+      setNewMeeting({ meetingDate: '', meetingTime: '', attendees: '', discussedPoints: '', actionPoints: '' });
+      alert('Meeting note added!');
+    } catch (e) {
+      alert('Failed to save: ' + e.message);
+    }
+    setIsSaving(false);
+  };
 
   const handleExport = () => {
     const exportData = schoolInfo.map(info => ({
@@ -26662,450 +26698,284 @@ function AdminSchoolInfo({
       'Printer Brand': info.printerBrand,
       'Printer Issued Date': info.printerIssuedDate,
       'Other Assets Count': info.otherAssets ? info.otherAssets.length : 0,
-      'Meeting Notes Count': info.meetingMinutes ? info.meetingMinutes.length : 0,
       'Last Updated': info.updatedAt ? new Date(info.updatedAt).toLocaleString() : ''
     }));
     exportToExcel(exportData, 'school_information');
   };
-
-  const startEditing = (info) => {
-    setEditingSchool(info.school);
-    setEditFormData({ ...info });
-  };
-
-  const cancelEditing = () => {
-    setEditingSchool(null);
-    setEditFormData({});
-  };
-
-  const handleFieldChange = (field, value) => {
-    setEditFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const saveSchoolInfo = async () => {
-    if (!editFormData.school) return;
-    setIsSaving(true);
-    try {
-      const docId = editFormData.school.replace(/\s+/g, '_');
-      const now = new Date().toISOString();
-      const userId = currentUser.afid || currentUser.id || currentUser.docId || currentUser.email;
-      const historyEntry = { updatedBy: userId, updatedByName: currentUser.name, updatedAt: now };
-      
-      const dataToSave = {
-        ...editFormData,
-        updatedBy: userId,
-        updatedByName: currentUser.name,
-        updatedAt: now
-      };
-      
-      await db.collection('schoolInfo').doc(docId).set({
-        ...dataToSave,
-        updateHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry)
-      }, { merge: true });
-      
-      if (setSchoolInfo) {
-        const existingHistory = editFormData.updateHistory || [];
-        const updatedInfo = { ...dataToSave, docId, updateHistory: [...existingHistory, historyEntry] };
-        setSchoolInfo(prev => {
-          const idx = prev.findIndex(s => s.school === editFormData.school);
-          if (idx >= 0) {
-            const updated = [...prev];
-            updated[idx] = updatedInfo;
-            return updated;
-          }
-          return [...prev, updatedInfo];
-        });
-      }
-      
-      setEditingSchool(null);
-      setEditFormData({});
-      alert('✅ School information updated successfully!');
-    } catch (e) {
-      console.error('Save error:', e);
-      alert('❌ Failed to save: ' + e.message);
-    }
-    setIsSaving(false);
-  };
-
-  const addMeetingNote = async (schoolName) => {
-    if (!newMeeting.discussedPoints.trim()) {
-      alert('Please enter discussion points');
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const info = schoolInfo.find(s => s.school === schoolName);
-      const docId = schoolName.replace(/\s+/g, '_');
-      const now = new Date().toISOString();
-      const userId = currentUser.afid || currentUser.id || currentUser.docId || currentUser.email;
-      
-      const meetingEntry = {
-        ...newMeeting,
-        updatedBy: currentUser.name,
-        updatedAt: now
-      };
-      
-      const existingMeetings = info?.meetingMinutes || [];
-      const updatedMeetings = [meetingEntry, ...existingMeetings];
-      
-      await db.collection('schoolInfo').doc(docId).set({
-        school: schoolName,
-        meetingMinutes: updatedMeetings,
-        updatedBy: userId,
-        updatedByName: currentUser.name,
-        updatedAt: now,
-        updateHistory: firebase.firestore.FieldValue.arrayUnion({ updatedBy: userId, updatedByName: currentUser.name, updatedAt: now })
-      }, { merge: true });
-      
-      if (setSchoolInfo) {
-        setSchoolInfo(prev => {
-          const idx = prev.findIndex(s => s.school === schoolName);
-          if (idx >= 0) {
-            const updated = [...prev];
-            updated[idx] = { ...updated[idx], meetingMinutes: updatedMeetings, updatedAt: now, updatedByName: currentUser.name };
-            return updated;
-          }
-          return [...prev, { school: schoolName, meetingMinutes: updatedMeetings, updatedAt: now, updatedByName: currentUser.name }];
-        });
-      }
-      
-      setAddingMeetingFor(null);
-      setNewMeeting({ meetingDate: new Date().toISOString().split('T')[0], meetingTime: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }), attendees: '', discussedPoints: '', actionPoints: '' });
-      alert('✅ Meeting note added successfully!');
-    } catch (e) {
-      console.error('Save meeting error:', e);
-      alert('❌ Failed to save: ' + e.message);
-    }
-    setIsSaving(false);
-  };
-
-  const deleteMeeting = async (schoolName, meetingIndex) => {
-    if (!confirm('Are you sure you want to delete this meeting note?')) return;
-    setIsSaving(true);
-    try {
-      const info = schoolInfo.find(s => s.school === schoolName);
-      const docId = schoolName.replace(/\s+/g, '_');
-      const now = new Date().toISOString();
-      const userId = currentUser.afid || currentUser.id || currentUser.docId || currentUser.email;
-      
-      const updatedMeetings = [...(info?.meetingMinutes || [])];
-      updatedMeetings.splice(meetingIndex, 1);
-      
-      await db.collection('schoolInfo').doc(docId).update({
-        meetingMinutes: updatedMeetings,
-        updatedBy: userId,
-        updatedByName: currentUser.name,
-        updatedAt: now
-      });
-      
-      if (setSchoolInfo) {
-        setSchoolInfo(prev => {
-          const idx = prev.findIndex(s => s.school === schoolName);
-          if (idx >= 0) {
-            const updated = [...prev];
-            updated[idx] = { ...updated[idx], meetingMinutes: updatedMeetings, updatedAt: now };
-            return updated;
-          }
-          return prev;
-        });
-      }
-      alert('✅ Meeting note deleted!');
-    } catch (e) {
-      console.error('Delete meeting error:', e);
-      alert('❌ Failed to delete: ' + e.message);
-    }
-    setIsSaving(false);
-  };
-
-  const renderEditableField = (label, field, type = 'text', options = null) => {
-    const value = editFormData[field] || '';
-    if (options) {
-  return React.createElement("div", { className: "space-y-6" },
-    React.createElement("div", { className: "flex justify-between items-center flex-wrap gap-4" },
-      React.createElement("h2", { className: "text-3xl font-bold" }, "🏫 School Information"),
-      React.createElement("button", {
-        onClick: handleExport,
-        className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700"
-      }, "📥 Export to Excel")
-    ),
-    
-    schoolInfo.length === 0 ? React.createElement("div", { className: "bg-white p-8 rounded-2xl text-center" },
-      React.createElement("p", { className: "text-gray-600" }, "No school information available yet. Teachers need to fill the forms.")
-    ) : React.createElement("div", { className: "space-y-6" },
-      schoolInfo.map(info => React.createElement("div", {
-        key: info.school || info.id,
-        className: "bg-white p-6 rounded-2xl shadow-lg"
-      },
-        // Header with Edit button
-        React.createElement("div", { className: "flex justify-between items-start mb-4 flex-wrap gap-4" },
-          React.createElement("div", null,
-            React.createElement("h3", { className: "text-2xl font-bold" }, info.school),
-            React.createElement("div", { className: "text-sm text-gray-600 mt-1" },
-              "Last updated: ", info.updatedAt ? new Date(info.updatedAt).toLocaleString() : 'N/A',
-              info.updatedByName && React.createElement("span", null, " by ", info.updatedByName)
-            )
-          ),
-          React.createElement("div", { className: "flex gap-2 flex-wrap" },
-            editingSchool === info.school ? React.createElement(React.Fragment, null,
-              React.createElement("button", {
-                onClick: saveSchoolInfo,
-                disabled: isSaving,
-                className: "px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-400"
-              }, isSaving ? "⏳ Saving..." : "💾 Save"),
-              React.createElement("button", {
-                onClick: cancelEditing,
-                className: "px-4 py-2 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600"
-              }, "❌ Cancel")
-            ) : React.createElement(React.Fragment, null,
-              React.createElement("button", {
-                onClick: () => startEditing(info),
-                className: "px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
-              }, "✏️ Edit"),
-              React.createElement("button", {
-                onClick: () => setAddingMeetingFor(addingMeetingFor === info.school ? null : info.school),
-                className: "px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700"
-              }, addingMeetingFor === info.school ? "❌ Cancel" : "📝 Add Meeting Note")
-            )
-          )
-        ),
-        
-        // Add Meeting Form
-        addingMeetingFor === info.school && React.createElement("div", { className: "mb-6 p-4 bg-purple-50 rounded-xl border-2 border-purple-200" },
-          React.createElement("h4", { className: "font-bold text-purple-800 mb-4" }, "📝 Add New Meeting Note"),
-          React.createElement("div", { className: "grid md:grid-cols-2 gap-4 mb-4" },
-            React.createElement("div", null,
-              React.createElement("label", { className: "block text-sm font-semibold mb-1" }, "Meeting Date"),
-              React.createElement("input", {
-                type: "date",
-                value: newMeeting.meetingDate,
-                onChange: e => setNewMeeting({ ...newMeeting, meetingDate: e.target.value }),
-                className: "w-full border-2 px-3 py-2 rounded-lg"
-              })
-            ),
-            React.createElement("div", null,
-              React.createElement("label", { className: "block text-sm font-semibold mb-1" }, "Meeting Time"),
-              React.createElement("input", {
-                type: "time",
-                value: newMeeting.meetingTime,
-                onChange: e => setNewMeeting({ ...newMeeting, meetingTime: e.target.value }),
-                className: "w-full border-2 px-3 py-2 rounded-lg"
-              })
-            )
-          ),
-          React.createElement("div", { className: "mb-4" },
-            React.createElement("label", { className: "block text-sm font-semibold mb-1" }, "👥 Attendees"),
-            React.createElement("input", {
-              type: "text",
-              placeholder: "e.g., Principal, Coordinator, Teachers",
-              value: newMeeting.attendees,
-              onChange: e => setNewMeeting({ ...newMeeting, attendees: e.target.value }),
-              className: "w-full border-2 px-3 py-2 rounded-lg"
-            })
-          ),
-          React.createElement("div", { className: "mb-4" },
-            React.createElement("label", { className: "block text-sm font-semibold mb-1" }, "💬 Discussion Points *"),
-            React.createElement("textarea", {
-              placeholder: "Enter points discussed in the meeting...",
-              value: newMeeting.discussedPoints,
-              onChange: e => setNewMeeting({ ...newMeeting, discussedPoints: e.target.value }),
-              rows: 4,
-              className: "w-full border-2 px-3 py-2 rounded-lg"
-            })
-          ),
-          React.createElement("div", { className: "mb-4" },
-            React.createElement("label", { className: "block text-sm font-semibold mb-1" }, "✅ Action Items"),
-            React.createElement("textarea", {
-              placeholder: "Enter action items and follow-ups...",
-              value: newMeeting.actionPoints,
-              onChange: e => setNewMeeting({ ...newMeeting, actionPoints: e.target.value }),
-              rows: 3,
-              className: "w-full border-2 px-3 py-2 rounded-lg"
-            })
-          ),
-          React.createElement("button", {
-            onClick: () => addMeetingNote(info.school),
-            disabled: isSaving,
-            className: "px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 disabled:bg-gray-400"
-          }, isSaving ? "⏳ Saving..." : "💾 Save Meeting Note")
-        ),
-        
-        // Edit Form for principal/coordinator info
-        editingSchool === info.school ? React.createElement("div", { className: "space-y-6" },
-          React.createElement("div", { className: "border-2 border-blue-300 rounded-xl p-4 bg-blue-50" },
-            React.createElement("h4", { className: "font-bold text-lg mb-3 text-blue-800" }, "👨‍💼 Principal"),
-            React.createElement("div", { className: "grid md:grid-cols-3 gap-4" },
-              renderEditableField("Name", "principalName"),
-              renderEditableField("Phone", "principalPhone", "tel"),
-              renderEditableField("Email", "principalEmail", "email")
-            )
-          ),
-          React.createElement("div", { className: "border-2 border-green-300 rounded-xl p-4 bg-green-50" },
-            React.createElement("h4", { className: "font-bold text-lg mb-3 text-green-800" }, "👨‍💼 Vice Principal"),
-            React.createElement("div", { className: "grid md:grid-cols-3 gap-4" },
-              renderEditableField("Name", "vicePrincipalName"),
-              renderEditableField("Phone", "vicePrincipalPhone", "tel"),
-              renderEditableField("Email", "vicePrincipalEmail", "email")
-            )
-          ),
-          React.createElement("div", { className: "border-2 border-orange-300 rounded-xl p-4 bg-orange-50" },
-            React.createElement("h4", { className: "font-bold text-lg mb-3 text-orange-800" }, "👨‍💼 Avanti Coordinator"),
-            React.createElement("div", { className: "grid md:grid-cols-3 gap-4" },
-              renderEditableField("Name", "coordinatorName"),
-              renderEditableField("Phone", "coordinatorPhone", "tel"),
-              renderEditableField("Email", "coordinatorEmail", "email")
-            )
-          ),
-          React.createElement("div", { className: "border-2 border-purple-300 rounded-xl p-4 bg-purple-50" },
-            React.createElement("h4", { className: "font-bold text-lg mb-3 text-purple-800" }, "📶 WiFi Connection"),
-            React.createElement("div", { className: "grid md:grid-cols-3 gap-4" },
-              renderEditableField("WiFi Available", "wifiInClassroom", "text", ["Yes", "No"]),
-              renderEditableField("Installed By", "wifiInstalledBy"),
-              renderEditableField("Working", "wifiWorking", "text", ["Yes", "No"]),
-              renderEditableField("Monthly Bill (₹)", "wifiMonthlyBill", "number")
-            )
-          )
-        ) : React.createElement(React.Fragment, null,
-          // View Mode - Principal Info
-          React.createElement("div", { className: "border-2 border-blue-300 rounded-xl p-4 mb-4 bg-blue-50" },
-            React.createElement("h4", { className: "font-bold text-lg mb-3 text-blue-800" }, "👨‍💼 Principal"),
-            React.createElement("div", { className: "grid md:grid-cols-3 gap-3 text-sm" },
-              React.createElement("div", null, React.createElement("strong", null, "Name:"), " ", info.principalName || '—'),
-              React.createElement("div", null, React.createElement("strong", null, "Phone:"), " ", info.principalPhone || '—'),
-              React.createElement("div", null, React.createElement("strong", null, "Email:"), " ", info.principalEmail || '—')
-            )
-          ),
-          React.createElement("div", { className: "border-2 border-green-300 rounded-xl p-4 mb-4 bg-green-50" },
-            React.createElement("h4", { className: "font-bold text-lg mb-3 text-green-800" }, "👨‍💼 Vice Principal"),
-            React.createElement("div", { className: "grid md:grid-cols-3 gap-3 text-sm" },
-              React.createElement("div", null, React.createElement("strong", null, "Name:"), " ", info.vicePrincipalName || '—'),
-              React.createElement("div", null, React.createElement("strong", null, "Phone:"), " ", info.vicePrincipalPhone || '—'),
-              React.createElement("div", null, React.createElement("strong", null, "Email:"), " ", info.vicePrincipalEmail || '—')
-            )
-          ),
-          React.createElement("div", { className: "border-2 border-orange-300 rounded-xl p-4 mb-4 bg-orange-50" },
-            React.createElement("h4", { className: "font-bold text-lg mb-3 text-orange-800" }, "👨‍💼 Avanti Coordinator"),
-            React.createElement("div", { className: "grid md:grid-cols-3 gap-3 text-sm" },
-              React.createElement("div", null, React.createElement("strong", null, "Name:"), " ", info.coordinatorName || '—'),
-              React.createElement("div", null, React.createElement("strong", null, "Phone:"), " ", info.coordinatorPhone || '—'),
-              React.createElement("div", null, React.createElement("strong", null, "Email:"), " ", info.coordinatorEmail || '—')
-            )
-          ),
-          React.createElement("div", { className: "border-2 border-purple-300 rounded-xl p-4 mb-4 bg-purple-50" },
-            React.createElement("h4", { className: "font-bold text-lg mb-3 text-purple-800" }, "📶 WiFi Connection"),
-            React.createElement("div", { className: "grid md:grid-cols-3 gap-3 text-sm" },
-              React.createElement("div", null, React.createElement("strong", null, "WiFi Available:"), " ", info.wifiInClassroom || '—'),
-              info.wifiInClassroom === 'Yes' && React.createElement(React.Fragment, null,
-                React.createElement("div", null, React.createElement("strong", null, "Working:"), " ", info.wifiWorking || '—'),
-                React.createElement("div", null, React.createElement("strong", null, "Monthly Bill:"), " ₹", info.wifiMonthlyBill || '—')
-              )
-            )
-          ),
-          // Modules
-          React.createElement("div", { className: "grid md:grid-cols-2 gap-4 mb-4" },
-            React.createElement("div", { className: "border-2 border-green-300 rounded-xl p-4 bg-green-50" },
-              React.createElement("h4", { className: "font-bold text-lg mb-3 text-green-800" }, "📚 Modules - Class 11"),
-              React.createElement("div", { className: "space-y-2 text-sm" },
-                React.createElement("div", null, React.createElement("strong", null, "Received:"), " ", info.modules11Received || '—'),
-                React.createElement("div", null, React.createElement("strong", null, "Distributed:"), " ", info.modules11Distributed || '—'),
-                React.createElement("div", null, React.createElement("strong", null, "In Stock:"), " ", info.modules11Stock || '—')
-              )
-            ),
-            React.createElement("div", { className: "border-2 border-green-300 rounded-xl p-4 bg-green-50" },
-              React.createElement("h4", { className: "font-bold text-lg mb-3 text-green-800" }, "📚 Modules - Class 12"),
-              React.createElement("div", { className: "space-y-2 text-sm" },
-                React.createElement("div", null, React.createElement("strong", null, "Received:"), " ", info.modules12Received || '—'),
-                React.createElement("div", null, React.createElement("strong", null, "Distributed:"), " ", info.modules12Distributed || '—'),
-                React.createElement("div", null, React.createElement("strong", null, "In Stock:"), " ", info.modules12Stock || '—')
-              )
-            )
-          ),
-          // Chromebooks
-          React.createElement("div", { className: "grid md:grid-cols-2 gap-4 mb-4" },
-            React.createElement("div", { className: "border-2 border-pink-300 rounded-xl p-4 bg-pink-50" },
-              React.createElement("h4", { className: "font-bold text-lg mb-3 text-pink-800" }, "💻 Chromebooks - Class 11"),
-              React.createElement("div", { className: "space-y-2 text-sm" },
-                React.createElement("div", null, React.createElement("strong", null, "Distributed:"), " ", info.chromebooks11Distributed || '—'),
-                info.chromebooks11Distributed === 'Yes' && React.createElement(React.Fragment, null,
-                  React.createElement("div", null, React.createElement("strong", null, "Count:"), " ", info.chromebooks11Count || '—'),
-                  React.createElement("div", null, React.createElement("strong", null, "Working:"), " ", info.chromebooks11Working || '—')
-                )
-              )
-            ),
-            React.createElement("div", { className: "border-2 border-pink-300 rounded-xl p-4 bg-pink-50" },
-              React.createElement("h4", { className: "font-bold text-lg mb-3 text-pink-800" }, "💻 Chromebooks - Class 12"),
-              React.createElement("div", { className: "space-y-2 text-sm" },
-                React.createElement("div", null, React.createElement("strong", null, "Distributed:"), " ", info.chromebooks12Distributed || '—'),
-                info.chromebooks12Distributed === 'Yes' && React.createElement(React.Fragment, null,
-                  React.createElement("div", null, React.createElement("strong", null, "Count:"), " ", info.chromebooks12Count || '—'),
-                  React.createElement("div", null, React.createElement("strong", null, "Working:"), " ", info.chromebooks12Working || '—')
-                )
-              )
-            )
-          ),
-          // Printer
-          React.createElement("div", { className: "border-2 border-cyan-300 rounded-xl p-4 mb-4 bg-cyan-50" },
-            React.createElement("h4", { className: "font-bold text-lg mb-3 text-cyan-800" }, "🖨️ Printer"),
-            React.createElement("div", { className: "grid md:grid-cols-2 gap-3 text-sm" },
-              React.createElement("div", null, React.createElement("strong", null, "Printer Available:"), " ", info.printerAvailable || '—'),
-              info.printerAvailable === 'Yes' && React.createElement(React.Fragment, null,
-                React.createElement("div", null, React.createElement("strong", null, "Working:"), " ", info.printerWorking || '—'),
-                React.createElement("div", null, React.createElement("strong", null, "Brand:"), " ", info.printerBrand || '—')
-              )
-            )
-          )
-        ),
-        
-        // Meeting Minutes Section
-        React.createElement("div", { className: "border-2 border-purple-300 rounded-xl p-4 bg-purple-50 mt-4" },
-          React.createElement("h4", { className: "font-bold text-lg mb-3 text-purple-800" }, 
-            "📝 Meeting Minutes (", (info.meetingMinutes || []).length, ")"
-          ),
-          (info.meetingMinutes && info.meetingMinutes.length > 0) ? React.createElement("div", { className: "space-y-3" },
-            info.meetingMinutes.map((meeting, idx) => React.createElement("div", {
-              key: idx,
-              className: "bg-white p-4 rounded-lg border border-purple-200"
-            },
-              React.createElement("div", { className: "flex justify-between items-start mb-3 flex-wrap gap-2" },
-                React.createElement("div", { className: "flex items-center gap-3 flex-wrap" },
-                  React.createElement("span", { className: "px-3 py-1 bg-purple-600 text-white rounded-full text-xs font-semibold" },
-                    "Meeting #", info.meetingMinutes.length - idx
-                  ),
-                  React.createElement("span", { className: "text-sm text-gray-600" },
-                    meeting.meetingDate ? new Date(meeting.meetingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No date',
-                    meeting.meetingTime && (' at ' + meeting.meetingTime)
-                  )
-                ),
-                React.createElement("div", { className: "flex gap-2" },
-                  React.createElement("button", {
-                    onClick: () => {
-                      const pw = window.open('', '_blank');
-                      const mn = info.meetingMinutes.length - idx;
-                      const sn = info.school;
-                      const ds = meeting.meetingDate ? new Date(meeting.meetingDate).toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : 'N/A';
-                      pw.document.write('<!DOCTYPE html><html><head><title>Meeting - ' + sn + '</title><style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:0 auto;}.header{border-bottom:3px solid #7C3AED;padding-bottom:15px;margin-bottom:20px;}.section{margin-top:20px;padding:15px;background:#FAF5FF;border-radius:8px;}</style></head><body><div class="header"><h1>Meeting #' + mn + '</h1><p>School: ' + sn + '</p><p>Date: ' + ds + '</p></div><div class="section"><h3>Attendees</h3><p>' + (meeting.attendees || 'Not specified') + '</p></div><div class="section"><h3>Discussion</h3><p>' + (meeting.discussedPoints || '').replace(/\n/g, '<br>') + '</p></div><div class="section"><h3>Actions</h3><p>' + (meeting.actionPoints || 'None').replace(/\n/g, '<br>') + '</p></div><script>setTimeout(function(){window.print();},500);</'+'script></body></html>');
-                      pw.document.close();
-                    },
-                    className: "px-3 py-1 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700"
-                  }, "📄 PDF"),
-                  React.createElement("button", {
-                    onClick: () => deleteMeeting(info.school, idx),
-                    className: "px-3 py-1 bg-red-500 text-white rounded-lg text-xs font-semibold hover:bg-red-600"
-                  }, "🗑️")
-                )
-              ),
-              React.createElement("div", { className: "text-sm space-y-2" },
-                React.createElement("div", null, React.createElement("strong", { className: "text-purple-700" }, "👥 Attendees:"), " ", meeting.attendees || 'Not specified'),
-                React.createElement("div", null, React.createElement("strong", { className: "text-purple-700" }, "💬 Discussed:"), " ", meeting.discussedPoints?.substring(0, 200) || 'No points', meeting.discussedPoints?.length > 200 ? '...' : ''),
-                meeting.actionPoints && React.createElement("div", null, React.createElement("strong", { className: "text-green-700" }, "✅ Actions:"), " ", meeting.actionPoints.substring(0, 150), meeting.actionPoints.length > 150 ? '...' : '')
-              )
-            ))
-          ) : React.createElement("p", { className: "text-gray-500 text-sm" }, "No meeting notes yet. Click 'Add Meeting Note' to add one.")
-        )
-      ))
-    )
-  );
+  return React.createElement("div", {
+    className: "space-y-6"
+  }, React.createElement("div", {
+    className: "flex justify-between items-center"
+  }, React.createElement("h2", {
+    className: "text-3xl font-bold"
+  }, "\uD83C\uDFEB School Information"), React.createElement("button", {
+    onClick: handleExport,
+    className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold"
+  }, "\uD83D\uDCE5 Export to Excel")), schoolInfo.length === 0 ? React.createElement("div", {
+    className: "bg-white p-8 rounded-2xl text-center"
+  }, React.createElement("p", {
+    className: "text-gray-600"
+  }, "No school information available yet. Teachers need to fill the forms.")) : React.createElement("div", {
+    className: "space-y-6"
+  }, schoolInfo.map(info => React.createElement("div", {
+    key: info.id || info.school,
+    className: "bg-white p-6 rounded-2xl shadow-lg"
+  }, React.createElement("div", {
+    className: "flex justify-between items-start mb-4 flex-wrap gap-4"
+  }, React.createElement("div", null, React.createElement("h3", {
+    className: "text-2xl font-bold"
+  }, info.school), React.createElement("div", {
+    className: "text-sm text-gray-600 mt-1"
+  }, "Last updated: ", info.updatedAt ? new Date(info.updatedAt).toLocaleString() : 'N/A', info.updatedByName && React.createElement("span", null, " by ", info.updatedByName))), React.createElement("div", {
+    className: "flex gap-2 flex-wrap"
+  }, React.createElement("button", {
+    onClick: () => setShowMeetingForm(showMeetingForm === info.school ? null : info.school),
+    className: "px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700"
+  }, showMeetingForm === info.school ? "\u274C Cancel" : "\uD83D\uDCDD Add Meeting Note"))), showMeetingForm === info.school && React.createElement("div", {
+    className: "mb-6 p-4 bg-purple-50 rounded-xl border-2 border-purple-200"
+  }, React.createElement("h4", {
+    className: "font-bold text-purple-800 mb-4"
+  }, "\uD83D\uDCDD Add New Meeting Note"), React.createElement("div", {
+    className: "grid md:grid-cols-2 gap-4 mb-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-semibold mb-1"
+  }, "Meeting Date"), React.createElement("input", {
+    type: "date",
+    value: newMeeting.meetingDate,
+    onChange: e => setNewMeeting({ ...newMeeting, meetingDate: e.target.value }),
+    className: "w-full border-2 px-3 py-2 rounded-lg"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-semibold mb-1"
+  }, "Meeting Time"), React.createElement("input", {
+    type: "time",
+    value: newMeeting.meetingTime,
+    onChange: e => setNewMeeting({ ...newMeeting, meetingTime: e.target.value }),
+    className: "w-full border-2 px-3 py-2 rounded-lg"
+  }))), React.createElement("div", {
+    className: "mb-4"
+  }, React.createElement("label", {
+    className: "block text-sm font-semibold mb-1"
+  }, "\uD83D\uDC65 Attendees"), React.createElement("input", {
+    type: "text",
+    placeholder: "e.g., Principal, Coordinator, Teachers",
+    value: newMeeting.attendees,
+    onChange: e => setNewMeeting({ ...newMeeting, attendees: e.target.value }),
+    className: "w-full border-2 px-3 py-2 rounded-lg"
+  })), React.createElement("div", {
+    className: "mb-4"
+  }, React.createElement("label", {
+    className: "block text-sm font-semibold mb-1"
+  }, "\uD83D\uDCAC Discussion Points *"), React.createElement("textarea", {
+    placeholder: "Enter points discussed in the meeting...",
+    value: newMeeting.discussedPoints,
+    onChange: e => setNewMeeting({ ...newMeeting, discussedPoints: e.target.value }),
+    rows: 4,
+    className: "w-full border-2 px-3 py-2 rounded-lg"
+  })), React.createElement("div", {
+    className: "mb-4"
+  }, React.createElement("label", {
+    className: "block text-sm font-semibold mb-1"
+  }, "\u2705 Action Items"), React.createElement("textarea", {
+    placeholder: "Enter action items and follow-ups...",
+    value: newMeeting.actionPoints,
+    onChange: e => setNewMeeting({ ...newMeeting, actionPoints: e.target.value }),
+    rows: 3,
+    className: "w-full border-2 px-3 py-2 rounded-lg"
+  })), React.createElement("button", {
+    onClick: () => addMeetingNote(info.school),
+    disabled: isSaving,
+    className: "px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 disabled:bg-gray-400"
+  }, isSaving ? "\u23F3 Saving..." : "\uD83D\uDCBE Save Meeting Note")), info.updateHistory && info.updateHistory.length > 0 && React.createElement("div", {
+    className: "mb-4 bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded"
+  }, React.createElement("div", {
+    className: "font-semibold mb-1"
+  }, "Edit history"), React.createElement("ul", {
+    className: "text-xs max-h-32 overflow-y-auto space-y-1"
+  }, info.updateHistory.slice().sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt)).map((entry, idx) => React.createElement("li", {
+    key: idx
+  }, new Date(entry.updatedAt).toLocaleString(), " \u2014 ", entry.updatedByName || entry.updatedBy)))), React.createElement("div", {
+    className: "border-2 border-blue-300 rounded-xl p-4 mb-4 bg-blue-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-blue-800"
+  }, "\uD83D\uDC68\u200D\uD83D\uDCBC Principal"), React.createElement("div", {
+    className: "grid md:grid-cols-3 gap-3 text-sm"
+  }, React.createElement("div", null, React.createElement("strong", null, "Name:"), " ", info.principalName || '—'), React.createElement("div", null, React.createElement("strong", null, "Phone:"), " ", info.principalPhone || '—'), React.createElement("div", null, React.createElement("strong", null, "Email:"), " ", info.principalEmail || '—'))), React.createElement("div", {
+    className: "border-2 border-green-300 rounded-xl p-4 mb-4 bg-green-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-green-800"
+  }, "\uD83D\uDC68\u200D\uD83D\uDCBC Vice Principal"), React.createElement("div", {
+    className: "grid md:grid-cols-3 gap-3 text-sm"
+  }, React.createElement("div", null, React.createElement("strong", null, "Name:"), " ", info.vicePrincipalName || '—'), React.createElement("div", null, React.createElement("strong", null, "Phone:"), " ", info.vicePrincipalPhone || '—'), React.createElement("div", null, React.createElement("strong", null, "Email:"), " ", info.vicePrincipalEmail || '—'))), React.createElement("div", {
+    className: "border-2 border-orange-300 rounded-xl p-4 mb-4 bg-orange-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-orange-800"
+  }, "\uD83D\uDC68\u200D\uD83D\uDCBC Avanti Coordinator"), React.createElement("div", {
+    className: "grid md:grid-cols-3 gap-3 text-sm"
+  }, React.createElement("div", null, React.createElement("strong", null, "Name:"), " ", info.coordinatorName || '—'), React.createElement("div", null, React.createElement("strong", null, "Phone:"), " ", info.coordinatorPhone || '—'), React.createElement("div", null, React.createElement("strong", null, "Email:"), " ", info.coordinatorEmail || '—'))), React.createElement("div", {
+    className: "border-2 border-purple-300 rounded-xl p-4 mb-4 bg-purple-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-purple-800"
+  }, "\uD83D\uDCF6 WiFi Connection"), React.createElement("div", {
+    className: "grid md:grid-cols-3 gap-3 text-sm"
+  }, React.createElement("div", null, React.createElement("strong", null, "WiFi Available:"), " ", info.wifiInClassroom || '—'), info.wifiInClassroom === 'Yes' && React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("strong", null, "Installed By:"), " ", info.wifiInstalledBy || '—'), React.createElement("div", null, React.createElement("strong", null, "Working:"), " ", info.wifiWorking || '—'), React.createElement("div", null, React.createElement("strong", null, "Monthly Bill:"), " \u20B9", info.wifiMonthlyBill || '—'), React.createElement("div", null, React.createElement("strong", null, "Connection Type:"), " ", info.wifiConnectionType || '—'), React.createElement("div", null, React.createElement("strong", null, "Network:"), " ", info.wifiNetworkName || '—'), React.createElement("div", null, React.createElement("strong", null, "Both Classes WiFi:"), " ", info.bothClassesWifi || '—')))), React.createElement("div", {
+    className: "grid md:grid-cols-2 gap-4 mb-4"
+  }, React.createElement("div", {
+    className: "border-2 border-green-300 rounded-xl p-4 bg-green-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-green-800"
+  }, "\uD83D\uDCDA Modules - Class 11"), React.createElement("div", {
+    className: "space-y-2 text-sm"
+  }, React.createElement("div", null, React.createElement("strong", null, "Received:"), " ", info.modules11Received || '—'), React.createElement("div", null, React.createElement("strong", null, "Distributed:"), " ", info.modules11Distributed || '—'), React.createElement("div", null, React.createElement("strong", null, "In Stock:"), " ", info.modules11Stock || '—'), info.modules11Remarks && React.createElement("div", {
+    className: "mt-2 p-2 bg-white rounded border border-green-200"
+  }, React.createElement("strong", null, "\uD83D\uDCDD Remarks:"), " ", info.modules11Remarks))), React.createElement("div", {
+    className: "border-2 border-blue-300 rounded-xl p-4 bg-blue-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-blue-800"
+  }, "\uD83D\uDCDA Modules - Class 12"), React.createElement("div", {
+    className: "space-y-2 text-sm"
+  }, React.createElement("div", null, React.createElement("strong", null, "Received:"), " ", info.modules12Received || '—'), React.createElement("div", null, React.createElement("strong", null, "Distributed:"), " ", info.modules12Distributed || '—'), React.createElement("div", null, React.createElement("strong", null, "In Stock:"), " ", info.modules12Stock || '—'), info.modules12Remarks && React.createElement("div", {
+    className: "mt-2 p-2 bg-white rounded border border-blue-200"
+  }, React.createElement("strong", null, "\uD83D\uDCDD Remarks:"), " ", info.modules12Remarks)))), info.referenceBooks && info.referenceBooks.length > 0 && React.createElement("div", {
+    className: "border-2 border-yellow-300 rounded-xl p-4 mb-4 bg-yellow-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-yellow-800"
+  }, "\uD83D\uDCD6 Reference Books"), React.createElement("div", {
+    className: "overflow-x-auto"
+  }, React.createElement("table", {
+    className: "w-full text-sm"
+  }, React.createElement("thead", {
+    className: "bg-yellow-200"
+  }, React.createElement("tr", null, React.createElement("th", {
+    className: "p-2 text-left"
+  }, "Book Name"), React.createElement("th", {
+    className: "p-2 text-left"
+  }, "Publisher"), React.createElement("th", {
+    className: "p-2 text-left"
+  }, "Author"), React.createElement("th", {
+    className: "p-2 text-left"
+  }, "Price"), React.createElement("th", {
+    className: "p-2 text-left"
+  }, "In Stock"), React.createElement("th", {
+    className: "p-2 text-left"
+  }, "Distributed"))), React.createElement("tbody", null, info.referenceBooks.map((book, idx) => React.createElement("tr", {
+    key: idx,
+    className: "border-b border-yellow-200"
+  }, React.createElement("td", {
+    className: "p-2"
+  }, book.bookName || '—'), React.createElement("td", {
+    className: "p-2"
+  }, book.publisher || '—'), React.createElement("td", {
+    className: "p-2"
+  }, book.author || '—'), React.createElement("td", {
+    className: "p-2"
+  }, "\u20B9", book.price || '—'), React.createElement("td", {
+    className: "p-2"
+  }, book.inStock || '—'), React.createElement("td", {
+    className: "p-2"
+  }, book.distributed || '—'))))))), React.createElement("div", {
+    className: "grid md:grid-cols-2 gap-4 mb-4"
+  }, React.createElement("div", {
+    className: "border-2 border-indigo-300 rounded-xl p-4 bg-indigo-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-indigo-800"
+  }, "\uD83D\uDCBB Chromebooks - Class 11"), React.createElement("div", {
+    className: "space-y-2 text-sm"
+  }, React.createElement("div", null, React.createElement("strong", null, "Distributed from Avanti:"), " ", info.chromebooks11Distributed || '—'), info.chromebooks11Distributed === 'Yes' ? React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("strong", null, "Count:"), " ", info.chromebooks11Count || '—'), React.createElement("div", null, React.createElement("strong", null, "Working:"), " ", info.chromebooks11Working || '—'), React.createElement("div", null, React.createElement("strong", null, "Brand:"), " ", info.chromebooks11Brand || '—'), React.createElement("div", null, React.createElement("strong", null, "Distributed:"), " ", info.chromebooks11DistributedDate || '—')) : React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("strong", null, "Test Method:"), " ", info.chromebooks11TestMethod || '—'), React.createElement("div", null, React.createElement("strong", null, "JNV Lab Access:"), " ", info.chromebooks11JNVLabAccess || '—'), React.createElement("div", null, React.createElement("strong", null, "JNV Devices:"), " ", info.chromebooks11JNVCount || '—')))), React.createElement("div", {
+    className: "border-2 border-pink-300 rounded-xl p-4 bg-pink-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-pink-800"
+  }, "\uD83D\uDCBB Chromebooks - Class 12"), React.createElement("div", {
+    className: "space-y-2 text-sm"
+  }, React.createElement("div", null, React.createElement("strong", null, "Distributed from Avanti:"), " ", info.chromebooks12Distributed || '—'), info.chromebooks12Distributed === 'Yes' ? React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("strong", null, "Count:"), " ", info.chromebooks12Count || '—'), React.createElement("div", null, React.createElement("strong", null, "Working:"), " ", info.chromebooks12Working || '—'), React.createElement("div", null, React.createElement("strong", null, "Brand:"), " ", info.chromebooks12Brand || '—'), React.createElement("div", null, React.createElement("strong", null, "Distributed:"), " ", info.chromebooks12DistributedDate || '—')) : React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("strong", null, "Test Method:"), " ", info.chromebooks12TestMethod || '—'), React.createElement("div", null, React.createElement("strong", null, "JNV Lab Access:"), " ", info.chromebooks12JNVLabAccess || '—'), React.createElement("div", null, React.createElement("strong", null, "JNV Devices:"), " ", info.chromebooks12JNVCount || '—'))))), React.createElement("div", {
+    className: "border-2 border-cyan-300 rounded-xl p-4 mb-4 bg-cyan-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-cyan-800"
+  }, "\uD83D\uDDA8\uFE0F Printer"), React.createElement("div", {
+    className: "grid md:grid-cols-2 gap-3 text-sm"
+  }, React.createElement("div", null, React.createElement("strong", null, "Printer Available:"), " ", info.printerAvailable || '—'), info.printerAvailable === 'Yes' && React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("strong", null, "Working:"), " ", info.printerWorking || '—'), React.createElement("div", null, React.createElement("strong", null, "Brand:"), " ", info.printerBrand || '—'), React.createElement("div", null, React.createElement("strong", null, "Issued:"), " ", info.printerIssuedDate || '—')))), info.otherAssets && info.otherAssets.length > 0 && React.createElement("div", {
+    className: "border-2 border-teal-300 rounded-xl p-4 mb-4 bg-teal-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-teal-800"
+  }, "\uD83D\uDCE6 Other Assets (", info.otherAssets.length, ")"), React.createElement("div", {
+    className: "overflow-x-auto"
+  }, React.createElement("table", {
+    className: "w-full text-sm"
+  }, React.createElement("thead", {
+    className: "bg-teal-200"
+  }, React.createElement("tr", null, React.createElement("th", {
+    className: "p-2 text-left"
+  }, "Asset Name"), React.createElement("th", {
+    className: "p-2 text-left"
+  }, "Quantity"), React.createElement("th", {
+    className: "p-2 text-left"
+  }, "Condition"), React.createElement("th", {
+    className: "p-2 text-left"
+  }, "Notes"))), React.createElement("tbody", null, info.otherAssets.map((asset, idx) => React.createElement("tr", {
+    key: idx,
+    className: "border-b border-teal-200"
+  }, React.createElement("td", {
+    className: "p-2 font-semibold"
+  }, asset.assetName || '—'), React.createElement("td", {
+    className: "p-2"
+  }, asset.assetQuantity || '—'), React.createElement("td", {
+    className: "p-2"
+  }, React.createElement("span", {
+    className: `px-2 py-1 rounded-full text-xs font-bold ${asset.assetCondition === 'Working' ? 'bg-green-100 text-green-700' : asset.assetCondition === 'Not Working' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`
+  }, asset.assetCondition || '—')), React.createElement("td", {
+    className: "p-2"
+  }, asset.assetNotes || '—'))))))), info.meetingMinutes && info.meetingMinutes.length > 0 && React.createElement("div", {
+    className: "border-2 border-purple-300 rounded-xl p-4 bg-purple-50"
+  }, React.createElement("h4", {
+    className: "font-bold text-lg mb-3 text-purple-800"
+  }, "\uD83D\uDCDD Meeting Minutes (", info.meetingMinutes.length, ")"), React.createElement("div", {
+    className: "space-y-3"
+  }, info.meetingMinutes.map((meeting, idx) => React.createElement("div", {
+    key: idx,
+    className: "bg-white p-4 rounded-lg border border-purple-200"
+  }, React.createElement("div", {
+    className: "flex justify-between items-start mb-3"
+  }, React.createElement("div", {
+    className: "flex items-center gap-3"
+  }, React.createElement("span", {
+    className: "px-3 py-1 bg-purple-600 text-white rounded-full text-xs font-semibold"
+  }, "Meeting #", info.meetingMinutes.length - idx), React.createElement("span", {
+    className: "text-sm text-gray-600"
+  }, meeting.meetingDate ? new Date(meeting.meetingDate).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  }) : 'No date', meeting.meetingTime && ` at ${meeting.meetingTime}`)), React.createElement("button", {
+    onClick: () => {
+      const printWindow = window.open('', '_blank');
+      const meetingNum = info.meetingMinutes.length - idx;
+      const schoolName = info.school;
+      const dateStr = meeting.meetingDate ? new Date(meeting.meetingDate).toLocaleDateString('en-IN', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+      }) : 'N/A';
+      const timeStr = meeting.meetingTime || 'N/A';
+      const attendeesStr = meeting.attendees || 'Not specified';
+      const discussedStr = (meeting.discussedPoints || 'No points recorded').replace(/\n/g, '<br>');
+      const actionStr = (meeting.actionPoints || 'No action items').replace(/\n/g, '<br>');
+      const updatedStr = meeting.updatedAt ? new Date(meeting.updatedAt).toLocaleString('en-IN') : 'N/A';
+      const updatedByStr = meeting.updatedBy || 'Unknown';
+      const nowStr = new Date().toLocaleString('en-IN');
+      printWindow.document.write('<!DOCTYPE html><html><head><title>Meeting Minutes - ' + schoolName + '</title>' + '<style>@media print { @page { margin: 1cm; size: A4; } body { -webkit-print-color-adjust: exact; } }' + 'body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; color: #333; }' + '.header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #7C3AED; padding-bottom: 15px; margin-bottom: 20px; }' + '.logo { font-size: 24px; font-weight: bold; color: #7C3AED; }' + '.meeting-badge { background: #7C3AED; color: white; padding: 8px 16px; border-radius: 20px; }' + '.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }' + '.info-item { padding: 12px; background: #F9FAFB; border-radius: 8px; border-left: 4px solid #7C3AED; }' + '.info-item label { font-size: 11px; color: #6B7280; text-transform: uppercase; display: block; margin-bottom: 4px; }' + '.info-item span { font-weight: bold; color: #1F2937; }' + '.section { margin-top: 20px; padding: 15px; background: #FAF5FF; border-radius: 8px; border: 1px solid #E9D5FF; }' + '.section-title { font-weight: bold; color: #7C3AED; margin-bottom: 10px; }' + '.section-content { white-space: pre-wrap; line-height: 1.8; }' + '.footer { margin-top: 30px; padding-top: 15px; border-top: 2px solid #E9D5FF; font-size: 11px; color: #666; display: flex; justify-content: space-between; }' + '</style></head><body>' + '<div class="header"><div><div class="logo">अवंती Avanti Fellows</div>' + '<h1 style="margin: 10px 0 5px; font-size: 22px;">Minutes of Meeting</h1>' + '<p style="margin: 0; color: #666;">🏫 ' + schoolName + '</p></div>' + '<div class="meeting-badge">Meeting #' + meetingNum + '</div></div>' + '<div class="info-grid"><div class="info-item"><label>📅 Date</label><span>' + dateStr + '</span></div>' + '<div class="info-item"><label>🕐 Time</label><span>' + timeStr + '</span></div></div>' + '<div class="section"><div class="section-title">👥 Attendees</div><div class="section-content">' + attendeesStr + '</div></div>' + '<div class="section"><div class="section-title">💬 Discussion Points</div><div class="section-content">' + discussedStr + '</div></div>' + '<div class="section" style="background: #F0FDF4; border-color: #BBF7D0;"><div class="section-title" style="color: #059669;">✅ Action Items</div><div class="section-content">' + actionStr + '</div></div>' + '<div class="footer"><div>Updated: ' + updatedStr + ' by ' + updatedByStr + '</div><div>Generated: ' + nowStr + '</div></div>' + '<script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</scr' + 'ipt></body></html>');
+      printWindow.document.close();
+    },
+    className: "px-3 py-1 bg-purple-600 text-white rounded-lg text-xs font-semibold hover:bg-purple-700"
+  }, "\uD83D\uDCC4 Export PDF")), React.createElement("div", {
+    className: "text-sm space-y-2"
+  }, React.createElement("div", null, React.createElement("strong", {
+    className: "text-purple-700"
+  }, "\uD83D\uDC65 Attendees:"), " ", meeting.attendees || 'Not specified'), React.createElement("div", null, React.createElement("strong", {
+    className: "text-purple-700"
+  }, "\uD83D\uDCAC Discussed:"), " ", meeting.discussedPoints?.substring(0, 150), meeting.discussedPoints?.length > 150 ? '...' : '' || 'No points'), meeting.actionPoints && React.createElement("div", null, React.createElement("strong", {
+    className: "text-green-700"
+  }, "\u2705 Actions:"), " ", meeting.actionPoints.substring(0, 100), meeting.actionPoints.length > 100 ? '...' : ''))))))))));
 }
-
 function TeacherDirectory({
   teachers,
   currentUser
