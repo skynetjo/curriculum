@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
   
-  <!-- ✅ VERSION 5.0.3 - STUDENT FIX (Firebase permissions + Chart.js + Performance) -->
+  <!-- ✅ VERSION 5.0.4 - STUDENT PERFORMANCE FIX (Fast load + Console fix + Permissions) -->
   <script>
     window.__PERF_START = performance.now();
-    console.log('🚀 Curriculum Tracker v5.0.3 - Student Dashboard Fixed');
+    console.log('🚀 Curriculum Tracker v5.0.4 - Student Performance Optimized');
   </script>
   
   <!-- ✅ CRITICAL: Clear old buggy service worker caches IMMEDIATELY -->
   <!-- This runs before anything else to fix CORS issues -->
   <script>
     (function() {
-      var SW_VERSION = '5.0.3';
+      var SW_VERSION = '5.0.4';
       var storedVersion = localStorage.getItem('swVersion');
       
       // If version mismatch, clear everything
@@ -66,11 +66,11 @@
   <link rel="dns-prefetch" href="https://firestore.googleapis.com">
   <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com">
   
-  <!-- ✅ PERFORMANCE: Preload critical scripts with high priority -->
-  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" as="script" crossorigin fetchpriority="high">
-  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js" as="script" crossorigin>
-  <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script" crossorigin fetchpriority="high">
-  <link rel="preload" href="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" as="script" crossorigin>
+  <!-- ✅ PERFORMANCE: Preload critical scripts with high priority - crossorigin="anonymous" for CORS -->
+  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" as="script" crossorigin="anonymous" fetchpriority="high">
+  <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js" as="script" crossorigin="anonymous">
+  <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script" crossorigin="anonymous" fetchpriority="high">
+  <link rel="preload" href="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" as="script" crossorigin="anonymous">
   
   <!-- ✅ APP SHELL ARCHITECTURE: Critical CSS inline for INSTANT UI display -->
   <!-- This CSS loads the entire UI structure before any JavaScript runs -->
@@ -7635,7 +7635,36 @@ function StudentProfileForm({
     const fetchProfile = async () => {
       try {
         setLoading(true);
-        const docSnap = await db.collection('studentProfiles').doc(myId).get();
+        
+        // ✅ FIX: Load from cache first for instant display
+        const cacheKey = `studentProfile_${myId}`;
+        try {
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.data) {
+              setProfile(prev => ({
+                ...prev,
+                grade: currentUser.grade || '',
+                school: currentUser.school || '',
+                ...parsed.data
+              }));
+              setLoading(false);
+              console.log('✅ Profile form loaded from cache');
+            }
+          }
+        } catch (e) {}
+        
+        // ✅ FIX: Fetch with timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('timeout')), 8000)
+        );
+        
+        const docSnap = await Promise.race([
+          db.collection('studentProfiles').doc(myId).get(),
+          timeoutPromise
+        ]);
+        
         if (docSnap.exists) {
           const profileData = docSnap.data();
           const fullProfile = {
@@ -7645,14 +7674,21 @@ function StudentProfileForm({
             ...profileData
           };
           setProfile(fullProfile);
+          // Update cache
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify({
+              data: profileData,
+              timestamp: Date.now()
+            }));
+          } catch (e) {}
           if (onProfileUpdated) {
             onProfileUpdated(fullProfile);
           }
         }
         setLoading(false);
       } catch (e) {
-        console.error('Error fetching profile:', e);
-        setLoading(false);
+        console.warn('Profile fetch:', e.message);
+        setLoading(false); // ✅ FIX: Always stop loading even on error
       }
     };
     fetchProfile();
@@ -10057,9 +10093,25 @@ function StudentDashboard({
   const myId = currentUser.studentId || currentUser.id;
   useEffect(() => {
     const fetchData = async () => {
+      // ✅ FIX: Helper function for Firebase queries with timeout
+      const queryWithTimeout = async (promise, timeoutMs = 6000, fallbackValue = []) => {
+        try {
+          const result = await Promise.race([
+            promise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
+          ]);
+          return result;
+        } catch (e) {
+          console.warn('Query timeout/error - using cache:', e.message);
+          return null; // Return null to indicate we should use cache
+        }
+      };
+      
       try {
         console.log('⚡ Loading cached data instantly...');
         const teacherCacheKey = `teachers_${mySchool}`;
+        
+        // ✅ INSTANT: Load ALL cached data first (no waiting)
         try {
           const cachedTeachers = localStorage.getItem(teacherCacheKey);
           if (cachedTeachers) {
@@ -10090,78 +10142,90 @@ function StudentDashboard({
             }
           }
         } catch (e) {}
+        
+        // ✅ FIX: Set loading false IMMEDIATELY after cache (UI is now usable)
         setLoading(false);
-        const currentAuthUser = auth.currentUser;
-        if (!currentAuthUser) {
-          console.warn('⏳ Auth not ready, waiting...');
-          await new Promise(resolve => setTimeout(resolve, 500));
-          if (!auth.currentUser) {
+        
+        // ✅ FIX: Background refresh with shorter timeouts
+        console.log('🔄 Refreshing data in background...');
+        
+        // Teachers query (most important - show on dashboard)
+        queryWithTimeout(
+          db.collection('teachers').where('school', '==', mySchool).get(),
+          5000
+        ).then(snap => {
+          if (snap && snap.docs) {
+            const teachersData = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
+            setTeachers(teachersData);
             try {
-              await auth.signInAnonymously();
-              console.log('✅ Re-authenticated anonymously');
-            } catch (reAuthErr) {
-              console.error('Re-auth failed:', reAuthErr);
-            }
+              localStorage.setItem(teacherCacheKey, JSON.stringify({
+                data: teachersData,
+                timestamp: Date.now(),
+                school: mySchool
+              }));
+            } catch (e) {}
+            console.log('✅ Teachers refreshed:', teachersData.length);
           }
-        }
-        console.log('🔄 Fetching fresh data in parallel...');
-        const fetchPromises = [];
-        fetchPromises.push(db.collection('curriculum').get().then(snap => {
-          const currMap = {};
-          snap.docs.forEach(doc => {
-            currMap[doc.id] = doc.data();
-          });
-          setCurriculum(currMap);
-          try {
-            localStorage.setItem(`curriculum_${mySchool}_${myGrade}`, JSON.stringify({
-              data: currMap,
-              timestamp: Date.now()
-            }));
-          } catch (e) {}
-        }).catch(e => console.warn('Curriculum error:', e.message)));
-        fetchPromises.push(db.collection('chapterProgress').get().then(snap => {
-          const progressMap = {};
-          snap.docs.forEach(d => {
-            progressMap[d.id] = d.data();
-          });
-          setChapterProgress(progressMap);
-        }).catch(e => console.warn('Progress error:', e.message)));
-        fetchPromises.push(db.collection('studentAttendance').where('studentId', '==', String(myId)).get().then(snap => {
-          const attendanceData = snap.docs.map(d => ({
-            ...d.data(),
-            docId: d.id
-          })).sort((a, b) => b.date.localeCompare(a.date));
-          setStudentAttendance(attendanceData);
-          try {
-            localStorage.setItem(`attendance_${myId}`, JSON.stringify({
-              data: attendanceData,
-              timestamp: Date.now()
-            }));
-          } catch (e) {}
-        }).catch(e => console.warn('Attendance error:', e.message)));
-        fetchPromises.push(db.collection('teachers').where('school', '==', mySchool).get().then(snap => {
-          const teachersData = snap.docs.map(d => ({
-            ...d.data(),
-            docId: d.id
-          }));
-          setTeachers(teachersData);
-          try {
-            localStorage.setItem(teacherCacheKey, JSON.stringify({
-              data: teachersData,
-              timestamp: Date.now(),
-              school: mySchool
-            }));
-          } catch (e) {}
-          console.log('✅ Teachers refreshed:', teachersData.length);
-        }).catch(e => {
-          console.warn('Teachers error:', e.message);
-          setTeachers([]);
-        }));
-        fetchPromises.push(db.collection('studentExamRegistrations').doc(myId).get().then(snap => {
-          if (snap.exists) setExamRegistrations(snap.data());
-        }).catch(e => console.warn('Exams error:', e.message)));
-        await Promise.all(fetchPromises);
-        console.log('✅ All data refreshed');
+        }).catch(e => console.warn('Teachers background fetch failed'));
+        
+        // Curriculum (secondary priority)
+        queryWithTimeout(
+          db.collection('curriculum').get(),
+          6000
+        ).then(snap => {
+          if (snap && snap.docs) {
+            const currMap = {};
+            snap.docs.forEach(doc => { currMap[doc.id] = doc.data(); });
+            setCurriculum(currMap);
+            try {
+              localStorage.setItem(`curriculum_${mySchool}_${myGrade}`, JSON.stringify({
+                data: currMap,
+                timestamp: Date.now()
+              }));
+            } catch (e) {}
+          }
+        }).catch(e => console.warn('Curriculum background fetch failed'));
+        
+        // Attendance (can be slower)
+        queryWithTimeout(
+          db.collection('studentAttendance').where('studentId', '==', String(myId)).get(),
+          8000
+        ).then(snap => {
+          if (snap && snap.docs) {
+            const attendanceData = snap.docs.map(d => ({
+              ...d.data(),
+              docId: d.id
+            })).sort((a, b) => b.date.localeCompare(a.date));
+            setStudentAttendance(attendanceData);
+            try {
+              localStorage.setItem(`attendance_${myId}`, JSON.stringify({
+                data: attendanceData,
+                timestamp: Date.now()
+              }));
+            } catch (e) {}
+          }
+        }).catch(e => console.warn('Attendance background fetch failed'));
+        
+        // Chapter progress (low priority)
+        queryWithTimeout(
+          db.collection('chapterProgress').get(),
+          8000
+        ).then(snap => {
+          if (snap && snap.docs) {
+            const progressMap = {};
+            snap.docs.forEach(d => { progressMap[d.id] = d.data(); });
+            setChapterProgress(progressMap);
+          }
+        }).catch(e => console.warn('Progress background fetch failed'));
+        
+        // Exam registrations (low priority)
+        queryWithTimeout(
+          db.collection('studentExamRegistrations').doc(myId).get(),
+          5000
+        ).then(snap => {
+          if (snap && snap.exists) setExamRegistrations(snap.data());
+        }).catch(e => console.warn('Exams background fetch failed'));
+        
       } catch (e) {
         console.error('Data fetch error:', e);
         setLoading(false);
@@ -10178,6 +10242,8 @@ function StudentDashboard({
     if (!myId) return;
     const loadProfile = async () => {
       const cacheKey = `studentProfile_${myId}`;
+      
+      // ✅ FIX: Load from cache FIRST (instant display)
       try {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
@@ -10192,8 +10258,16 @@ function StudentDashboard({
           }
         }
       } catch (e) {}
+      
+      // ✅ FIX: Fetch fresh data with timeout for slow connections
       try {
-        const docSnap = await db.collection('studentProfiles').doc(myId).get();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Profile fetch timeout')), 8000)
+        );
+        
+        const fetchPromise = db.collection('studentProfiles').doc(myId).get();
+        const docSnap = await Promise.race([fetchPromise, timeoutPromise]);
+        
         if (docSnap.exists) {
           const profileData = docSnap.data();
           setStudentProfile(prev => ({
@@ -10212,7 +10286,8 @@ function StudentDashboard({
           setProfileLoaded(true);
         }
       } catch (err) {
-        console.warn('Profile fetch error:', err.message);
+        // ✅ FIX: Even on error, mark as loaded so UI doesn't hang
+        console.warn('Profile fetch:', err.message);
         setProfileLoaded(true);
       }
     };
@@ -10226,28 +10301,33 @@ function StudentDashboard({
           ...d.data(),
           id: d.id
         })));
-        if (studentProfile?.lastFeedbackDate) {
-          const lastDate = new Date(studentProfile.lastFeedbackDate);
-          const now = new Date();
-          const diffMonths = (now.getFullYear() - lastDate.getFullYear()) * 12 + (now.getMonth() - lastDate.getMonth());
-          if (diffMonths >= 2) {
-            setTimeout(() => setShowFeedbackNotification(true), 2000);
-          }
-        } else {
-          setTimeout(() => setShowFeedbackNotification(true), 2000);
-        }
       } catch (error) {
         if (error.code === 'permission-denied') {
           console.warn('Teacher feedback access limited for this student');
-        } else {
-          console.error('Error fetching feedback data:', error);
         }
       }
     };
-    if (myId && studentProfile) {
+    if (myId) {
       fetchFeedbackData();
     }
-  }, [myId, studentProfile]);
+  }, [myId]);
+  
+  // ✅ FIX: Show feedback notification only once based on profile loaded
+  useEffect(() => {
+    if (!profileLoaded || !myId) return;
+    const lastFeedbackDate = studentProfile?.lastFeedbackDate;
+    if (lastFeedbackDate) {
+      const lastDate = new Date(lastFeedbackDate);
+      const now = new Date();
+      const diffMonths = (now.getFullYear() - lastDate.getFullYear()) * 12 + (now.getMonth() - lastDate.getMonth());
+      if (diffMonths >= 2) {
+        setTimeout(() => setShowFeedbackNotification(true), 2000);
+      }
+    } else {
+      setTimeout(() => setShowFeedbackNotification(true), 2000);
+    }
+  }, [profileLoaded, myId]);
+  
   const getTeacherAverageRating = teacherDocId => {
     const teacherFeedbackList = teacherFeedbacks.filter(f => f.teacherId === teacherDocId);
     if (teacherFeedbackList.length === 0) return null;
@@ -10273,13 +10353,19 @@ function StudentDashboard({
     fetchFeedbackData();
   };
   const profileCompletion = calculateCompletion();
-  console.log('=== STUDENT PROFILE DEBUG ===');
-  console.log('📊 Profile Completion:', profileCompletion + '%');
-  console.log('👤 Student Data:', studentProfile);
-  console.log('🔢 Student ID:', myId);
-  console.log('🏫 School:', mySchool);
-  console.log('📚 Grade:', myGrade);
-  console.log('============================');
+  
+  // ✅ FIX: Debug logging only once when profile loads (prevents console spam)
+  useEffect(() => {
+    if (profileLoaded && myId) {
+      console.log('=== STUDENT PROFILE DEBUG (once) ===');
+      console.log('📊 Profile Completion:', profileCompletion + '%');
+      console.log('🔢 Student ID:', myId);
+      console.log('🏫 School:', mySchool);
+      console.log('📚 Grade:', myGrade);
+      console.log('====================================');
+    }
+  }, [profileLoaded, myId]);
+  
   if (loading) {
     return React.createElement("div", {
       className: "text-center py-8"
