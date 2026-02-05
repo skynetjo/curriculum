@@ -32160,7 +32160,9 @@ function StudentFeedbackView({
     className: "text-sm opacity-90"
   }, "Avg Rating"), React.createElement("div", {
     className: "text-3xl font-bold"
-  }, "\u2B50 ", stats.avgRating)), React.createElement("div", {
+  }, "\u2B50 ", stats.avgRating, React.createElement("span", {
+    className: "text-lg ml-2 opacity-90"
+  }, "(", stats.avgRating > 0 ? ((stats.avgRating / 5) * 100).toFixed(0) : 0, "%)"))), React.createElement("div", {
     className: "stat-card bg-green-500 text-white"
   }, React.createElement("div", {
     className: "text-sm opacity-90"
