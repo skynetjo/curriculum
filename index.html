@@ -31996,12 +31996,12 @@ function StudentFeedbackView({
     return students.find(s => s.id === studentId) || {};
   };
   const getTeacherName = teacherId => {
-    const teacher = teachers.find(t => t.id === teacherId);
+    const teacher = teachers.find(t => t.id === teacherId || t.afid === teacherId || t.docId === teacherId);
     if (!teacher) return 'Unknown Teacher';
     return teacher.isArchived ? `${teacher.name} (Archived)` : teacher.name;
   };
   const getTeacherInfo = teacherId => {
-    return teachers.find(t => t.id === teacherId) || null;
+    return teachers.find(t => t.id === teacherId || t.afid === teacherId || t.docId === teacherId) || null;
   };
   const filteredFeedback = accessibleFeedback.filter(feedback => {
     const student = getStudentDetails(feedback.studentId);
