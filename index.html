@@ -32005,7 +32005,8 @@ function StudentFeedbackView({
   };
   const filteredFeedback = accessibleFeedback.filter(feedback => {
     const student = getStudentDetails(feedback.studentId);
-    const teacherName = getTeacherName(feedback.teacherId);
+    // Use stored teacherName if available, otherwise lookup
+    const teacherName = feedback.teacherName || getTeacherName(feedback.teacherId || feedback.teacherAfid);
     if (filterSchool !== 'All' && feedback.school !== filterSchool) return false;
     if (filterGrade !== 'All' && student.grade !== filterGrade) return false;
     if (filterTeacher !== 'All' && teacherName !== filterTeacher) return false;
@@ -32045,7 +32046,7 @@ function StudentFeedbackView({
     const allHeaders = [...baseColumns, ...questionColumns];
     const csvData = filteredFeedback.map(feedback => {
       const student = getStudentDetails(feedback.studentId);
-      const teacherName = getTeacherName(feedback.teacherId);
+      const teacherName = feedback.teacherName || getTeacherName(feedback.teacherId || feedback.teacherAfid);
       const responses = feedback.responses || {};
       const row = {};
       allHeaders.forEach(header => {
@@ -32306,7 +32307,7 @@ function StudentFeedbackView({
     className: "p-3 text-left"
   }, "Comments"))), React.createElement("tbody", null, filteredFeedback.map(feedback => {
     const student = getStudentDetails(feedback.studentId);
-    const teacherName = getTeacherName(feedback.teacherId);
+    const teacherName = feedback.teacherName || getTeacherName(feedback.teacherId || feedback.teacherAfid);
     const ratingBadge = getRatingBadge(feedback.rating);
     return React.createElement("tr", {
       key: feedback.id,
