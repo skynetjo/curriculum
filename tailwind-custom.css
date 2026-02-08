@@ -1,0 +1,67 @@
+/* ✅ Tailwind JIT-only classes - Custom CSS for classes not in pre-built Tailwind */
+/* These replace the Tailwind CDN JIT compiler for production */
+
+/* Arbitrary values */
+.h-\[46px\] { height: 46px; }
+.max-h-\[350px\] { max-height: 350px; }
+.max-h-\[600px\] { max-height: 600px; }
+.max-h-\[90vh\] { max-height: 90vh; }
+.max-h-\[95vh\] { max-height: 95vh; }
+.min-h-\[80px\] { min-height: 80px; }
+.min-h-\[100px\] { min-height: 100px; }
+.min-h-\[120px\] { min-height: 120px; }
+.min-h-\[400px\] { min-height: 400px; }
+.min-w-\[80px\] { min-width: 80px; }
+.min-w-\[90px\] { min-width: 90px; }
+.z-\[9999\] { z-index: 9999; }
+.z-\[10000\] { z-index: 10000; }
+
+/* Opacity modifiers */
+.bg-black\/50 { background-color: rgba(0, 0, 0, 0.5); }
+.bg-white\/20 { background-color: rgba(255, 255, 255, 0.2); }
+.bg-white\/30 { background-color: rgba(255, 255, 255, 0.3); }
+.bg-red-50\/50 { background-color: rgba(254, 242, 242, 0.5); }
+.bg-yellow-500\/20 { background-color: rgba(234, 179, 8, 0.2); }
+.border-white\/30 { border-color: rgba(255, 255, 255, 0.3); }
+.text-white\/80 { color: rgba(255, 255, 255, 0.8); }
+.hover\:bg-white\/20:hover { background-color: rgba(255, 255, 255, 0.2); }
+.hover\:bg-white\/30:hover { background-color: rgba(255, 255, 255, 0.3); }
+.hover\:bg-red-100\/50:hover { background-color: rgba(254, 226, 226, 0.5); }
+
+/* Scale transforms */
+.hover\:scale-\[1\.02\]:hover { transform: scale(1.02); }
+.active\:scale-\[0\.98\]:active { transform: scale(0.98); }
+.hover\:scale-105:hover { transform: scale(1.05); }
+.active\:scale-95:active { transform: scale(0.95); }
+
+/* Gradient text */
+.bg-clip-text { -webkit-background-clip: text; background-clip: text; }
+.text-transparent { color: transparent; }
+
+/* File input hover */
+.hover\:file\:bg-yellow-100:hover::file-selector-button { background-color: #fef9c3; }
+
+/* Focus-within */
+.focus-within\:bg-white:focus-within { background-color: white; }
+.focus-within\:border-purple-400:focus-within { border-color: #c084fc; }
+
+/* Accent color */
+.accent-red-500 { accent-color: #ef4444; }
+
+/* Line clamp */
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Scroll behavior */
+.scroll-smooth { scroll-behavior: smooth; }
+.scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+
+/* Backdrop blur */
+.backdrop-blur-sm { backdrop-filter: blur(4px); }
+.backdrop-blur { backdrop-filter: blur(8px); }
+
+/* Top positioning */
+.top-1\/2 { top: 50%; }
+.-translate-y-1\/2 { transform: translateY(-50%); }
