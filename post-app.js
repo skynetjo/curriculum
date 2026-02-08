@@ -1,4 +1,4 @@
-  // ========================================
+// ========================================
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
@@ -372,7 +372,7 @@
   };
 
 })();
-</script>
+// (script boundary removed)
 
 // ============================================
 // NOTIFICATION MANAGER - Global App Notifications
@@ -1679,7 +1679,7 @@ const NotificationManager = {
                     <span>${this.timeAgo(time)}</span>
                 </div>
                 
-                <!-- Reply Input -->
+// Reply Input
                 <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #2a2a3a;">
                     <div style="display: flex; gap: 8px; align-items: flex-end;">
                         <textarea 
@@ -1838,9 +1838,9 @@ if (typeof requestIdleCallback !== 'undefined') {
 } else {
     setTimeout(() => NotificationManager.init(), 2000);
 }
-</script>
+// (script boundary removed)
 
-<!-- PWA Sync Handler - Handles data sync when back online -->
+// PWA Sync Handler - Handles data sync when back online
 // Listen for sync events from PWA Manager
 window.addEventListener('syncAttendance', async (event) => {
   const data = event.detail;
