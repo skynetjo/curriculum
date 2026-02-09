@@ -8,14 +8,14 @@
   <!-- ✅ VERSION 5.1.0 - PERFORMANCE OPTIMIZED - STUDENT FIX (Firebase permissions + Chart.js + Performance) -->
   <script>
     window.__PERF_START = performance.now();
-    console.log('🚀 Curriculum Tracker v5.1.1 - Student Dashboard Fixed');
+    console.log('🚀 Curriculum Tracker v5.1.2 - Student Dashboard Fixed');
   </script>
   
   <!-- ✅ AUTOMATIC CACHE CLEAR - Teachers don't need to do anything -->
   <!-- When version changes, this clears ALL caches and force-reloads ONCE -->
   <script>
     (function() {
-      var APP_VERSION = '5.1.1';
+      var APP_VERSION = '5.1.2';
       var storedVersion = localStorage.getItem('appCacheVersion');
       
       // If version changed, nuke everything and reload
@@ -94,8 +94,8 @@
   <!-- ✅ PERFORMANCE: Preload critical scripts for faster download -->
   <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" as="script">
   <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script">
-  <link rel="preload" href="/app.js?v=5.1.1" as="script">
-  <link rel="preload" href="/init.js?v=5.1.1" as="script">
+  <link rel="preload" href="/app.js?v=5.1.2" as="script">
+  <link rel="preload" href="/init.js?v=5.1.2" as="script">
   
   <!-- ✅ APP SHELL ARCHITECTURE: Critical CSS inline for INSTANT UI display -->
   <!-- This CSS loads the entire UI structure before any JavaScript runs -->
@@ -1349,10 +1349,10 @@
   <!-- ✅ PERFORMANCE: Defer FontAwesome - not critical for initial render -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" media="print" onload="this.media='all'" />
 
-  <!-- ✅ PERFORMANCE v5.1.1: All scripts moved to defer for parallel download -->
+  <!-- ✅ PERFORMANCE v5.1.2: All scripts moved to defer for parallel download -->
   <!-- Firebase, React, Tailwind, and app code load after HTML parsing -->
   <!-- CSS preload for Tailwind -->
-  <link rel="stylesheet" href="/tailwind-custom.css?v=5.1.1">
+  <link rel="stylesheet" href="/tailwind-custom.css?v=5.1.2">
   
   <!-- ✅ FIX: Tailwind fallback CSS - ensures app works even if CDN fails -->
   <!-- Critical for teachers in JNVs 30-40km from cities with poor signals -->
@@ -4026,7 +4026,7 @@ body.has-install-banner .sidebar {
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 
-  <script defer src="/init.js?v=5.1.1"></script>
+  <script defer src="/init.js?v=5.1.2"></script>
 
 </head>
 <body>
@@ -4301,7 +4301,7 @@ body.has-install-banner .sidebar {
   <!-- Chart config moved to init.js -->
   <!-- ✅ PERFORMANCE: Main app code loaded as deferred external script -->
   <!-- Downloads in parallel with HTML parsing, executes after DOM ready -->
-  <script defer src="/app.js?v=5.1.1"></script>
+  <script defer src="/app.js?v=5.1.2"></script>
   <!-- PWA management moved to post-app.js -->
   <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -4350,7 +4350,7 @@ body.has-install-banner .sidebar {
   <div>Saving…</div>
 </div>
 
-  <script defer src="/post-app.js?v=5.1.1"></script>
+  <script defer src="/post-app.js?v=5.1.2"></script>
 <script src="avanti-widget.js" onerror="console.warn('⚠️ avanti-widget.js failed to load - chatbot disabled')"></script>
 
 
@@ -4774,41 +4774,6 @@ console.log('[PWA] Sync handlers registered');
 </script>
 <!-- Add before closing </body> tag -->
 <script src="/pwa-manager.js"></script>
-<!-- PWA Install Prompt -->
-<script>
-let deferredPrompt;
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  
-  // Show install button
-  const installBtn = document.getElementById('pwa-install-btn');
-  if (installBtn) installBtn.style.display = 'flex';
-  
-  console.log('[PWA] Install prompt ready');
-});
-
-// Install function
-window.installPWA = async function() {
-  if (!deferredPrompt) {
-    alert('App is already installed or not available for installation');
-    return;
-  }
-  
-  deferredPrompt.prompt();
-  const { outcome } = await deferredPrompt.userChoice;
-  console.log('[PWA] Install outcome:', outcome);
-  deferredPrompt = null;
-  
-  const installBtn = document.getElementById('pwa-install-btn');
-  if (installBtn) installBtn.style.display = 'none';
-};
-
-window.addEventListener('appinstalled', () => {
-  console.log('[PWA] App installed!');
-  deferredPrompt = null;
-});
-</script>
+<!-- PWA Install Prompt moved to post-app.js -->
 </body>
 </html>
