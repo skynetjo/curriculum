@@ -8,51 +8,76 @@
   <!-- ✅ VERSION 5.1.0 - PERFORMANCE OPTIMIZED - STUDENT FIX (Firebase permissions + Chart.js + Performance) -->
   <script>
     window.__PERF_START = performance.now();
-    console.log('🚀 Curriculum Tracker v5.1.0 - Student Dashboard Fixed');
+    console.log('🚀 Curriculum Tracker v5.1.1 - Student Dashboard Fixed');
   </script>
   
-  <!-- ✅ CRITICAL: Clear old buggy service worker caches IMMEDIATELY -->
-  <!-- This runs before anything else to fix CORS issues -->
+  <!-- ✅ AUTOMATIC CACHE CLEAR - Teachers don't need to do anything -->
+  <!-- When version changes, this clears ALL caches and force-reloads ONCE -->
   <script>
     (function() {
-      var SW_VERSION = '5.1.0';
-      var storedVersion = localStorage.getItem('swVersion');
+      var APP_VERSION = '5.1.1';
+      var storedVersion = localStorage.getItem('appCacheVersion');
       
-      // If version mismatch, clear everything
-      if (storedVersion !== SW_VERSION) {
-        console.log('[Boot] Clearing old service worker caches...');
+      // If version changed, nuke everything and reload
+      if (storedVersion !== APP_VERSION) {
+        console.log('[AutoUpdate] Version changed: ' + (storedVersion || 'none') + ' → ' + APP_VERSION);
         
-        // Clear all caches
+        // 1. Clear all Service Worker caches
         if ('caches' in window) {
           caches.keys().then(function(names) {
             names.forEach(function(name) {
               caches.delete(name);
-              console.log('[Boot] Deleted cache:', name);
+              console.log('[AutoUpdate] Deleted cache:', name);
             });
           });
         }
         
-        // Unregister all service workers
+        // 2. Unregister all service workers
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.getRegistrations().then(function(registrations) {
             registrations.forEach(function(registration) {
               registration.unregister();
-              console.log('[Boot] Unregistered service worker');
+              console.log('[AutoUpdate] Unregistered service worker');
             });
           });
         }
         
-        // Store new version
-        localStorage.setItem('swVersion', SW_VERSION);
+        // 3. Preserve critical user data
+        var preserve = {
+          studentSession: localStorage.getItem('studentSession'),
+          authToken: localStorage.getItem('authToken'),
+          avanti_device_id: localStorage.getItem('avanti_device_id'),
+          darkMode: localStorage.getItem('darkMode')
+        };
         
-        // Reload after clearing (only once)
-        if (!sessionStorage.getItem('swCleared')) {
-          sessionStorage.setItem('swCleared', 'true');
-          setTimeout(function() {
-            window.location.reload(true);
-          }, 100);
+        // 4. Clear ALL localStorage (removes old cached data)
+        localStorage.clear();
+        
+        // 5. Restore preserved data
+        if (preserve.studentSession) localStorage.setItem('studentSession', preserve.studentSession);
+        if (preserve.authToken) localStorage.setItem('authToken', preserve.authToken);
+        if (preserve.avanti_device_id) localStorage.setItem('avanti_device_id', preserve.avanti_device_id);
+        if (preserve.darkMode) localStorage.setItem('darkMode', preserve.darkMode);
+        
+        // 6. Store new version BEFORE reload
+        localStorage.setItem('appCacheVersion', APP_VERSION);
+        
+        // 7. Force reload ONCE (sessionStorage prevents loop)
+        if (!sessionStorage.getItem('autoUpdated')) {
+          sessionStorage.setItem('autoUpdated', 'true');
+          console.log('[AutoUpdate] Reloading with clean cache...');
+          // Add cache-bust parameter to force fresh download of ALL files
+          var url = window.location.pathname + '?v=' + APP_VERSION + '.' + Date.now();
+          window.location.replace(url);
+          return; // Stop executing - page will reload
         }
       }
+      
+      // Store version for future checks
+      if (!storedVersion) localStorage.setItem('appCacheVersion', APP_VERSION);
+      
+      // Make version available globally
+      window.APP_VERSION = APP_VERSION;
     })();
   </script>
   
@@ -69,8 +94,8 @@
   <!-- ✅ PERFORMANCE: Preload critical scripts for faster download -->
   <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" as="script">
   <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script">
-  <link rel="preload" href="/app.js" as="script">
-  <link rel="preload" href="/init.js" as="script">
+  <link rel="preload" href="/app.js?v=5.1.1" as="script">
+  <link rel="preload" href="/init.js?v=5.1.1" as="script">
   
   <!-- ✅ APP SHELL ARCHITECTURE: Critical CSS inline for INSTANT UI display -->
   <!-- This CSS loads the entire UI structure before any JavaScript runs -->
@@ -1324,10 +1349,10 @@
   <!-- ✅ PERFORMANCE: Defer FontAwesome - not critical for initial render -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" media="print" onload="this.media='all'" />
 
-  <!-- ✅ PERFORMANCE v5.1.0: All scripts moved to defer for parallel download -->
+  <!-- ✅ PERFORMANCE v5.1.1: All scripts moved to defer for parallel download -->
   <!-- Firebase, React, Tailwind, and app code load after HTML parsing -->
   <!-- CSS preload for Tailwind -->
-  <link rel="stylesheet" href="/tailwind-custom.css">
+  <link rel="stylesheet" href="/tailwind-custom.css?v=5.1.1">
   
   <!-- ✅ FIX: Tailwind fallback CSS - ensures app works even if CDN fails -->
   <!-- Critical for teachers in JNVs 30-40km from cities with poor signals -->
@@ -4001,7 +4026,7 @@ body.has-install-banner .sidebar {
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 
-  <script defer src="/init.js"></script>
+  <script defer src="/init.js?v=5.1.1"></script>
 
 </head>
 <body>
@@ -4276,7 +4301,7 @@ body.has-install-banner .sidebar {
   <!-- Chart config moved to init.js -->
   <!-- ✅ PERFORMANCE: Main app code loaded as deferred external script -->
   <!-- Downloads in parallel with HTML parsing, executes after DOM ready -->
-  <script defer src="/app.js"></script>
+  <script defer src="/app.js?v=5.1.1"></script>
   <!-- PWA management moved to post-app.js -->
   <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -4325,7 +4350,7 @@ body.has-install-banner .sidebar {
   <div>Saving…</div>
 </div>
 
-  <script defer src="/post-app.js"></script>
+  <script defer src="/post-app.js?v=5.1.1"></script>
 <script src="avanti-widget.js" onerror="console.warn('⚠️ avanti-widget.js failed to load - chatbot disabled')"></script>
 
 
