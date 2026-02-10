@@ -1706,14 +1706,14 @@ function TeacherProfileView({
         ${observation.strengths ? `
           <div style="margin-top: 20px; background: #ECFDF5; padding: 15px; border-radius: 8px;">
             <h4 style="color: #059669; margin: 0 0 10px;">✅ Strengths Observed</h4>
-            <p style="margin: 0; font-size: 13px;">${observation.strengths}</p>
+            <p style="margin: 0; font-size: 13px; white-space: pre-line;">${observation.strengths}</p>
           </div>
         ` : ''}
 
         ${observation.improvements ? `
           <div style="margin-top: 15px; background: #FEF3C7; padding: 15px; border-radius: 8px;">
             <h4 style="color: #D97706; margin: 0 0 10px;">💡 Points of Improvement</h4>
-            <p style="margin: 0; font-size: 13px;">${observation.improvements}</p>
+            <p style="margin: 0; font-size: 13px; white-space: pre-line;">${observation.improvements}</p>
           </div>
         ` : ''}
 
@@ -1929,13 +1929,13 @@ function TeacherProfileView({
   }, React.createElement("h4", {
     className: "font-bold text-green-700 mb-2"
   }, "\u2705 Strengths"), React.createElement("p", {
-    className: "text-sm"
+    className: "text-sm", style: { whiteSpace: "pre-line" }
   }, selectedObservation.strengths)), selectedObservation.improvements && React.createElement("div", {
     className: "bg-yellow-50 p-4 rounded-xl mb-3"
   }, React.createElement("h4", {
     className: "font-bold text-yellow-700 mb-2"
   }, "\uD83D\uDCA1 Improvements"), React.createElement("p", {
-    className: "text-sm"
+    className: "text-sm", style: { whiteSpace: "pre-line" }
   }, selectedObservation.improvements)), React.createElement("div", {
     className: "text-sm text-gray-500 mt-4"
   }, "Observer: ", selectedObservation.observerName, " (", selectedObservation.observerPosition, ") | Submitted: ", new Date(selectedObservation.submittedAt).toLocaleString('en-IN'))))));
@@ -8285,6 +8285,10 @@ function App() {
     }
   }, [loading]);
   useEffect(() => {
+    // ✅ FIX: Skip admin/teacher data fetching for students
+    // Students have their own data fetching in StudentDashboard component
+    // SmartSync fetches ALL attendance which students don't have permission for
+    if (!currentUser || currentUser.userType === 'student') return;
     const loadCachedData = () => {
       try {
         const cached = localStorage.getItem('cachedAppData');
@@ -28914,13 +28918,13 @@ function TeacherSelfProfile({
   }, React.createElement("h4", {
     className: "font-bold text-green-700 mb-2"
   }, "\u2705 Strengths"), React.createElement("p", {
-    className: "text-sm"
+    className: "text-sm", style: { whiteSpace: "pre-line" }
   }, selectedObservation.strengths)), selectedObservation.improvements && React.createElement("div", {
     className: "bg-yellow-50 p-4 rounded-xl mb-3"
   }, React.createElement("h4", {
     className: "font-bold text-yellow-700 mb-2"
   }, "\uD83D\uDCA1 Improvements"), React.createElement("p", {
-    className: "text-sm"
+    className: "text-sm", style: { whiteSpace: "pre-line" }
   }, selectedObservation.improvements)), React.createElement("div", {
     className: "text-sm text-gray-500 mt-4"
   }, "Observer: ", selectedObservation.observerName, " (", selectedObservation.observerPosition, ") | Submitted: ", new Date(selectedObservation.submittedAt).toLocaleString('en-IN'))))));
@@ -29043,14 +29047,14 @@ function AdminClassroomObservations({
         ${observation.strengths ? `
           <div style="margin-top: 20px; background: #ECFDF5; padding: 15px; border-radius: 8px;">
             <h4 style="color: #059669; margin: 0 0 10px;">✅ Strengths Observed</h4>
-            <p style="margin: 0; font-size: 13px;">${observation.strengths}</p>
+            <p style="margin: 0; font-size: 13px; white-space: pre-line;">${observation.strengths}</p>
           </div>
         ` : ''}
 
         ${observation.improvements ? `
           <div style="margin-top: 15px; background: #FEF3C7; padding: 15px; border-radius: 8px;">
             <h4 style="color: #D97706; margin: 0 0 10px;">💡 Points of Improvement</h4>
-            <p style="margin: 0; font-size: 13px;">${observation.improvements}</p>
+            <p style="margin: 0; font-size: 13px; white-space: pre-line;">${observation.improvements}</p>
           </div>
         ` : ''}
 
