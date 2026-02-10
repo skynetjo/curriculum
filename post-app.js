@@ -2,7 +2,7 @@
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '5.1.2'; // ✅ PERFORMANCE FIX + NOTIFICATION FIX
+  const CURRENT_VERSION = '5.1.3'; // ✅ PERFORMANCE FIX + NOTIFICATION FIX
 
   // ✅ PERFORMANCE FIX: Check for updates less frequently (once per session)
   // This saves bandwidth for teachers in low-connectivity areas
