@@ -20019,7 +20019,14 @@ function TeacherAttendanceView({
   const [localSubmittedAttendance, setLocalSubmittedAttendance] = useState([]);
   const [gpsVerified, setGpsVerified] = useState(false);
   const today = new Date();
-  const maxDate = getTodayDate();
+  const maxDate = useMemo(() => {
+    if (status === 'On Leave') {
+      const d = new Date();
+      d.setDate(d.getDate() + 10);
+      return d.toISOString().split('T')[0];
+    }
+    return getTodayDate();
+  }, [status]);
   const minDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() - 2);
@@ -20344,7 +20351,7 @@ function TeacherAttendanceView({
     className: "w-full border-2 px-4 py-3 rounded-xl"
   }), React.createElement("p", {
     className: "text-xs text-gray-500 mt-1"
-  }, "\uD83D\uDCC5 You can mark attendance for today and previous 2 days only")), isDateRange && status === 'On Leave' && React.createElement("div", null, React.createElement("label", {
+  }, status === 'On Leave' ? "\uD83D\uDCC5 Leave: up to 10 days ahead & 2 days back" : "\uD83D\uDCC5 Attendance: today and previous 2 days only")), isDateRange && status === 'On Leave' && React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-2"
   }, "End Date"), React.createElement("input", {
     type: "date",
@@ -27519,6 +27526,22 @@ function StudentFeedbackView({
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+  const deleteFeedback = async (feedbackId, studentName) => {
+    if (!isSuperAdmin) return;
+    if (!confirm(`Are you sure you want to delete feedback from "${studentName || 'Unknown'}"?\n\nThis action cannot be undone.`)) return;
+    try {
+      setDeletingId(feedbackId);
+      await db.collection('teacherFeedback').doc(feedbackId).delete();
+      setFeedbackList(prev => prev.filter(f => f.id !== feedbackId));
+      console.log('[Feedback] ✅ Deleted:', feedbackId);
+    } catch (error) {
+      console.error('Error deleting feedback:', error);
+      alert('Failed to delete feedback: ' + error.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
   const getCategoryFromRating = rating => {
     if (rating == null) return null;
     if (rating >= 5) return 'Excellent';
@@ -27961,7 +27984,9 @@ function StudentFeedbackView({
     className: "p-3 text-left"
   }, "Pace"), React.createElement("th", {
     className: "p-3 text-left"
-  }, "Comments"))), React.createElement("tbody", null, filteredFeedback.map(feedback => {
+  }, "Comments"), isSuperAdmin && React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Action"))), React.createElement("tbody", null, filteredFeedback.map(feedback => {
     const student = getStudentDetails(feedback.studentId);
     const teacherName = feedback.teacherName || getTeacherName(feedback.teacherId || feedback.teacherAfid);
     const ratingBadge = getRatingBadge(feedback.rating);
@@ -28007,7 +28032,14 @@ function StudentFeedbackView({
     }, React.createElement("div", {
       className: "max-w-xs truncate",
       title: feedback.comments
-    }, feedback.comments || '-')));
+    }, feedback.comments || '-')), isSuperAdmin && React.createElement("td", {
+      className: "p-3"
+    }, React.createElement("button", {
+      onClick: () => deleteFeedback(feedback.id, student.name || feedback.studentName),
+      disabled: deletingId === feedback.id,
+      className: "px-3 py-1 bg-red-500 text-white rounded-lg text-xs font-semibold hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed",
+      title: "Delete this feedback"
+    }, deletingId === feedback.id ? '⏳' : '🗑️ Delete')));
   }))))));
 }
 function TeacherSelfProfile({
