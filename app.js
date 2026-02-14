@@ -2732,9 +2732,9 @@ function TeacherFeedbackForm({
     className: "px-6 py-3 avanti-gradient text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
   }, "Next \u2192") : React.createElement("button", {
     onClick: handleSubmit,
-    disabled: !canProceed(),
+    disabled: !canProceed() || isSubmitting,
     className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-  }, "\u2713 Submit Feedback"))))));
+  }, isSubmitting ? '⏳ Submitting...' : "\u2713 Submit Feedback"))))));
 }
 function FeedbackNotification({
   onClose,
@@ -27542,6 +27542,64 @@ function StudentFeedbackView({
       setDeletingId(null);
     }
   };
+  const [cleaningDuplicates, setCleaningDuplicates] = useState(false);
+  const [duplicateCount, setDuplicateCount] = useState(0);
+  const findDuplicates = (list) => {
+    const seen = {};
+    const duplicateIds = [];
+    const sorted = [...list].sort((a, b) => a.submittedAt - b.submittedAt);
+    sorted.forEach(f => {
+      const dateStr = f.submittedAt ? f.submittedAt.toLocaleDateString('en-IN') : '';
+      const key = `${f.studentId || f.studentName || ''}_${f.teacherId || f.teacherAfid || f.teacherName || ''}_${f.subject || ''}_${dateStr}`;
+      if (seen[key]) {
+        duplicateIds.push(f.id);
+      } else {
+        seen[key] = f.id;
+      }
+    });
+    return duplicateIds;
+  };
+  useEffect(() => {
+    const dupes = findDuplicates(feedbackList);
+    setDuplicateCount(dupes.length);
+  }, [feedbackList]);
+  const cleanDuplicates = async () => {
+    if (!isSuperAdmin) return;
+    const dupeIds = findDuplicates(feedbackList);
+    if (dupeIds.length === 0) {
+      alert('No duplicates found!');
+      return;
+    }
+    if (!confirm(`Found ${dupeIds.length} duplicate feedback entries.\n\nThis will keep the first entry for each student-teacher-subject-date combination and permanently delete the rest.\n\nProceed?`)) return;
+    setCleaningDuplicates(true);
+    try {
+      let batch = db.batch();
+      let batchCount = 0;
+      let totalDeleted = 0;
+      for (const id of dupeIds) {
+        batch.delete(db.collection('teacherFeedback').doc(id));
+        batchCount++;
+        if (batchCount === 500) {
+          await batch.commit();
+          totalDeleted += batchCount;
+          batch = db.batch();
+          batchCount = 0;
+        }
+      }
+      if (batchCount > 0) {
+        await batch.commit();
+        totalDeleted += batchCount;
+      }
+      setFeedbackList(prev => prev.filter(f => !dupeIds.includes(f.id)));
+      alert(`✅ Cleaned ${totalDeleted} duplicate entries successfully!`);
+      console.log('[Feedback] ✅ Removed', totalDeleted, 'duplicates');
+    } catch (error) {
+      console.error('Error cleaning duplicates:', error);
+      alert('Failed to clean duplicates: ' + error.message);
+    } finally {
+      setCleaningDuplicates(false);
+    }
+  };
   const getCategoryFromRating = rating => {
     if (rating == null) return null;
     if (rating >= 5) return 'Excellent';
@@ -27822,11 +27880,17 @@ function StudentFeedbackView({
     className: "flex flex-wrap items-center justify-between gap-4"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
-  }, "\uD83D\uDCAC Student Feedback"), React.createElement("button", {
+  }, "\uD83D\uDCAC Student Feedback"), React.createElement("div", {
+    className: "flex flex-wrap gap-3"
+  }, isSuperAdmin && duplicateCount > 0 && React.createElement("button", {
+    onClick: cleanDuplicates,
+    disabled: cleaningDuplicates,
+    className: "px-6 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+  }, cleaningDuplicates ? '⏳ Cleaning...' : `🧹 Clean ${duplicateCount} Duplicates`), React.createElement("button", {
     onClick: exportToCSV,
     disabled: filteredFeedback.length === 0,
     className: "px-6 py-3 avanti-gradient text-white rounded-xl font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-  }, "\uD83D\uDCE5 Export to CSV")), React.createElement("div", {
+  }, "\uD83D\uDCE5 Export to CSV"))), React.createElement("div", {
     className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
   }, React.createElement("div", {
     className: "stat-card bg-blue-500 text-white"
