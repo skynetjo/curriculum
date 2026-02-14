@@ -27550,7 +27550,8 @@ function StudentFeedbackView({
     const sorted = [...list].sort((a, b) => a.submittedAt - b.submittedAt);
     sorted.forEach(f => {
       const dateStr = f.submittedAt ? f.submittedAt.toLocaleDateString('en-IN') : '';
-      const key = `${f.studentId || f.studentName || ''}_${f.teacherId || f.teacherAfid || f.teacherName || ''}_${f.subject || ''}_${dateStr}`;
+      const timeStr = f.submittedAt ? f.submittedAt.toLocaleTimeString('en-IN') : '';
+      const key = `${f.studentId || f.studentName || ''}_${f.teacherId || f.teacherAfid || f.teacherName || ''}_${f.subject || ''}_${dateStr}_${timeStr}`;
       if (seen[key]) {
         duplicateIds.push(f.id);
       } else {
@@ -27570,7 +27571,7 @@ function StudentFeedbackView({
       alert('No duplicates found!');
       return;
     }
-    if (!confirm(`Found ${dupeIds.length} duplicate feedback entries.\n\nThis will keep the first entry for each student-teacher-subject-date combination and permanently delete the rest.\n\nProceed?`)) return;
+    if (!confirm(`Found ${dupeIds.length} duplicate feedback entries (same student, teacher, subject, date & time).\n\nThis will keep 1 entry per exact timestamp and permanently delete the rest.\n\nProceed?`)) return;
     setCleaningDuplicates(true);
     try {
       let batch = db.batch();
