@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
   
-  <!-- ✅ VERSION 5.1.0 - PERFORMANCE OPTIMIZED - STUDENT FIX (Firebase permissions + Chart.js + Performance) -->
+  <!-- ✅ VERSION 5.2.0 - PERFORMANCE: Removed Tailwind CDN, Fixed CLS, Optimized LCP -->
   <script>
     window.__PERF_START = performance.now();
-    console.log('🚀 Curriculum Tracker v5.1.7 - Student Dashboard Fixed');
+    console.log('🚀 Curriculum Tracker v5.2.0 - Performance Optimized: CLS + LCP + INP');
   </script>
   
   <!-- ✅ AUTOMATIC CACHE CLEAR - Teachers don't need to do anything -->
   <!-- When version changes, this clears ALL caches and force-reloads ONCE -->
   <script>
     (function() {
-      var APP_VERSION = '5.1.7';
+      var APP_VERSION = '5.2.0';
       var storedVersion = localStorage.getItem('appCacheVersion');
       
       // If version changed, nuke everything and reload
@@ -84,7 +84,7 @@
   <!-- ✅ PERFORMANCE: Resource hints for faster connections -->
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://unpkg.com" crossorigin>
-  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+  <!-- REMOVED: Tailwind CDN preconnect - using tailwind-static.css instead -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
@@ -94,8 +94,9 @@
   <!-- ✅ PERFORMANCE: Preload critical scripts for faster download -->
   <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" as="script">
   <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script">
-  <link rel="preload" href="/app.js?v=5.1.7" as="script">
-  <link rel="preload" href="/init.js?v=5.1.7" as="script">
+  <link rel="preload" href="/tailwind-static.css?v=5.2.0" as="style">
+  <link rel="preload" href="/app.js?v=5.2.0" as="script">
+  <link rel="preload" href="/init.js?v=5.2.0" as="script">
   
   <!-- ✅ APP SHELL ARCHITECTURE: Critical CSS inline for INSTANT UI display -->
   <!-- This CSS loads the entire UI structure before any JavaScript runs -->
@@ -188,18 +189,26 @@
       min-height: 100vh;
     }
     
-    /* App Shell Container - shows immediately */
+    /* App Shell Container - shows immediately as overlay */
     .app-shell {
       display: flex;
       min-height: 100vh;
       opacity: 1;
       transition: opacity 0.3s ease;
-      /* ✅ PERFORMANCE: Isolate layout/paint for better performance */
+      /* ✅ CLS FIX: Position as fixed overlay — hiding won't shift layout */
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9999;
       contain: layout style;
     }
     
     .app-shell.hidden {
-      display: none;
+      opacity: 0;
+      pointer-events: none;
+      visibility: hidden;
     }
     
     /* Sidebar Shell */
@@ -1349,10 +1358,10 @@
   <!-- ✅ PERFORMANCE: Defer FontAwesome - not critical for initial render -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" media="print" onload="this.media='all'" />
 
-  <!-- ✅ PERFORMANCE v5.1.7: All scripts moved to defer for parallel download -->
+  <!-- ✅ PERFORMANCE v5.2.0: All scripts moved to defer for parallel download -->
   <!-- Firebase, React, Tailwind, and app code load after HTML parsing -->
   <!-- CSS preload for Tailwind -->
-  <link rel="stylesheet" href="/tailwind-custom.css?v=5.1.7">
+  <link rel="stylesheet" href="/tailwind-static.css?v=5.2.0">
   
   <!-- ✅ FIX: Tailwind fallback CSS - ensures app works even if CDN fails -->
   <!-- Critical for teachers in JNVs 30-40km from cities with poor signals -->
@@ -3998,23 +4007,9 @@ body.has-install-banner .sidebar {
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script defer src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script defer src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <!-- ✅ FIX: Tailwind loaded dynamically with fallback for low-connectivity areas -->
-  <!-- If CDN fails, fallback CSS below ensures app still looks correct -->
-  <script>
-    (function() {
-      var tw = document.createElement('script');
-      tw.src = 'https://cdn.tailwindcss.com';
-      tw.onerror = function() {
-        console.error('[Tailwind] Failed to load - fallback styles active');
-        window.tailwindFailed = true;
-      };
-      tw.onload = function() {
-        console.log('[Tailwind] Loaded successfully');
-        window.tailwindFailed = false;
-      };
-      document.head.appendChild(tw);
-    })();
-  </script>
+  <!-- ✅ PERFORMANCE FIX v5.2: Tailwind CDN REMOVED — saves 3MB+ download -->
+  <!-- Using pre-built tailwind-static.css instead (generated during Vercel build) -->
+  <!-- Inline fallback CSS above ensures styles work even offline -->
   <!-- Non-critical libraries - download in parallel, execute before app -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
@@ -4026,7 +4021,7 @@ body.has-install-banner .sidebar {
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 
-  <script defer src="/init.js?v=5.1.7"></script>
+  <script defer src="/init.js?v=5.2.0"></script>
 
 </head>
 <body>
@@ -4228,13 +4223,17 @@ body.has-install-banner .sidebar {
       console.log('⚡ App fully loaded in ' + loadTime + ' seconds');
     }
     
-    // Hide the App Shell with smooth transition
+    // ✅ CLS FIX: Hide with opacity transition (no layout shift!)
     const appShell = document.getElementById('app-shell');
     if (appShell) {
-      appShell.classList.add('react-ready');
-      appShell.style.display = 'none';
-      appShell.style.visibility = 'hidden';
-      console.log('✅ [App Shell] Hiding - React app is ready');
+      appShell.classList.add('hidden');
+      console.log('✅ [App Shell] Fading out - React app is ready');
+      // Remove from DOM after transition completes
+      setTimeout(() => {
+        if (appShell && appShell.parentNode) {
+          appShell.parentNode.removeChild(appShell);
+        }
+      }, 400);
     }
     
     // Also hide legacy loader if visible
@@ -4298,10 +4297,18 @@ body.has-install-banner .sidebar {
   window.updateShellWithCache();
   </script>
   
-  <!-- Chart config moved to init.js -->
+  <!-- ✅ INP FIX: Helpers to break up long tasks and keep UI responsive -->
+  <script>
+  window.yieldToMain = function() { return new Promise(function(r) { setTimeout(r, 0); }); };
+  window.scheduleIdle = function(fn) {
+    if ('requestIdleCallback' in window) requestIdleCallback(fn, { timeout: 2000 });
+    else setTimeout(fn, 100);
+  };
+  </script>
+
   <!-- ✅ PERFORMANCE: Main app code loaded as deferred external script -->
   <!-- Downloads in parallel with HTML parsing, executes after DOM ready -->
-  <script defer src="/app.js?v=5.1.7"></script>
+  <script defer src="/app.js?v=5.2.0"></script>
   <!-- PWA management moved to post-app.js -->
   <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -4350,7 +4357,7 @@ body.has-install-banner .sidebar {
   <div>Saving…</div>
 </div>
 
-  <script defer src="/post-app.js?v=5.1.7"></script>
+  <script defer src="/post-app.js?v=5.2.0"></script>
 <script src="avanti-widget.js" onerror="console.warn('⚠️ avanti-widget.js failed to load - chatbot disabled')"></script>
 
 
