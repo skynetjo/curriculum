@@ -1,0 +1,12 @@
+{
+  "name": "curriculum-tracker",
+  "version": "3.7.3",
+  "private": true,
+  "scripts": {
+    "build:css": "npx tailwindcss -i ./src/input.css -o ./public/tailwind-static.css --minify",
+    "build": "npm run build:css"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}
