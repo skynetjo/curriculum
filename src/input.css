@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .stat-card {
+    @apply p-4 rounded-xl shadow-lg text-center;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .chapter-card {
+    @apply bg-white p-4 rounded-xl shadow border;
+    min-height: 80px;
+  }
+  .avanti-gradient {
+    @apply bg-gradient-to-r from-yellow-500 via-yellow-600 to-red-600;
+  }
+}
