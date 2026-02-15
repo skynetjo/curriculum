@@ -1,4 +1,4 @@
-// ✅ INIT.JS v5.1.0 - Consolidated initialization
+// ✅ INIT.JS v5.3.1 - Fixed deprecation warnings
 // Firebase + Connection Manager + Offline Queue + Chart Config
 
 // ── Firebase Initialization ──────────────────────────────
@@ -24,13 +24,16 @@
         merge: true
       });
       
+      // ✅ FIX: Set _firestoreInitialized SYNCHRONOUSLY to prevent
+      // app.js from calling _enableOfflinePersistence (which would
+      // call db.settings() again and trigger "overriding host" warning)
+      window._firestoreInitialized = true;
+      
       db.enablePersistence({ synchronizeTabs: true })
         .then(() => {
           console.log('✅ Offline persistence enabled');
-          window._firestoreInitialized = true;
         })
         .catch((err) => {
-          window._firestoreInitialized = true;
           if (err.code === 'failed-precondition') {
             console.log('ℹ️ Persistence limited to one tab');
           } else if (err.code === 'unimplemented') {
@@ -50,7 +53,11 @@ window._enableOfflinePersistence = function(db) {
   if (window._firestoreInitialized) return;
   window._firestoreInitialized = true;
   try {
-    db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+    // ✅ FIX: Added merge: true to prevent "overriding host" warning
+    db.settings({ 
+      cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+      merge: true
+    });
     db.enablePersistence({ synchronizeTabs: true })
       .then(() => console.log('✅ Offline persistence enabled (fallback)'))
       .catch(() => {});
@@ -308,4 +315,4 @@ window.addEventListener('load', function() {
   }, 2000); // Wait 2s after page load
 });
 
-console.log('✅ Init.js loaded - performance enhanced');
+console.log('✅ Init.js v5.3.1 loaded - warnings fixed');
