@@ -9231,14 +9231,31 @@ function App() {
     return React.createElement("div", {
       className: "min-h-screen avanti-gradient flex items-center justify-center"
     }, React.createElement("div", {
-      className: "text-center"
+      style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }
     }, React.createElement("img", {
       src: AVANTI_LOGO,
       alt: "Avanti Fellows",
-      className: "w-20 h-20 mx-auto mb-4 animate-bounce"
+      style: { width: '60px', height: '60px', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }
     }), React.createElement("div", {
-      className: "text-white text-2xl font-bold"
-    }, "Loading...")));
+      style: { position: 'relative', width: '100px', height: '100px' }
+    }, React.createElement("svg", {
+      viewBox: "0 0 120 120",
+      style: { width: '100px', height: '100px', transform: 'rotate(-90deg)' }
+    }, React.createElement("circle", {
+      cx: "60", cy: "60", r: "54", fill: "none", stroke: "#F4B41A", strokeWidth: "10", opacity: "0.4"
+    }), React.createElement("circle", {
+      cx: "60", cy: "60", r: "54", fill: "none", stroke: "#8B1A1A", strokeWidth: "10", strokeLinecap: "round",
+      strokeDasharray: "339.292", strokeDashoffset: "135.717",
+      style: { filter: 'drop-shadow(0 0 6px rgba(139,26,26,0.4))', animation: 'react-cpl-pulse 2s ease-in-out infinite alternate' }
+    })), React.createElement("div", {
+      style: { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }
+    }, React.createElement("span", {
+      style: { fontSize: '20px', fontWeight: 800, color: 'white', textShadow: '0 2px 8px rgba(0,0,0,0.15)' }
+    }, "\u23F3"))), React.createElement("div", {
+      style: { color: 'white', fontSize: '18px', fontWeight: 700, textShadow: '0 2px 4px rgba(0,0,0,0.15)' }
+    }, "Loading Dashboard..."), React.createElement("div", {
+      style: { color: 'rgba(255,255,255,0.85)', fontSize: '12px', background: 'rgba(255,255,255,0.15)', padding: '5px 14px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.2)' }
+    }, "Fetching your school data"), React.createElement("style", null, "@keyframes react-cpl-pulse { 0% { stroke-dashoffset: 305.363; } 100% { stroke-dashoffset: 135.717; } }")));
   }
   if (show2FASetup && pending2FAUser) {
     return React.createElement("div", {
