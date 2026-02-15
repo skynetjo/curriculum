@@ -8384,7 +8384,7 @@ function App() {
           docs: []
         }) => {
           return Promise.race([promise, new Promise((_, reject) => setTimeout(() => {
-            console.warn('⏱️ Firebase query timeout after', ms, 'ms - will use cache');
+            console.log('⏱️ Firebase query timeout after', ms, 'ms - will use cache');
             reject(new Error('timeout'));
           }, ms))]).catch(e => {
             console.warn('Query failed:', e.message, '- checking cache fallback');
