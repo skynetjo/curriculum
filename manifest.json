@@ -30,14 +30,6 @@
       "url": "https://www.microsoft.com/store/apps/curriculumtracker"
     }
   ],
-  "scope_extensions": [
-    {
-      "origin": "https://avantifellows.org"
-    },
-    {
-      "origin": "https://curriculum-murex.vercel.app"
-    }
-  ],
   "launch_handler": {
     "client_mode": ["navigate-existing", "auto"]
   },
