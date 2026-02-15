@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
   
-  <!-- ✅ VERSION 5.2.0 - PERFORMANCE: Removed Tailwind CDN, Fixed CLS, Optimized LCP -->
+  <!-- ✅ VERSION 5.3.0 - Circular Progress Loader + UX Improvements -->
   <script>
     window.__PERF_START = performance.now();
-    console.log('🚀 Curriculum Tracker v5.2.0 - Performance Optimized: CLS + LCP + INP');
+    console.log('🚀 Curriculum Tracker v5.3.0 - Circular Progress Loader + UX');
   </script>
   
   <!-- ✅ AUTOMATIC CACHE CLEAR - Teachers don't need to do anything -->
   <!-- When version changes, this clears ALL caches and force-reloads ONCE -->
   <script>
     (function() {
-      var APP_VERSION = '5.2.0';
+      var APP_VERSION = '5.3.0';
       var storedVersion = localStorage.getItem('appCacheVersion');
       
       // If version changed, nuke everything and reload
@@ -94,9 +94,9 @@
   <!-- ✅ PERFORMANCE: Preload critical scripts for faster download -->
   <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" as="script">
   <link rel="preload" href="https://unpkg.com/react@18/umd/react.production.min.js" as="script">
-  <link rel="preload" href="/tailwind-static.css?v=5.2.0" as="style">
-  <link rel="preload" href="/app.js?v=5.2.0" as="script">
-  <link rel="preload" href="/init.js?v=5.2.0" as="script">
+  <link rel="preload" href="/tailwind-static.css?v=5.3.0" as="style">
+  <link rel="preload" href="/app.js?v=5.3.0" as="script">
+  <link rel="preload" href="/init.js?v=5.3.0" as="script">
   
   <!-- ✅ APP SHELL ARCHITECTURE: Critical CSS inline for INSTANT UI display -->
   <!-- This CSS loads the entire UI structure before any JavaScript runs -->
@@ -592,24 +592,80 @@
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.05); }
     }
-    .loader-dots {
-      display: flex;
-      gap: 8px;
-      margin-top: 30px;
+    /* ✅ Circular Progress Loader - Yellow track + Maroon fill */
+    .circular-progress-loader {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      filter: drop-shadow(0 8px 24px rgba(0,0,0,0.2));
+      margin-top: 24px;
     }
-    .loader-dot {
-      width: 12px;
-      height: 12px;
-      background: white;
-      border-radius: 50%;
-      animation: bounce 1.4s ease-in-out infinite;
+    .circular-progress-loader svg {
+      width: 120px;
+      height: 120px;
+      transform: rotate(-90deg);
     }
-    .loader-dot:nth-child(1) { animation-delay: 0s; }
-    .loader-dot:nth-child(2) { animation-delay: 0.2s; }
-    .loader-dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes bounce {
-      0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
-      40% { transform: scale(1); opacity: 1; }
+    .circular-progress-loader .cpl-track {
+      fill: none;
+      stroke: #F4B41A;
+      stroke-width: 10;
+      opacity: 0.4;
+    }
+    .circular-progress-loader .cpl-glow {
+      fill: none;
+      stroke: #C8342E;
+      stroke-width: 12;
+      stroke-linecap: round;
+      stroke-dasharray: 339.292;
+      stroke-dashoffset: 339.292;
+      opacity: 0.3;
+      filter: blur(3px);
+      transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .circular-progress-loader .cpl-fill {
+      fill: none;
+      stroke: #8B1A1A;
+      stroke-width: 10;
+      stroke-linecap: round;
+      stroke-dasharray: 339.292;
+      stroke-dashoffset: 339.292;
+      transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      filter: drop-shadow(0 0 6px rgba(139, 26, 26, 0.4));
+    }
+    .circular-progress-loader .cpl-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    .circular-progress-loader .cpl-number {
+      font-size: 28px;
+      font-weight: 800;
+      color: white;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      line-height: 1;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .circular-progress-loader .cpl-symbol {
+      font-size: 14px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.9);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .cpl-step-text {
+      color: rgba(255,255,255,0.9);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.2);
+      margin-top: 16px;
+      transition: opacity 0.3s ease;
     }
     
     /* ✅ NEW: Login button spinner animation */
@@ -1361,7 +1417,7 @@
   <!-- ✅ PERFORMANCE v5.2.0: All scripts moved to defer for parallel download -->
   <!-- Firebase, React, Tailwind, and app code load after HTML parsing -->
   <!-- CSS preload for Tailwind -->
-  <link rel="stylesheet" href="/tailwind-static.css?v=5.2.0">
+  <link rel="stylesheet" href="/tailwind-static.css?v=5.3.0">
   
   <!-- ✅ FIX: Tailwind fallback CSS - ensures app works even if CDN fails -->
   <!-- Critical for teachers in JNVs 30-40km from cities with poor signals -->
@@ -4021,7 +4077,7 @@ body.has-install-banner .sidebar {
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 
-  <script defer src="/init.js?v=5.2.0"></script>
+  <script defer src="/init.js?v=5.3.0"></script>
 
 </head>
 <body>
@@ -4182,11 +4238,18 @@ body.has-install-banner .sidebar {
     <div class="instant-loader-logo">📚</div>
     <div class="instant-loader-text">Curriculum Tracker</div>
     <div class="instant-loader-sub">Avanti Fellows</div>
-    <div class="loader-dots">
-      <div class="loader-dot"></div>
-      <div class="loader-dot"></div>
-      <div class="loader-dot"></div>
+    <!-- ✅ Circular Progress Loader with percentage -->
+    <div class="circular-progress-loader" id="cpl-loader">
+      <svg viewBox="0 0 120 120">
+        <circle class="cpl-track" cx="60" cy="60" r="54"></circle>
+        <circle class="cpl-glow" id="cpl-glow" cx="60" cy="60" r="54"></circle>
+        <circle class="cpl-fill" id="cpl-fill" cx="60" cy="60" r="54"></circle>
+      </svg>
+      <div class="cpl-center">
+        <span class="cpl-number" id="cpl-number">0</span><span class="cpl-symbol">%</span>
+      </div>
     </div>
+    <div class="cpl-step-text" id="cpl-step">Initializing...</div>
     <!-- ✅ NEW: Slow connection message for iOS/low connectivity -->
     <div class="loader-timeout-msg">
       Loading is taking longer than usual.<br/>
@@ -4196,6 +4259,62 @@ body.has-install-banner .sidebar {
     </div>
   </div>
   
+  <!-- ✅ Circular Progress Loader Engine -->
+  <script>
+  (function() {
+    var CPL_CIRCUMFERENCE = 2 * Math.PI * 54; // 339.292
+    
+    window.updateLoaderProgress = function(percent, stepText) {
+      var fill = document.getElementById('cpl-fill');
+      var glow = document.getElementById('cpl-glow');
+      var num = document.getElementById('cpl-number');
+      var step = document.getElementById('cpl-step');
+      
+      if (!fill || !num) return;
+      
+      var clamped = Math.min(100, Math.max(0, percent));
+      var offset = CPL_CIRCUMFERENCE - (clamped / 100) * CPL_CIRCUMFERENCE;
+      
+      fill.style.strokeDashoffset = offset;
+      if (glow) glow.style.strokeDashoffset = offset;
+      num.textContent = Math.round(clamped);
+      if (step && stepText) step.textContent = stepText;
+    };
+
+    // Auto-simulate progress while page loads
+    var autoProgress = 0;
+    var autoSteps = [
+      { at: 5,  text: '🔗 Connecting...' },
+      { at: 15, text: '📦 Loading Firebase...' },
+      { at: 30, text: '🔐 Setting up auth...' },
+      { at: 50, text: '⚛️ Loading interface...' },
+      { at: 70, text: '📊 Preparing app...' },
+    ];
+    
+    var autoInterval = setInterval(function() {
+      if (autoProgress >= 85) {
+        clearInterval(autoInterval);
+        return;
+      }
+      // Slows down as percentage increases - feels natural
+      var increment = autoProgress < 30 ? 2 : autoProgress < 60 ? 1.5 : 0.8;
+      autoProgress = Math.min(85, autoProgress + increment);
+      
+      var stepText = null;
+      for (var i = autoSteps.length - 1; i >= 0; i--) {
+        if (autoProgress >= autoSteps[i].at) {
+          stepText = autoSteps[i].text;
+          break;
+        }
+      }
+      
+      window.updateLoaderProgress(autoProgress, stepText);
+    }, 200);
+    
+    window._cplAutoInterval = autoInterval;
+  })();
+  </script>
+
   <div id="root"></div>
   <!-- PWA Network Status Indicator -->
 <div id="pwa-network-status" class="pwa-network-status online">
@@ -4213,6 +4332,9 @@ body.has-install-banner .sidebar {
   // ✅ APP SHELL ARCHITECTURE: Hide app shell once React app renders
   // This function is called when the React app is ready to show
   window.hideInstantLoader = function() {
+    // ✅ Clear auto-progress interval
+    if (window._cplAutoInterval) clearInterval(window._cplAutoInterval);
+    
     // ✅ iOS FIX: Clear timeout handlers
     if (window._loaderTimeoutId) clearTimeout(window._loaderTimeoutId);
     if (window._forceHideTimeout) clearTimeout(window._forceHideTimeout);
@@ -4223,30 +4345,38 @@ body.has-install-banner .sidebar {
       console.log('⚡ App fully loaded in ' + loadTime + ' seconds');
     }
     
-    // ✅ CLS FIX: Hide with opacity transition (no layout shift!)
-    const appShell = document.getElementById('app-shell');
-    if (appShell) {
-      appShell.classList.add('hidden');
-      console.log('✅ [App Shell] Fading out - React app is ready');
-      // Remove from DOM after transition completes
-      setTimeout(() => {
-        if (appShell && appShell.parentNode) {
-          appShell.parentNode.removeChild(appShell);
-        }
-      }, 400);
+    // ✅ Jump to 100% with "Ready!" before fading out
+    if (window.updateLoaderProgress) {
+      window.updateLoaderProgress(100, '✅ Ready!');
     }
     
-    // Also hide legacy loader if visible
-    const loader = document.getElementById('instant-loader');
-    if (loader) {
-      loader.style.transition = 'opacity 0.3s ease';
-      loader.style.opacity = '0';
-      setTimeout(() => {
-        if (loader && loader.parentNode) {
-          loader.parentNode.removeChild(loader);
-        }
-      }, 300);
-    }
+    // Small delay to show 100%, then hide
+    setTimeout(function() {
+      // ✅ CLS FIX: Hide with opacity transition (no layout shift!)
+      const appShell = document.getElementById('app-shell');
+      if (appShell) {
+        appShell.classList.add('hidden');
+        console.log('✅ [App Shell] Fading out - React app is ready');
+        // Remove from DOM after transition completes
+        setTimeout(() => {
+          if (appShell && appShell.parentNode) {
+            appShell.parentNode.removeChild(appShell);
+          }
+        }, 400);
+      }
+      
+      // Also hide legacy loader if visible
+      const loader = document.getElementById('instant-loader');
+      if (loader) {
+        loader.style.transition = 'opacity 0.4s ease';
+        loader.style.opacity = '0';
+        setTimeout(() => {
+          if (loader && loader.parentNode) {
+            loader.parentNode.removeChild(loader);
+          }
+        }, 400);
+      }
+    }, 350);
   };
   
   // ✅ NEW: Force hide app shell after 5 seconds no matter what
@@ -4308,7 +4438,7 @@ body.has-install-banner .sidebar {
 
   <!-- ✅ PERFORMANCE: Main app code loaded as deferred external script -->
   <!-- Downloads in parallel with HTML parsing, executes after DOM ready -->
-  <script defer src="/app.js?v=5.2.0"></script>
+  <script defer src="/app.js?v=5.3.0"></script>
   <!-- PWA management moved to post-app.js -->
   <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
@@ -4357,7 +4487,7 @@ body.has-install-banner .sidebar {
   <div>Saving…</div>
 </div>
 
-  <script defer src="/post-app.js?v=5.2.0"></script>
+  <script defer src="/post-app.js?v=5.3.0"></script>
 <script src="avanti-widget.js" onerror="console.warn('⚠️ avanti-widget.js failed to load - chatbot disabled')"></script>
 
 
