@@ -4067,7 +4067,12 @@ body.has-install-banner .sidebar {
   <!-- ✅ PERFORMANCE FIX v5.2: Tailwind CDN REMOVED — saves 3MB+ download -->
   <!-- Using pre-built tailwind-static.css instead (generated during Vercel build) -->
   <!-- Inline fallback CSS above ensures styles work even offline -->
-  <!-- v5.4.0: Heavy libraries load on-demand via LazyLibs - not on every page visit -->
+  <!-- Chart.js loaded eagerly - used directly in app.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+
+  <!-- v5.4.0: Other heavy libraries load on-demand via LazyLibs only when needed -->
+  <!-- Removed: xlsx (1MB), html5-qrcode (300KB), otpauth, qrcode, firebase-messaging, firebase-storage, papaparse -->
 
   <script defer src="/init.js?v=5.4.0"></script>
 
