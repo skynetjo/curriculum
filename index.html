@@ -4071,8 +4071,11 @@ body.has-install-banner .sidebar {
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 
+  <!-- OTPAuth loaded eagerly - used directly in 2FA verification -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/otpauth/9.2.2/otpauth.umd.min.js"></script>
+
   <!-- v5.4.0: Other heavy libraries load on-demand via LazyLibs only when needed -->
-  <!-- Removed: xlsx (1MB), html5-qrcode (300KB), otpauth, qrcode, firebase-messaging, firebase-storage, papaparse -->
+  <!-- Still removed: xlsx (1MB), html5-qrcode (300KB), qrcode, firebase-messaging, firebase-storage, papaparse -->
 
   <script defer src="/init.js?v=5.4.0"></script>
 
