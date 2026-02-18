@@ -1,0 +1,151 @@
+/* ============================================================
+   cls-fix.css - Curriculum Tracker v5.4.0
+   Fixes Cumulative Layout Shift (CLS) on mobile and desktop.
+   
+   Current CLS: 0.67 desktop / 1.0 mobile (TERRIBLE - page jumps)
+   Target CLS:  < 0.1 desktop / < 0.1 mobile (GOOD - stable page)
+   
+   CLS happens when elements load AFTER the page renders and
+   push other content down. These fixes reserve space in advance.
+   ============================================================ */
+
+/* ── Reserve space for the main app container ────────────── */
+#app-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ── Navigation bar - fixed height so nothing shifts ─────── */
+.fixed.bottom-0,
+nav.fixed {
+  height: 64px;
+  min-height: 64px;
+}
+
+/* ── Top header bar - fixed height ──────────────────────── */
+header,
+.fixed.top-0 {
+  height: 60px;
+  min-height: 60px;
+}
+
+/* ── Stat cards on dashboard ────────────────────────────── */
+.shell-stat-card,
+[class*="stat-card"] {
+  min-height: 110px;
+}
+
+/* ── Charts - fixed size prevents resize jump ──────────── */
+canvas {
+  display: block;
+}
+
+.chart-container,
+[class*="chart-container"] {
+  min-height: 280px;
+  width: 100%;
+}
+
+/* ── Profile/avatar images ──────────────────────────────── */
+.shell-avatar,
+[class*="avatar"],
+img[class*="profile"],
+img[class*="Avatar"] {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  display: block;
+}
+
+/* ── Data tables / list containers ─────────────────────── */
+[class*="table-container"],
+[class*="list-container"],
+[class*="teachers-list"],
+[class*="students-list"] {
+  min-height: 150px;
+}
+
+/* ── Toast notifications - always fixed, never in flow ───── */
+[class*="toast"],
+.pwa-toast,
+[class*="notification-banner"],
+[class*="alert-banner"] {
+  position: fixed !important;
+}
+
+/* ── Prevent horizontal scroll causing layout jumps ─────── */
+body {
+  overflow-x: hidden;
+}
+
+/* ── Modal open - no scrollbar compensation needed ──────── */
+/* (Mobile has overlay scrollbars, not shifting ones) */
+body.modal-open,
+body.overflow-hidden {
+  overflow: hidden;
+  padding-right: 0 !important;
+}
+
+/* ── Loading skeleton placeholders ──────────────────────── */
+.animate-pulse,
+[class*="skeleton"],
+[class*="loading-placeholder"] {
+  min-height: 60px;
+}
+
+/* ── Card grid items ─────────────────────────────────────── */
+[class*="card"] {
+  contain: layout paint;
+}
+
+/* ============================================================
+   MOBILE SPECIFIC (phones - most of your teachers use these)
+   ============================================================ */
+@media (max-width: 768px) {
+
+  /* Bottom nav on mobile - exact height with notch support */
+  .fixed.bottom-0,
+  nav.fixed.bottom-0,
+  [class*="bottom-nav"] {
+    height: 56px;
+    min-height: 56px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Main content area - reserve space for header + bottom nav */
+  main,
+  #main-content,
+  [class*="main-content"] {
+    min-height: calc(100dvh - 116px);
+    padding-bottom: 70px;
+  }
+
+  /* Charts smaller on mobile */
+  .chart-container,
+  [class*="chart-container"] {
+    min-height: 200px;
+  }
+
+  /* Cards consistent height on mobile */
+  .shell-stat-card,
+  [class*="stat-card"] {
+    min-height: 90px;
+  }
+
+  /* Prevent font size adjustment on rotation */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}
+
+/* ============================================================
+   iPhone / iPad notch and safe area support
+   ============================================================ */
+@supports (padding: max(0px)) {
+  .fixed.bottom-0,
+  nav.fixed.bottom-0 {
+    padding-bottom: max(env(safe-area-inset-bottom), 8px);
+  }
+}
