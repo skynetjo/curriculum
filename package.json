@@ -1,6 +1,6 @@
 {
   "name": "curriculum-tracker",
-  "version": "5.1.7",
+  "version": "5.4.0",
   "private": true,
   "scripts": {
     "build": "npx tailwindcss -i ./src/input.css -o ./tailwind-static.css --minify"
