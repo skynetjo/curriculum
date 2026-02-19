@@ -4067,22 +4067,15 @@ body.has-install-banner .sidebar {
   <!-- ✅ PERFORMANCE FIX v5.2: Tailwind CDN REMOVED — saves 3MB+ download -->
   <!-- Using pre-built tailwind-static.css instead (generated during Vercel build) -->
   <!-- Inline fallback CSS above ensures styles work even offline -->
-  <!-- Chart.js loaded eagerly - used directly in app.js -->
+  <!-- ✅ v5.4.0 PERFORMANCE: All libraries needed by app.js loaded here -->
+  <!-- firebase-messaging + firebase-storage ONLY are removed (LazyLibs handles them) -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-
-  <!-- OTPAuth loaded eagerly - used directly in 2FA verification -->
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/otpauth/9.2.2/otpauth.umd.min.js"></script>
-
-  <!-- v5.4.0: Other heavy libraries load on-demand via LazyLibs only when needed -->
-  <!-- XLSX loaded eagerly - used directly by Export buttons -->
   <script defer src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script defer src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-
-  <!-- ✅ v5.4.0: Only firebase-messaging + firebase-storage still removed (LazyLibs handles them) -->
 
   <script defer src="/init.js?v=5.4.0"></script>
 
@@ -4495,7 +4488,7 @@ body.has-install-banner .sidebar {
 </div>
 
   <script defer src="/post-app.js?v=5.4.0"></script>
-<script src="avanti-widget.js" onerror="console.warn('⚠️ avanti-widget.js failed to load - chatbot disabled')"></script>
+<script defer src="avanti-widget.js" onerror="console.warn('⚠️ avanti-widget.js failed to load - chatbot disabled')"></script>
 
 
 <!-- ============================================
@@ -4917,7 +4910,7 @@ window.addEventListener('syncFeedback', async (event) => {
 console.log('[PWA] Sync handlers registered');
 </script>
 <!-- Add before closing </body> tag -->
-<script src="/pwa-manager.js"></script>
+<script defer src="/pwa-manager.js"></script>
 <!-- PWA Install Prompt moved to post-app.js -->
 </body>
 </html>
