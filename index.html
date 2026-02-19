@@ -4078,7 +4078,13 @@ body.has-install-banner .sidebar {
   <!-- XLSX loaded eagerly - used directly by Export buttons -->
   <script defer src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
-  <!-- Still removed: html5-qrcode (300KB), qrcode, firebase-messaging, firebase-storage, papaparse -->
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script defer src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+  <!-- ✅ v5.4.0: Only firebase-messaging + firebase-storage still removed (LazyLibs handles them) -->
+
+  <script defer src="/init.js?v=5.4.0"></script>
 
 </head>
 <body>
