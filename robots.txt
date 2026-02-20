@@ -1,0 +1,7 @@
+# Curriculum Tracker - Avanti Fellows
+# This is a private internal tool - block all search engine indexing
+
+User-agent: *
+Disallow: /
+
+# Sitemap: not applicable (private internal tool)
