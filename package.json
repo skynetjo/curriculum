@@ -3,7 +3,7 @@
   "version": "5.5.0",
   "private": true,
   "scripts": {
-    "build": "npx tailwindcss -i ./src/input.css -o ./tailwind-static.css --minify"
+    "build": "npx tailwindcss -i ./src/input.css -o ./tailwind-static.css --minify && node build-split.js"
   },
   "devDependencies": {
     "tailwindcss": "^3.4.17"
