@@ -4,36 +4,87 @@
   "installCommand": "npm install",
   "framework": null,
   "rewrites": [
-    {
-      "source": "/robots.txt",
-      "destination": "/robots.txt"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/robots.txt",      "destination": "/robots.txt" },
+    { "source": "/manifest.json",   "destination": "/manifest.json" },
+    { "source": "/sw.js",           "destination": "/sw.js" },
+    { "source": "/app.js",          "destination": "/app.js" },
+    { "source": "/app-admin.js",    "destination": "/app-admin.js" },
+    { "source": "/app-features.js", "destination": "/app-features.js" },
+    { "source": "/init.js",         "destination": "/init.js" },
+    { "source": "/post-app.js",     "destination": "/post-app.js" },
+    { "source": "/avanti-widget.js","destination": "/avanti-widget.js" },
+    { "source": "/tailwind-static.css", "destination": "/tailwind-static.css" },
+    { "source": "/cls-fix.css",     "destination": "/cls-fix.css" },
+    { "source": "/version.json",    "destination": "/version.json" },
+    { "source": "/(.*\\.js)",       "destination": "/$1" },
+    { "source": "/(.*\\.css)",      "destination": "/$1" },
+    { "source": "/(.*\\.json)",     "destination": "/$1" },
+    { "source": "/(.*\\.(png|jpg|jpeg|webp|gif|ico|svg|woff|woff2))", "destination": "/$1" },
+    { "source": "/(.*)",            "destination": "/index.html" }
   ],
   "headers": [
     {
       "source": "/robots.txt",
       "headers": [
-        { "key": "Content-Type", "value": "text/plain" },
-        { "key": "Cache-Control", "value": "public, max-age=86400" }
+        { "key": "Content-Type",   "value": "text/plain" },
+        { "key": "Cache-Control",  "value": "public, max-age=86400" }
       ]
     },
     {
       "source": "/manifest.json",
       "headers": [
-        { "key": "Content-Type", "value": "application/manifest+json" },
+        { "key": "Content-Type",  "value": "application/manifest+json" },
         { "key": "Cache-Control", "value": "public, max-age=3600" }
       ]
     },
     {
       "source": "/sw.js",
       "headers": [
-        { "key": "Content-Type", "value": "application/javascript" },
-        { "key": "Service-Worker-Allowed", "value": "/" },
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        { "key": "Content-Type",          "value": "application/javascript" },
+        { "key": "Service-Worker-Allowed","value": "/" },
+        { "key": "Cache-Control",         "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/app.js",
+      "headers": [
+        { "key": "Content-Type",  "value": "application/javascript" },
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/app-admin.js",
+      "headers": [
+        { "key": "Content-Type",  "value": "application/javascript" },
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/app-features.js",
+      "headers": [
+        { "key": "Content-Type",  "value": "application/javascript" },
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/init.js",
+      "headers": [
+        { "key": "Content-Type",  "value": "application/javascript" },
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/post-app.js",
+      "headers": [
+        { "key": "Content-Type",  "value": "application/javascript" },
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/avanti-widget.js",
+      "headers": [
+        { "key": "Content-Type",  "value": "application/javascript" },
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
       ]
     },
     {
@@ -49,25 +100,7 @@
       ]
     },
     {
-      "source": "/app.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/post-app.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/init.js",
-      "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/(.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.webp|.*\\.gif|.*\\.ico|.*\\.svg)",
+      "source": "/(.*\\.(png|jpg|jpeg|webp|gif|ico|svg))",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
@@ -76,8 +109,8 @@
       "source": "/(.*)",
       "headers": [
         { "key": "Content-Security-Policy", "value": "upgrade-insecure-requests" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
+        { "key": "X-Content-Type-Options",  "value": "nosniff" },
+        { "key": "X-Frame-Options",         "value": "SAMEORIGIN" }
       ]
     }
   ]
