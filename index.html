@@ -99,6 +99,8 @@
   <link rel="preload" href="/tailwind-static.css?v=5.5.0" as="style">
 <link rel="stylesheet" href="/cls-fix.css?v=5.5.0">
   <link rel="preload" href="/app.js?v=5.5.0" as="script">
+  <link rel="preload" href="/app-admin.js?v=5.5.0" as="script">
+  <link rel="preload" href="/app-features.js?v=5.5.0" as="script">
   <link rel="preload" href="/init.js?v=5.5.0" as="script">
   
   <!-- ✅ APP SHELL ARCHITECTURE: Critical CSS inline for INSTANT UI display -->
@@ -4450,9 +4452,11 @@ body.has-install-banner .sidebar {
   };
   </script>
 
-  <!-- ✅ PERFORMANCE: Main app code loaded as deferred external script -->
-  <!-- Downloads in parallel with HTML parsing, executes after DOM ready -->
-  <script defer src="/app.js?v=5.5.0"></script>
+  <!-- ✅ PERFORMANCE v5.5.0: App split into 3 chunks for parallel download -->
+  <!-- Downloads in parallel, executes in order. Reduces TBT by breaking 1 big task into 3 -->
+  <script defer src="/app.js?v=5.5.0"></script>        <!-- Core: utils + App() + TeacherView ~551KB -->
+  <script defer src="/app-admin.js?v=5.5.0"></script>   <!-- Admin: AdminView + attendance ~321KB -->
+  <script defer src="/app-features.js?v=5.5.0"></script> <!-- Features: social + school info + more ~427KB -->
   <!-- PWA management moved to post-app.js -->
   <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
