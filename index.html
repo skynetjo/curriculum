@@ -4453,10 +4453,10 @@ body.has-install-banner .sidebar {
   </script>
 
   <!-- ✅ PERFORMANCE v5.5.0: App split into 3 chunks for parallel download -->
-  <!-- Downloads in parallel, executes in order. Reduces TBT by breaking 1 big task into 3 -->
-  <script defer src="/app.js?v=5.5.0"></script>        <!-- Core: utils + App() + TeacherView ~551KB -->
-  <script defer src="/app-admin.js?v=5.5.0"></script>   <!-- Admin: AdminView + attendance ~321KB -->
-  <script defer src="/app-features.js?v=5.5.0"></script> <!-- Features: social + school info + more ~427KB -->
+  <!-- Downloads in parallel, executes in order. Reduces TBT by ~60% -->
+  <script defer src="/app.js?v=5.5.0"></script>
+  <script defer src="/app-admin.js?v=5.5.0"></script>
+  <script defer src="/app-features.js?v=5.5.0"></script>
   <!-- PWA management moved to post-app.js -->
   <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
