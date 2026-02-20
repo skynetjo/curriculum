@@ -4,13 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Curriculum Tracker - Avanti Fellows</title>
-  <meta name="description" content="Track curriculum progress, daily attendance, and student feedback for JNV and EMRS centres. Built for Avanti Fellows teachers across 32 schools in India.">
-  <meta name="robots" content="noindex, nofollow">
   
-  <!-- ✅ VERSION 5.5.0 - Circular Progress Loader + UX Improvements -->
+  <!-- ✅ VERSION 5.4.0 - Circular Progress Loader + UX Improvements -->
   <script>
     window.__PERF_START = performance.now();
-    console.log('🚀 Curriculum Tracker v5.5.0 - Version Sync + Performance Progress Loader + UX');
+    console.log('🚀 Curriculum Tracker v5.4.0 - Circular Progress Loader + UX');
   </script>
   
   <!-- ✅ AUTOMATIC CACHE CLEAR - Teachers don't need to do anything -->
@@ -84,14 +82,14 @@
   </script>
   
   <!-- ✅ PERFORMANCE: Resource hints for faster connections -->
-  <!-- ✅ PERFORMANCE v5.5.0: Only 2 preconnects - PageSpeed warns against >4 -->
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <!-- REMOVED: Tailwind CDN preconnect - using tailwind-static.css instead -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
-  <!-- dns-prefetch for others (lighter, no PageSpeed warning) -->
-  <link rel="dns-prefetch" href="https://unpkg.com">
-  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://firestore.googleapis.com">
   <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com">
-  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
 
   <!-- ✅ PERFORMANCE: Preload critical scripts for faster download -->
   <link rel="preload" href="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" as="script">
@@ -337,8 +335,6 @@
       background-size: 200% 100%;
       animation: skeleton-shimmer 1.5s ease-in-out infinite;
       border-radius: 8px;
-      will-change: background-position;
-      transform: translateZ(0);
     }
     
     .skeleton-text {
@@ -476,8 +472,6 @@
       border-top-color: white;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      will-change: transform;
-      transform: translateZ(0);
     }
     
     @keyframes spin {
@@ -685,7 +679,6 @@
       gap: 12px;
     }
     .login-spinner-icon {
-      will-change: transform;
       width: 24px;
       height: 24px;
       border: 3px solid rgba(255,255,255,0.3);
@@ -1424,7 +1417,7 @@
   <!-- ✅ PERFORMANCE: Defer FontAwesome - not critical for initial render -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" media="print" onload="this.media='all'" />
 
-  <!-- ✅ PERFORMANCE v5.5.0: All scripts moved to defer for parallel download -->
+  <!-- ✅ PERFORMANCE v5.2.0: All scripts moved to defer for parallel download -->
   <!-- Firebase, React, Tailwind, and app code load after HTML parsing -->
   <!-- CSS preload for Tailwind -->
   <link rel="stylesheet" href="/tailwind-static.css?v=5.5.0">
@@ -1845,9 +1838,9 @@
     .list-disc { list-style-type: disc; }
     .list-none { list-style-type: none; }
     .outline-none { outline: none; }
-    .animate-spin { animation: spin 1s linear infinite; will-change: transform; transform: translateZ(0); }
-    .animate-pulse { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; will-change: opacity; }
-    .animate-bounce { animation: bounce 1s infinite; will-change: transform; transform: translateZ(0); }
+    .animate-spin { animation: spin 1s linear infinite; }
+    .animate-pulse { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+    .animate-bounce { animation: bounce 1s infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     @keyframes bounce { 0%, 100% { transform: translateY(-25%); animation-timing-function: cubic-bezier(0.8,0,1,1); } 50% { transform: translateY(0); animation-timing-function: cubic-bezier(0,0,0.2,1); } }
@@ -4076,22 +4069,15 @@ body.has-install-banner .sidebar {
   <!-- ✅ PERFORMANCE FIX v5.2: Tailwind CDN REMOVED — saves 3MB+ download -->
   <!-- Using pre-built tailwind-static.css instead (generated during Vercel build) -->
   <!-- Inline fallback CSS above ensures styles work even offline -->
-  <!-- Chart.js loaded eagerly - used directly in app.js -->
+  <!-- ✅ v5.4.0 PERFORMANCE: All libraries needed by app.js loaded here -->
+  <!-- firebase-messaging + firebase-storage ONLY are removed (LazyLibs handles them) -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
-
-  <!-- OTPAuth loaded eagerly - used directly in 2FA verification -->
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/otpauth/9.2.2/otpauth.umd.min.js"></script>
-
-  <!-- v5.5.0: Other heavy libraries load on-demand via LazyLibs only when needed -->
-  <!-- XLSX loaded eagerly - used directly by Export buttons -->
   <script defer src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script defer src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-
-  <!-- ✅ v5.5.0: Only firebase-messaging + firebase-storage still removed (LazyLibs handles them) -->
 
   <script defer src="/init.js?v=5.5.0"></script>
 
@@ -4452,8 +4438,9 @@ body.has-install-banner .sidebar {
   };
   </script>
 
-  <!-- ✅ PERFORMANCE v5.5.0: App split into 3 chunks for parallel download -->
-  <!-- Downloads in parallel, executes in order. Reduces TBT by ~60% -->
+  <!-- ✅ PERFORMANCE: Main app code loaded as deferred external script -->
+  <!-- Downloads in parallel with HTML parsing, executes after DOM ready -->
+  <!-- ✅ PERFORMANCE v5.5.0: app.js auto-split into 3 chunks by build-split.js on Vercel -->
   <script defer src="/app.js?v=5.5.0"></script>
   <script defer src="/app-admin.js?v=5.5.0"></script>
   <script defer src="/app-features.js?v=5.5.0"></script>
@@ -4506,7 +4493,7 @@ body.has-install-banner .sidebar {
 </div>
 
   <script defer src="/post-app.js?v=5.5.0"></script>
-<script src="avanti-widget.js" onerror="console.warn('⚠️ avanti-widget.js failed to load - chatbot disabled')"></script>
+<script defer src="avanti-widget.js" onerror="console.warn('⚠️ avanti-widget.js failed to load - chatbot disabled')"></script>
 
 
 <!-- ============================================
@@ -4928,7 +4915,7 @@ window.addEventListener('syncFeedback', async (event) => {
 console.log('[PWA] Sync handlers registered');
 </script>
 <!-- Add before closing </body> tag -->
-<script src="/pwa-manager.js"></script>
+<script defer src="/pwa-manager.js"></script>
 <!-- PWA Install Prompt moved to post-app.js -->
 </body>
 </html>
