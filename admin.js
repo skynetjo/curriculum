@@ -7487,3 +7487,621 @@ function TeacherAttendanceView({
     className: "text-xs text-green-600 mt-1"
   }, "\u2713 GPS Verified")))));
 }
+
+
+// ✅ v5.5.1 OVERRIDE: Fixed AdminAttendanceAnalytics with date range fetch
+
+function AdminAttendanceAnalytics({
+  students,
+  teachers,
+  studentAttendance,
+  teacherAttendance,
+  accessibleSchools = [],
+  isSuperAdmin = false,
+  isDirector = false
+}) {
+  const hasFullDataAccess = isSuperAdmin || isDirector;
+  const schoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
+  const schoolMatchesFilter = (itemSchool, selectedSchools) => {
+    if (!selectedSchools || selectedSchools.length === 0) return true;
+    if (!itemSchool) return false;
+    const itemSchoolLower = itemSchool.toString().toLowerCase().trim();
+    return selectedSchools.some(s => s && s.toString().toLowerCase().trim() === itemSchoolLower);
+  };
+  const [filterSchools, setFilterSchools] = useState([...schoolOptions]);
+  const [filterGrade, setFilterGrade] = useState('All');
+  const [startDate, setStartDate] = useState(getTodayDate().slice(0, 7) + '-01');
+  const [endDate, setEndDate] = useState(getTodayDate());
+  const [selectedDate, setSelectedDate] = useState(getTodayDate());
+  const [attendanceLocks, setAttendanceLocks] = useState([]);
+  const [loadingLocks, setLoadingLocks] = useState(false);
+  const [showLockManagement, setShowLockManagement] = useState(false);
+  const [lockFilterSchool, setLockFilterSchool] = useState('All');
+  const [lockFilterDate, setLockFilterDate] = useState(getTodayDate());
+  const chart1Ref = useRef(null);
+  const chart2Ref = useRef(null);
+  const chart3Ref = useRef(null);
+  const chart4Ref = useRef(null);
+  const chartInstances = useRef({});
+  const loadAttendanceLocks = async () => {
+    setLoadingLocks(true);
+    try {
+      let query = db.collection('attendanceLocks').orderBy('lockedAt', 'desc').limit(100);
+      const snapshot = await query.get();
+      const locks = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAttendanceLocks(locks);
+    } catch (e) {
+      console.error('Error loading locks:', e);
+    }
+    setLoadingLocks(false);
+  };
+  useEffect(() => {
+    if (showLockManagement) {
+      loadAttendanceLocks();
+    }
+  }, [showLockManagement]);
+  const handleUnlock = async (lockId, school, grade, date) => {
+    const confirmation = confirm(`Are you sure you want to unlock attendance for:\n\nSchool: ${school}\nClass: ${grade}\nDate: ${date}\n\nTeachers will be able to modify attendance again.`);
+    if (!confirmation) return;
+    try {
+      await db.collection('attendanceLocks').doc(lockId).delete();
+      alert('✅ Attendance unlocked successfully!');
+      loadAttendanceLocks();
+    } catch (e) {
+      alert('Failed to unlock: ' + e.message);
+    }
+  };
+  const filteredLocks = attendanceLocks.filter(lock => {
+    if (lockFilterSchool !== 'All' && lock.school?.toLowerCase() !== lockFilterSchool?.toLowerCase()) return false;
+    if (lockFilterDate && lock.date !== lockFilterDate) return false;
+    if (!hasFullDataAccess && !schoolMatchesFilter(lock.school, accessibleSchools)) return false;
+    return true;
+  });
+  // ✅ v5.5.1 FIX: On-demand fetch for any date range
+  const [extraData, setExtraData] = useState({ student: [], teacher: [] });
+  const [loadingExtra, setLoadingExtra] = useState(false);
+  const [loadedRange, setLoadedRange] = useState('');
+
+  const loadDateRange = () => {
+    const key = startDate + '|' + endDate;
+    if (loadedRange === key) return;
+    setLoadingExtra(true);
+    const fdb = firebase.firestore();
+    const fetchAll = (col) => fdb.collection(col)
+      .where('date', '>=', startDate)
+      .where('date', '<=', endDate)
+      .get()
+      .then(snap => snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    Promise.all([fetchAll('studentAttendance'), fetchAll('teacherAttendance')])
+      .then(([s, t]) => {
+        setExtraData({ student: s, teacher: t });
+        setLoadedRange(key);
+        console.log('[Dashboard] Loaded', s.length, 'student +', t.length, 'teacher records');
+      })
+      .catch(err => alert('Load failed: ' + err.message))
+      .finally(() => setLoadingExtra(false));
+  };
+
+  const mergedStudent = extraData.student.length > 0 ? extraData.student : studentAttendance;
+  const mergedTeacher = extraData.teacher.length > 0 ? extraData.teacher : teacherAttendance;
+
+  const filteredStudentAttendance = useMemo(() => {
+    return mergedStudent.filter(a => {
+      if (!schoolMatchesFilter(a.school, filterSchools)) return false;
+      if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
+      if (a.date < startDate || a.date > endDate) return false;
+      return true;
+    });
+  }, [mergedStudent, filterSchools, filterGrade, startDate, endDate]);
+  const filteredTeacherAttendance = useMemo(() => {
+    return mergedTeacher.filter(a => {
+      if (!schoolMatchesFilter(a.school, filterSchools)) return false;
+      if (a.date < startDate || a.date > endDate) return false;
+      return true;
+    });
+  }, [mergedTeacher, filterSchools, startDate, endDate]);
+  const todayStats = useMemo(() => {
+    const studentRecords = mergedStudent.filter(a => {
+      if (a.date !== selectedDate) return false;
+      if (!schoolMatchesFilter(a.school, filterSchools)) return false;
+      if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
+      return true;
+    });
+    const teacherRecords = mergedTeacher.filter(a => {
+      if (a.date !== selectedDate) return false;
+      if (!schoolMatchesFilter(a.school, filterSchools)) return false;
+      return true;
+    });
+    return {
+      studentPresent: studentRecords.filter(r => r.status === 'Present').length,
+      studentAbsent: studentRecords.filter(r => r.status === 'Absent').length,
+      teacherPresent: teacherRecords.filter(r => r.status === 'Present').length,
+      teacherAbsent: teacherRecords.filter(r => r.status === 'On Leave').length
+    };
+  }, [mergedStudent, mergedTeacher, selectedDate, filterSchools, filterGrade]);
+  const genderStats = useMemo(() => {
+    const stats = {
+      Male: {
+        present: 0,
+        absent: 0
+      },
+      Female: {
+        present: 0,
+        absent: 0
+      },
+      Other: {
+        present: 0,
+        absent: 0
+      }
+    };
+    filteredStudentAttendance.forEach(a => {
+      const student = students.find(s => s.id === a.studentId);
+      if (student && stats[student.gender]) {
+        if (a.status === 'Present') {
+          stats[student.gender].present++;
+        } else {
+          stats[student.gender].absent++;
+        }
+      }
+    });
+    return stats;
+  }, [filteredStudentAttendance, students]);
+  const monthlyDayStats = useMemo(() => {
+    const stats = {};
+    filteredStudentAttendance.forEach(a => {
+      if (!stats[a.date]) {
+        stats[a.date] = {
+          present: 0,
+          absent: 0
+        };
+      }
+      if (a.status === 'Present') {
+        stats[a.date].present++;
+      } else {
+        stats[a.date].absent++;
+      }
+    });
+    return stats;
+  }, [filteredStudentAttendance]);
+  useEffect(() => {
+    Object.values(chartInstances.current).forEach(chart => {
+      if (chart) chart.destroy();
+    });
+    chartInstances.current = {};
+    if (chart1Ref.current) {
+      const ctx = chart1Ref.current.getContext('2d');
+      const dates = Object.keys(monthlyDayStats).sort();
+      chartInstances.current.chart1 = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: dates.map(d => new Date(d).getDate()),
+          datasets: [{
+            label: 'Present',
+            data: dates.map(d => monthlyDayStats[d].present),
+            borderColor: '#10B981',
+            backgroundColor: 'rgba(16,185,129,0.1)',
+            tension: 0.4,
+            fill: true
+          }, {
+            label: 'Absent',
+            data: dates.map(d => monthlyDayStats[d].absent),
+            borderColor: '#EF4444',
+            backgroundColor: 'rgba(239,68,68,0.1)',
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Daily Student Attendance (Month)',
+              font: {
+                size: 16,
+                weight: 'bold'
+              }
+            },
+            legend: {
+              position: 'bottom'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+    if (chart2Ref.current) {
+      const ctx = chart2Ref.current.getContext('2d');
+      const genders = Object.keys(genderStats);
+      chartInstances.current.chart2 = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: genders,
+          datasets: [{
+            label: 'Present',
+            data: genders.map(g => genderStats[g].present),
+            backgroundColor: '#10B981'
+          }, {
+            label: 'Absent',
+            data: genders.map(g => genderStats[g].absent),
+            backgroundColor: '#EF4444'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Gender-wise Student Attendance',
+              font: {
+                size: 16,
+                weight: 'bold'
+              }
+            },
+            legend: {
+              position: 'bottom'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+    if (chart3Ref.current) {
+      const ctx = chart3Ref.current.getContext('2d');
+      const present = filteredTeacherAttendance.filter(a => a.status === 'Present').length;
+      const onLeave = filteredTeacherAttendance.filter(a => a.status === 'On Leave').length;
+      chartInstances.current.chart3 = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: ['Present', 'On Leave'],
+          datasets: [{
+            data: [present, onLeave],
+            backgroundColor: ['#5B8A8A', '#D4A574'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Teacher Attendance Status (Month)',
+              font: {
+                size: 16,
+                weight: 'bold'
+              }
+            },
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+    if (chart4Ref.current) {
+      const ctx = chart4Ref.current.getContext('2d');
+      const present = filteredStudentAttendance.filter(a => a.status === 'Present').length;
+      const absent = filteredStudentAttendance.filter(a => a.status === 'Absent').length;
+      chartInstances.current.chart4 = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Present', 'Absent'],
+          datasets: [{
+            data: [present, absent],
+            backgroundColor: ['#5B8A8A', '#C17A6E'],
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Overall Student Attendance (Month)',
+              font: {
+                size: 16,
+                weight: 'bold'
+              }
+            },
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+    return () => {
+      Object.values(chartInstances.current).forEach(chart => {
+        if (chart) chart.destroy();
+      });
+    };
+  }, [monthlyDayStats, genderStats, filteredTeacherAttendance, filteredStudentAttendance]);
+  const handleExportStudents = () => {
+    if (loadingExtra) { alert('Still loading - please wait.'); return; }
+    if (filteredStudentAttendance.length === 0) { alert('No data. Click "Load Data for Selected Date Range" first.'); return; }
+    const exportData = filteredStudentAttendance.map((a,i) => ({'S.No':i+1,Date:a.date,School:a.school,Grade:a.grade,'Student Name':a.studentName,Status:a.status,Remarks:a.remarks||'','Marked By':a.markedBy}));
+    exportToExcel(exportData, `student_attendance_${startDate}_to_${endDate}`);
+  };
+  const handleExportTeachers = () => {
+    if (loadingExtra) { alert('Still loading - please wait.'); return; }
+    if (filteredTeacherAttendance.length === 0) { alert('No data. Click "Load Data for Selected Date Range" first.'); return; }
+    const exportData = filteredTeacherAttendance.map((a,i) => ({'S.No':i+1,Date:a.date,'Teacher Name':a.teacherName,School:a.school,'Punch-In Time':a.punchInTime||'Not recorded',Status:a.status,Reason:a.reason||'',Location:a.location||''}));
+    exportToExcel(exportData, `teacher_attendance_${startDate}_to_${endDate}`);
+  };
+  return React.createElement("div", {
+    className: "space-y-6"
+  }, React.createElement("div", {
+    className: "flex justify-between items-center flex-wrap gap-4"
+  }, React.createElement("h2", {
+    className: "text-3xl font-bold"
+  }, "\uD83D\uDCCA Attendance Analytics"), React.createElement("div", {
+    className: "flex gap-2 flex-wrap"
+  }, React.createElement("button", {
+    onClick: () => setShowLockManagement(!showLockManagement),
+    className: `px-4 py-2 rounded-xl font-semibold ${showLockManagement ? 'bg-yellow-600 text-white' : 'bg-yellow-100 text-yellow-800 border-2 border-yellow-400'}`
+  }, "\uD83D\uDD10 Manage Locks"), React.createElement("button", {
+    onClick: handleExportStudents,
+    className: "px-4 py-2 bg-green-600 text-white rounded-xl font-semibold"
+  }, "\uD83D\uDCE5 Export Students"), React.createElement("button", {
+    onClick: handleExportTeachers,
+    className: "px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold"
+  }, "\uD83D\uDCE5 Export Teachers"))), showLockManagement && React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg border-2 border-yellow-300"
+  }, React.createElement("div", {
+    className: "flex justify-between items-center mb-4"
+  }, React.createElement("h3", {
+    className: "text-xl font-bold flex items-center gap-2"
+  }, "\uD83D\uDD10 Attendance Lock Management"), React.createElement("button", {
+    onClick: loadAttendanceLocks,
+    disabled: loadingLocks,
+    className: "px-4 py-2 bg-gray-200 rounded-lg font-semibold"
+  }, loadingLocks ? '⏳ Loading...' : '🔄 Refresh')), React.createElement("p", {
+    className: "text-sm text-gray-600 mb-4"
+  }, "View and manage attendance locks. When attendance is locked, teachers cannot modify it. Use this section to unlock attendance when needed."), React.createElement("div", {
+    className: "grid md:grid-cols-3 gap-4 mb-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Filter by School"), React.createElement("select", {
+    value: lockFilterSchool,
+    onChange: e => setLockFilterSchool(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  }, React.createElement("option", {
+    value: "All"
+  }, "All Schools"), schoolOptions.map(s => React.createElement("option", {
+    key: s,
+    value: s
+  }, s)))), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Filter by Date"), React.createElement("input", {
+    type: "date",
+    value: lockFilterDate,
+    onChange: e => setLockFilterDate(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  })), React.createElement("div", {
+    className: "flex items-end"
+  }, React.createElement("button", {
+    onClick: () => setLockFilterDate(''),
+    className: "w-full px-4 py-3 bg-gray-200 rounded-xl font-semibold"
+  }, "Show All Dates"))), loadingLocks ? React.createElement("div", {
+    className: "text-center py-8"
+  }, React.createElement("div", {
+    className: "animate-spin text-4xl mb-2"
+  }, "\u23F3"), React.createElement("p", null, "Loading attendance locks...")) : filteredLocks.length === 0 ? React.createElement("div", {
+    className: "text-center py-8 text-gray-500"
+  }, React.createElement("div", {
+    className: "text-4xl mb-2"
+  }, "\uD83D\uDD13"), React.createElement("p", null, "No attendance locks found for the selected filters.")) : React.createElement("div", {
+    className: "overflow-x-auto"
+  }, React.createElement("table", {
+    className: "w-full"
+  }, React.createElement("thead", {
+    className: "bg-yellow-100"
+  }, React.createElement("tr", null, React.createElement("th", {
+    className: "p-3 text-left"
+  }, "School"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Grade"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Date"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Locked By"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Locked At"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Actions"))), React.createElement("tbody", null, filteredLocks.map(lock => React.createElement("tr", {
+    key: lock.id,
+    className: "border-b hover:bg-gray-50"
+  }, React.createElement("td", {
+    className: "p-3"
+  }, lock.school), React.createElement("td", {
+    className: "p-3"
+  }, React.createElement("span", {
+    className: "px-2 py-1 bg-blue-100 text-blue-800 rounded font-semibold"
+  }, "Class ", lock.grade)), React.createElement("td", {
+    className: "p-3 font-mono"
+  }, lock.date), React.createElement("td", {
+    className: "p-3"
+  }, lock.lockedByName || lock.lockedBy), React.createElement("td", {
+    className: "p-3 text-sm"
+  }, lock.lockedAt ? new Date(lock.lockedAt).toLocaleString() : 'Unknown'), React.createElement("td", {
+    className: "p-3"
+  }, React.createElement("button", {
+    onClick: () => handleUnlock(lock.id, lock.school, lock.grade, lock.date),
+    className: "px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600"
+  }, "\uD83D\uDD13 Unlock")))))), React.createElement("div", {
+    className: "mt-4 text-sm text-gray-500"
+  }, "Showing ", filteredLocks.length, " lock(s)"))), React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg"
+  }, React.createElement("h3", {
+    className: "text-xl font-bold mb-4"
+  }, "\uD83D\uDD0D Filters"), React.createElement("div", {
+    className: "grid md:grid-cols-5 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Schools (", filterSchools.length, "/", schoolOptions.length, ")"), React.createElement(MultiSelectDropdown, {
+    options: schoolOptions,
+    selected: filterSchools,
+    onChange: setFilterSchools,
+    placeholder: "Select Schools..."
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Grade"), React.createElement("select", {
+    value: filterGrade,
+    onChange: e => setFilterGrade(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  }, React.createElement("option", {
+    value: "All"
+  }, "All Grades"), React.createElement("option", {
+    value: "11"
+  }, "Class 11"), React.createElement("option", {
+    value: "12"
+  }, "Class 12"))), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Start Date"), React.createElement("input", {
+    type: "date",
+    value: startDate,
+    onChange: e => setStartDate(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "End Date"), React.createElement("input", {
+    type: "date",
+    value: endDate,
+    onChange: e => setEndDate(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Today's View"), React.createElement("input", {
+    type: "date",
+    value: selectedDate,
+    onChange: e => setSelectedDate(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  })))), React.createElement("div", {
+    className: "mt-3"
+  }, React.createElement("button", {
+    onClick: loadDateRange,
+    disabled: loadingExtra,
+    style: {width:"100%",padding:"14px",borderRadius:"12px",fontWeight:"bold",fontSize:"16px",color:"white",background:loadingExtra?"#9ca3af":"#4f46e5",cursor:loadingExtra?"not-allowed":"pointer",border:"none"}
+  }, loadingExtra ? "\u23F3 Loading data from Firebase..." : "\uD83D\uDD0D Load Data for Selected Date Range" + (loadedRange ? " \u2705" : ""))), React.createElement("div", {
+    className: "grid grid-cols-2 md:grid-cols-4 gap-4 mt-4"
+  }, React.createElement("div", {
+    className: "stat-card bg-green-500 text-white"
+  }, React.createElement("div", {
+    className: "text-sm opacity-90"
+  }, "Students Present Today"), React.createElement("div", {
+    className: "text-4xl font-bold"
+  }, todayStats.studentPresent)), React.createElement("div", {
+    className: "stat-card bg-red-500 text-white"
+  }, React.createElement("div", {
+    className: "text-sm opacity-90"
+  }, "Students Absent Today"), React.createElement("div", {
+    className: "text-4xl font-bold"
+  }, todayStats.studentAbsent)), React.createElement("div", {
+    className: "stat-card bg-blue-500 text-white"
+  }, React.createElement("div", {
+    className: "text-sm opacity-90"
+  }, "Teachers Present Today"), React.createElement("div", {
+    className: "text-4xl font-bold"
+  }, todayStats.teacherPresent)), React.createElement("div", {
+    className: "stat-card bg-orange-500 text-white"
+  }, React.createElement("div", {
+    className: "text-sm opacity-90"
+  }, "Teachers on Leave Today"), React.createElement("div", {
+    className: "text-4xl font-bold"
+  }, todayStats.teacherAbsent))), React.createElement("div", {
+    className: "grid md:grid-cols-2 gap-6"
+  }, React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg",
+    style: {
+      height: '350px'
+    }
+  }, React.createElement("canvas", {
+    ref: chart1Ref
+  })), React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg",
+    style: {
+      height: '350px'
+    }
+  }, React.createElement("canvas", {
+    ref: chart2Ref
+  })), React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg",
+    style: {
+      height: '350px'
+    }
+  }, React.createElement("canvas", {
+    ref: chart3Ref
+  })), React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg",
+    style: {
+      height: '350px'
+    }
+  }, React.createElement("canvas", {
+    ref: chart4Ref
+  }))), React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg"
+  }, React.createElement("h3", {
+    className: "text-xl font-bold mb-4"
+  }, "\uD83D\uDCCB Detailed Teacher Attendance"), React.createElement("div", {
+    className: "overflow-x-auto"
+  }, React.createElement("table", {
+    className: "w-full"
+  }, React.createElement("thead", {
+    className: "avanti-gradient-light"
+  }, React.createElement("tr", null, React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Date"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Teacher"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "School"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Punch-In Time"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Status"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Reason"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Location"))), React.createElement("tbody", null, filteredTeacherAttendance.length === 0 ? React.createElement("tr", null, React.createElement("td", {
+    colSpan: "7",
+    className: "p-8 text-center text-gray-500"
+  }, "No records found")) : filteredTeacherAttendance.slice(0, 50).map((a, idx) => React.createElement("tr", {
+    key: idx,
+    className: "border-b hover:bg-gray-50"
+  }, React.createElement("td", {
+    className: "p-3 text-sm"
+  }, a.date), React.createElement("td", {
+    className: "p-3 font-semibold"
+  }, a.teacherName), React.createElement("td", {
+    className: "p-3"
+  }, a.school), React.createElement("td", {
+    className: "p-3"
+  }, React.createElement("span", {
+    className: "font-mono font-bold text-blue-600 text-lg"
+  }, "\u23F0 ", a.punchInTime || '--:--')), React.createElement("td", {
+    className: "p-3"
+  }, React.createElement("span", {
+    className: `px-2 py-1 rounded-full text-xs font-bold ${a.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`
+  }, a.status)), React.createElement("td", {
+    className: "p-3 text-sm"
+  }, a.reason), React.createElement("td", {
+    className: "p-3 text-sm"
+  }, "\uD83D\uDCCD ", a.location))))))));
+}
