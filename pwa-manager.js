@@ -1,5 +1,5 @@
 // ========================================
-// PWA ENHANCEMENT MODULE v5.0.3
+// PWA ENHANCEMENT MODULE v5.5.2
 // For Curriculum Tracker - Avanti Fellows
 // Includes: Offline Support, Background Sync, Notifications
 // ========================================
@@ -7,7 +7,7 @@
 (function() {
   'use strict';
   
-  console.log('[PWA] 🚀 Loading PWA Enhancement Module v5.0.3...');
+  console.log('[PWA] 🚀 Loading PWA Enhancement Module v5.5.2...');
   
   // ========================================
   // PWA MANAGER OBJECT
@@ -697,6 +697,6 @@
     PWAManager.init();
   }
   
-  console.log('[PWA] ✅ PWA Enhancement Module v5.0.3 loaded');
+  console.log('[PWA] ✅ PWA Enhancement Module v5.5.2 loaded');
   
 })();
