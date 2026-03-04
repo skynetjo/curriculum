@@ -1,4 +1,4 @@
-// ✅ CURRICULUM TRACKER v5.5.3 - CHUNK 2: Admin + Attendance Features 
+// ✅ CURRICULUM TRACKER v5.5.4 - CHUNK 2: Admin + Attendance Features
 // Loaded in parallel with app.js, executes after app.js
 // Contains: AdminView, TeacherManagement, StudentManagement, AdminCurriculum,
 //           AdminAnalytics, StudentAttendanceView, TeacherAttendanceView
