@@ -19249,7 +19249,7 @@ function TeacherAttendanceDashboard({
       let records = snap.docs.map(d => d.data());
       if (filterGrade !== 'All') records = records.filter(a => a.grade === filterGrade);
       records.sort((a, b) => a.date.localeCompare(b.date));
-      if (records.length === 0) { alert('No student attendance records found for the selected period.'); setExportingStudents(false); return; }
+      if (!records.length) { alert('No student records found for this period.'); setExportingStudents(false); return; }
       exportToExcel(records.map(a => ({ Date: a.date, Grade: a.grade, 'Student Name': a.studentName, Status: a.status, Remarks: a.remarks || '', 'Marked By': a.markedBy })), `student_attendance_${mySchool}_${startDate}_to_${endDate}`);
     } catch (err) { alert('Export failed: ' + err.message); }
     setExportingStudents(false);
@@ -19259,13 +19259,9 @@ function TeacherAttendanceDashboard({
     try {
       const snap = await db.collection('teacherAttendance').where('school', '==', mySchool).where('date', '>=', startDate).where('date', '<=', endDate).get();
       let records = snap.docs.map(d => d.data());
-      if (filterSubject !== 'All') {
-        const teacherMap = {};
-        teachers.forEach(t => { teacherMap[t.afid] = t; });
-        records = records.filter(a => { const t = teacherMap[a.teacherId]; return t && t.subject === filterSubject; });
-      }
+      if (filterSubject !== 'All') { const tm = {}; teachers.forEach(t => { tm[t.afid] = t; }); records = records.filter(a => { const t = tm[a.teacherId]; return t && t.subject === filterSubject; }); }
       records.sort((a, b) => a.date.localeCompare(b.date));
-      if (records.length === 0) { alert('No teacher attendance records found for the selected period.'); setExportingTeachers(false); return; }
+      if (!records.length) { alert('No teacher records found for this period.'); setExportingTeachers(false); return; }
       exportToExcel(records.map(a => ({ Date: a.date, 'Teacher Name': a.teacherName, 'Punch-In Time': a.punchInTime || 'Not recorded', Status: a.status, Reason: a.reason || '', Location: a.location || '' })), `teacher_attendance_${mySchool}_${startDate}_to_${endDate}`);
     } catch (err) { alert('Export failed: ' + err.message); }
     setExportingTeachers(false);
@@ -20528,9 +20524,7 @@ function AdminAttendanceAnalytics({
       }
       setRangeStudentData(stuRecords);
       setRangeTeacherData(tchRecords);
-    } catch (err) {
-      alert('Failed to load data: ' + err.message);
-    }
+    } catch (err) { alert('Failed to load data: ' + err.message); }
     setLoadingRange(false);
   };
   React.useEffect(() => {
@@ -20538,10 +20532,7 @@ function AdminAttendanceAnalytics({
     setRangeTeacherData(null);
   }, [startDate, endDate, filterSchools]);
   const filteredStudentAttendance = useMemo(() => {
-    const source = rangeStudentData !== null ? rangeStudentData : studentAttendance.filter(a => {
-      if (a.date < startDate || a.date > endDate) return false;
-      return true;
-    });
+    const source = rangeStudentData !== null ? rangeStudentData : studentAttendance.filter(a => a.date >= startDate && a.date <= endDate);
     return source.filter(a => {
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
@@ -20549,10 +20540,7 @@ function AdminAttendanceAnalytics({
     });
   }, [rangeStudentData, studentAttendance, filterSchools, filterGrade, startDate, endDate]);
   const filteredTeacherAttendance = useMemo(() => {
-    const source = rangeTeacherData !== null ? rangeTeacherData : teacherAttendance.filter(a => {
-      if (a.date < startDate || a.date > endDate) return false;
-      return true;
-    });
+    const source = rangeTeacherData !== null ? rangeTeacherData : teacherAttendance.filter(a => a.date >= startDate && a.date <= endDate);
     return source.filter(a => {
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       return true;
@@ -20794,12 +20782,12 @@ function AdminAttendanceAnalytics({
     setExportingStudents(true);
     try {
       const snap = await db.collection('studentAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get();
-      let records = snap.docs.map(doc => doc.data());
+      let records = snap.docs.map(d => d.data());
       if (!hasFullDataAccess && accessibleSchools.length > 0) records = records.filter(a => schoolMatchesFilter(a.school, accessibleSchools));
       if (filterSchools.length > 0) records = records.filter(a => schoolMatchesFilter(a.school, filterSchools));
       if (filterGrade !== 'All') records = records.filter(a => a.grade === filterGrade);
       records.sort((a, b) => a.date.localeCompare(b.date));
-      if (records.length === 0) { alert('No student attendance records found for the selected period.'); setExportingStudents(false); return; }
+      if (!records.length) { alert('No student records found for this period.'); setExportingStudents(false); return; }
       exportToExcel(records.map(a => ({ Date: a.date, School: a.school, Grade: a.grade, 'Student Name': a.studentName, Status: a.status, Remarks: a.remarks || '', 'Marked By': a.markedBy })), `student_attendance_${startDate}_to_${endDate}`);
     } catch (err) { alert('Export failed: ' + err.message); }
     setExportingStudents(false);
@@ -20808,11 +20796,11 @@ function AdminAttendanceAnalytics({
     setExportingTeachers(true);
     try {
       const snap = await db.collection('teacherAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get();
-      let records = snap.docs.map(doc => doc.data());
+      let records = snap.docs.map(d => d.data());
       if (!hasFullDataAccess && accessibleSchools.length > 0) records = records.filter(a => schoolMatchesFilter(a.school, accessibleSchools));
       if (filterSchools.length > 0) records = records.filter(a => schoolMatchesFilter(a.school, filterSchools));
       records.sort((a, b) => a.date.localeCompare(b.date));
-      if (records.length === 0) { alert('No teacher attendance records found for the selected period.'); setExportingTeachers(false); return; }
+      if (!records.length) { alert('No teacher records found for this period.'); setExportingTeachers(false); return; }
       exportToExcel(records.map(a => ({ Date: a.date, 'Teacher Name': a.teacherName, School: a.school, 'Punch-In Time': a.punchInTime || 'Not recorded', Status: a.status, Reason: a.reason || '', Location: a.location || '' })), `teacher_attendance_${startDate}_to_${endDate}`);
     } catch (err) { alert('Export failed: ' + err.message); }
     setExportingTeachers(false);
@@ -20962,7 +20950,7 @@ function AdminAttendanceAnalytics({
     className: "w-full border-2 px-4 py-3 rounded-xl"
   })), React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-2"
-  }, "Load Range"), React.createElement("button", {
+  }, "Load Range Data"), React.createElement("button", {
     onClick: handleLoadRange,
     disabled: loadingRange,
     className: `w-full py-3 rounded-xl font-bold text-white ${loadingRange ? 'bg-gray-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 active:scale-95'}`
@@ -21056,7 +21044,7 @@ function AdminAttendanceAnalytics({
   }, "Location"))), React.createElement("tbody", null, filteredTeacherAttendance.length === 0 ? React.createElement("tr", null, React.createElement("td", {
     colSpan: "7",
     className: "p-8 text-center text-gray-500"
-  }, rangeTeacherData === null ? "\u26A0\uFE0F No cached data for this range. Click \"Load Data\" to fetch from server." : "No records found for selected filters.")) : filteredTeacherAttendance.slice(0, 50).map((a, idx) => React.createElement("tr", {
+  }, rangeTeacherData === null ? "\u26A0\uFE0F Select dates above and click Load Data to view records" : "No records found for selected filters.")) : filteredTeacherAttendance.slice(0, 50).map((a, idx) => React.createElement("tr", {
     key: idx,
     className: "border-b hover:bg-gray-50"
   }, React.createElement("td", {
