@@ -1,4 +1,4 @@
-// ✅ PRE-COMPILED JAVASCRIPT v5.5.2 - Performance Optimized
+// ✅ PRE-COMPILED JAVASCRIPT v5.5.1 - Performance Optimized
 // ✅ PERFORMANCE: Use passive event listeners for scroll/touch
 document.addEventListener('touchstart', function(){}, {passive: true});
 document.addEventListener('touchmove', function(){}, {passive: true});
