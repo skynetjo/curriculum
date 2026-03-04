@@ -8454,16 +8454,8 @@ function App() {
           teacherAttQuery = db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get();
         } else {
           progressQuery = db.collection('chapterProgress').get();
-          // ✅ FIX v5.5.1: Fallback now uses school-only query (single field, no composite index needed)
-          // Old fallback fetched ALL 32 schools' data → timed out on poor rural connectivity
-          studentAttQuery = fetchWithIndexFallback(
-            db.collection('studentAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(),
-            db.collection('studentAttendance').where('school', '==', userSchool).get().then(snap => ({ docs: snap.docs.filter(d => d.data().date >= thirtyDaysAgo) })),
-            data => data.school === userSchool, 'studentAttendance');
-          teacherAttQuery = fetchWithIndexFallback(
-            db.collection('teacherAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(),
-            db.collection('teacherAttendance').where('school', '==', userSchool).get().then(snap => ({ docs: snap.docs.filter(d => d.data().date >= thirtyDaysAgo) })),
-            data => data.school === userSchool, 'teacherAttendance');
+          studentAttQuery = fetchWithIndexFallback(db.collection('studentAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(), db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get(), data => data.school === userSchool, 'studentAttendance');
+          teacherAttQuery = fetchWithIndexFallback(db.collection('teacherAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(), db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get(), data => data.school === userSchool, 'teacherAttendance');
         }
         const [progressSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, schoolsSnap, rankingsSnap] = await Promise.all([timeoutPromise(progressQuery, 25000), timeoutPromise(studentAttQuery, 30000), timeoutPromise(teacherAttQuery, 30000), timeoutPromise(db.collection('schoolInfo').get(), 20000), timeoutPromise(db.collection('leaveAdjustments').get(), 15000), timeoutPromise(db.collection('schoolsList').get(), 15000), timeoutPromise(db.collection('system').doc('schoolRankings').get(), 10000, {
           exists: false
@@ -8671,15 +8663,7 @@ function App() {
       try {
         const userSchool = currentUser?.school;
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        // ✅ FIX v5.5.1: Filter by school first (not date) — avoids cross-school data fetch timeout
-        const safeSchoolQuery = (col) => {
-          if (userSchool) {
-            return db.collection(col).where('school', '==', userSchool).get()
-              .then(snap => ({ docs: snap.docs.filter(d => d.data().date >= thirtyDaysAgo) }));
-          }
-          return db.collection(col).where('date', '>=', thirtyDaysAgo).get();
-        };
-        const [studentAttSnap, teacherAttSnap] = await Promise.all([safeSchoolQuery('studentAttendance'), safeSchoolQuery('teacherAttendance')]);
+        const [studentAttSnap, teacherAttSnap] = await Promise.all([db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get(), db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get()]);
         const studentAttData = studentAttSnap.docs.map(d => ({
           ...d.data(),
           docId: d.id
