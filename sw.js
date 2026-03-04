@@ -1,10 +1,10 @@
 // ========================================
 // CURRICULUM TRACKER - SERVICE WORKER
-// Version: 5.5.0 - Version Sync + Performance
+// Version: 5.5.2 - Version Sync + Performance
 // ========================================
 
-const CACHE_NAME = 'curriculum-tracker-v5.5.0';
-const APP_SHELL_CACHE = 'app-shell-v5.5.0';
+const CACHE_NAME = 'curriculum-tracker-v5.5.2';
+const APP_SHELL_CACHE = 'app-shell-v5.5.2';
 
 // App Shell - Only cache our own files, NOT external CDNs
 const APP_SHELL_FILES = [
@@ -15,7 +15,7 @@ const APP_SHELL_FILES = [
 
 // Install Event - Cache App Shell only
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing Service Worker v5.5.0');
+  console.log('[SW] Installing Service Worker v5.5.2');
   event.waitUntil(
     caches.open(APP_SHELL_CACHE).then((cache) => {
       return cache.addAll(APP_SHELL_FILES).catch(err => {
@@ -27,7 +27,7 @@ self.addEventListener('install', (event) => {
 
 // Activate Event - Clean up ALL old caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating Service Worker v5.5.0');
+  console.log('[SW] Activating Service Worker v5.5.2');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -128,4 +128,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-console.log('[SW] Service Worker v5.5.0 loaded');
+console.log('[SW] Service Worker v5.5.2 loaded');
