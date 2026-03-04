@@ -9332,7 +9332,7 @@ function App() {
       className: "login-spinner-icon"
     }), React.createElement("span", {
       className: "login-progress-text"
-    }, loginProgress || 'Please wait...')) : 'Login'))));
+    }, loginProgress || 'Please wait...')) : 'Login')))));
   }
   if (currentUser && currentUser.userType === 'student') {
     return React.createElement(StudentDashboard, {
