@@ -19240,80 +19240,27 @@ function TeacherAttendanceDashboard({
       });
     };
   }, [dailyStats, gradeStats, teacherStats]);
-  const handleExportStudents = async () => {
-    // ✅ FIX v5.5.1: Fetch fresh from Firebase for full date range (was limited to 30 days)
-    if (!startDate || !endDate) { alert('Please select both Start Date and End Date.'); return; }
-    if (startDate > endDate) { alert('Start Date must be before End Date.'); return; }
-    const btn = document.activeElement;
-    const origTxt = btn ? btn.innerText : '';
-    if (btn) { btn.innerText = '⏳ Fetching...'; btn.disabled = true; }
-    try {
-      const fdb = firebase.firestore();
-      let all = [], lastDoc = null, hasMore = true;
-      while (hasMore) {
-        let q = fdb.collection('studentAttendance')
-          .where('school', '==', mySchool)
-          .where('date', '>=', startDate)
-          .where('date', '<=', endDate)
-          .orderBy('date', 'asc').limit(500);
-        if (lastDoc) q = q.startAfter(lastDoc);
-        const snap = await q.get();
-        if (snap.empty) { hasMore = false; break; }
-        snap.forEach(doc => all.push({ id: doc.id, ...doc.data() }));
-        if (snap.size < 500) { hasMore = false; } else { lastDoc = snap.docs[snap.docs.length - 1]; }
-      }
-      if (filterGrade !== 'All') all = all.filter(a => a.grade === filterGrade);
-      if (all.length === 0) { alert(`No student attendance found between ${startDate} and ${endDate}.`); return; }
-      all.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.studentName||'').localeCompare(b.studentName||''));
-      const exportData = all.map((a, i) => ({
-        'S.No': i + 1, Date: a.date, Grade: a.grade,
-        'Student Name': a.studentName, Status: a.status,
-        Remarks: a.remarks || '', 'Marked By': a.markedBy
-      }));
-      exportToExcel(exportData, `student_attendance_${mySchool}_${startDate}_to_${endDate}`);
-    } catch (err) {
-      console.error('[Export] ❌', err);
-      if (err.code === 'failed-precondition') {
-        alert('Export needs a Firebase index. Check the browser console for a link to create it, then try again.');
-      } else { alert('Export failed: ' + err.message); }
-    } finally { if (btn) { btn.innerText = origTxt; btn.disabled = false; } }
+  const handleExportStudents = () => {
+    const exportData = filteredStudentAttendance.map(a => ({
+      Date: a.date,
+      Grade: a.grade,
+      'Student Name': a.studentName,
+      Status: a.status,
+      Remarks: a.remarks || '',
+      'Marked By': a.markedBy
+    }));
+    exportToExcel(exportData, `student_attendance_${mySchool}_${startDate}_to_${endDate}`);
   };
-  const handleExportTeachers = async () => {
-    // ✅ FIX v5.5.1: Fetch fresh from Firebase for full date range (was limited to 30 days)
-    if (!startDate || !endDate) { alert('Please select both Start Date and End Date.'); return; }
-    if (startDate > endDate) { alert('Start Date must be before End Date.'); return; }
-    const btn = document.activeElement;
-    const origTxt = btn ? btn.innerText : '';
-    if (btn) { btn.innerText = '⏳ Fetching...'; btn.disabled = true; }
-    try {
-      const fdb = firebase.firestore();
-      let all = [], lastDoc = null, hasMore = true;
-      while (hasMore) {
-        let q = fdb.collection('teacherAttendance')
-          .where('school', '==', mySchool)
-          .where('date', '>=', startDate)
-          .where('date', '<=', endDate)
-          .orderBy('date', 'asc').limit(500);
-        if (lastDoc) q = q.startAfter(lastDoc);
-        const snap = await q.get();
-        if (snap.empty) { hasMore = false; break; }
-        snap.forEach(doc => all.push({ id: doc.id, ...doc.data() }));
-        if (snap.size < 500) { hasMore = false; } else { lastDoc = snap.docs[snap.docs.length - 1]; }
-      }
-      if (all.length === 0) { alert(`No teacher attendance found between ${startDate} and ${endDate}.`); return; }
-      all.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.teacherName||'').localeCompare(b.teacherName||''));
-      const exportData = all.map((a, i) => ({
-        'S.No': i + 1, Date: a.date, 'Teacher Name': a.teacherName,
-        'Punch-In Time': a.punchInTime || 'Not recorded',
-        Status: a.status, Reason: a.reason || '', Location: a.location || ''
-      }));
-      exportToExcel(exportData, `teacher_attendance_${mySchool}_${startDate}_to_${endDate}`);
-    } catch (err) {
-      console.error('[Export] ❌', err);
-      if (err.code === 'failed-precondition') {
-        alert('Export needs a Firebase index. Check the browser console for a link to create it, then try again.');
-      } else { alert('Export failed: ' + err.message); }
-    } finally { if (btn) { btn.innerText = origTxt; btn.disabled = false; } }
+  const handleExportTeachers = () => {
+    const exportData = filteredTeacherAttendance.map(a => ({
+      Date: a.date,
+      'Teacher Name': a.teacherName,
+      'Punch-In Time': a.punchInTime || 'Not recorded',
+      Status: a.status,
+      Reason: a.reason,
+      Location: a.location
+    }));
+    exportToExcel(exportData, `teacher_attendance_${mySchool}_${startDate}_to_${endDate}`);
   };
   return React.createElement("div", {
     className: "space-y-6"
@@ -20553,21 +20500,110 @@ function AdminAttendanceAnalytics({
     if (!hasFullDataAccess && !schoolMatchesFilter(lock.school, accessibleSchools)) return false;
     return true;
   });
+  // ✅ FIX v5.5.1: Local state for Firebase-fetched data (not limited to 30 days)
+  const [fetchedStudentAtt, setFetchedStudentAtt] = useState(studentAttendance);
+  const [fetchedTeacherAtt, setFetchedTeacherAtt] = useState(teacherAttendance);
+  const [isFetchingRange, setIsFetchingRange] = useState(false);
+
+  // Fetch fresh data from Firebase whenever date range or school filter changes
+  useEffect(() => {
+    if (!startDate || !endDate) return;
+    const today = getTodayDate();
+    // Calculate if selected range is within last 30 days (already in memory)
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    if (startDate >= thirtyDaysAgo) {
+      // Within 30-day window — use props (already loaded, faster)
+      setFetchedStudentAtt(studentAttendance);
+      setFetchedTeacherAtt(teacherAttendance);
+      return;
+    }
+    // Outside 30-day window — fetch fresh from Firebase
+    setIsFetchingRange(true);
+    const fetchRange = async () => {
+      try {
+        const fdb = firebase.firestore();
+        // Fetch student attendance
+        let sAll = [], sLast = null, sMore = true;
+        while (sMore) {
+          let sq = fdb.collection('studentAttendance')
+            .where('date', '>=', startDate)
+            .where('date', '<=', endDate)
+            .orderBy('date', 'asc').limit(500);
+          if (filterSchools && filterSchools.length === 1) {
+            sq = fdb.collection('studentAttendance')
+              .where('school', '==', filterSchools[0])
+              .where('date', '>=', startDate)
+              .where('date', '<=', endDate)
+              .orderBy('date', 'asc').limit(500);
+          }
+          if (sLast) sq = sq.startAfter(sLast);
+          const snap = await sq.get();
+          if (snap.empty) { sMore = false; break; }
+          snap.forEach(doc => sAll.push({ id: doc.id, ...doc.data() }));
+          if (snap.size < 500) { sMore = false; } else { sLast = snap.docs[snap.docs.length - 1]; }
+        }
+        // Fetch teacher attendance
+        let tAll = [], tLast = null, tMore = true;
+        while (tMore) {
+          let tq = fdb.collection('teacherAttendance')
+            .where('date', '>=', startDate)
+            .where('date', '<=', endDate)
+            .orderBy('date', 'asc').limit(500);
+          if (filterSchools && filterSchools.length === 1) {
+            tq = fdb.collection('teacherAttendance')
+              .where('school', '==', filterSchools[0])
+              .where('date', '>=', startDate)
+              .where('date', '<=', endDate)
+              .orderBy('date', 'asc').limit(500);
+          }
+          if (tLast) tq = tq.startAfter(tLast);
+          const snap = await tq.get();
+          if (snap.empty) { tMore = false; break; }
+          snap.forEach(doc => tAll.push({ id: doc.id, ...doc.data() }));
+          if (snap.size < 500) { tMore = false; } else { tLast = snap.docs[snap.docs.length - 1]; }
+        }
+        setFetchedStudentAtt(sAll);
+        setFetchedTeacherAtt(tAll);
+        console.log('[AttendanceDashboard] ✅ Fetched', sAll.length, 'student +', tAll.length, 'teacher records for', startDate, 'to', endDate);
+      } catch (err) {
+        console.error('[AttendanceDashboard] ❌ Fetch error:', err);
+        if (err.code === 'failed-precondition') {
+          alert('Dashboard needs a Firebase index. Check the browser console for a link to create it, then refresh.');
+        }
+        // Fallback to in-memory data
+        setFetchedStudentAtt(studentAttendance);
+        setFetchedTeacherAtt(teacherAttendance);
+      } finally {
+        setIsFetchingRange(false);
+      }
+    };
+    fetchRange();
+  }, [startDate, endDate, filterSchools.join(',')]);
+
+  // When in-memory props update (e.g. on app refresh), sync them if within 30-day window
+  useEffect(() => {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    if (startDate >= thirtyDaysAgo) {
+      setFetchedStudentAtt(studentAttendance);
+      setFetchedTeacherAtt(teacherAttendance);
+    }
+  }, [studentAttendance, teacherAttendance]);
+
   const filteredStudentAttendance = useMemo(() => {
-    return studentAttendance.filter(a => {
+    return fetchedStudentAtt.filter(a => {
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
       if (a.date < startDate || a.date > endDate) return false;
       return true;
     });
-  }, [studentAttendance, filterSchools, filterGrade, startDate, endDate]);
+  }, [fetchedStudentAtt, filterSchools, filterGrade, startDate, endDate]);
   const filteredTeacherAttendance = useMemo(() => {
-    return teacherAttendance.filter(a => {
+    return fetchedTeacherAtt.filter(a => {
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       if (a.date < startDate || a.date > endDate) return false;
       return true;
     });
-  }, [teacherAttendance, filterSchools, startDate, endDate]);
+  }, [fetchedTeacherAtt, filterSchools, startDate, endDate]);
   const todayStats = useMemo(() => {
     const studentRecords = studentAttendance.filter(a => {
       if (a.date !== selectedDate) return false;
@@ -20798,110 +20834,29 @@ function AdminAttendanceAnalytics({
       });
     };
   }, [monthlyDayStats, genderStats, filteredTeacherAttendance, filteredStudentAttendance]);
-  const handleExportStudents = async () => {
-    // ✅ FIX v5.5.1: Fetch fresh from Firebase for the full selected date range.
-    // Old code used filteredStudentAttendance which only had last 30 days in memory.
-    if (!startDate || !endDate) { alert('Please select both Start Date and End Date.'); return; }
-    if (startDate > endDate) { alert('Start Date must be before End Date.'); return; }
-    const btn = document.activeElement;
-    const origTxt = btn ? btn.innerText : '';
-    if (btn) { btn.innerText = '⏳ Fetching...'; btn.disabled = true; }
-    try {
-      const fdb = firebase.firestore();
-      let all = [], lastDoc = null, hasMore = true;
-      while (hasMore) {
-        let q = fdb.collection('studentAttendance')
-          .where('date', '>=', startDate)
-          .where('date', '<=', endDate)
-          .orderBy('date', 'asc').limit(500);
-        if (filterSchools && filterSchools.length > 0 && filterSchools.length === 1) {
-          q = fdb.collection('studentAttendance')
-            .where('school', '==', filterSchools[0])
-            .where('date', '>=', startDate)
-            .where('date', '<=', endDate)
-            .orderBy('date', 'asc').limit(500);
-        }
-        if (lastDoc) q = q.startAfter(lastDoc);
-        const snap = await q.get();
-        if (snap.empty) { hasMore = false; break; }
-        snap.forEach(doc => all.push({ id: doc.id, ...doc.data() }));
-        if (snap.size < 500) { hasMore = false; } else { lastDoc = snap.docs[snap.docs.length - 1]; }
-      }
-      // Client-side filter for multi-school or grade
-      let records = all.filter(a => {
-        if (filterSchools && filterSchools.length > 0 && filterSchools.length > 1) {
-          if (!filterSchools.some(s => s.toLowerCase() === (a.school || '').toLowerCase())) return false;
-        }
-        if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
-        return true;
-      });
-      if (records.length === 0) { alert(`No student attendance found between ${startDate} and ${endDate}.`); return; }
-      records.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.studentName||'').localeCompare(b.studentName||''));
-      const exportData = records.map((a, i) => ({
-        'S.No': i + 1, Date: a.date, School: a.school, Grade: a.grade,
-        'Student Name': a.studentName, Status: a.status,
-        Remarks: a.remarks || '', 'Marked By': a.markedBy
-      }));
-      exportToExcel(exportData, `student_attendance_${startDate}_to_${endDate}`);
-      console.log(`[Export] ✅ Exported ${records.length} student records`);
-    } catch (err) {
-      console.error('[Export] ❌', err);
-      if (err.code === 'failed-precondition') {
-        alert('Export needs a Firebase index. Check the browser console for a link to create it, then try again.');
-      } else { alert('Export failed: ' + err.message); }
-    } finally { if (btn) { btn.innerText = origTxt; btn.disabled = false; } }
+  const handleExportStudents = () => {
+    // ✅ filteredStudentAttendance is now Firebase-fetched for any date range
+    if (isFetchingRange) { alert('Data is still loading, please wait a moment and try again.'); return; }
+    if (filteredStudentAttendance.length === 0) { alert(`No student attendance found between ${startDate} and ${endDate}.`); return; }
+    const exportData = filteredStudentAttendance.map((a, i) => ({
+      'S.No': i + 1, Date: a.date, School: a.school, Grade: a.grade,
+      'Student Name': a.studentName, Status: a.status,
+      Remarks: a.remarks || '', 'Marked By': a.markedBy
+    }));
+    exportToExcel(exportData, `student_attendance_${startDate}_to_${endDate}`);
+    console.log(`[Export] ✅ ${exportData.length} student records`);
   };
-  const handleExportTeachers = async () => {
-    // ✅ FIX v5.5.1: Fetch fresh from Firebase for the full selected date range.
-    // Old code used filteredTeacherAttendance which only had last 30 days in memory.
-    if (!startDate || !endDate) { alert('Please select both Start Date and End Date.'); return; }
-    if (startDate > endDate) { alert('Start Date must be before End Date.'); return; }
-    const btn = document.activeElement;
-    const origTxt = btn ? btn.innerText : '';
-    if (btn) { btn.innerText = '⏳ Fetching...'; btn.disabled = true; }
-    try {
-      const fdb = firebase.firestore();
-      let all = [], lastDoc = null, hasMore = true;
-      while (hasMore) {
-        let q = fdb.collection('teacherAttendance')
-          .where('date', '>=', startDate)
-          .where('date', '<=', endDate)
-          .orderBy('date', 'asc').limit(500);
-        if (filterSchools && filterSchools.length === 1) {
-          q = fdb.collection('teacherAttendance')
-            .where('school', '==', filterSchools[0])
-            .where('date', '>=', startDate)
-            .where('date', '<=', endDate)
-            .orderBy('date', 'asc').limit(500);
-        }
-        if (lastDoc) q = q.startAfter(lastDoc);
-        const snap = await q.get();
-        if (snap.empty) { hasMore = false; break; }
-        snap.forEach(doc => all.push({ id: doc.id, ...doc.data() }));
-        if (snap.size < 500) { hasMore = false; } else { lastDoc = snap.docs[snap.docs.length - 1]; }
-      }
-      // Client-side filter for multi-school
-      let records = all.filter(a => {
-        if (filterSchools && filterSchools.length > 1) {
-          if (!filterSchools.some(s => s.toLowerCase() === (a.school || '').toLowerCase())) return false;
-        }
-        return true;
-      });
-      if (records.length === 0) { alert(`No teacher attendance found between ${startDate} and ${endDate}.`); return; }
-      records.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.teacherName||'').localeCompare(b.teacherName||''));
-      const exportData = records.map((a, i) => ({
-        'S.No': i + 1, Date: a.date, 'Teacher Name': a.teacherName, School: a.school,
-        'Punch-In Time': a.punchInTime || 'Not recorded',
-        Status: a.status, Reason: a.reason || '', Location: a.location || ''
-      }));
-      exportToExcel(exportData, `teacher_attendance_${startDate}_to_${endDate}`);
-      console.log(`[Export] ✅ Exported ${records.length} teacher records`);
-    } catch (err) {
-      console.error('[Export] ❌', err);
-      if (err.code === 'failed-precondition') {
-        alert('Export needs a Firebase index. Check the browser console for a link to create it, then try again.');
-      } else { alert('Export failed: ' + err.message); }
-    } finally { if (btn) { btn.innerText = origTxt; btn.disabled = false; } }
+  const handleExportTeachers = () => {
+    // ✅ filteredTeacherAttendance is now Firebase-fetched for any date range
+    if (isFetchingRange) { alert('Data is still loading, please wait a moment and try again.'); return; }
+    if (filteredTeacherAttendance.length === 0) { alert(`No teacher attendance found between ${startDate} and ${endDate}.`); return; }
+    const exportData = filteredTeacherAttendance.map((a, i) => ({
+      'S.No': i + 1, Date: a.date, 'Teacher Name': a.teacherName, School: a.school,
+      'Punch-In Time': a.punchInTime || 'Not recorded',
+      Status: a.status, Reason: a.reason || '', Location: a.location || ''
+    }));
+    exportToExcel(exportData, `teacher_attendance_${startDate}_to_${endDate}`);
+    console.log(`[Export] ✅ ${exportData.length} teacher records`);
   };
   return React.createElement("div", {
     className: "space-y-6"
@@ -20909,7 +20864,9 @@ function AdminAttendanceAnalytics({
     className: "flex justify-between items-center flex-wrap gap-4"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
-  }, "\uD83D\uDCCA Attendance Analytics"), React.createElement("div", {
+  }, "\uD83D\uDCCA Attendance Analytics"), isFetchingRange && React.createElement("div", {
+    className: "flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 rounded-xl font-semibold text-sm"
+  }, "\u23F3 Loading attendance data..."), React.createElement("div", {
     className: "flex gap-2 flex-wrap"
   }, React.createElement("button", {
     onClick: () => setShowLockManagement(!showLockManagement),
