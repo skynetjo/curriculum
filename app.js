@@ -20500,94 +20500,54 @@ function AdminAttendanceAnalytics({
     if (!hasFullDataAccess && !schoolMatchesFilter(lock.school, accessibleSchools)) return false;
     return true;
   });
-  // ✅ FIX v5.5.1: Local state for Firebase-fetched data (not limited to 30 days)
-  const [fetchedStudentAtt, setFetchedStudentAtt] = useState(studentAttendance);
-  const [fetchedTeacherAtt, setFetchedTeacherAtt] = useState(teacherAttendance);
+  // ✅ FIX v5.5.2: Firebase-fetched data for any date range — NO composite index needed
+  // Strategy: query by date only (single-field index, always exists), filter school client-side
+  const [fetchedStudentAtt, setFetchedStudentAtt] = useState([]);
+  const [fetchedTeacherAtt, setFetchedTeacherAtt] = useState([]);
   const [isFetchingRange, setIsFetchingRange] = useState(false);
+  const [fetchError, setFetchError] = useState('');
 
-  // Fetch fresh data from Firebase whenever date range or school filter changes
   useEffect(() => {
-    if (!startDate || !endDate) return;
-    const today = getTodayDate();
-    // Calculate if selected range is within last 30 days (already in memory)
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    if (startDate >= thirtyDaysAgo) {
-      // Within 30-day window — use props (already loaded, faster)
-      setFetchedStudentAtt(studentAttendance);
-      setFetchedTeacherAtt(teacherAttendance);
-      return;
-    }
-    // Outside 30-day window — fetch fresh from Firebase
+    if (!startDate || !endDate || startDate > endDate) return;
     setIsFetchingRange(true);
-    const fetchRange = async () => {
-      try {
-        const fdb = firebase.firestore();
-        // Fetch student attendance
-        let sAll = [], sLast = null, sMore = true;
-        while (sMore) {
-          let sq = fdb.collection('studentAttendance')
-            .where('date', '>=', startDate)
-            .where('date', '<=', endDate)
-            .orderBy('date', 'asc').limit(500);
-          if (filterSchools && filterSchools.length === 1) {
-            sq = fdb.collection('studentAttendance')
-              .where('school', '==', filterSchools[0])
-              .where('date', '>=', startDate)
-              .where('date', '<=', endDate)
-              .orderBy('date', 'asc').limit(500);
-          }
-          if (sLast) sq = sq.startAfter(sLast);
-          const snap = await sq.get();
-          if (snap.empty) { sMore = false; break; }
-          snap.forEach(doc => sAll.push({ id: doc.id, ...doc.data() }));
-          if (snap.size < 500) { sMore = false; } else { sLast = snap.docs[snap.docs.length - 1]; }
-        }
-        // Fetch teacher attendance
-        let tAll = [], tLast = null, tMore = true;
-        while (tMore) {
-          let tq = fdb.collection('teacherAttendance')
-            .where('date', '>=', startDate)
-            .where('date', '<=', endDate)
-            .orderBy('date', 'asc').limit(500);
-          if (filterSchools && filterSchools.length === 1) {
-            tq = fdb.collection('teacherAttendance')
-              .where('school', '==', filterSchools[0])
-              .where('date', '>=', startDate)
-              .where('date', '<=', endDate)
-              .orderBy('date', 'asc').limit(500);
-          }
-          if (tLast) tq = tq.startAfter(tLast);
-          const snap = await tq.get();
-          if (snap.empty) { tMore = false; break; }
-          snap.forEach(doc => tAll.push({ id: doc.id, ...doc.data() }));
-          if (snap.size < 500) { tMore = false; } else { tLast = snap.docs[snap.docs.length - 1]; }
-        }
-        setFetchedStudentAtt(sAll);
-        setFetchedTeacherAtt(tAll);
-        console.log('[AttendanceDashboard] ✅ Fetched', sAll.length, 'student +', tAll.length, 'teacher records for', startDate, 'to', endDate);
-      } catch (err) {
-        console.error('[AttendanceDashboard] ❌ Fetch error:', err);
-        if (err.code === 'failed-precondition') {
-          alert('Dashboard needs a Firebase index. Check the browser console for a link to create it, then refresh.');
-        }
-        // Fallback to in-memory data
-        setFetchedStudentAtt(studentAttendance);
-        setFetchedTeacherAtt(teacherAttendance);
-      } finally {
-        setIsFetchingRange(false);
-      }
-    };
-    fetchRange();
-  }, [startDate, endDate, filterSchools.join(',')]);
+    setFetchError('');
 
-  // When in-memory props update (e.g. on app refresh), sync them if within 30-day window
-  useEffect(() => {
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    if (startDate >= thirtyDaysAgo) {
-      setFetchedStudentAtt(studentAttendance);
-      setFetchedTeacherAtt(teacherAttendance);
-    }
-  }, [studentAttendance, teacherAttendance]);
+    const fetchAll = async (collectionName) => {
+      // ✅ ONLY filter by date — no school filter in query = no composite index needed
+      // School filtering happens client-side below
+      const fdb = firebase.firestore();
+      let all = [], lastDoc = null;
+      while (true) {
+        let q = fdb.collection(collectionName)
+          .where('date', '>=', startDate)
+          .where('date', '<=', endDate)
+          .orderBy('date', 'asc')
+          .limit(500);
+        if (lastDoc) q = q.startAfter(lastDoc);
+        const snap = await q.get();
+        if (snap.empty) break;
+        snap.forEach(doc => all.push({ id: doc.id, ...doc.data() }));
+        if (snap.size < 500) break;
+        lastDoc = snap.docs[snap.docs.length - 1];
+      }
+      return all;
+    };
+
+    Promise.all([
+      fetchAll('studentAttendance'),
+      fetchAll('teacherAttendance')
+    ]).then(([sAll, tAll]) => {
+      setFetchedStudentAtt(sAll);
+      setFetchedTeacherAtt(tAll);
+      console.log('[Dashboard] ✅ Fetched', sAll.length, 'student +', tAll.length, 'teacher records:', startDate, '→', endDate);
+    }).catch(err => {
+      console.error('[Dashboard] ❌ Fetch error:', err);
+      setFetchError('Could not load data: ' + err.message);
+      // Fallback to whatever was already in state
+    }).finally(() => {
+      setIsFetchingRange(false);
+    });
+  }, [startDate, endDate]);
 
   const filteredStudentAttendance = useMemo(() => {
     return fetchedStudentAtt.filter(a => {
@@ -20605,13 +20565,14 @@ function AdminAttendanceAnalytics({
     });
   }, [fetchedTeacherAtt, filterSchools, startDate, endDate]);
   const todayStats = useMemo(() => {
-    const studentRecords = studentAttendance.filter(a => {
+    // ✅ Use fetchedStudentAtt/fetchedTeacherAtt so "Today's View" also works for any date
+    const studentRecords = fetchedStudentAtt.filter(a => {
       if (a.date !== selectedDate) return false;
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
       return true;
     });
-    const teacherRecords = teacherAttendance.filter(a => {
+    const teacherRecords = fetchedTeacherAtt.filter(a => {
       if (a.date !== selectedDate) return false;
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       return true;
@@ -20622,7 +20583,7 @@ function AdminAttendanceAnalytics({
       teacherPresent: teacherRecords.filter(r => r.status === 'Present').length,
       teacherAbsent: teacherRecords.filter(r => r.status === 'On Leave').length
     };
-  }, [studentAttendance, teacherAttendance, selectedDate, filterSchools, filterGrade]);
+  }, [fetchedStudentAtt, fetchedTeacherAtt, selectedDate, filterSchools, filterGrade]);
   const genderStats = useMemo(() => {
     const stats = {
       Male: {
@@ -20864,9 +20825,13 @@ function AdminAttendanceAnalytics({
     className: "flex justify-between items-center flex-wrap gap-4"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
-  }, "\uD83D\uDCCA Attendance Analytics"), isFetchingRange && React.createElement("div", {
-    className: "flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 rounded-xl font-semibold text-sm"
-  }, "\u23F3 Loading attendance data..."), React.createElement("div", {
+  }, "\uD83D\uDCCA Attendance Analytics"), React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, isFetchingRange && React.createElement("div", {
+    className: "flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-800 rounded-xl font-semibold text-sm animate-pulse"
+  }, "\u23F3 Loading data for ", startDate, " \u2192 ", endDate, "..."), fetchError && React.createElement("div", {
+    className: "flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-xl text-sm"
+  }, "\u26A0\uFE0F ", fetchError)), React.createElement("div", {
     className: "flex gap-2 flex-wrap"
   }, React.createElement("button", {
     onClick: () => setShowLockManagement(!showLockManagement),
