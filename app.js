@@ -1,4 +1,4 @@
-// ✅ PRE-COMPILED JAVASCRIPT v5.5.3 - Performance Optimized
+// ✅ PRE-COMPILED JAVASCRIPT v5.5.4 - Performance Optimized
 // ✅ PERFORMANCE: Use passive event listeners for scroll/touch
 document.addEventListener('touchstart', function(){}, {passive: true});
 document.addEventListener('touchmove', function(){}, {passive: true});
@@ -2898,17 +2898,10 @@ function MultiSelectDropdown({
     className: "absolute z-50 w-full mt-1 bg-white border-2 rounded-xl shadow-lg max-h-64 overflow-y-auto"
   }, React.createElement("label", {
     className: "flex items-center px-4 py-2 hover:bg-yellow-50 cursor-pointer border-b"
-  }, React.createElement("input", {
-    type: "checkbox",
-    checked: selected.length === options.length,
-    onChange: handleSelectAll,
-    className: "mr-3 accent-red-500",
-    style: {
-      width: '18px',
-      height: '18px'
-    }
-  }), React.createElement("span", {
-    className: "font-semibold"
+  }, React.createElement("div", {
+    className: `w-5 h-5 rounded border-2 mr-3 flex items-center justify-center flex-shrink-0 transition-colors ${selected.length === options.length ? 'bg-red-500 border-red-500' : 'border-gray-300 bg-white'}`
+  }, selected.length === options.length && React.createElement("svg", {viewBox:"0 0 10 8", width:"12", height:"12", fill:"none"}, React.createElement("path", {d:"M1 4l3 3 5-6", stroke:"white", strokeWidth:"1.8", strokeLinecap:"round", strokeLinejoin:"round"}))), React.createElement("span", {
+    className: "font-semibold text-gray-800"
   }, selected.length === options.length ? 'Deselect All' : 'Select All')), options.map((option, idx) => {
     const value = getOptionValue(option);
     const labelText = getOptionLabel(option);
@@ -2921,17 +2914,9 @@ function MultiSelectDropdown({
       onClick: () => handleToggleOption(value)
     }, React.createElement("label", {
       className: "flex items-center cursor-pointer flex-1"
-    }, React.createElement("input", {
-      type: "checkbox",
-      checked: selected.includes(value),
-      onChange: () => handleToggleOption(value),
-      className: "mr-3 accent-red-500",
-      style: {
-        width: '18px',
-        height: '18px'
-      },
-      onClick: e => e.stopPropagation()
-    }), React.createElement("span", null, labelText)), React.createElement("button", {
+    }, React.createElement("div", {
+      className: `w-5 h-5 rounded border-2 mr-3 flex items-center justify-center flex-shrink-0 transition-all duration-150 ${selected.includes(value) ? 'bg-red-500 border-red-500' : 'border-gray-300 bg-white group-hover:border-red-300'}`
+    }, selected.includes(value) && React.createElement("svg", {viewBox:"0 0 10 8", width:"12", height:"12", fill:"none"}, React.createElement("path", {d:"M1 4l3 3 5-6", stroke:"white", strokeWidth:"1.8", strokeLinecap:"round", strokeLinejoin:"round"}))), React.createElement("span", {className: "text-gray-700 text-sm"}, labelText)), React.createElement("button", {
       onClick: e => handleOnlyClick(e, value),
       className: `text-xs font-semibold px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 transition-opacity duration-150 ${isHovered ? 'opacity-100' : 'opacity-0'}`,
       style: {
@@ -7083,7 +7068,7 @@ function DataFreshnessIndicator() {
   const shouldShow = !isOnline || isStale || isRefreshing || pendingCount > 0 || connectionQuality === 'very-slow';
   if (!shouldShow) return null;
   return React.createElement("div", {
-    className: "fixed bottom-20 right-4 z-40"
+    className: "fixed bottom-20 right-4 z-30"
   }, React.createElement("div", {
     className: `px-3 py-2 rounded-lg shadow-lg text-sm cursor-pointer transition-all ${getConnectionColor()} text-white`,
     onClick: () => setShowDetails(!showDetails)
