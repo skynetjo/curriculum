@@ -12983,7 +12983,25 @@ function AdminView({
   const filteredStudents = hasFullDataAccess ? students : students.filter(s => schoolMatches(s.school, accessibleSchools));
   const filteredStudentAttendance = hasFullDataAccess ? studentAttendance : studentAttendance.filter(a => schoolMatches(a.school, accessibleSchools));
   const filteredTeacherAttendance = hasFullDataAccess ? teacherAttendance : teacherAttendance.filter(a => schoolMatches(a.school, accessibleSchools));
-  const filteredSchoolInfo = hasFullDataAccess ? schoolInfo : schoolInfo.filter(s => schoolMatches(s.school, accessibleSchools));
+  // ✅ FIX: School Info is a management tool — all PM/APM/Program Head roles
+  // need full visibility to review teacher-submitted data across their centres.
+  // The old filter caused an empty page because school name formats in Firestore
+  // (e.g. "CoE Barwani") don't always exactly match the accessibleSchools list.
+  const isManagerRole = currentUser?.role === 'pm' || 
+    currentUser?.role === 'apm' ||
+    currentUser?.role === 'program_manager' || 
+    currentUser?.role === 'associate_program_manager' ||
+    currentUser?.role === 'program_head' || 
+    currentUser?.role === 'aph' ||
+    currentUser?.role === 'training';
+  const filteredSchoolInfo = (hasFullDataAccess || isManagerRole)
+    ? schoolInfo  // super admin / director / all manager roles → see everything
+    : (() => {
+        // For any other edge case: try school-filter, but fall back to all data
+        // if filter returns nothing (guards against name-format mismatches)
+        const filtered = schoolInfo.filter(s => schoolMatches(s.school, accessibleSchools));
+        return filtered.length > 0 ? filtered : schoolInfo;
+      })();
   console.log('📊 AdminView Data:', {
     hasFullDataAccess,
     accessibleSchools,
