@@ -21252,7 +21252,10 @@ function SchoolInfoView({
   };
   const handleSubmit = async () => {
     const docId = mySchool.replace(/\s+/g, '_');
-    const existingDoc = await db.collection('schoolInformation').doc(docId).get();
+    // ✅ FIX: Use correct collection 'schoolInfo' (was wrongly 'schoolInformation')
+    // This ensures the existence check correctly finds previously saved data,
+    // so teachers editing existing info don't get forced through full validation again.
+    const existingDoc = await db.collection('schoolInfo').doc(docId).get();
     const schoolInfoExists = existingDoc.exists && existingDoc.data().principalName;
     if (!schoolInfoExists) {
       const requiredFields = [{
@@ -22317,6 +22320,60 @@ function AdminSchoolInfo({
   const [isSaving, setIsSaving] = useState(false);
   const [showMeetingForm, setShowMeetingForm] = useState(null);
   const [newMeeting, setNewMeeting] = useState({ meetingDate: '', meetingTime: '', attendees: '', discussedPoints: '', actionPoints: '' });
+  // ✅ FIX: Allow PM/Admin to manually add school info for schools teachers haven't filled yet
+  const [addingSchool, setAddingSchool] = useState(null);
+  const [addFormData, setAddFormData] = useState({});
+  const [isAddSaving, setIsAddSaving] = useState(false);
+
+  const filledSchools = new Set(schoolInfo.map(s => s.school));
+
+  const startAdding = (schoolName) => {
+    setAddingSchool(schoolName);
+    setAddFormData({
+      school: schoolName,
+      principalName: '', principalPhone: '', principalEmail: '',
+      vicePrincipalName: '', vicePrincipalPhone: '', vicePrincipalEmail: '',
+      coordinatorName: '', coordinatorPhone: '', coordinatorEmail: '',
+      wifiInClassroom: 'No', wifiWorking: 'No', bothClassesWifi: 'No',
+      wifiInstalledBy: '', wifiMonthlyBill: '', wifiConnectionType: '', wifiNetworkName: '',
+      modules11Received: '', modules11Distributed: '', modules11Stock: '', modules11Remarks: '',
+      modules12Received: '', modules12Distributed: '', modules12Stock: '', modules12Remarks: '',
+      chromebooks11Distributed: 'No', chromebooks11Count: '', chromebooks11Working: '',
+      chromebooks12Distributed: 'No', chromebooks12Count: '', chromebooks12Working: '',
+      printerAvailable: 'No', printerWorking: 'No', printerBrand: '', printerIssuedDate: '',
+      referenceBooks: [], otherAssets: [], meetingMinutes: []
+    });
+  };
+
+  const saveNewSchoolInfo = async () => {
+    if (!addFormData.principalName?.trim()) {
+      alert('Please enter at least the Principal Name before saving.');
+      return;
+    }
+    setIsAddSaving(true);
+    try {
+      const docId = addFormData.school.replace(/\s+/g, '_');
+      const now = new Date().toISOString();
+      const userId = currentUser?.afid || currentUser?.id || currentUser?.email || 'unknown';
+      const historyEntry = { updatedBy: userId, updatedByName: currentUser?.name || 'Manager', updatedAt: now };
+      await db.collection('schoolInfo').doc(docId).set({
+        ...addFormData,
+        updatedBy: userId,
+        updatedByName: currentUser?.name || 'Manager',
+        updatedAt: now,
+        updateHistory: [historyEntry]
+      });
+      if (setSchoolInfo) {
+        setSchoolInfo(prev => [...prev, { ...addFormData, docId, updatedAt: now, updatedByName: currentUser?.name }]);
+      }
+      setAddingSchool(null);
+      setAddFormData({});
+      alert('\u2705 School information added successfully!');
+    } catch (e) {
+      alert('\u274C Failed to save: ' + e.message);
+    }
+    setIsAddSaving(false);
+  };
 
   const startEditing = (info) => {
     setEditingSchool(info.school);
@@ -22450,20 +22507,133 @@ function AdminSchoolInfo({
     }));
     exportToExcel(exportData, 'school_information');
   };
+  // ✅ FIX: Show all schools with their fill status. For unfilled schools,
+  // show an "Add Info" button so PM can enter data directly without waiting for teachers.
+  const allSchools = typeof SCHOOLS !== 'undefined' ? SCHOOLS : [];
+  const unfilledSchools = allSchools.filter(s => !filledSchools.has(s));
+
+  // Simple add-form helper
+  const addField = (label, field, type) => React.createElement("div", { className: "mb-3" },
+    React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-1" }, label),
+    React.createElement("input", {
+      type: type || "text",
+      value: addFormData[field] || '',
+      onChange: e => setAddFormData(prev => ({ ...prev, [field]: e.target.value })),
+      className: "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+    })
+  );
+
   return React.createElement("div", {
     className: "space-y-6"
-  }, React.createElement("div", {
+  },
+  // ── Header ──────────────────────────────────────────────────────────────
+  React.createElement("div", {
     className: "flex justify-between items-center"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
   }, "\uD83C\uDFEB School Information"), React.createElement("button", {
     onClick: handleExport,
     className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold"
-  }, "\uD83D\uDCE5 Export to Excel")), schoolInfo.length === 0 ? React.createElement("div", {
+  }, "\uD83D\uDCE5 Export to Excel")),
+
+  // ── Status summary banner ────────────────────────────────────────────────
+  React.createElement("div", {
+    className: "grid grid-cols-2 gap-4 sm:grid-cols-3"
+  },
+    React.createElement("div", { className: "bg-green-50 border border-green-200 rounded-2xl p-4 text-center" },
+      React.createElement("div", { className: "text-3xl font-bold text-green-700" }, schoolInfo.length),
+      React.createElement("div", { className: "text-sm text-green-600 mt-1" }, "Schools Filled")
+    ),
+    React.createElement("div", { className: "bg-orange-50 border border-orange-200 rounded-2xl p-4 text-center" },
+      React.createElement("div", { className: "text-3xl font-bold text-orange-600" }, unfilledSchools.length),
+      React.createElement("div", { className: "text-sm text-orange-500 mt-1" }, "Schools Pending")
+    ),
+    React.createElement("div", { className: "bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center" },
+      React.createElement("div", { className: "text-3xl font-bold text-blue-700" }, allSchools.length || (schoolInfo.length + unfilledSchools.length)),
+      React.createElement("div", { className: "text-sm text-blue-600 mt-1" }, "Total Schools")
+    )
+  ),
+
+  // ── Unfilled schools — PM can add info directly ──────────────────────────
+  unfilledSchools.length > 0 && React.createElement("div", { className: "bg-orange-50 border border-orange-200 rounded-2xl p-5" },
+    React.createElement("h3", { className: "font-semibold text-orange-700 mb-3" },
+      "\u23F3 Pending Schools — Teachers haven't submitted yet"
+    ),
+    React.createElement("div", { className: "space-y-2" },
+      unfilledSchools.map(school => React.createElement("div", {
+        key: school,
+        className: "flex items-center justify-between bg-white border border-orange-100 rounded-xl px-4 py-3"
+      },
+        React.createElement("span", { className: "font-medium text-gray-800" }, school),
+        React.createElement("button", {
+          onClick: () => startAdding(school),
+          className: "px-4 py-1.5 bg-yellow-500 text-white rounded-lg text-sm font-semibold hover:bg-yellow-600 transition"
+        }, "\u2795 Add Info")
+      ))
+    )
+  ),
+
+  // ── Add Info Modal ───────────────────────────────────────────────────────
+  addingSchool && React.createElement("div", {
+    className: "fixed inset-0 z-50 flex items-start justify-center bg-black bg-opacity-50 overflow-y-auto pt-4 pb-8"
+  }, React.createElement("div", { className: "bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6" },
+    React.createElement("div", { className: "flex justify-between items-center mb-4" },
+      React.createElement("h3", { className: "text-xl font-bold" }, "\uD83C\uDFEB Add Info — " + addingSchool),
+      React.createElement("button", { onClick: () => setAddingSchool(null), className: "text-gray-400 hover:text-gray-700 text-2xl leading-none" }, "\u00D7")
+    ),
+    React.createElement("p", { className: "text-sm text-gray-500 mb-4" }, "Fill key details. You can always edit later. Only Principal Name is required to save."),
+    // Contact section
+    React.createElement("div", { className: "font-semibold text-gray-700 mb-2 mt-2" }, "\uD83D\uDC64 Principal"),
+    addField("Name *", "principalName"),
+    addField("Phone", "principalPhone", "tel"),
+    addField("Email", "principalEmail", "email"),
+    React.createElement("div", { className: "font-semibold text-gray-700 mb-2 mt-4" }, "\uD83D\uDC64 Vice Principal"),
+    addField("Name", "vicePrincipalName"),
+    addField("Phone", "vicePrincipalPhone", "tel"),
+    React.createElement("div", { className: "font-semibold text-gray-700 mb-2 mt-4" }, "\uD83D\uDC64 Avanti Coordinator"),
+    addField("Name", "coordinatorName"),
+    addField("Phone", "coordinatorPhone", "tel"),
+    addField("Email", "coordinatorEmail", "email"),
+    // WiFi
+    React.createElement("div", { className: "font-semibold text-gray-700 mb-2 mt-4" }, "\uD83D\uDCF6 WiFi Status"),
+    React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-2" },
+      ["wifiInClassroom","wifiWorking","bothClassesWifi"].map(f =>
+        React.createElement("div", { key: f },
+          React.createElement("label", { className: "block text-sm text-gray-600 mb-1" },
+            f === "wifiInClassroom" ? "WiFi in Classroom" : f === "wifiWorking" ? "WiFi Working" : "Both Classes WiFi"
+          ),
+          React.createElement("select", {
+            value: addFormData[f] || 'No',
+            onChange: e => setAddFormData(prev => ({ ...prev, [f]: e.target.value })),
+            className: "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          },
+            React.createElement("option", null, "Yes"),
+            React.createElement("option", null, "No")
+          )
+        )
+      )
+    ),
+    React.createElement("div", { className: "flex gap-3 mt-6" },
+      React.createElement("button", {
+        onClick: saveNewSchoolInfo,
+        disabled: isAddSaving,
+        className: "flex-1 py-3 rounded-xl font-bold text-white " + (isAddSaving ? "bg-gray-400" : "avanti-gradient hover:opacity-90")
+      }, isAddSaving ? "\u23F3 Saving..." : "\uD83D\uDCBE Save School Info"),
+      React.createElement("button", {
+        onClick: () => setAddingSchool(null),
+        className: "px-6 py-3 rounded-xl font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50"
+      }, "Cancel")
+    )
+  )),
+
+  // ── Filled school cards ──────────────────────────────────────────────────
+  schoolInfo.length === 0 && unfilledSchools.length === 0 && React.createElement("div", {
     className: "bg-white p-8 rounded-2xl text-center"
   }, React.createElement("p", {
     className: "text-gray-600"
-  }, "No school information available yet. Teachers need to fill the forms.")) : React.createElement("div", {
+  }, "No schools configured yet.")),
+
+  schoolInfo.length > 0 && React.createElement("div", {
     className: "space-y-6"
   }, schoolInfo.map(info => React.createElement("div", {
     key: info.id || info.school,
