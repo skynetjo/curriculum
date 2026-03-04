@@ -2,7 +2,7 @@
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '5.5.3'; // ✅ ATTENDANCE EXPORT + RANGE FIX
+  const CURRENT_VERSION = '5.5.4'; // ✅ ATTENDANCE EXPORT + RANGE FIX
 
   // ✅ PERFORMANCE FIX: Check for updates less frequently (once per session)
   // This saves bandwidth for teachers in low-connectivity areas
