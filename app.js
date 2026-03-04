@@ -8459,7 +8459,15 @@ function App() {
         (progressSnap.docs || []).forEach(d => {
           progressMap[d.id] = d.data();
         });
-        setChapterProgress(progressMap);
+        // ✅ FIX: Never downgrade - only update if new data is richer
+        // Prevents TeacherOverview showing 0% when background sync runs with partial data
+        if (Object.keys(progressMap).length > 0) {
+          setChapterProgress(prev => {
+            const prevCount = Object.keys(prev || {}).length;
+            const newCount = Object.keys(progressMap).length;
+            return newCount >= prevCount ? { ...(prev || {}), ...progressMap } : prev;
+          });
+        }
         let studentsData = [];
         if (currentUser && currentUser.userType !== 'student') {
           if (userIsAdmin) {
@@ -13461,6 +13469,12 @@ function TeacherOverview({
 }) {
   const mySchool = currentUser.school;
   const mySubject = currentUser.subject;
+  // ✅ FIX: Detect if chapterProgress data is genuinely loaded
+  // If chapterProgress has 0 entries but curriculum has chapters, data is still loading
+  const chapterProgressEntries = Object.keys(chapterProgress || {}).length;
+  const curriculumEntries = Object.keys(curriculum || {}).length;
+  const isDataLoaded = chapterProgressEntries > 0 || curriculumEntries === 0;
+
   const schoolRankings = useMemo(() => {
     const rankings = SCHOOLS.map(school => {
       let total = 0,
@@ -13513,8 +13527,10 @@ function TeacherOverview({
     rankings.sort((a, b) => b.percentage - a.percentage);
     return rankings;
   }, [curriculum, chapterProgress, mySchool]);
-  const mySchoolRank = schoolRankings.findIndex(r => r.school === mySchool) + 1;
-  const laggingSubject = subjectRankings[subjectRankings.length - 1];
+  // ✅ FIX: Show "–" when data isn't loaded (prevents showing #0 incorrectly)
+  const rawRank = schoolRankings.findIndex(r => r.school === mySchool) + 1;
+  const mySchoolRank = isDataLoaded ? rawRank : '–';
+  const laggingSubject = isDataLoaded ? subjectRankings[subjectRankings.length - 1] : null;
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [lastSyncTime, setLastSyncTime] = React.useState(null);
   React.useEffect(() => {
@@ -13581,7 +13597,7 @@ function TeacherOverview({
     className: "text-sm opacity-90"
   }, "Your School Rank"), React.createElement("div", {
     className: "text-5xl font-bold"
-  }, "#", mySchoolRank), React.createElement("div", {
+  }, isDataLoaded ? "#" + mySchoolRank : "–"), React.createElement("div", {
     className: "text-sm mt-2"
   }, "Out of ", schoolRankings.length || SCHOOLS.length, " schools")), React.createElement("div", {
     className: "stat-card text-white",
@@ -13611,7 +13627,10 @@ function TeacherOverview({
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "text-2xl font-bold mb-4"
-  }, "\uD83C\uDFC6 School Rankings"), React.createElement("div", {
+  }, "\uD83C\uDFC6 School Rankings"), !isDataLoaded ? React.createElement("div", {
+    className: "text-center py-8 text-gray-400"
+  }, React.createElement("div", {className: "text-3xl mb-2"}, "\u23F3"),
+    React.createElement("p", null, "Loading rankings...")) : React.createElement("div", {
     className: "space-y-3"
   }, schoolRankings.map((rank, index) => React.createElement("div", {
     key: rank.school,
@@ -23024,6 +23043,12 @@ function OrgChartDirectory({
   const [filterRole, setFilterRole] = useState('all');
   const [filterSubject, setFilterSubject] = useState('all');
   const [filterManager, setFilterManager] = useState('all');
+  // ✅ FIX: Safety timeout - stop loading after 10s if Firebase fails silently
+  React.useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -23540,6 +23565,11 @@ function SocialWall({
   const [posting, setPosting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(null);
+  // ✅ FIX: Safety timeout - if loading takes >10s, stop spinner and show empty state
+  React.useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 10000);
+    return () => clearTimeout(timer);
+  }, []);
   const [allMembers, setAllMembers] = useState([]);
   const [activeTab, setActiveTab] = useState('feed');
   const [celebrationReactions, setCelebrationReactions] = useState({});
@@ -23850,24 +23880,21 @@ function SocialWall({
     const fetchData = async () => {
       try {
         setLoading(true);
-        const managersSnap = await db.collection('managers').get();
-        const managers = managersSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          role: 'Manager'
-        }));
-        const apcsSnap = await db.collection('apcs').get();
-        const apcs = apcsSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          role: 'APC'
-        }));
-        const teachersSnap = await db.collection('teachers').get();
-        const allTeachers = teachersSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          role: 'Teacher'
-        }));
+        // ✅ FIX: Use the teachers prop already loaded in App - avoid 3 redundant Firebase reads
+        // Also fetch managers/apcs for birthday data, but use Promise.allSettled so 
+        // partial failures don't block posts from loading
+        const [managersResult, apcsResult] = await Promise.allSettled([
+          db.collection('managers').get(),
+          db.collection('apcs').get()
+        ]);
+        const managers = managersResult.status === 'fulfilled' 
+          ? managersResult.value.docs.map(doc => ({id: doc.id, ...doc.data(), role: 'Manager'}))
+          : [];
+        const apcs = apcsResult.status === 'fulfilled'
+          ? apcsResult.value.docs.map(doc => ({id: doc.id, ...doc.data(), role: 'APC'}))
+          : [];
+        // Use prop teachers (already loaded) instead of re-fetching
+        const allTeachers = (teachers || []).map(t => ({...t, role: 'Teacher'}));
         const combined = [...managers, ...apcs, ...allTeachers].filter(m => m.name && m.name.toLowerCase() !== 'vacant' && !m.isArchived);
         setAllMembers(combined);
         console.log('[SocialWall] Total members loaded:', combined.length);
@@ -23967,13 +23994,29 @@ function SocialWall({
             setShowBirthdayPopup(todayBirthdays[0]);
           }
         }
-        const postsSnap = await db.collection('socialPosts').orderBy('createdAt', 'desc').limit(50).get();
-        setPosts(postsSnap.docs.map(doc => ({
+        // ✅ FIX: Try ordered query first; fall back to unordered if index missing
+        let postsSnap;
+        try {
+          postsSnap = await db.collection('socialPosts').orderBy('createdAt', 'desc').limit(50).get();
+        } catch (indexErr) {
+          console.warn('[SocialWall] orderBy index not ready, fetching without sort:', indexErr.message);
+          postsSnap = await db.collection('socialPosts').limit(50).get();
+        }
+        const postsData = postsSnap.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-        })));
+        }));
+        // Sort client-side as fallback
+        postsData.sort((a, b) => {
+          const aTime = a.createdAt?.toDate?.()?.getTime() || new Date(a.createdAt || 0).getTime();
+          const bTime = b.createdAt?.toDate?.()?.getTime() || new Date(b.createdAt || 0).getTime();
+          return bTime - aTime;
+        });
+        setPosts(postsData);
       } catch (error) {
-        console.error('[SocialWall] Error:', error);
+        console.error('[SocialWall] Error loading posts:', error);
+        // ✅ FIX: Set empty posts so loading spinner stops - show empty state
+        setPosts([]);
       } finally {
         setLoading(false);
       }
