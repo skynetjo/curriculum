@@ -19240,27 +19240,78 @@ function TeacherAttendanceDashboard({
       });
     };
   }, [dailyStats, gradeStats, teacherStats]);
-  const handleExportStudents = () => {
-    const exportData = filteredStudentAttendance.map(a => ({
-      Date: a.date,
-      Grade: a.grade,
-      'Student Name': a.studentName,
-      Status: a.status,
-      Remarks: a.remarks || '',
-      'Marked By': a.markedBy
-    }));
-    exportToExcel(exportData, `student_attendance_${mySchool}_${startDate}_to_${endDate}`);
+  const [exportingStudents, setExportingStudents] = React.useState(false);
+  const [exportingTeachers, setExportingTeachers] = React.useState(false);
+  const handleExportStudents = async () => {
+    setExportingStudents(true);
+    try {
+      const snap = await db.collection('studentAttendance')
+        .where('school', '==', mySchool)
+        .where('date', '>=', startDate)
+        .where('date', '<=', endDate)
+        .get();
+      let records = snap.docs.map(doc => doc.data());
+      if (filterGrade !== 'All') {
+        records = records.filter(a => a.grade === filterGrade);
+      }
+      records.sort((a, b) => a.date.localeCompare(b.date));
+      if (records.length === 0) {
+        alert('No student attendance records found for the selected date range.');
+        setExportingStudents(false);
+        return;
+      }
+      const exportData = records.map(a => ({
+        Date: a.date,
+        Grade: a.grade,
+        'Student Name': a.studentName,
+        Status: a.status,
+        Remarks: a.remarks || '',
+        'Marked By': a.markedBy
+      }));
+      exportToExcel(exportData, `student_attendance_${mySchool}_${startDate}_to_${endDate}`);
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Failed to export: ' + err.message);
+    }
+    setExportingStudents(false);
   };
-  const handleExportTeachers = () => {
-    const exportData = filteredTeacherAttendance.map(a => ({
-      Date: a.date,
-      'Teacher Name': a.teacherName,
-      'Punch-In Time': a.punchInTime || 'Not recorded',
-      Status: a.status,
-      Reason: a.reason,
-      Location: a.location
-    }));
-    exportToExcel(exportData, `teacher_attendance_${mySchool}_${startDate}_to_${endDate}`);
+  const handleExportTeachers = async () => {
+    setExportingTeachers(true);
+    try {
+      const snap = await db.collection('teacherAttendance')
+        .where('school', '==', mySchool)
+        .where('date', '>=', startDate)
+        .where('date', '<=', endDate)
+        .get();
+      let records = snap.docs.map(doc => doc.data());
+      if (filterSubject !== 'All') {
+        const teacherMap = {};
+        teachers.forEach(t => { teacherMap[t.afid] = t; });
+        records = records.filter(a => {
+          const t = teacherMap[a.teacherId];
+          return t && t.subject === filterSubject;
+        });
+      }
+      records.sort((a, b) => a.date.localeCompare(b.date));
+      if (records.length === 0) {
+        alert('No teacher attendance records found for the selected date range.');
+        setExportingTeachers(false);
+        return;
+      }
+      const exportData = records.map(a => ({
+        Date: a.date,
+        'Teacher Name': a.teacherName,
+        'Punch-In Time': a.punchInTime || 'Not recorded',
+        Status: a.status,
+        Reason: a.reason || '',
+        Location: a.location || ''
+      }));
+      exportToExcel(exportData, `teacher_attendance_${mySchool}_${startDate}_to_${endDate}`);
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Failed to export: ' + err.message);
+    }
+    setExportingTeachers(false);
   };
   return React.createElement("div", {
     className: "space-y-6"
@@ -19319,11 +19370,13 @@ function TeacherAttendanceDashboard({
     className: "flex gap-3 mt-4"
   }, React.createElement("button", {
     onClick: handleExportStudents,
-    className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold"
-  }, "\uD83D\uDCE5 Export Student Attendance"), React.createElement("button", {
+    disabled: exportingStudents,
+    className: `px-6 py-3 rounded-xl font-semibold text-white ${exportingStudents ? 'bg-green-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`
+  }, exportingStudents ? "\u23F3 Fetching..." : "\uD83D\uDCE5 Export Student Attendance"), React.createElement("button", {
     onClick: handleExportTeachers,
-    className: "px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold"
-  }, "\uD83D\uDCE5 Export Teacher Attendance"))), React.createElement("div", {
+    disabled: exportingTeachers,
+    className: `px-6 py-3 rounded-xl font-semibold text-white ${exportingTeachers ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`
+  }, exportingTeachers ? "\u23F3 Fetching..." : "\uD83D\uDCE5 Export Teacher Attendance"))), React.createElement("div", {
     className: "grid grid-cols-2 md:grid-cols-4 gap-4"
   }, React.createElement("div", {
     className: "stat-card bg-green-500 text-white"
@@ -20745,29 +20798,90 @@ function AdminAttendanceAnalytics({
       });
     };
   }, [monthlyDayStats, genderStats, filteredTeacherAttendance, filteredStudentAttendance]);
-  const handleExportStudents = () => {
-    const exportData = filteredStudentAttendance.map(a => ({
-      Date: a.date,
-      School: a.school,
-      Grade: a.grade,
-      'Student Name': a.studentName,
-      Status: a.status,
-      Remarks: a.remarks || '',
-      'Marked By': a.markedBy
-    }));
-    exportToExcel(exportData, `student_attendance_${startDate}_to_${endDate}`);
+  const [exportingStudents, setExportingStudents] = React.useState(false);
+  const [exportingTeachers, setExportingTeachers] = React.useState(false);
+  const handleExportStudents = async () => {
+    setExportingStudents(true);
+    try {
+      let snap;
+      if (hasFullDataAccess) {
+        snap = await db.collection('studentAttendance')
+          .where('date', '>=', startDate)
+          .where('date', '<=', endDate)
+          .get();
+      } else {
+        snap = await db.collection('studentAttendance')
+          .where('date', '>=', startDate)
+          .where('date', '<=', endDate)
+          .get();
+      }
+      let records = snap.docs.map(doc => doc.data());
+      if (!hasFullDataAccess && accessibleSchools.length > 0) {
+        records = records.filter(a => schoolMatchesFilter(a.school, accessibleSchools));
+      }
+      if (filterSchools.length > 0) {
+        records = records.filter(a => schoolMatchesFilter(a.school, filterSchools));
+      }
+      if (filterGrade !== 'All') {
+        records = records.filter(a => a.grade === filterGrade);
+      }
+      records.sort((a, b) => a.date.localeCompare(b.date));
+      if (records.length === 0) {
+        alert('No student attendance records found for the selected date range and filters.');
+        setExportingStudents(false);
+        return;
+      }
+      const exportData = records.map(a => ({
+        Date: a.date,
+        School: a.school,
+        Grade: a.grade,
+        'Student Name': a.studentName,
+        Status: a.status,
+        Remarks: a.remarks || '',
+        'Marked By': a.markedBy
+      }));
+      exportToExcel(exportData, `student_attendance_${startDate}_to_${endDate}`);
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Failed to export: ' + err.message);
+    }
+    setExportingStudents(false);
   };
-  const handleExportTeachers = () => {
-    const exportData = filteredTeacherAttendance.map(a => ({
-      Date: a.date,
-      'Teacher Name': a.teacherName,
-      School: a.school,
-      'Punch-In Time': a.punchInTime || 'Not recorded',
-      Status: a.status,
-      Reason: a.reason,
-      Location: a.location
-    }));
-    exportToExcel(exportData, `teacher_attendance_${startDate}_to_${endDate}`);
+  const handleExportTeachers = async () => {
+    setExportingTeachers(true);
+    try {
+      const snap = await db.collection('teacherAttendance')
+        .where('date', '>=', startDate)
+        .where('date', '<=', endDate)
+        .get();
+      let records = snap.docs.map(doc => doc.data());
+      if (!hasFullDataAccess && accessibleSchools.length > 0) {
+        records = records.filter(a => schoolMatchesFilter(a.school, accessibleSchools));
+      }
+      if (filterSchools.length > 0) {
+        records = records.filter(a => schoolMatchesFilter(a.school, filterSchools));
+      }
+      records.sort((a, b) => a.date.localeCompare(b.date));
+      if (records.length === 0) {
+        alert('No teacher attendance records found for the selected date range and filters.');
+        setExportingTeachers(false);
+        return;
+      }
+      const exportData = records.map(a => ({
+        Date: a.date,
+        'Teacher Name': a.teacherName,
+        School: a.school,
+        'Punch-In Time': a.punchInTime || 'Not recorded',
+        Status: a.status,
+        Reason: a.reason || '',
+        Location: a.location || ''
+      }));
+      exportToExcel(exportData, `teacher_attendance_${startDate}_to_${endDate}`);
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('Failed to export: ' + err.message);
+    }
+    setExportingTeachers(false);
   };
   return React.createElement("div", {
     className: "space-y-6"
@@ -20782,11 +20896,13 @@ function AdminAttendanceAnalytics({
     className: `px-4 py-2 rounded-xl font-semibold ${showLockManagement ? 'bg-yellow-600 text-white' : 'bg-yellow-100 text-yellow-800 border-2 border-yellow-400'}`
   }, "\uD83D\uDD10 Manage Locks"), React.createElement("button", {
     onClick: handleExportStudents,
-    className: "px-4 py-2 bg-green-600 text-white rounded-xl font-semibold"
-  }, "\uD83D\uDCE5 Export Students"), React.createElement("button", {
+    disabled: exportingStudents,
+    className: `px-4 py-2 rounded-xl font-semibold text-white ${exportingStudents ? 'bg-green-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`
+  }, exportingStudents ? "\u23F3 Fetching..." : "\uD83D\uDCE5 Export Students"), React.createElement("button", {
     onClick: handleExportTeachers,
-    className: "px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold"
-  }, "\uD83D\uDCE5 Export Teachers"))), showLockManagement && React.createElement("div", {
+    disabled: exportingTeachers,
+    className: `px-4 py-2 rounded-xl font-semibold text-white ${exportingTeachers ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`
+  }, exportingTeachers ? "\u23F3 Fetching..." : "\uD83D\uDCE5 Export Teachers"))), showLockManagement && React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg border-2 border-yellow-300"
   }, React.createElement("div", {
     className: "flex justify-between items-center mb-4"
