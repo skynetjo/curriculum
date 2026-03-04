@@ -20500,84 +20500,63 @@ function AdminAttendanceAnalytics({
     if (!hasFullDataAccess && !schoolMatchesFilter(lock.school, accessibleSchools)) return false;
     return true;
   });
-  // ✅ FIX: On-demand fetch from Firebase for any date range
-  // Initial app load only has last 30 days. When user picks older dates,
-  // we fetch directly from Firestore using date-only query (no composite index needed).
-  const [rangeData, setRangeData] = useState({ student: studentAttendance, teacher: teacherAttendance });
-  const [isLoadingRange, setIsLoadingRange] = useState(false);
-  const [rangeLoadedFor, setRangeLoadedFor] = useState('');
+  // v5.5.1 FIX: On-demand Firebase fetch for historical date ranges
+  const [extraData, setExtraData] = useState({ student: [], teacher: [] });
+  const [loadingExtra, setLoadingExtra] = useState(false);
+  const [loadedRange, setLoadedRange] = useState('');
 
-  useEffect(() => {
-    const rangeKey = startDate + '_' + endDate;
-    if (rangeLoadedFor === rangeKey) return; // already loaded this range
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    if (startDate >= thirtyDaysAgo) {
-      // Within 30-day window — in-memory data is sufficient
-      setRangeData({ student: studentAttendance, teacher: teacherAttendance });
-      setRangeLoadedFor(rangeKey);
-      return;
-    }
-    // Older range — fetch from Firebase
-    setIsLoadingRange(true);
+  const loadDateRange = () => {
+    const key = startDate + '|' + endDate;
+    if (loadedRange === key) return; // already loaded
+    setLoadingExtra(true);
     const fdb = firebase.firestore();
-    const fetchPaged = async (col) => {
-      let all = [], last = null;
-      while (true) {
-        // Simple date-only query — no composite index required
-        let q = fdb.collection(col)
-          .where('date', '>=', startDate)
-          .where('date', '<=', endDate)
-          .orderBy('date').limit(500);
-        if (last) q = q.startAfter(last);
-        const snap = await q.get();
-        if (snap.empty) break;
-        snap.forEach(d => all.push({ id: d.id, ...d.data() }));
-        if (snap.size < 500) break;
-        last = snap.docs[snap.docs.length - 1];
-      }
-      return all;
+    const fetchPaged = (col) => {
+      return fdb.collection(col)
+        .where('date', '>=', startDate)
+        .where('date', '<=', endDate)
+        .get()
+        .then(snap => snap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     Promise.all([fetchPaged('studentAttendance'), fetchPaged('teacherAttendance')])
       .then(([s, t]) => {
-        setRangeData({ student: s, teacher: t });
-        setRangeLoadedFor(rangeKey);
-        console.log('[Dashboard] ✅ Loaded', s.length, 'student +', t.length, 'teacher records for', startDate, '->', endDate);
+        setExtraData({ student: s, teacher: t });
+        setLoadedRange(key);
+        console.log('[Dashboard] Loaded', s.length, 'student +', t.length, 'teacher records');
       })
-      .catch(err => { console.error('[Dashboard] ❌', err); })
-      .finally(() => setIsLoadingRange(false));
-  }, [startDate, endDate]);
+      .catch(err => {
+        console.error('[Dashboard] Fetch error:', err);
+        alert('Failed to load data: ' + err.message);
+      })
+      .finally(() => setLoadingExtra(false));
+  };
 
-  // Keep in sync when props refresh (within 30-day window)
-  useEffect(() => {
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    if (startDate >= thirtyDaysAgo) {
-      setRangeData({ student: studentAttendance, teacher: teacherAttendance });
-    }
-  }, [studentAttendance, teacherAttendance]);
+  // Merge: use extra fetched data if available, otherwise fall back to props
+  const mergedStudent = extraData.student.length > 0 ? extraData.student : studentAttendance;
+  const mergedTeacher = extraData.teacher.length > 0 ? extraData.teacher : teacherAttendance;
 
   const filteredStudentAttendance = useMemo(() => {
-    return rangeData.student.filter(a => {
+    return mergedStudent.filter(a => {
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
       if (a.date < startDate || a.date > endDate) return false;
       return true;
     });
-  }, [rangeData.student, filterSchools, filterGrade, startDate, endDate]);
+  }, [mergedStudent, filterSchools, filterGrade, startDate, endDate]);
   const filteredTeacherAttendance = useMemo(() => {
-    return rangeData.teacher.filter(a => {
+    return mergedTeacher.filter(a => {
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       if (a.date < startDate || a.date > endDate) return false;
       return true;
     });
-  }, [rangeData.teacher, filterSchools, startDate, endDate]);
+  }, [mergedTeacher, filterSchools, startDate, endDate]);
   const todayStats = useMemo(() => {
-    const studentRecords = rangeData.student.filter(a => {
+    const studentRecords = mergedStudent.filter(a => {
       if (a.date !== selectedDate) return false;
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
       return true;
     });
-    const teacherRecords = rangeData.teacher.filter(a => {
+    const teacherRecords = mergedTeacher.filter(a => {
       if (a.date !== selectedDate) return false;
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       return true;
@@ -20588,7 +20567,7 @@ function AdminAttendanceAnalytics({
       teacherPresent: teacherRecords.filter(r => r.status === 'Present').length,
       teacherAbsent: teacherRecords.filter(r => r.status === 'On Leave').length
     };
-  }, [rangeData, selectedDate, filterSchools, filterGrade]);
+  }, [mergedStudent, mergedTeacher, selectedDate, filterSchools, filterGrade]);
   const genderStats = useMemo(() => {
     const stats = {
       Male: {
@@ -20801,8 +20780,8 @@ function AdminAttendanceAnalytics({
     };
   }, [monthlyDayStats, genderStats, filteredTeacherAttendance, filteredStudentAttendance]);
   const handleExportStudents = () => {
-    if (isLoadingRange) { alert('Data is still loading. Please wait a moment and try again.'); return; }
-    if (filteredStudentAttendance.length === 0) { alert('No student attendance records found for the selected date range.'); return; }
+    if (loadingExtra) { alert('Please wait - data is still loading.'); return; }
+    if (filteredStudentAttendance.length === 0) { alert('No records found. Click "Load Data for Selected Date Range" first.'); return; }
     const exportData = filteredStudentAttendance.map((a, i) => ({
       'S.No': i + 1, Date: a.date, School: a.school, Grade: a.grade,
       'Student Name': a.studentName, Status: a.status,
@@ -20811,8 +20790,8 @@ function AdminAttendanceAnalytics({
     exportToExcel(exportData, `student_attendance_${startDate}_to_${endDate}`);
   };
   const handleExportTeachers = () => {
-    if (isLoadingRange) { alert('Data is still loading. Please wait a moment and try again.'); return; }
-    if (filteredTeacherAttendance.length === 0) { alert('No teacher attendance records found for the selected date range.'); return; }
+    if (loadingExtra) { alert('Please wait - data is still loading.'); return; }
+    if (filteredTeacherAttendance.length === 0) { alert('No records found. Click "Load Data for Selected Date Range" first.'); return; }
     const exportData = filteredTeacherAttendance.map((a, i) => ({
       'S.No': i + 1, Date: a.date, 'Teacher Name': a.teacherName, School: a.school,
       'Punch-In Time': a.punchInTime || 'Not recorded',
@@ -20826,11 +20805,13 @@ function AdminAttendanceAnalytics({
     className: "flex justify-between items-center flex-wrap gap-4"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
-  }, "\uD83D\uDCCA Attendance Analytics"), isLoadingRange && React.createElement("span", {
-    className: "text-sm font-normal px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full animate-pulse ml-2"
-  }, "\u23F3 Loading ", startDate, " to ", endDate, "..."), React.createElement("div", {
-    className: "flex gap-2 flex-wrap"
-  }, React.createElement("button", {
+  }, "\uD83D\uDCCA Attendance Analytics"), React.createElement("div", {
+    className: "flex gap-2 flex-wrap items-center"
+  }, loadingExtra && React.createElement("span", {
+    className: "text-sm px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full font-semibold"
+  }, "\u23F3 Loading..."), loadedRange && !loadingExtra && React.createElement("span", {
+    className: "text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full"
+  }, "\u2705 Loaded"), React.createElement("button", {
     onClick: () => setShowLockManagement(!showLockManagement),
     className: `px-4 py-2 rounded-xl font-semibold ${showLockManagement ? 'bg-yellow-600 text-white' : 'bg-yellow-100 text-yellow-800 border-2 border-yellow-400'}`
   }, "\uD83D\uDD10 Manage Locks"), React.createElement("button", {
@@ -20971,7 +20952,13 @@ function AdminAttendanceAnalytics({
     onChange: e => setSelectedDate(e.target.value),
     className: "w-full border-2 px-4 py-3 rounded-xl"
   })))), React.createElement("div", {
-    className: "grid grid-cols-2 md:grid-cols-4 gap-4"
+    className: "mt-3"
+  }, React.createElement("button", {
+    onClick: loadDateRange,
+    disabled: loadingExtra,
+    style: {width:"100%", padding:"12px", borderRadius:"12px", fontWeight:"bold", fontSize:"16px", color:"white", background: loadingExtra ? "#9ca3af" : "#4f46e5", cursor: loadingExtra ? "not-allowed" : "pointer", border:"none"}
+  }, loadingExtra ? "\u23F3 Loading data from Firebase..." : "\uD83D\uDD0D Load Data for Selected Date Range")), React.createElement("div", {
+    className: "grid grid-cols-2 md:grid-cols-4 gap-4 mt-4"
   }, React.createElement("div", {
     className: "stat-card bg-green-500 text-white"
   }, React.createElement("div", {
