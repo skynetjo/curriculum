@@ -1,4 +1,4 @@
-// ✅ PRE-COMPILED JAVASCRIPT v5.5.4 - Performance Optimized
+// ✅ PRE-COMPILED JAVASCRIPT v5.5.5 - Performance Optimized
 // ✅ PERFORMANCE: Use passive event listeners for scroll/touch
 document.addEventListener('touchstart', function(){}, {passive: true});
 document.addEventListener('touchmove', function(){}, {passive: true});
@@ -7034,14 +7034,19 @@ function DataFreshnessIndicator() {
       if (window.OfflineQueue && pendingCount > 0) {
         await window.OfflineQueue.processQueue();
       }
-      window.location.reload();
+      // Trigger SmartSync refresh instead of page reload
+      if (window.SmartSyncManager) {
+        window.SmartSyncManager.forceRefresh?.('all');
+        window.dispatchEvent(new CustomEvent('smartsync:refresh', {detail: {type: 'all'}}));
+      }
+      setTimeout(() => {
+        window._forceRefresh = false;
+        setIsRefreshing(false);
+      }, 3000);
     } catch (e) {
       console.error('Refresh failed:', e);
       setIsRefreshing(false);
     }
-    setTimeout(() => {
-      window._forceRefresh = false;
-    }, 5000);
   };
   const getTimeAgo = timestamp => {
     if (!timestamp) return 'Unknown';
@@ -7060,15 +7065,13 @@ function DataFreshnessIndicator() {
   };
   const getConnectionColor = () => {
     if (!isOnline) return 'bg-red-500';
-    if (connectionQuality === 'good') return 'bg-green-500';
     if (connectionQuality === 'slow') return 'bg-yellow-500';
     if (connectionQuality === 'very-slow') return 'bg-orange-500';
-    return 'bg-gray-500';
+    return 'bg-green-500';
   };
-  const shouldShow = !isOnline || isStale || isRefreshing || pendingCount > 0 || connectionQuality === 'very-slow';
-  if (!shouldShow) return null;
   return React.createElement("div", {
-    className: "fixed bottom-20 right-4 z-30"
+    className: "fixed bottom-20 right-4 z-30",
+    style: {display: "block"}
   }, React.createElement("div", {
     className: `px-3 py-2 rounded-lg shadow-lg text-sm cursor-pointer transition-all ${getConnectionColor()} text-white`,
     onClick: () => setShowDetails(!showDetails)
@@ -9262,79 +9265,67 @@ function App() {
   }
   if (!currentUser) {
     return React.createElement("div", {
-      className: "min-h-screen avanti-gradient flex items-center justify-center p-4"
+      className: "min-h-screen flex items-center justify-center p-4"
+    , style: {background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)"}
     }, React.createElement("div", {
-      className: "bg-white rounded-3xl shadow-2xl p-10 w-full max-w-md"
+      className: "w-full max-w-sm"
     }, React.createElement("div", {
       className: "text-center mb-8"
+    }, React.createElement("div", {
+      style: {width:"80px", height:"80px", borderRadius:"20px", background:"rgba(255,255,255,0.15)", backdropFilter:"blur(10px)", border:"1px solid rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px"}
     }, React.createElement("img", {
       src: AVANTI_LOGO,
       alt: "Avanti Fellows",
-      className: "w-20 h-20 mx-auto mb-4"
-    }), React.createElement("h1", {
-      className: "text-4xl font-bold text-gray-800 mb-2"
+      style: {width:"56px", height:"56px", objectFit:"contain"}
+    })), React.createElement("h1", {
+      className: "text-3xl font-bold mb-1",
+      style: {color:"white", letterSpacing:"-0.5px"}
     }, "Curriculum Tracker"), React.createElement("p", {
-      className: "text-gray-600 mt-3"
-    }, "Avanti Fellows")), React.createElement("div", {
-      className: "flex gap-2 mb-6"
+      style: {color:"rgba(255,255,255,0.5)", fontSize:"14px"}
+    }, "Avanti Fellows • JNV Program")), React.createElement("div", {
+      style: {background:"rgba(255,255,255,0.08)", backdropFilter:"blur(20px)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:"24px", padding:"28px"}
+    }, React.createElement("div", {
+      style: {display:"flex", gap:"8px", marginBottom:"24px", background:"rgba(255,255,255,0.08)", borderRadius:"14px", padding:"4px"}
     }, React.createElement("button", {
-      onClick: () => setLoginForm({
-        ...loginForm,
-        loginType: 'teacher'
-      }),
-      className: `flex-1 py-3 rounded-xl font-semibold ${loginForm.loginType === 'teacher' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`
+      onClick: () => setLoginForm({...loginForm, loginType: 'teacher'}),
+      style: {flex:1, padding:"10px", borderRadius:"10px", fontWeight:"600", fontSize:"14px", border:"none", cursor:"pointer", transition:"all 0.2s", background: loginForm.loginType === 'teacher' ? "white" : "transparent", color: loginForm.loginType === 'teacher' ? "#1a1a2e" : "rgba(255,255,255,0.6)"}
     }, "\uD83D\uDC68\u200D\uD83C\uDFEB Teacher"), React.createElement("button", {
-      onClick: () => setLoginForm({
-        ...loginForm,
-        loginType: 'student'
-      }),
-      className: `flex-1 py-3 rounded-xl font-semibold ${loginForm.loginType === 'student' ? 'bg-green-600 text-white' : 'bg-gray-200'}`
+      onClick: () => setLoginForm({...loginForm, loginType: 'student'}),
+      style: {flex:1, padding:"10px", borderRadius:"10px", fontWeight:"600", fontSize:"14px", border:"none", cursor:"pointer", transition:"all 0.2s", background: loginForm.loginType === 'student' ? "white" : "transparent", color: loginForm.loginType === 'student' ? "#1a1a2e" : "rgba(255,255,255,0.6)"}
     }, "\uD83D\uDC68\u200D\uD83C\uDF93 Student")), React.createElement("div", {
-      className: "space-y-5"
+      style: {display:"flex", flexDirection:"column", gap:"12px"}
     }, loginForm.loginType === 'student' ? React.createElement(React.Fragment, null, React.createElement("input", {
       type: "text",
-      className: "w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg",
+      style: {width:"100%", padding:"14px 16px", borderRadius:"12px", border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.1)", color:"white", fontSize:"15px", outline:"none"},
       value: loginForm.studentId || '',
-      onChange: e => setLoginForm({
-        ...loginForm,
-        studentId: e.target.value
-      }),
+      onChange: e => setLoginForm({...loginForm, studentId: e.target.value}),
       placeholder: "Student ID"
     }), React.createElement("input", {
       type: "password",
-      className: "w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg",
+      style: {width:"100%", padding:"14px 16px", borderRadius:"12px", border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.1)", color:"white", fontSize:"15px", outline:"none"},
       value: loginForm.password,
-      onChange: e => setLoginForm({
-        ...loginForm,
-        password: e.target.value
-      }),
+      onChange: e => setLoginForm({...loginForm, password: e.target.value}),
       placeholder: "Password (pass123)",
       onKeyPress: e => e.key === 'Enter' && handleLogin()
     }), React.createElement("p", {
-      className: "text-sm text-gray-600 text-center"
-    }, "Default password: ", React.createElement("strong", null, "pass123"))) : React.createElement(React.Fragment, null, React.createElement("input", {
+      style: {fontSize:"13px", color:"rgba(255,255,255,0.5)", textAlign:"center"}
+    }, "Default password: ", React.createElement("strong", {style:{color:"rgba(255,255,255,0.8)"}}, "pass123"))) : React.createElement(React.Fragment, null, React.createElement("input", {
       type: "email",
-      className: "w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg",
+      style: {width:"100%", padding:"14px 16px", borderRadius:"12px", border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.1)", color:"white", fontSize:"15px", outline:"none"},
       value: loginForm.email,
-      onChange: e => setLoginForm({
-        ...loginForm,
-        email: e.target.value
-      }),
-      placeholder: "Email"
+      onChange: e => setLoginForm({...loginForm, email: e.target.value}),
+      placeholder: "Email address"
     }), React.createElement("input", {
       type: "password",
-      className: "w-full px-5 py-4 border-2 border-gray-300 rounded-xl text-lg",
+      style: {width:"100%", padding:"14px 16px", borderRadius:"12px", border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.1)", color:"white", fontSize:"15px", outline:"none"},
       value: loginForm.password,
-      onChange: e => setLoginForm({
-        ...loginForm,
-        password: e.target.value
-      }),
+      onChange: e => setLoginForm({...loginForm, password: e.target.value}),
       placeholder: "Password",
       onKeyPress: e => e.key === 'Enter' && handleLogin()
     })), React.createElement("button", {
       onClick: handleLogin,
       disabled: authLoading,
-      className: "w-full avanti-gradient text-white py-4 rounded-xl font-bold text-lg disabled:opacity-70 transition-all"
+      style: {width:"100%", padding:"14px", borderRadius:"12px", fontWeight:"700", fontSize:"16px", border:"none", cursor:"pointer", background:"linear-gradient(135deg, #F4B41A 0%, #E8A000 50%, #d97706 100%)", color:"white", opacity: authLoading ? 0.7 : 1, transition:"all 0.2s", marginTop:"4px"}
     }, authLoading ? React.createElement("span", {
       className: "login-spinner"
     }, React.createElement("span", {
@@ -9349,9 +9340,7 @@ function App() {
       handleLogout: handleLogout
     });
   }
-  return React.createElement(React.Fragment, null, currentUser && React.createElement(OnlineStatusCard, {
-    currentUser: currentUser
-  }), currentUser && React.createElement(DataFreshnessIndicator, null), isAdmin ? React.createElement(AdminView, {
+  return React.createElement(React.Fragment, null, currentUser && React.createElement(DataFreshnessIndicator, null), isAdmin ? React.createElement(AdminView, {
     currentUser: currentUser,
     handleLogout: handleLogout,
     teachers: teachers,
@@ -13595,22 +13584,30 @@ function TeacherOverview({
   }, "#", mySchoolRank), React.createElement("div", {
     className: "text-sm mt-2"
   }, "Out of ", schoolRankings.length || SCHOOLS.length, " schools")), React.createElement("div", {
-    className: "stat-card bg-gradient-to-br from-green-500 to-emerald-600 text-white"
+    className: "stat-card text-white",
+    style: {background: "linear-gradient(135deg, #22c55e 0%, #059669 100%)"}
   }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Best Performing School"), React.createElement("div", {
-    className: "text-2xl font-bold mt-2"
-  }, schoolRankings[0]?.school), React.createElement("div", {
-    className: "text-sm mt-2"
-  }, schoolRankings[0]?.percentage, "% completed")), React.createElement("div", {
-    className: "stat-card bg-gradient-to-br from-orange-500 to-red-600 text-white"
+    className: "text-sm",
+    style: {opacity: 0.85}
+  }, "\uD83C\uDFC6 Best Performing"), React.createElement("div", {
+    className: "font-bold mt-2",
+    style: {fontSize: "18px", color: "white"}
+  }, schoolRankings[0]?.school || "Loading..."), React.createElement("div", {
+    className: "text-sm mt-1",
+    style: {opacity: 0.9}
+  }, (schoolRankings[0]?.percentage || 0), "% completed")), React.createElement("div", {
+    className: "stat-card text-white",
+    style: {background: "linear-gradient(135deg, #f97316 0%, #dc2626 100%)"}
   }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Lagging Subject (Your School)"), React.createElement("div", {
-    className: "text-2xl font-bold mt-2"
-  }, laggingSubject?.subject), React.createElement("div", {
-    className: "text-sm mt-2"
-  }, laggingSubject?.percentage, "% completed"))), React.createElement("div", {
+    className: "text-sm",
+    style: {opacity: 0.85}
+  }, "\u26A0\uFE0F Lagging Subject"), React.createElement("div", {
+    className: "font-bold mt-2",
+    style: {fontSize: "18px", color: "white"}
+  }, laggingSubject?.subject || "All caught up!"), React.createElement("div", {
+    className: "text-sm mt-1",
+    style: {opacity: 0.9}
+  }, (laggingSubject?.percentage || 0), "% completed"))), React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "text-2xl font-bold mb-4"
@@ -23031,24 +23028,23 @@ function OrgChartDirectory({
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [managersSnap, apcsSnap, teachersSnap] = await Promise.all([db.collection('managers').get(), db.collection('apcs').get(), db.collection('teachers').get()]);
-        const managersData = managersSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setManagers(managersData);
-        const apcsData = apcsSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setApcs(apcsData);
-        const teachersData = teachersSnap.docs.map(doc => ({
-          docId: doc.id,
-          ...doc.data()
-        }));
-        setAllTeachers(teachersData);
+        // Fetch each collection independently so partial failures don't break everything
+        const [managersResult, apcsResult, teachersResult] = await Promise.allSettled([
+          db.collection('managers').get(),
+          db.collection('apcs').get(),
+          db.collection('teachers').get()
+        ]);
+        if (managersResult.status === 'fulfilled') {
+          setManagers(managersResult.value.docs.map(doc => ({id: doc.id, ...doc.data()})));
+        }
+        if (apcsResult.status === 'fulfilled') {
+          setApcs(apcsResult.value.docs.map(doc => ({id: doc.id, ...doc.data()})));
+        }
+        if (teachersResult.status === 'fulfilled') {
+          setAllTeachers(teachersResult.value.docs.map(doc => ({docId: doc.id, ...doc.data()})));
+        }
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Directory load error:', error);
       } finally {
         setLoading(false);
       }
