@@ -8454,8 +8454,16 @@ function App() {
           teacherAttQuery = db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get();
         } else {
           progressQuery = db.collection('chapterProgress').get();
-          studentAttQuery = fetchWithIndexFallback(db.collection('studentAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(), db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get(), data => data.school === userSchool, 'studentAttendance');
-          teacherAttQuery = fetchWithIndexFallback(db.collection('teacherAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(), db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get(), data => data.school === userSchool, 'teacherAttendance');
+          // ✅ FIX v5.5.1: Fallback now uses school-only query (single field, no composite index needed)
+          // Old fallback fetched ALL 32 schools' data → timed out on poor rural connectivity
+          studentAttQuery = fetchWithIndexFallback(
+            db.collection('studentAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(),
+            db.collection('studentAttendance').where('school', '==', userSchool).get().then(snap => ({ docs: snap.docs.filter(d => d.data().date >= thirtyDaysAgo) })),
+            data => data.school === userSchool, 'studentAttendance');
+          teacherAttQuery = fetchWithIndexFallback(
+            db.collection('teacherAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(),
+            db.collection('teacherAttendance').where('school', '==', userSchool).get().then(snap => ({ docs: snap.docs.filter(d => d.data().date >= thirtyDaysAgo) })),
+            data => data.school === userSchool, 'teacherAttendance');
         }
         const [progressSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, schoolsSnap, rankingsSnap] = await Promise.all([timeoutPromise(progressQuery, 25000), timeoutPromise(studentAttQuery, 30000), timeoutPromise(teacherAttQuery, 30000), timeoutPromise(db.collection('schoolInfo').get(), 20000), timeoutPromise(db.collection('leaveAdjustments').get(), 15000), timeoutPromise(db.collection('schoolsList').get(), 15000), timeoutPromise(db.collection('system').doc('schoolRankings').get(), 10000, {
           exists: false
@@ -8663,7 +8671,15 @@ function App() {
       try {
         const userSchool = currentUser?.school;
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const [studentAttSnap, teacherAttSnap] = await Promise.all([db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get(), db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get()]);
+        // ✅ FIX v5.5.1: Filter by school first (not date) — avoids cross-school data fetch timeout
+        const safeSchoolQuery = (col) => {
+          if (userSchool) {
+            return db.collection(col).where('school', '==', userSchool).get()
+              .then(snap => ({ docs: snap.docs.filter(d => d.data().date >= thirtyDaysAgo) }));
+          }
+          return db.collection(col).where('date', '>=', thirtyDaysAgo).get();
+        };
+        const [studentAttSnap, teacherAttSnap] = await Promise.all([safeSchoolQuery('studentAttendance'), safeSchoolQuery('teacherAttendance')]);
         const studentAttData = studentAttSnap.docs.map(d => ({
           ...d.data(),
           docId: d.id
@@ -20500,63 +20516,29 @@ function AdminAttendanceAnalytics({
     if (!hasFullDataAccess && !schoolMatchesFilter(lock.school, accessibleSchools)) return false;
     return true;
   });
-  // v5.5.1 FIX: On-demand Firebase fetch for historical date ranges
-  const [extraData, setExtraData] = useState({ student: [], teacher: [] });
-  const [loadingExtra, setLoadingExtra] = useState(false);
-  const [loadedRange, setLoadedRange] = useState('');
-
-  const loadDateRange = () => {
-    const key = startDate + '|' + endDate;
-    if (loadedRange === key) return; // already loaded
-    setLoadingExtra(true);
-    const fdb = firebase.firestore();
-    const fetchPaged = (col) => {
-      return fdb.collection(col)
-        .where('date', '>=', startDate)
-        .where('date', '<=', endDate)
-        .get()
-        .then(snap => snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    };
-    Promise.all([fetchPaged('studentAttendance'), fetchPaged('teacherAttendance')])
-      .then(([s, t]) => {
-        setExtraData({ student: s, teacher: t });
-        setLoadedRange(key);
-        console.log('[Dashboard] Loaded', s.length, 'student +', t.length, 'teacher records');
-      })
-      .catch(err => {
-        console.error('[Dashboard] Fetch error:', err);
-        alert('Failed to load data: ' + err.message);
-      })
-      .finally(() => setLoadingExtra(false));
-  };
-
-  // Merge: use extra fetched data if available, otherwise fall back to props
-  const mergedStudent = extraData.student.length > 0 ? extraData.student : studentAttendance;
-  const mergedTeacher = extraData.teacher.length > 0 ? extraData.teacher : teacherAttendance;
-
   const filteredStudentAttendance = useMemo(() => {
-    return mergedStudent.filter(a => {
+    return studentAttendance.filter(a => {
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
       if (a.date < startDate || a.date > endDate) return false;
       return true;
     });
-  }, [mergedStudent, filterSchools, filterGrade, startDate, endDate]);
+  }, [studentAttendance, filterSchools, filterGrade, startDate, endDate]);
   const filteredTeacherAttendance = useMemo(() => {
-    return mergedTeacher.filter(a => {
+    return teacherAttendance.filter(a => {
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       if (a.date < startDate || a.date > endDate) return false;
       return true;
     });
-  }, [mergedTeacher, filterSchools, startDate, endDate]);
+  }, [teacherAttendance, filterSchools, startDate, endDate]);
   const todayStats = useMemo(() => {
-    const studentRecords = mergedStudent.filter(a => {
+    const studentRecords = studentAttendance.filter(a => {
       if (a.date !== selectedDate) return false;
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
       return true;
     });
-    const teacherRecords = mergedTeacher.filter(a => {
+    const teacherRecords = teacherAttendance.filter(a => {
       if (a.date !== selectedDate) return false;
       if (!schoolMatchesFilter(a.school, filterSchools)) return false;
       return true;
@@ -20567,7 +20549,7 @@ function AdminAttendanceAnalytics({
       teacherPresent: teacherRecords.filter(r => r.status === 'Present').length,
       teacherAbsent: teacherRecords.filter(r => r.status === 'On Leave').length
     };
-  }, [mergedStudent, mergedTeacher, selectedDate, filterSchools, filterGrade]);
+  }, [studentAttendance, teacherAttendance, selectedDate, filterSchools, filterGrade]);
   const genderStats = useMemo(() => {
     const stats = {
       Male: {
@@ -20780,22 +20762,26 @@ function AdminAttendanceAnalytics({
     };
   }, [monthlyDayStats, genderStats, filteredTeacherAttendance, filteredStudentAttendance]);
   const handleExportStudents = () => {
-    if (loadingExtra) { alert('Please wait - data is still loading.'); return; }
-    if (filteredStudentAttendance.length === 0) { alert('No records found. Click "Load Data for Selected Date Range" first.'); return; }
-    const exportData = filteredStudentAttendance.map((a, i) => ({
-      'S.No': i + 1, Date: a.date, School: a.school, Grade: a.grade,
-      'Student Name': a.studentName, Status: a.status,
-      Remarks: a.remarks || '', 'Marked By': a.markedBy
+    const exportData = filteredStudentAttendance.map(a => ({
+      Date: a.date,
+      School: a.school,
+      Grade: a.grade,
+      'Student Name': a.studentName,
+      Status: a.status,
+      Remarks: a.remarks || '',
+      'Marked By': a.markedBy
     }));
     exportToExcel(exportData, `student_attendance_${startDate}_to_${endDate}`);
   };
   const handleExportTeachers = () => {
-    if (loadingExtra) { alert('Please wait - data is still loading.'); return; }
-    if (filteredTeacherAttendance.length === 0) { alert('No records found. Click "Load Data for Selected Date Range" first.'); return; }
-    const exportData = filteredTeacherAttendance.map((a, i) => ({
-      'S.No': i + 1, Date: a.date, 'Teacher Name': a.teacherName, School: a.school,
+    const exportData = filteredTeacherAttendance.map(a => ({
+      Date: a.date,
+      'Teacher Name': a.teacherName,
+      School: a.school,
       'Punch-In Time': a.punchInTime || 'Not recorded',
-      Status: a.status, Reason: a.reason || '', Location: a.location || ''
+      Status: a.status,
+      Reason: a.reason,
+      Location: a.location
     }));
     exportToExcel(exportData, `teacher_attendance_${startDate}_to_${endDate}`);
   };
@@ -20806,12 +20792,8 @@ function AdminAttendanceAnalytics({
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
   }, "\uD83D\uDCCA Attendance Analytics"), React.createElement("div", {
-    className: "flex gap-2 flex-wrap items-center"
-  }, loadingExtra && React.createElement("span", {
-    className: "text-sm px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full font-semibold"
-  }, "\u23F3 Loading..."), loadedRange && !loadingExtra && React.createElement("span", {
-    className: "text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full"
-  }, "\u2705 Loaded"), React.createElement("button", {
+    className: "flex gap-2 flex-wrap"
+  }, React.createElement("button", {
     onClick: () => setShowLockManagement(!showLockManagement),
     className: `px-4 py-2 rounded-xl font-semibold ${showLockManagement ? 'bg-yellow-600 text-white' : 'bg-yellow-100 text-yellow-800 border-2 border-yellow-400'}`
   }, "\uD83D\uDD10 Manage Locks"), React.createElement("button", {
@@ -20952,13 +20934,7 @@ function AdminAttendanceAnalytics({
     onChange: e => setSelectedDate(e.target.value),
     className: "w-full border-2 px-4 py-3 rounded-xl"
   })))), React.createElement("div", {
-    className: "mt-3"
-  }, React.createElement("button", {
-    onClick: loadDateRange,
-    disabled: loadingExtra,
-    style: {width:"100%", padding:"12px", borderRadius:"12px", fontWeight:"bold", fontSize:"16px", color:"white", background: loadingExtra ? "#9ca3af" : "#4f46e5", cursor: loadingExtra ? "not-allowed" : "pointer", border:"none"}
-  }, loadingExtra ? "\u23F3 Loading data from Firebase..." : "\uD83D\uDD0D Load Data for Selected Date Range")), React.createElement("div", {
-    className: "grid grid-cols-2 md:grid-cols-4 gap-4 mt-4"
+    className: "grid grid-cols-2 md:grid-cols-4 gap-4"
   }, React.createElement("div", {
     className: "stat-card bg-green-500 text-white"
   }, React.createElement("div", {
