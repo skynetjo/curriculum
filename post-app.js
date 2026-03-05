@@ -1953,88 +1953,59 @@ window.addEventListener('appinstalled', () => {
     var _initialized = false;
     var _lastSeenTimer = null;
 
-    // Determine which Firestore collection based on role
     function getCollection(role) {
         if (!role) return 'teachers';
         var r = role.toLowerCase();
-        if (
-            r === 'pm' || r === 'apm' || r === 'ph' || r === 'aph' ||
-            r.indexOf('manager') !== -1 ||
-            r.indexOf('head') !== -1 ||
-            r.indexOf('director') !== -1 ||
-            r.indexOf('admin') !== -1
-        ) {
+        if (r === 'pm' || r === 'apm' || r === 'ph' || r === 'aph' ||
+            r.indexOf('manager') !== -1 || r.indexOf('head') !== -1 ||
+            r.indexOf('director') !== -1 || r.indexOf('admin') !== -1) {
             return 'managers';
         }
-        return 'teachers'; // teachers, apcs
+        return 'teachers';
     }
 
-    // Write lastSeen to Firestore (update only — never overwrites other fields)
     function writeLastSeen(afid, collection) {
         if (!afid || typeof firebase === 'undefined') return;
         var now = new Date().toISOString();
-        firebase.firestore()
-            .collection(collection)
-            .doc(String(afid))
+        firebase.firestore().collection(collection).doc(String(afid))
             .update({ lastSeen: now })
-            .then(function () {
-                console.log('[LastSeen] ✅ Updated:', afid, '→', collection);
-            })
+            .then(function () { console.log('[LastSeen] ✅ Updated:', afid, '→', collection); })
             .catch(function () {
-                // Fallback with merge in case doc doesn't support update
-                firebase.firestore()
-                    .collection(collection)
-                    .doc(String(afid))
+                firebase.firestore().collection(collection).doc(String(afid))
                     .set({ lastSeen: now }, { merge: true })
-                    .catch(function (e) {
-                        console.warn('[LastSeen] ⚠️ Write failed:', e.message);
-                    });
+                    .catch(function (e) { console.warn('[LastSeen] ⚠️ Write failed:', e.message); });
             });
     }
 
-    // Pull afid + role from window.currentUser OR NotificationManager as fallback
     function getActiveUser() {
         var user = window.currentUser;
         if (user && (user.afid || user.id || user.uid)) {
-            return {
-                afid: user.afid || user.id || user.uid,
-                role: user.role || ''
-            };
+            return { afid: user.afid || user.id || user.uid, role: user.role || '' };
         }
-        // Fallback: NotificationManager already has userId set after login
         if (window.NotificationManager && window.NotificationManager.userId) {
-            return {
-                afid: window.NotificationManager.userId,
-                role: window.NotificationManager.userRole || ''
-            };
+            return { afid: window.NotificationManager.userId, role: window.NotificationManager.userRole || '' };
         }
         return null;
     }
 
-    // Start tracking once user is confirmed logged in
     function startTracking() {
         if (_initialized) return;
-
         var activeUser = getActiveUser();
-        if (!activeUser) return; // Not ready yet
+        if (!activeUser) return;
 
         _initialized = true;
         var afid = activeUser.afid;
         var collection = getCollection(activeUser.role);
-
         console.log('[LastSeen] 🟢 Tracking started | User:', afid, '| Collection:', collection);
 
-        // Write immediately on login
         writeLastSeen(afid, collection);
 
-        // Refresh every 15 minutes (low cost, stays accurate)
         if (_lastSeenTimer) clearInterval(_lastSeenTimer);
         _lastSeenTimer = setInterval(function () {
             var u = getActiveUser();
             if (u) writeLastSeen(u.afid, getCollection(u.role));
         }, 15 * 60 * 1000);
 
-        // Also write when user returns to the app tab (e.g. switches away and comes back)
         document.addEventListener('visibilitychange', function () {
             if (!document.hidden) {
                 var u = getActiveUser();
@@ -2043,24 +2014,17 @@ window.addEventListener('appinstalled', () => {
         });
     }
 
-    // Wait for Firebase Auth to confirm login, then give app time to set currentUser
     function waitForAuth() {
         var checkInterval = setInterval(function () {
             if (typeof firebase !== 'undefined' && firebase.auth) {
                 clearInterval(checkInterval);
                 firebase.auth().onAuthStateChanged(function (firebaseUser) {
                     if (!firebaseUser) {
-                        // User logged out — reset so next login re-initialises
                         _initialized = false;
-                        if (_lastSeenTimer) {
-                            clearInterval(_lastSeenTimer);
-                            _lastSeenTimer = null;
-                        }
+                        if (_lastSeenTimer) { clearInterval(_lastSeenTimer); _lastSeenTimer = null; }
                         return;
                     }
-                    // Give the app 3s to finish setting window.currentUser after auth
                     setTimeout(startTracking, 3000);
-                    // Second attempt at 8s for slow/2G connections
                     setTimeout(startTracking, 8000);
                 });
             }
@@ -2069,4 +2033,284 @@ window.addEventListener('appinstalled', () => {
 
     waitForAuth();
     console.log('[LastSeen] 🔄 v2.0 initialised');
+})();
+// ============================================================
+// LOGIN PAGE BACKGROUND ENHANCEMENT v1.0
+// Adds animated dark background + floating education icons
+// + rotating inspirational quotes to the login screen.
+// Pure CSS/JS — zero external requests — safe for 2G.
+// ============================================================
+(function () {
+    'use strict';
+
+    var QUOTES = [
+        '"Education is the most powerful weapon which you can use to change the world." — Nelson Mandela',
+        '"The art of teaching is the art of assisting discovery." — Mark Van Doren',
+        '"A good teacher can inspire hope, ignite the imagination, and instill a love of learning." — Brad Henry',
+        '"Teaching is the greatest act of optimism." — Colleen Wilcox',
+        '"One child, one teacher, one book, one pen can change the world." — Malala Yousafzai',
+        '"The mediocre teacher tells. The good teacher explains. The great teacher inspires." — William Arthur Ward',
+    ];
+
+    var FLOATERS = ['📚', '✏️', '🎓', '📐', '🔬', '📊', '🏫', '💡', '📝'];
+
+    // ── Inject styles ────────────────────────────────────────
+    function injectStyles() {
+        if (document.getElementById('__login_bg_styles')) return;
+        var style = document.createElement('style');
+        style.id = '__login_bg_styles';
+        style.textContent = `
+/* ── Login BG Scene ── */
+#__login_bg_scene {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  background: linear-gradient(135deg, #0f0f23 0%, #1a1a38 45%, #0d1117 100%) !important;
+}
+
+/* Glowing blobs */
+.__login_blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.15;
+  animation: __loginBlobFloat linear infinite;
+}
+.__login_blob_1 { width: 600px; height: 600px; background: #F4B41A; top: -150px; left: -150px; animation-duration: 20s; }
+.__login_blob_2 { width: 450px; height: 450px; background: #E8B039; bottom: -100px; right: -100px; animation-duration: 25s; animation-delay: -9s; }
+.__login_blob_3 { width: 320px; height: 320px; background: #ff7043; top: 45%; left: 40%; animation-duration: 17s; animation-delay: -5s; }
+
+@keyframes __loginBlobFloat {
+  0%   { transform: translate(0,0) scale(1); }
+  33%  { transform: translate(40px,-50px) scale(1.06); }
+  66%  { transform: translate(-25px,25px) scale(0.94); }
+  100% { transform: translate(0,0) scale(1); }
+}
+
+/* Stars */
+.__login_stars {
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 8%  12%, rgba(255,255,255,.65) 0%, transparent 100%),
+    radial-gradient(1px   1px   at 22% 58%, rgba(255,255,255,.40) 0%, transparent 100%),
+    radial-gradient(2px   2px   at 48% 22%, rgba(255,255,255,.70) 0%, transparent 100%),
+    radial-gradient(1px   1px   at 65% 78%, rgba(255,255,255,.50) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 82% 38%, rgba(255,255,255,.60) 0%, transparent 100%),
+    radial-gradient(1px   1px   at 35% 88%, rgba(255,255,255,.30) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 60% 48%, rgba(255,255,255,.55) 0%, transparent 100%),
+    radial-gradient(1px   1px   at 92%  8%, rgba(255,255,255,.70) 0%, transparent 100%),
+    radial-gradient(1px   1px   at 12% 92%, rgba(255,255,255,.40) 0%, transparent 100%),
+    radial-gradient(1px   1px   at 50% 50%, rgba(255,255,255,.30) 0%, transparent 100%),
+    radial-gradient(1px   1px   at 75% 18%, rgba(255,255,255,.50) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 30% 35%, rgba(255,255,255,.45) 0%, transparent 100%);
+  animation: __loginTwinkle 4s ease-in-out infinite alternate;
+}
+@keyframes __loginTwinkle { from { opacity: .6; } to { opacity: 1; } }
+
+/* Dot grid */
+.__login_grid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(244,180,26,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(244,180,26,.04) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Floating icons */
+.__login_floater {
+  position: absolute;
+  bottom: -10%;
+  font-size: 26px;
+  opacity: 0;
+  animation: __loginFloat linear infinite;
+  user-select: none;
+  pointer-events: none;
+}
+@keyframes __loginFloat {
+  0%   { transform: translateY(0) rotate(0deg);    opacity: 0; }
+  5%   { opacity: 0.13; }
+  90%  { opacity: 0.13; }
+  100% { transform: translateY(-115vh) rotate(360deg); opacity: 0; }
+}
+
+/* Quote bar at bottom of screen */
+#__login_quote_bar {
+  position: fixed !important;
+  bottom: 18px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 1 !important;
+  text-align: center !important;
+  pointer-events: none !important;
+  max-width: 90vw !important;
+  animation: __loginQuoteFade 1s ease forwards !important;
+}
+@keyframes __loginQuoteFade { from { opacity:0; transform: translateX(-50%) translateY(10px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+
+#__login_quote_bar span {
+  font-size: 12px !important;
+  color: rgba(255,255,255,0.35) !important;
+  font-style: italic !important;
+  line-height: 1.5 !important;
+  font-family: Georgia, serif !important;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5) !important;
+  transition: opacity 0.6s !important;
+}
+
+/* Make the login container sit above the bg */
+.__login_above_bg {
+  position: relative !important;
+  z-index: 2 !important;
+}
+        `;
+        document.head.appendChild(style);
+    }
+
+    // ── Build the background scene ───────────────────────────
+    function buildScene() {
+        if (document.getElementById('__login_bg_scene')) return;
+
+        var scene = document.createElement('div');
+        scene.id = '__login_bg_scene';
+        scene.innerHTML =
+            '<div class="__login_blob __login_blob_1"></div>' +
+            '<div class="__login_blob __login_blob_2"></div>' +
+            '<div class="__login_blob __login_blob_3"></div>' +
+            '<div class="__login_stars"></div>' +
+            '<div class="__login_grid"></div>';
+
+        // Floating icons — staggered starts
+        FLOATERS.forEach(function (icon, i) {
+            var el = document.createElement('div');
+            el.className = '__login_floater';
+            el.textContent = icon;
+            el.style.left = (5 + i * 10.5) + '%';
+            el.style.animationDuration = (11 + i * 1.3) + 's';
+            el.style.animationDelay = '-' + (i * 2.2) + 's';
+            el.style.fontSize = (18 + (i % 3) * 6) + 'px';
+            scene.appendChild(el);
+        });
+
+        document.body.insertBefore(scene, document.body.firstChild);
+    }
+
+    // ── Quote rotator ────────────────────────────────────────
+    var _quoteTimer = null;
+    function buildQuoteBar() {
+        if (document.getElementById('__login_quote_bar')) return;
+        var bar = document.createElement('div');
+        bar.id = '__login_quote_bar';
+        var span = document.createElement('span');
+        span.textContent = QUOTES[0];
+        bar.appendChild(span);
+        document.body.appendChild(bar);
+
+        var qi = 0;
+        _quoteTimer = setInterval(function () {
+            span.style.opacity = '0';
+            setTimeout(function () {
+                qi = (qi + 1) % QUOTES.length;
+                span.textContent = QUOTES[qi];
+                span.style.opacity = '';
+            }, 650);
+        }, 7000);
+    }
+
+    // ── Elevate login card above bg ──────────────────────────
+    function elevateLoginCard() {
+        // Works for most React login layouts — targets the outermost
+        // full-screen container that wraps the login form
+        var selectors = [
+            '.min-h-screen',          // common Tailwind wrapper
+            '[class*="login"]',       // anything with "login" in class
+            '[class*="Login"]',
+            '#root > div',            // root child
+        ];
+        selectors.forEach(function (sel) {
+            try {
+                document.querySelectorAll(sel).forEach(function (el) {
+                    // Only target top-level wrappers (no deep nesting)
+                    if (el.style.background || el.style.backgroundColor) {
+                        el.style.background = 'transparent';
+                        el.style.backgroundColor = 'transparent';
+                    }
+                    el.classList.add('__login_above_bg');
+                });
+            } catch (e) {}
+        });
+    }
+
+    // ── Teardown when user logs in ───────────────────────────
+    function teardown() {
+        var scene = document.getElementById('__login_bg_scene');
+        var bar   = document.getElementById('__login_quote_bar');
+        if (scene) scene.remove();
+        if (bar)   bar.remove();
+        if (_quoteTimer) clearInterval(_quoteTimer);
+        console.log('[LoginBG] 🧹 Removed (user logged in)');
+    }
+
+    // ── Main: watch for login page ───────────────────────────
+    function activate() {
+        injectStyles();
+        buildScene();
+        buildQuoteBar();
+        elevateLoginCard();
+        console.log('[LoginBG] ✅ Background active');
+    }
+
+    function isLoginPage() {
+        // Heuristic: no authToken in storage AND a password input exists in DOM
+        var hasToken = !!(localStorage.getItem('authToken') || localStorage.getItem('studentSession'));
+        var hasPasswordInput = !!document.querySelector('input[type="password"]');
+        return !hasToken && hasPasswordInput;
+    }
+
+    // Watch for Firebase Auth — remove bg once user is confirmed logged in
+    function watchAuth() {
+        var authCheck = setInterval(function () {
+            if (typeof firebase !== 'undefined' && firebase.auth) {
+                clearInterval(authCheck);
+                firebase.auth().onAuthStateChanged(function (user) {
+                    if (user) teardown();
+                });
+            }
+        }, 500);
+    }
+
+    // Use MutationObserver to detect when login form appears (React renders async)
+    var _activated = false;
+    var observer = new MutationObserver(function () {
+        if (_activated) return;
+        if (isLoginPage()) {
+            _activated = true;
+            activate();
+            watchAuth();
+        }
+    });
+
+    // Start observing once DOM is ready
+    function start() {
+        // Immediate check
+        if (isLoginPage()) {
+            _activated = true;
+            activate();
+            watchAuth();
+        } else {
+            // Observe DOM for login form to appear
+            observer.observe(document.body, { childList: true, subtree: true });
+            // Stop observing after 15s to save resources
+            setTimeout(function () { observer.disconnect(); }, 15000);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+    } else {
+        start();
+    }
+
+    console.log('[LoginBG] 🔄 v1.0 initialised');
 })();
