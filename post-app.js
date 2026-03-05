@@ -2064,23 +2064,52 @@ window.addEventListener('appinstalled', () => {
 #__login_bg_scene {
   position: fixed !important;
   inset: 0 !important;
-  z-index: 0 !important;
+  z-index: -1 !important;
   pointer-events: none !important;
   overflow: hidden !important;
-  background: linear-gradient(135deg, #0f0f23 0%, #1a1a38 45%, #0d1117 100%) !important;
+  background: linear-gradient(135deg, #0a0a18 0%, #141430 45%, #080d14 100%) !important;
 }
 
-/* Glowing blobs */
+/* ── Make React app wrappers transparent so gradient shows through ── */
+body > #root, body > #app, body > div:first-child {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Glowing blobs — MORE VISIBLE */
 .__login_blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.15;
+  filter: blur(80px);
+  opacity: 0.42;
   animation: __loginBlobFloat linear infinite;
 }
 .__login_blob_1 { width: 600px; height: 600px; background: #F4B41A; top: -150px; left: -150px; animation-duration: 20s; }
-.__login_blob_2 { width: 450px; height: 450px; background: #E8B039; bottom: -100px; right: -100px; animation-duration: 25s; animation-delay: -9s; }
-.__login_blob_3 { width: 320px; height: 320px; background: #ff7043; top: 45%; left: 40%; animation-duration: 17s; animation-delay: -5s; }
+.__login_blob_2 { width: 450px; height: 450px; background: #E87A1A; bottom: -100px; right: -100px; animation-duration: 25s; animation-delay: -9s; }
+.__login_blob_3 { width: 320px; height: 320px; background: #ff5722; top: 45%; left: 40%; animation-duration: 17s; animation-delay: -5s; }
+
+/* ── Floating stat badges ── */
+.__login_stat_badge {
+  position: fixed !important;
+  z-index: 5 !important;
+  background: rgba(255,255,255,0.07) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  border-radius: 50px !important;
+  padding: 8px 18px !important;
+  font-family: 'Outfit', system-ui, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: rgba(255,255,255,0.65) !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  backdrop-filter: blur(10px) !important;
+  animation: __loginBadgeFloat 6s ease-in-out infinite !important;
+}
+.__login_stat_badge span { color: #F4B41A !important; font-weight: 800 !important; font-size: 15px !important; }
+.__login_stat_b1 { top: 22%; left: 6%; animation-delay: 0s !important; }
+.__login_stat_b2 { top: 34%; right: 6%; animation-delay: -2s !important; }
+.__login_stat_b3 { bottom: 28%; left: 5%; animation-delay: -4s !important; }
+@keyframes __loginBadgeFloat { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-10px);} }
 
 @keyframes __loginBlobFloat {
   0%   { transform: translate(0,0) scale(1); }
@@ -2194,6 +2223,20 @@ window.addEventListener('appinstalled', () => {
         });
 
         document.body.insertBefore(scene, document.body.firstChild);
+
+        // Inject stat badges directly into body at fixed position (visible above React)
+        var badges = [
+            { cls: '__login_stat_b1', html: '🏫 <span>32</span> JNV Centres' },
+            { cls: '__login_stat_b2', html: '🎓 <span>4000+</span> Students' },
+            { cls: '__login_stat_b3', html: '✏️ <span>120+</span> Teachers' },
+        ];
+        badges.forEach(function(b) {
+            if (document.querySelector('.' + b.cls)) return;
+            var el = document.createElement('div');
+            el.className = '__login_stat_badge ' + b.cls;
+            el.innerHTML = b.html;
+            document.body.appendChild(el);
+        });
     }
 
     // ── Quote rotator ────────────────────────────────────────
@@ -2248,6 +2291,7 @@ window.addEventListener('appinstalled', () => {
         var bar   = document.getElementById('__login_quote_bar');
         if (scene) scene.remove();
         if (bar)   bar.remove();
+        document.querySelectorAll('.__login_stat_badge').forEach(function(el) { el.remove(); });
         if (_quoteTimer) clearInterval(_quoteTimer);
         console.log('[LoginBG] 🧹 Removed (user logged in)');
     }
@@ -2258,7 +2302,30 @@ window.addEventListener('appinstalled', () => {
         buildScene();
         buildQuoteBar();
         elevateLoginCard();
+        makeAppTransparent();
         console.log('[LoginBG] ✅ Background active');
+    }
+
+    // Force React wrapper backgrounds transparent so gradient shows through
+    function makeAppTransparent() {
+        var sel = ['#root', '#app', 'body > div'];
+        sel.forEach(function(s) {
+            document.querySelectorAll(s).forEach(function(el) {
+                if (el.offsetHeight > window.innerHeight * 0.7) {
+                    el.style.setProperty('background', 'transparent', 'important');
+                    el.style.setProperty('background-color', 'transparent', 'important');
+                }
+            });
+        });
+        // Also watch for any late-rendered wrappers
+        setTimeout(function() {
+            document.querySelectorAll('.min-h-screen, .min-h-full').forEach(function(el) {
+                if (el.offsetHeight > window.innerHeight * 0.5) {
+                    el.style.setProperty('background', 'transparent', 'important');
+                    el.style.setProperty('background-color', 'transparent', 'important');
+                }
+            });
+        }, 800);
     }
 
     function isLoginPage() {
@@ -2316,117 +2383,294 @@ window.addEventListener('appinstalled', () => {
 })();
 
 
+
 // ============================================================
-//  SELECT ALL FIX v1.0
-//  Fixes: "Select All" checkbox in school/filter dropdowns
-//  not updating state when clicked.
-//  Method: Intercepts click, dispatches React-compatible
-//  events on all sibling checkboxes.
+//  SELECT ALL FIX v2.0
+//  Uses capture-phase click delegation — lets React handle
+//  the "Select All" click normally, then fires real .click()
+//  on each sibling checkbox so React's own onChange fires.
 // ============================================================
 (function () {
     'use strict';
 
-    // Helper: trigger a React-compatible change on a checkbox
-    function reactCheck(input, checked) {
-        try {
-            // Use React's internal input descriptor so onChange fires
-            var nativeSetter = Object.getOwnPropertyDescriptor(
-                window.HTMLInputElement.prototype, 'checked'
-            ).set;
-            nativeSetter.call(input, checked);
-            input.dispatchEvent(new Event('change', { bubbles: true }));
-        } catch (e) {
-            // Fallback: just click it if state differs
-            if (input.checked !== checked) input.click();
+    function isSelectAllRow(el) {
+        // Walk up max 4 levels looking for a row whose ONLY text is "Select All"
+        var node = el;
+        for (var i = 0; i < 5; i++) {
+            if (!node) break;
+            var txt = (node.textContent || '').trim().replace(/\s+/g, ' ');
+            if (txt === 'Select All') return node;
+            // Stop walking up if we reach a big container
+            if (node.tagName === 'BODY' || node.tagName === 'MAIN') break;
+            node = node.parentElement;
         }
+        return null;
     }
 
-    // Patch a dropdown container that has a "Select All" row
-    function patchDropdown(container) {
-        if (container.__selectAllPatched) return;
-
-        var rows = container.querySelectorAll('div, li, label');
-        rows.forEach(function (row) {
-            // Only target the "Select All" row
-            var text = row.textContent || '';
-            if (text.replace(/\s/g, '') !== 'SelectAll') return;
-
-            var selectAllBox = row.querySelector('input[type="checkbox"]');
-            if (!selectAllBox || selectAllBox.__saFixed) return;
-            selectAllBox.__saFixed = true;
-
-            // Capture click on the entire row (checkbox + label area)
-            row.addEventListener('click', function (e) {
-                // Let the default click register first, then sync siblings
-                setTimeout(function () {
-                    var shouldCheck = selectAllBox.checked;
-
-                    // Find all checkboxes in the same dropdown
-                    var allBoxes = container.querySelectorAll('input[type="checkbox"]');
-                    allBoxes.forEach(function (box) {
-                        if (box === selectAllBox) return;
-                        if (box.checked !== shouldCheck) {
-                            reactCheck(box, shouldCheck);
-                        }
-                    });
-
-                    console.log('[SelectAllFix] Toggled', allBoxes.length - 1,
-                        'checkboxes to', shouldCheck);
-                }, 0);
-            }, false);
-
-            console.log('[SelectAllFix] ✅ Patched dropdown');
-        });
-
-        container.__selectAllPatched = true;
-    }
-
-    // Watch for dropdowns opening (React renders them async)
-    var saObserver = new MutationObserver(function (mutations) {
-        mutations.forEach(function (m) {
-            m.addedNodes.forEach(function (node) {
-                if (node.nodeType !== 1) return;
-
-                // Check the node itself and its children for checkbox lists
-                var candidates = [node];
-                try {
-                    node.querySelectorAll('*').forEach(function (c) {
-                        candidates.push(c);
-                    });
-                } catch (e) {}
-
-                candidates.forEach(function (el) {
-                    if (!el.querySelectorAll) return;
-                    var boxes = el.querySelectorAll('input[type="checkbox"]');
-                    if (boxes.length >= 2) {
-                        // Check if any row says "Select All"
-                        var hasSelectAll = false;
-                        el.querySelectorAll('div, li, label').forEach(function (r) {
-                            if ((r.textContent || '').replace(/\s/g, '') === 'SelectAll') {
-                                hasSelectAll = true;
-                            }
-                        });
-                        if (hasSelectAll) patchDropdown(el);
-                    }
-                });
-            });
-        });
-    });
-
-    function startObserver() {
-        saObserver.observe(document.body, { childList: true, subtree: true });
-        // Also patch any already-visible dropdowns
-        document.querySelectorAll('div, ul').forEach(function (el) {
+    function findDropdownContainer(startEl) {
+        // Walk up looking for the container that holds ALL the school checkboxes
+        var el = startEl;
+        for (var i = 0; i < 10; i++) {
+            if (!el || !el.parentElement) break;
+            el = el.parentElement;
             var boxes = el.querySelectorAll('input[type="checkbox"]');
-            if (boxes.length >= 2) patchDropdown(el);
+            if (boxes.length >= 3) return el; // Found the list container
+        }
+        return null;
+    }
+
+    // Capture phase: fires before React's own handlers
+    document.addEventListener('click', function (e) {
+        var row = isSelectAllRow(e.target);
+        if (!row) return;
+
+        var selectAllBox = row.querySelector('input[type="checkbox"]');
+        if (!selectAllBox) return;
+
+        var container = findDropdownContainer(row);
+        if (!container) return;
+
+        // Wait for React to process its own click first, then sync siblings
+        setTimeout(function () {
+            var shouldCheck = selectAllBox.checked;
+            var allBoxes = container.querySelectorAll('input[type="checkbox"]');
+            var clicked = 0;
+            allBoxes.forEach(function (box) {
+                if (box === selectAllBox) return;
+                if (box.checked !== shouldCheck) {
+                    box.click(); // Real DOM click → React onChange fires
+                    clicked++;
+                }
+            });
+            console.log('[SelectAll v2] Toggled', clicked, 'checkboxes →', shouldCheck ? 'checked' : 'unchecked');
+        }, 30);
+
+    }, true); // ← capture phase is critical
+
+    console.log('[SelectAll v2] 🔄 Initialised');
+})();
+
+
+// ============================================================
+//  RECOGNITION MONTH FIX v1.0
+//  "Educators of the Month" should show PREVIOUS completed
+//  month, not current ongoing month. Fixes March showing
+//  mid-month data when February is the last completed month.
+// ============================================================
+(function () {
+    'use strict';
+
+    var MONTHS = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+
+    function getPrevMonthLabel() {
+        var now = new Date();
+        var prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        return MONTHS[prevDate.getMonth()] + ' ' + prevDate.getFullYear();
+    }
+
+    function getCurrentMonthLabel() {
+        var now = new Date();
+        return MONTHS[now.getMonth()] + ' ' + now.getFullYear();
+    }
+
+    function fixRecognitionMonth() {
+        var currentLabel = getCurrentMonthLabel();
+        var prevLabel = getPrevMonthLabel();
+
+        // Find any text node that says current month inside the Recognition section
+        document.querySelectorAll('p, span, h2, h3, div').forEach(function (el) {
+            // Only match leaf elements (no child elements) with the current month text
+            if (el.children.length > 0) return;
+            var txt = (el.textContent || '').trim();
+            if (txt === currentLabel) {
+                // Check that a parent contains "Educators of the Month"
+                var parent = el;
+                for (var i = 0; i < 8; i++) {
+                    if (!parent) break;
+                    if ((parent.textContent || '').indexOf('Educators of the Month') !== -1) {
+                        el.textContent = prevLabel;
+                        console.log('[RecognitionFix] ✅ Changed month from', currentLabel, '→', prevLabel);
+                        return;
+                    }
+                    parent = parent.parentElement;
+                }
+            }
         });
+    }
+
+    // Run on DOM changes (Recognition tab may be loaded async)
+    var recObs = new MutationObserver(function () { fixRecognitionMonth(); });
+
+    function startRecFix() {
+        fixRecognitionMonth();
+        recObs.observe(document.body, { childList: true, subtree: true, characterData: true });
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', startObserver);
+        document.addEventListener('DOMContentLoaded', startRecFix);
     } else {
-        startObserver();
+        startRecFix();
     }
 
-    console.log('[SelectAllFix] 🔄 v1.0 initialised');
+    console.log('[RecognitionFix] 🔄 v1.0 initialised');
+})();
+
+
+// ============================================================
+//  LAST SEEN FIX v2.1
+//  Improves user detection — also uses Firebase Auth UID
+//  directly and retries up to 20 seconds after login.
+// ============================================================
+(function () {
+    'use strict';
+
+    // Wait for Firebase + currentUser and then write lastSeen
+    function tryWriteLastSeen() {
+        if (typeof firebase === 'undefined' || !firebase.auth) return;
+        var fbUser = firebase.auth().currentUser;
+        if (!fbUser) return;
+
+        // Prefer window.currentUser (has role + afid), fall back to searching by email/uid
+        var user = window.currentUser;
+        if (user && (user.afid || user.id)) {
+            doWrite(user.afid || user.id, user.role || '');
+            return;
+        }
+
+        // Fall back: search teachers + managers by email
+        var email = fbUser.email;
+        if (!email) return;
+
+        var db = firebase.firestore();
+        var searched = false;
+
+        function searchCollection(colName, callback) {
+            db.collection(colName).where('email', '==', email).limit(1).get()
+                .then(function (snap) {
+                    if (!snap.empty) {
+                        var doc = snap.docs[0];
+                        callback(doc.id, doc.data().role || colName === 'managers' ? 'pm' : 'teacher');
+                    }
+                })
+                .catch(function () {});
+        }
+
+        if (!searched) {
+            searched = true;
+            searchCollection('managers', doWrite);
+            searchCollection('teachers', doWrite);
+        }
+    }
+
+    function doWrite(afid, role) {
+        if (!afid) return;
+        var col = (role || '').toLowerCase();
+        var collection = (col.indexOf('teacher') !== -1) ? 'teachers' : 'managers';
+        var now = new Date().toISOString();
+        firebase.firestore().collection(collection).doc(String(afid))
+            .update({ lastSeen: now })
+            .catch(function () {
+                firebase.firestore().collection(collection).doc(String(afid))
+                    .set({ lastSeen: now }, { merge: true })
+                    .catch(function (e) { console.warn('[LastSeen v2.1] write failed:', e.message); });
+            });
+        console.log('[LastSeen v2.1] ✅ Wrote to', collection, '/', afid);
+    }
+
+    // Start retrying after auth state change
+    var retryInterval = null;
+    var retryCount = 0;
+
+    function waitAndRetry() {
+        if (typeof firebase === 'undefined' || !firebase.auth) {
+            setTimeout(waitAndRetry, 500);
+            return;
+        }
+        firebase.auth().onAuthStateChanged(function (user) {
+            if (!user) {
+                if (retryInterval) clearInterval(retryInterval);
+                return;
+            }
+            // Retry every 2s for up to 20s (currentUser populates late in React apps)
+            retryCount = 0;
+            if (retryInterval) clearInterval(retryInterval);
+            retryInterval = setInterval(function () {
+                retryCount++;
+                tryWriteLastSeen();
+                if (retryCount >= 10) clearInterval(retryInterval);
+            }, 2000);
+        });
+    }
+
+    waitAndRetry();
+    console.log('[LastSeen v2.1] 🔄 Initialised');
+})();
+
+
+// ============================================================
+//  SCHOOL INFO FILTER v1.0
+//  On the School Information page, hide schools that aren't
+//  assigned to the current Program Manager / APM.
+//  Only applies if role is PM or APM (not PH/Admin).
+// ============================================================
+(function () {
+    'use strict';
+
+    function getAssignedSchools() {
+        var user = window.currentUser;
+        if (!user) return null;
+        var role = (user.role || '').toLowerCase();
+        // Only filter for PM/APM — PH and Admin should see all
+        if (role.indexOf('ph') !== -1 || role.indexOf('head') !== -1 ||
+            role.indexOf('admin') !== -1 || role.indexOf('director') !== -1) {
+            return null; // Show all
+        }
+        // Return assigned schools array if present
+        return user.schools || user.assignedSchools || user.centers || null;
+    }
+
+    function filterSchoolInfoPage() {
+        // Check if we're on the School Info page
+        var heading = document.querySelector('h1, h2');
+        if (!heading || (heading.textContent || '').indexOf('School Information') === -1) return;
+
+        var assigned = getAssignedSchools();
+        if (!assigned || assigned.length === 0) return;
+
+        // Normalize assigned school names for comparison
+        var assignedLower = assigned.map(function (s) { return s.toLowerCase().trim(); });
+
+        // Find school rows in the pending list and hide non-assigned ones
+        var rows = document.querySelectorAll('[class*="border-b"], [class*="border"] > div');
+        rows.forEach(function (row) {
+            var text = (row.textContent || '').trim().toLowerCase();
+            if (text.length < 3) return;
+            // Check if any assigned school name is in this row's text
+            var isAssigned = assignedLower.some(function (s) {
+                return text.indexOf(s) !== -1 || s.indexOf(text.split('\n')[0].trim()) !== -1;
+            });
+            if (!isAssigned && row.querySelector && row.querySelector('button')) {
+                row.style.display = 'none';
+            }
+        });
+
+        console.log('[SchoolFilter] ✅ Filtered to', assigned.length, 'assigned schools');
+    }
+
+    // Watch for navigation to School Info page
+    var sfObs = new MutationObserver(function () { filterSchoolInfoPage(); });
+
+    function startFilter() {
+        filterSchoolInfoPage();
+        sfObs.observe(document.body, { childList: true, subtree: true });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startFilter);
+    } else {
+        startFilter();
+    }
+
+    console.log('[SchoolFilter] 🔄 v1.0 initialised');
 })();
