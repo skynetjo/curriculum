@@ -2314,3 +2314,119 @@ window.addEventListener('appinstalled', () => {
 
     console.log('[LoginBG] 🔄 v1.0 initialised');
 })();
+
+
+// ============================================================
+//  SELECT ALL FIX v1.0
+//  Fixes: "Select All" checkbox in school/filter dropdowns
+//  not updating state when clicked.
+//  Method: Intercepts click, dispatches React-compatible
+//  events on all sibling checkboxes.
+// ============================================================
+(function () {
+    'use strict';
+
+    // Helper: trigger a React-compatible change on a checkbox
+    function reactCheck(input, checked) {
+        try {
+            // Use React's internal input descriptor so onChange fires
+            var nativeSetter = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype, 'checked'
+            ).set;
+            nativeSetter.call(input, checked);
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (e) {
+            // Fallback: just click it if state differs
+            if (input.checked !== checked) input.click();
+        }
+    }
+
+    // Patch a dropdown container that has a "Select All" row
+    function patchDropdown(container) {
+        if (container.__selectAllPatched) return;
+
+        var rows = container.querySelectorAll('div, li, label');
+        rows.forEach(function (row) {
+            // Only target the "Select All" row
+            var text = row.textContent || '';
+            if (text.replace(/\s/g, '') !== 'SelectAll') return;
+
+            var selectAllBox = row.querySelector('input[type="checkbox"]');
+            if (!selectAllBox || selectAllBox.__saFixed) return;
+            selectAllBox.__saFixed = true;
+
+            // Capture click on the entire row (checkbox + label area)
+            row.addEventListener('click', function (e) {
+                // Let the default click register first, then sync siblings
+                setTimeout(function () {
+                    var shouldCheck = selectAllBox.checked;
+
+                    // Find all checkboxes in the same dropdown
+                    var allBoxes = container.querySelectorAll('input[type="checkbox"]');
+                    allBoxes.forEach(function (box) {
+                        if (box === selectAllBox) return;
+                        if (box.checked !== shouldCheck) {
+                            reactCheck(box, shouldCheck);
+                        }
+                    });
+
+                    console.log('[SelectAllFix] Toggled', allBoxes.length - 1,
+                        'checkboxes to', shouldCheck);
+                }, 0);
+            }, false);
+
+            console.log('[SelectAllFix] ✅ Patched dropdown');
+        });
+
+        container.__selectAllPatched = true;
+    }
+
+    // Watch for dropdowns opening (React renders them async)
+    var saObserver = new MutationObserver(function (mutations) {
+        mutations.forEach(function (m) {
+            m.addedNodes.forEach(function (node) {
+                if (node.nodeType !== 1) return;
+
+                // Check the node itself and its children for checkbox lists
+                var candidates = [node];
+                try {
+                    node.querySelectorAll('*').forEach(function (c) {
+                        candidates.push(c);
+                    });
+                } catch (e) {}
+
+                candidates.forEach(function (el) {
+                    if (!el.querySelectorAll) return;
+                    var boxes = el.querySelectorAll('input[type="checkbox"]');
+                    if (boxes.length >= 2) {
+                        // Check if any row says "Select All"
+                        var hasSelectAll = false;
+                        el.querySelectorAll('div, li, label').forEach(function (r) {
+                            if ((r.textContent || '').replace(/\s/g, '') === 'SelectAll') {
+                                hasSelectAll = true;
+                            }
+                        });
+                        if (hasSelectAll) patchDropdown(el);
+                    }
+                });
+            });
+        });
+    });
+
+    function startObserver() {
+        saObserver.observe(document.body, { childList: true, subtree: true });
+        // Also patch any already-visible dropdowns
+        document.querySelectorAll('div, ul').forEach(function (el) {
+            var boxes = el.querySelectorAll('input[type="checkbox"]');
+            if (boxes.length >= 2) patchDropdown(el);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startObserver);
+    } else {
+        startObserver();
+    }
+
+    console.log('[SelectAllFix] 🔄 v1.0 initialised');
+})();
