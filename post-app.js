@@ -2,7 +2,7 @@
   // AGGRESSIVE AUTO-UPDATE MECHANISM FOR PWA
   // ========================================
   // Version management - UPDATE THIS WITH EACH DEPLOYMENT
-  const CURRENT_VERSION = '5.5.5'; // ✅ ATTENDANCE EXPORT + RANGE FIX
+  const CURRENT_VERSION = '5.5.6'; // ✅ SELECT ALL + SCHOOL FILTER + LAST SEEN + RECOGNITION + LOGIN REDESIGN
 
   // ✅ PERFORMANCE FIX: Check for updates less frequently (once per session)
   // This saves bandwidth for teachers in low-connectivity areas
@@ -2384,137 +2384,12 @@ body > #root, body > #app, body > div:first-child {
 
 
 
-// ============================================================
-//  SELECT ALL FIX v2.0
-//  Uses capture-phase click delegation — lets React handle
-//  the "Select All" click normally, then fires real .click()
-//  on each sibling checkbox so React's own onChange fires.
-// ============================================================
-(function () {
-    'use strict';
-
-    function isSelectAllRow(el) {
-        // Walk up max 4 levels looking for a row whose ONLY text is "Select All"
-        var node = el;
-        for (var i = 0; i < 5; i++) {
-            if (!node) break;
-            var txt = (node.textContent || '').trim().replace(/\s+/g, ' ');
-            if (txt === 'Select All') return node;
-            // Stop walking up if we reach a big container
-            if (node.tagName === 'BODY' || node.tagName === 'MAIN') break;
-            node = node.parentElement;
-        }
-        return null;
-    }
-
-    function findDropdownContainer(startEl) {
-        // Walk up looking for the container that holds ALL the school checkboxes
-        var el = startEl;
-        for (var i = 0; i < 10; i++) {
-            if (!el || !el.parentElement) break;
-            el = el.parentElement;
-            var boxes = el.querySelectorAll('input[type="checkbox"]');
-            if (boxes.length >= 3) return el; // Found the list container
-        }
-        return null;
-    }
-
-    // Capture phase: fires before React's own handlers
-    document.addEventListener('click', function (e) {
-        var row = isSelectAllRow(e.target);
-        if (!row) return;
-
-        var selectAllBox = row.querySelector('input[type="checkbox"]');
-        if (!selectAllBox) return;
-
-        var container = findDropdownContainer(row);
-        if (!container) return;
-
-        // Wait for React to process its own click first, then sync siblings
-        setTimeout(function () {
-            var shouldCheck = selectAllBox.checked;
-            var allBoxes = container.querySelectorAll('input[type="checkbox"]');
-            var clicked = 0;
-            allBoxes.forEach(function (box) {
-                if (box === selectAllBox) return;
-                if (box.checked !== shouldCheck) {
-                    box.click(); // Real DOM click → React onChange fires
-                    clicked++;
-                }
-            });
-            console.log('[SelectAll v2] Toggled', clicked, 'checkboxes →', shouldCheck ? 'checked' : 'unchecked');
-        }, 30);
-
-    }, true); // ← capture phase is critical
-
-    console.log('[SelectAll v2] 🔄 Initialised');
-})();
+// ✅ SELECT ALL: Fixed natively in app.js (onClick: handleSelectAll on label). No DOM patch needed.
+console.log('[SelectAll] ✅ Fixed in app.js v5.5.6 — no patch needed');
 
 
-// ============================================================
-//  RECOGNITION MONTH FIX v1.0
-//  "Educators of the Month" should show PREVIOUS completed
-//  month, not current ongoing month. Fixes March showing
-//  mid-month data when February is the last completed month.
-// ============================================================
-(function () {
-    'use strict';
-
-    var MONTHS = ['January','February','March','April','May','June',
-                  'July','August','September','October','November','December'];
-
-    function getPrevMonthLabel() {
-        var now = new Date();
-        var prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        return MONTHS[prevDate.getMonth()] + ' ' + prevDate.getFullYear();
-    }
-
-    function getCurrentMonthLabel() {
-        var now = new Date();
-        return MONTHS[now.getMonth()] + ' ' + now.getFullYear();
-    }
-
-    function fixRecognitionMonth() {
-        var currentLabel = getCurrentMonthLabel();
-        var prevLabel = getPrevMonthLabel();
-
-        // Find any text node that says current month inside the Recognition section
-        document.querySelectorAll('p, span, h2, h3, div').forEach(function (el) {
-            // Only match leaf elements (no child elements) with the current month text
-            if (el.children.length > 0) return;
-            var txt = (el.textContent || '').trim();
-            if (txt === currentLabel) {
-                // Check that a parent contains "Educators of the Month"
-                var parent = el;
-                for (var i = 0; i < 8; i++) {
-                    if (!parent) break;
-                    if ((parent.textContent || '').indexOf('Educators of the Month') !== -1) {
-                        el.textContent = prevLabel;
-                        console.log('[RecognitionFix] ✅ Changed month from', currentLabel, '→', prevLabel);
-                        return;
-                    }
-                    parent = parent.parentElement;
-                }
-            }
-        });
-    }
-
-    // Run on DOM changes (Recognition tab may be loaded async)
-    var recObs = new MutationObserver(function () { fixRecognitionMonth(); });
-
-    function startRecFix() {
-        fixRecognitionMonth();
-        recObs.observe(document.body, { childList: true, subtree: true, characterData: true });
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', startRecFix);
-    } else {
-        startRecFix();
-    }
-
-    console.log('[RecognitionFix] 🔄 v1.0 initialised');
-})();
+// ✅ RECOGNITION: Fixed natively in app.js (month labels corrected). No DOM patch needed.
+console.log('[RecognitionFix] ✅ Fixed in app.js v5.5.6 — no patch needed');
 
 
 // ============================================================
@@ -2608,69 +2483,5 @@ body > #root, body > #app, body > div:first-child {
 })();
 
 
-// ============================================================
-//  SCHOOL INFO FILTER v1.0
-//  On the School Information page, hide schools that aren't
-//  assigned to the current Program Manager / APM.
-//  Only applies if role is PM or APM (not PH/Admin).
-// ============================================================
-(function () {
-    'use strict';
-
-    function getAssignedSchools() {
-        var user = window.currentUser;
-        if (!user) return null;
-        var role = (user.role || '').toLowerCase();
-        // Only filter for PM/APM — PH and Admin should see all
-        if (role.indexOf('ph') !== -1 || role.indexOf('head') !== -1 ||
-            role.indexOf('admin') !== -1 || role.indexOf('director') !== -1) {
-            return null; // Show all
-        }
-        // Return assigned schools array if present
-        return user.schools || user.assignedSchools || user.centers || null;
-    }
-
-    function filterSchoolInfoPage() {
-        // Check if we're on the School Info page
-        var heading = document.querySelector('h1, h2');
-        if (!heading || (heading.textContent || '').indexOf('School Information') === -1) return;
-
-        var assigned = getAssignedSchools();
-        if (!assigned || assigned.length === 0) return;
-
-        // Normalize assigned school names for comparison
-        var assignedLower = assigned.map(function (s) { return s.toLowerCase().trim(); });
-
-        // Find school rows in the pending list and hide non-assigned ones
-        var rows = document.querySelectorAll('[class*="border-b"], [class*="border"] > div');
-        rows.forEach(function (row) {
-            var text = (row.textContent || '').trim().toLowerCase();
-            if (text.length < 3) return;
-            // Check if any assigned school name is in this row's text
-            var isAssigned = assignedLower.some(function (s) {
-                return text.indexOf(s) !== -1 || s.indexOf(text.split('\n')[0].trim()) !== -1;
-            });
-            if (!isAssigned && row.querySelector && row.querySelector('button')) {
-                row.style.display = 'none';
-            }
-        });
-
-        console.log('[SchoolFilter] ✅ Filtered to', assigned.length, 'assigned schools');
-    }
-
-    // Watch for navigation to School Info page
-    var sfObs = new MutationObserver(function () { filterSchoolInfoPage(); });
-
-    function startFilter() {
-        filterSchoolInfoPage();
-        sfObs.observe(document.body, { childList: true, subtree: true });
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', startFilter);
-    } else {
-        startFilter();
-    }
-
-    console.log('[SchoolFilter] 🔄 v1.0 initialised');
-})();
+// ✅ SCHOOL FILTER: Fixed natively in app.js (filteredSchoolInfo uses accessibleSchools). No DOM patch needed.
+console.log('[SchoolFilter] ✅ Fixed in app.js v5.5.6 — no patch needed');
