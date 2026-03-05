@@ -1940,3 +1940,133 @@ window.addEventListener('appinstalled', () => {
   console.log('[PWA] App installed!');
   deferredPrompt = null;
 });
+
+// ============================================================
+// LAST SEEN TRACKER v2.0
+// Writes lastSeen timestamp to Firestore on login + every 15min
+// Uses Firebase Auth as trigger (reliable across all user types)
+// Cost: ~28,000 writes/month max = less than ₹5/month
+// ============================================================
+(function () {
+    'use strict';
+
+    var _initialized = false;
+    var _lastSeenTimer = null;
+
+    // Determine which Firestore collection based on role
+    function getCollection(role) {
+        if (!role) return 'teachers';
+        var r = role.toLowerCase();
+        if (
+            r === 'pm' || r === 'apm' || r === 'ph' || r === 'aph' ||
+            r.indexOf('manager') !== -1 ||
+            r.indexOf('head') !== -1 ||
+            r.indexOf('director') !== -1 ||
+            r.indexOf('admin') !== -1
+        ) {
+            return 'managers';
+        }
+        return 'teachers'; // teachers, apcs
+    }
+
+    // Write lastSeen to Firestore (update only — never overwrites other fields)
+    function writeLastSeen(afid, collection) {
+        if (!afid || typeof firebase === 'undefined') return;
+        var now = new Date().toISOString();
+        firebase.firestore()
+            .collection(collection)
+            .doc(String(afid))
+            .update({ lastSeen: now })
+            .then(function () {
+                console.log('[LastSeen] ✅ Updated:', afid, '→', collection);
+            })
+            .catch(function () {
+                // Fallback with merge in case doc doesn't support update
+                firebase.firestore()
+                    .collection(collection)
+                    .doc(String(afid))
+                    .set({ lastSeen: now }, { merge: true })
+                    .catch(function (e) {
+                        console.warn('[LastSeen] ⚠️ Write failed:', e.message);
+                    });
+            });
+    }
+
+    // Pull afid + role from window.currentUser OR NotificationManager as fallback
+    function getActiveUser() {
+        var user = window.currentUser;
+        if (user && (user.afid || user.id || user.uid)) {
+            return {
+                afid: user.afid || user.id || user.uid,
+                role: user.role || ''
+            };
+        }
+        // Fallback: NotificationManager already has userId set after login
+        if (window.NotificationManager && window.NotificationManager.userId) {
+            return {
+                afid: window.NotificationManager.userId,
+                role: window.NotificationManager.userRole || ''
+            };
+        }
+        return null;
+    }
+
+    // Start tracking once user is confirmed logged in
+    function startTracking() {
+        if (_initialized) return;
+
+        var activeUser = getActiveUser();
+        if (!activeUser) return; // Not ready yet
+
+        _initialized = true;
+        var afid = activeUser.afid;
+        var collection = getCollection(activeUser.role);
+
+        console.log('[LastSeen] 🟢 Tracking started | User:', afid, '| Collection:', collection);
+
+        // Write immediately on login
+        writeLastSeen(afid, collection);
+
+        // Refresh every 15 minutes (low cost, stays accurate)
+        if (_lastSeenTimer) clearInterval(_lastSeenTimer);
+        _lastSeenTimer = setInterval(function () {
+            var u = getActiveUser();
+            if (u) writeLastSeen(u.afid, getCollection(u.role));
+        }, 15 * 60 * 1000);
+
+        // Also write when user returns to the app tab (e.g. switches away and comes back)
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) {
+                var u = getActiveUser();
+                if (u) writeLastSeen(u.afid, getCollection(u.role));
+            }
+        });
+    }
+
+    // Wait for Firebase Auth to confirm login, then give app time to set currentUser
+    function waitForAuth() {
+        var checkInterval = setInterval(function () {
+            if (typeof firebase !== 'undefined' && firebase.auth) {
+                clearInterval(checkInterval);
+                firebase.auth().onAuthStateChanged(function (firebaseUser) {
+                    if (!firebaseUser) {
+                        // User logged out — reset so next login re-initialises
+                        _initialized = false;
+                        if (_lastSeenTimer) {
+                            clearInterval(_lastSeenTimer);
+                            _lastSeenTimer = null;
+                        }
+                        return;
+                    }
+                    // Give the app 3s to finish setting window.currentUser after auth
+                    setTimeout(startTracking, 3000);
+                    // Second attempt at 8s for slow/2G connections
+                    setTimeout(startTracking, 8000);
+                });
+            }
+        }, 500);
+    }
+
+    waitForAuth();
+    console.log('[LastSeen] 🔄 v2.0 initialised');
+})();
