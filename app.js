@@ -126,6 +126,7 @@ const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology'];
 const PresenceSystem = {
   userId: null,
   userName: null,
+  userEmail: null,
   presenceRef: null,
   heartbeatInterval: null,
   onlineUsers: {},
@@ -133,10 +134,11 @@ const PresenceSystem = {
   listeners: [],
   initialized: false,
   OFFLINE_TIMEOUT: 60000,
-  init: function (userId, userName) {
+  init: function (userId, userName, userEmail) {
     if (!userId || this.initialized) return;
     this.userId = String(userId);
     this.userName = userName || '';
+    this.userEmail = userEmail || '';
     this.initialized = true;
     console.log('[Presence] Initializing for:', this.userId, this.userName);
     this.updatePresence('online');
@@ -164,6 +166,7 @@ const PresenceSystem = {
         lastSeen: firebase.firestore.FieldValue.serverTimestamp(),
         userId: this.userId,
         userName: this.userName,
+        email: this.userEmail || '',
         updatedAt: new Date().toISOString(),
         heartbeatAt: Date.now()
       }, {
@@ -2897,7 +2900,8 @@ function MultiSelectDropdown({
   }, "\u25BC")), isOpen && !disabled && React.createElement("div", {
     className: "absolute z-50 w-full mt-1 bg-white border-2 rounded-xl shadow-lg max-h-64 overflow-y-auto"
   }, React.createElement("label", {
-    className: "flex items-center px-4 py-2 hover:bg-yellow-50 cursor-pointer border-b"
+    className: "flex items-center px-4 py-2 hover:bg-yellow-50 cursor-pointer border-b",
+    onClick: handleSelectAll
   }, React.createElement("div", {
     className: `w-5 h-5 rounded border-2 mr-3 flex items-center justify-center flex-shrink-0 transition-colors ${selected.length === options.length ? 'bg-red-500 border-red-500' : 'border-gray-300 bg-white'}`
   }, selected.length === options.length && React.createElement("svg", {viewBox:"0 0 10 8", width:"12", height:"12", fill:"none"}, React.createElement("path", {d:"M1 4l3 3 5-6", stroke:"white", strokeWidth:"1.8", strokeLinecap:"round", strokeLinejoin:"round"}))), React.createElement("span", {
@@ -7121,7 +7125,8 @@ function OnlineStatusCard({
     if (!currentUser) return;
     const userId = currentUser.afid || currentUser.uid || currentUser.email || currentUser.name;
     const userName = currentUser.name || '';
-    PresenceSystem.init(userId, userName);
+    const userEmail = currentUser.email || '';
+    PresenceSystem.init(userId, userName, userEmail);
     const unsubscribe = PresenceSystem.subscribe(users => {
       setOnlineUsers(users);
       setOnlineCount(Object.keys(users).length);
@@ -9273,75 +9278,162 @@ function App() {
   }
   if (!currentUser) {
     return React.createElement("div", {
-      className: "min-h-screen flex items-center justify-center p-4"
-    , style: {background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)"}
-    }, React.createElement("div", {
-      className: "w-full max-w-sm"
-    }, React.createElement("div", {
-      className: "text-center mb-8"
-    }, React.createElement("div", {
-      style: {width:"80px", height:"80px", borderRadius:"20px", background:"rgba(255,255,255,0.15)", backdropFilter:"blur(10px)", border:"1px solid rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px"}
-    }, React.createElement("img", {
-      src: AVANTI_LOGO,
-      alt: "Avanti Fellows",
-      style: {width:"56px", height:"56px", objectFit:"contain"}
-    })), React.createElement("h1", {
-      className: "text-3xl font-bold mb-1",
-      style: {color:"white", letterSpacing:"-0.5px"}
-    }, "Curriculum Tracker"), React.createElement("p", {
-      style: {color:"rgba(255,255,255,0.5)", fontSize:"14px"}
-    }, "Avanti Fellows • JNV Program")), React.createElement("div", {
-      style: {background:"rgba(255,255,255,0.08)", backdropFilter:"blur(20px)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:"24px", padding:"28px"}
-    }, React.createElement("div", {
-      style: {display:"flex", gap:"8px", marginBottom:"24px", background:"rgba(255,255,255,0.08)", borderRadius:"14px", padding:"4px"}
-    }, React.createElement("button", {
-      onClick: () => setLoginForm({...loginForm, loginType: 'teacher'}),
-      style: {flex:1, padding:"10px", borderRadius:"10px", fontWeight:"600", fontSize:"14px", border:"none", cursor:"pointer", transition:"all 0.2s", background: loginForm.loginType === 'teacher' ? "white" : "transparent", color: loginForm.loginType === 'teacher' ? "#1a1a2e" : "rgba(255,255,255,0.6)"}
-    }, "\uD83D\uDC68\u200D\uD83C\uDFEB Teacher"), React.createElement("button", {
-      onClick: () => setLoginForm({...loginForm, loginType: 'student'}),
-      style: {flex:1, padding:"10px", borderRadius:"10px", fontWeight:"600", fontSize:"14px", border:"none", cursor:"pointer", transition:"all 0.2s", background: loginForm.loginType === 'student' ? "white" : "transparent", color: loginForm.loginType === 'student' ? "#1a1a2e" : "rgba(255,255,255,0.6)"}
-    }, "\uD83D\uDC68\u200D\uD83C\uDF93 Student")), React.createElement("div", {
-      style: {display:"flex", flexDirection:"column", gap:"12px"}
-    }, loginForm.loginType === 'student' ? React.createElement(React.Fragment, null, React.createElement("input", {
-      type: "text",
-      style: {width:"100%", padding:"14px 16px", borderRadius:"12px", border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.1)", color:"white", fontSize:"15px", outline:"none"},
-      value: loginForm.studentId || '',
-      onChange: e => setLoginForm({...loginForm, studentId: e.target.value}),
-      placeholder: "Student ID"
-    }), React.createElement("input", {
-      type: "password",
-      style: {width:"100%", padding:"14px 16px", borderRadius:"12px", border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.1)", color:"white", fontSize:"15px", outline:"none"},
-      value: loginForm.password,
-      onChange: e => setLoginForm({...loginForm, password: e.target.value}),
-      placeholder: "Password (pass123)",
-      onKeyPress: e => e.key === 'Enter' && handleLogin()
-    }), React.createElement("p", {
-      style: {fontSize:"13px", color:"rgba(255,255,255,0.5)", textAlign:"center"}
-    }, "Default password: ", React.createElement("strong", {style:{color:"rgba(255,255,255,0.8)"}}, "pass123"))) : React.createElement(React.Fragment, null, React.createElement("input", {
-      type: "email",
-      style: {width:"100%", padding:"14px 16px", borderRadius:"12px", border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.1)", color:"white", fontSize:"15px", outline:"none"},
-      value: loginForm.email,
-      onChange: e => setLoginForm({...loginForm, email: e.target.value}),
-      placeholder: "Email address"
-    }), React.createElement("input", {
-      type: "password",
-      style: {width:"100%", padding:"14px 16px", borderRadius:"12px", border:"1px solid rgba(255,255,255,0.2)", background:"rgba(255,255,255,0.1)", color:"white", fontSize:"15px", outline:"none"},
-      value: loginForm.password,
-      onChange: e => setLoginForm({...loginForm, password: e.target.value}),
-      placeholder: "Password",
-      onKeyPress: e => e.key === 'Enter' && handleLogin()
-    })), React.createElement("button", {
-      onClick: handleLogin,
-      disabled: authLoading,
-      style: {width:"100%", padding:"14px", borderRadius:"12px", fontWeight:"700", fontSize:"16px", border:"none", cursor:"pointer", background:"linear-gradient(135deg, #F4B41A 0%, #E8A000 50%, #d97706 100%)", color:"white", opacity: authLoading ? 0.7 : 1, transition:"all 0.2s", marginTop:"4px"}
-    }, authLoading ? React.createElement("span", {
-      className: "login-spinner"
-    }, React.createElement("span", {
-      className: "login-spinner-icon"
-    }), React.createElement("span", {
-      className: "login-progress-text"
-    }, loginProgress || 'Please wait...')) : 'Login')))));
+      style: {minHeight:"100vh", display:"flex", background:"linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)"}
+    },
+    React.createElement("div", {
+      style: {flex:1, display:"none", flexDirection:"column", justifyContent:"space-between", padding:"48px", position:"relative", overflow:"hidden"},
+      className: "login-left-panel"
+    },
+      React.createElement("div", {style:{position:"absolute", top:"-80px", right:"-80px", width:"300px", height:"300px", borderRadius:"50%", background:"rgba(244,180,26,0.06)", pointerEvents:"none"}}),
+      React.createElement("div", {style:{position:"absolute", bottom:"-60px", left:"-60px", width:"240px", height:"240px", borderRadius:"50%", background:"rgba(244,180,26,0.04)", pointerEvents:"none"}}),
+      React.createElement("div", null,
+        React.createElement("div", {style:{display:"flex", alignItems:"center", gap:"12px", marginBottom:"48px"}},
+          React.createElement("div", {style:{width:"52px", height:"52px", borderRadius:"14px", background:"linear-gradient(135deg,#F4B41A,#E8A000)", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 15px rgba(244,180,26,0.4)"}},
+            React.createElement("img", {src:AVANTI_LOGO, alt:"Avanti Fellows", style:{width:"34px", height:"34px", objectFit:"contain"}})
+          ),
+          React.createElement("div", null,
+            React.createElement("div", {style:{color:"white", fontWeight:"700", fontSize:"16px", letterSpacing:"0.3px"}}, "Avanti Fellows"),
+            React.createElement("div", {style:{color:"rgba(255,255,255,0.45)", fontSize:"11px", letterSpacing:"2px", textTransform:"uppercase"}}, "JNV Curriculum Tracker")
+          )
+        ),
+        React.createElement("h1", {style:{color:"white", fontSize:"clamp(28px,3.5vw,42px)", fontWeight:"800", lineHeight:"1.15", marginBottom:"20px", letterSpacing:"-0.5px", whiteSpace:"pre-line"}},
+          "Empowering \u{F4B41A}",
+          React.createElement("span", {style:{color:"#F4B41A"}}, "32 JNV"),
+          " Centres,\nOne Day at a Time."
+        ),
+        React.createElement("p", {style:{color:"rgba(255,255,255,0.55)", fontSize:"15px", lineHeight:"1.7", maxWidth:"380px", marginBottom:"40px"}},
+          "Track curriculum progress, attendance, and student growth across Jawahar Navodaya Vidyalayas \u2014 designed for teachers, built for impact."
+        ),
+        React.createElement("div", {style:{display:"flex", flexWrap:"wrap", gap:"10px"}},
+          [["32","Centres"],["4000+","Students"],["120+","Teachers"]].map(function(item) {
+            return React.createElement("div", {key:item[1], style:{background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:"50px", padding:"10px 18px", display:"flex", alignItems:"center", gap:"6px", backdropFilter:"blur(8px)"}},
+              React.createElement("span", {style:{color:"#F4B41A", fontWeight:"700", fontSize:"15px"}}, item[0]),
+              React.createElement("span", {style:{color:"rgba(255,255,255,0.65)", fontSize:"13px"}}, item[1])
+            );
+          })
+        )
+      ),
+      React.createElement("div", {style:{borderTop:"1px solid rgba(255,255,255,0.1)", paddingTop:"24px"}},
+        React.createElement("p", {style:{color:"rgba(255,255,255,0.35)", fontSize:"12px", fontStyle:"italic", lineHeight:"1.6"}},
+          "\u201cEducation is the most powerful weapon which you can use to change the world.\u201d"
+        ),
+        React.createElement("p", {style:{color:"rgba(255,255,255,0.25)", fontSize:"11px", marginTop:"4px"}}, "\u2014 Nelson Mandela")
+      )
+    ),
+    React.createElement("div", {
+      style: {display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", width:"100%"},
+      className: "login-right-panel"
+    },
+      React.createElement("div", {
+        style: {background:"#f7f8fa", borderRadius:"24px", padding:"clamp(28px,5vw,44px) clamp(24px,5vw,40px)", width:"100%", maxWidth:"420px", boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}
+      },
+        React.createElement("div", {style:{textAlign:"center", marginBottom:"24px"}},
+          React.createElement("div", {style:{width:"72px", height:"72px", borderRadius:"50%", background:"linear-gradient(135deg,rgba(244,180,26,0.15),rgba(244,180,26,0.05))", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", border:"2px solid rgba(244,180,26,0.3)"}},
+            React.createElement("span", {style:{fontSize:"30px"}}, "\uD83D\uDD10")
+          ),
+          React.createElement("h2", {style:{color:"#1a1a2e", fontSize:"22px", fontWeight:"800", margin:"0 0 4px"}}, "Welcome Back!"),
+          React.createElement("p", {style:{color:"#6b7280", fontSize:"13px", margin:0}}, "Sign in to your Avanti account")
+        ),
+        React.createElement("div", {
+          style:{display:"flex", gap:"6px", marginBottom:"24px", background:"#e5e7eb", borderRadius:"12px", padding:"4px"}
+        },
+          React.createElement("button", {
+            onClick: () => setLoginForm({...loginForm, loginType: 'teacher'}),
+            style:{flex:1, padding:"9px", borderRadius:"9px", fontWeight:"600", fontSize:"13px", border:"none", cursor:"pointer", transition:"all 0.2s", background: loginForm.loginType !== 'student' ? "white" : "transparent", color: loginForm.loginType !== 'student' ? "#1a1a2e" : "#9ca3af", boxShadow: loginForm.loginType !== 'student' ? "0 1px 4px rgba(0,0,0,0.12)" : "none"}
+          }, "\uD83D\uDC68\u200D\uD83C\uDFEB Teacher"),
+          React.createElement("button", {
+            onClick: () => setLoginForm({...loginForm, loginType: 'student'}),
+            style:{flex:1, padding:"9px", borderRadius:"9px", fontWeight:"600", fontSize:"13px", border:"none", cursor:"pointer", transition:"all 0.2s", background: loginForm.loginType === 'student' ? "white" : "transparent", color: loginForm.loginType === 'student' ? "#1a1a2e" : "#9ca3af", boxShadow: loginForm.loginType === 'student' ? "0 1px 4px rgba(0,0,0,0.12)" : "none"}
+          }, "\uD83D\uDC68\u200D\uD83C\uDF93 Student")
+        ),
+        React.createElement("div", {style:{display:"flex", flexDirection:"column", gap:"12px"}},
+          loginForm.loginType === 'student' ?
+            React.createElement(React.Fragment, null,
+              React.createElement("div", null,
+                React.createElement("label", {style:{display:"block", color:"#374151", fontSize:"11px", fontWeight:"700", letterSpacing:"1px", textTransform:"uppercase", marginBottom:"6px"}}, "Student ID"),
+                React.createElement("div", {style:{position:"relative"}},
+                  React.createElement("span", {style:{position:"absolute", left:"14px", top:"50%", transform:"translateY(-50%)", fontSize:"15px", opacity:0.5}}, "\uD83C\uDF93"),
+                  React.createElement("input", {
+                    type:"text",
+                    style:{width:"100%", padding:"13px 14px 13px 42px", borderRadius:"10px", border:"1.5px solid #e5e7eb", background:"white", color:"#1a1a2e", fontSize:"14px", outline:"none", boxSizing:"border-box"},
+                    value: loginForm.studentId || '',
+                    onChange: e => setLoginForm({...loginForm, studentId: e.target.value}),
+                    placeholder:"Enter your Student ID"
+                  })
+                )
+              ),
+              React.createElement("div", null,
+                React.createElement("label", {style:{display:"block", color:"#374151", fontSize:"11px", fontWeight:"700", letterSpacing:"1px", textTransform:"uppercase", marginBottom:"6px"}}, "Password"),
+                React.createElement("div", {style:{position:"relative"}},
+                  React.createElement("span", {style:{position:"absolute", left:"14px", top:"50%", transform:"translateY(-50%)", fontSize:"15px", opacity:0.5}}, "\uD83D\uDD12"),
+                  React.createElement("input", {
+                    type:"password",
+                    style:{width:"100%", padding:"13px 14px 13px 42px", borderRadius:"10px", border:"1.5px solid #e5e7eb", background:"white", color:"#1a1a2e", fontSize:"14px", outline:"none", boxSizing:"border-box"},
+                    value: loginForm.password,
+                    onChange: e => setLoginForm({...loginForm, password: e.target.value}),
+                    placeholder:"Password (pass123)",
+                    onKeyPress: e => e.key === 'Enter' && handleLogin()
+                  })
+                )
+              ),
+              React.createElement("p", {style:{fontSize:"12px", color:"#9ca3af", textAlign:"center"}},
+                "Default password: ", React.createElement("strong", {style:{color:"#6b7280"}}, "pass123")
+              )
+            ) :
+            React.createElement(React.Fragment, null,
+              React.createElement("div", null,
+                React.createElement("label", {style:{display:"block", color:"#374151", fontSize:"11px", fontWeight:"700", letterSpacing:"1px", textTransform:"uppercase", marginBottom:"6px"}}, "Email Address"),
+                React.createElement("div", {style:{position:"relative"}},
+                  React.createElement("span", {style:{position:"absolute", left:"14px", top:"50%", transform:"translateY(-50%)", fontSize:"14px", opacity:0.5}}, "\u2709"),
+                  React.createElement("input", {
+                    type:"email",
+                    style:{width:"100%", padding:"13px 14px 13px 42px", borderRadius:"10px", border:"1.5px solid #e5e7eb", background:"white", color:"#1a1a2e", fontSize:"14px", outline:"none", boxSizing:"border-box"},
+                    value: loginForm.email,
+                    onChange: e => setLoginForm({...loginForm, email: e.target.value}),
+                    placeholder:"teacher@avantifellows.org"
+                  })
+                )
+              ),
+              React.createElement("div", null,
+                React.createElement("label", {style:{display:"block", color:"#374151", fontSize:"11px", fontWeight:"700", letterSpacing:"1px", textTransform:"uppercase", marginBottom:"6px"}}, "Password"),
+                React.createElement("div", {style:{position:"relative"}},
+                  React.createElement("span", {style:{position:"absolute", left:"14px", top:"50%", transform:"translateY(-50%)", fontSize:"15px", opacity:0.5}}, "\uD83D\uDD12"),
+                  React.createElement("input", {
+                    type:"password",
+                    style:{width:"100%", padding:"13px 14px 13px 42px", borderRadius:"10px", border:"1.5px solid #e5e7eb", background:"white", color:"#1a1a2e", fontSize:"14px", outline:"none", boxSizing:"border-box"},
+                    value: loginForm.password,
+                    onChange: e => setLoginForm({...loginForm, password: e.target.value}),
+                    placeholder:"Enter your password",
+                    onKeyPress: e => e.key === 'Enter' && handleLogin()
+                  })
+                )
+              )
+            ),
+          React.createElement("button", {
+            onClick: handleLogin,
+            disabled: authLoading,
+            style:{width:"100%", padding:"14px", borderRadius:"12px", fontWeight:"700", fontSize:"15px", border:"none", cursor: authLoading ? "not-allowed" : "pointer", background:"linear-gradient(135deg,#F4B41A 0%,#E8A000 50%,#d97706 100%)", color:"white", opacity: authLoading ? 0.75 : 1, transition:"all 0.2s", marginTop:"4px", boxShadow:"0 4px 14px rgba(244,180,26,0.4)"}
+          }, authLoading ?
+            React.createElement("span", {className:"login-spinner"},
+              React.createElement("span", {className:"login-spinner-icon"}),
+              React.createElement("span", {className:"login-progress-text"}, loginProgress || 'Please wait...')
+            ) : "Sign In \u2192"
+          )
+        ),
+        React.createElement("p", {style:{textAlign:"center", color:"#9ca3af", fontSize:"11px", marginTop:"20px", borderTop:"1px solid #e5e7eb", paddingTop:"16px"}},
+          "Avanti Fellows \u00B7 JNV Program \u00B7 v5.5.5"
+        )
+      )
+    ),
+    React.createElement("style", null, `
+      @media (min-width: 768px) {
+        .login-left-panel { display: flex !important; }
+        .login-right-panel { max-width: 480px; }
+      }
+    `)
+    );
   }
+
   if (currentUser && currentUser.userType === 'student') {
     return React.createElement(StudentDashboard, {
       currentUser: currentUser,
@@ -12994,11 +13086,10 @@ function AdminView({
     currentUser?.role === 'program_head' || 
     currentUser?.role === 'aph' ||
     currentUser?.role === 'training';
-  const filteredSchoolInfo = (hasFullDataAccess || isManagerRole)
-    ? schoolInfo  // super admin / director / all manager roles → see everything
+  const filteredSchoolInfo = hasFullDataAccess
+    ? schoolInfo  // super admin / director → see everything
     : (() => {
-        // For any other edge case: try school-filter, but fall back to all data
-        // if filter returns nothing (guards against name-format mismatches)
+        // PM/APM/PH: filter to their accessible schools only
         const filtered = schoolInfo.filter(s => schoolMatches(s.school, accessibleSchools));
         return filtered.length > 0 ? filtered : schoolInfo;
       })();
@@ -13452,7 +13543,8 @@ function AdminView({
   }), activeTab === 'schoolinfo' && React.createElement(AdminSchoolInfo, {
     schoolInfo: filteredSchoolInfo,
     setSchoolInfo: setSchoolInfo,
-    currentUser: currentUser
+    currentUser: currentUser,
+    accessibleSchools: availableSchools
   }), activeTab === 'assets' && React.createElement(AdminAssetManagement, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
@@ -22313,7 +22405,8 @@ function SchoolInfoView({
 function AdminSchoolInfo({
   schoolInfo,
   setSchoolInfo,
-  currentUser
+  currentUser,
+  accessibleSchools: propAccessibleSchools
 }) {
   const [editingSchool, setEditingSchool] = useState(null);
   const [editFormData, setEditFormData] = useState({});
@@ -22507,9 +22600,10 @@ function AdminSchoolInfo({
     }));
     exportToExcel(exportData, 'school_information');
   };
-  // ✅ FIX: Show all schools with their fill status. For unfilled schools,
-  // show an "Add Info" button so PM can enter data directly without waiting for teachers.
-  const allSchools = typeof SCHOOLS !== 'undefined' ? SCHOOLS : [];
+  // ✅ FIX: Show only assigned schools with their fill status.
+  const allSchools = (propAccessibleSchools && propAccessibleSchools.length > 0)
+    ? propAccessibleSchools
+    : (typeof SCHOOLS !== 'undefined' ? SCHOOLS : []);
   const unfilledSchools = allSchools.filter(s => !filledSchools.has(s));
 
   // Simple add-form helper
@@ -25485,7 +25579,7 @@ function SocialWall({
     className: "text-2xl font-bold mb-2"
   }, "Educators of the Month"), React.createElement("p", {
     className: "text-gray-500 mb-6"
-  }, new Date().toLocaleDateString('en-IN', {
+  }, new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString('en-IN', {
     month: 'long',
     year: 'numeric'
   })), topPerformers.length > 0 ? React.createElement("div", {
@@ -25529,7 +25623,7 @@ function SocialWall({
     className: "text-xl font-bold mb-6 flex items-center gap-2"
   }, React.createElement("span", null, "\uD83C\uDF1F"), " Previous Month's Top Performers", React.createElement("span", {
     className: "text-sm font-normal text-gray-500 ml-2"
-  }, "(", new Date(new Date().setMonth(new Date().getMonth() - 1)).toLocaleDateString('en-IN', {
+  }, "(", new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1).toLocaleDateString('en-IN', {
     month: 'long',
     year: 'numeric'
   }), ")")), React.createElement("div", {
