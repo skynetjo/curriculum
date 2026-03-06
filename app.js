@@ -13196,11 +13196,7 @@ function AdminView({
     currentUser?.role === 'training';
   const filteredSchoolInfo = hasFullDataAccess
     ? schoolInfo  // super admin / director → see everything
-    : (() => {
-        // PM/APM/PH: filter to their accessible schools only
-        const filtered = schoolInfo.filter(s => schoolMatches(s.school, accessibleSchools));
-        return filtered.length > 0 ? filtered : schoolInfo;
-      })();
+    : schoolInfo.filter(s => schoolMatches(s.school, accessibleSchools));  // PM/APM: only their schools
   console.log('📊 AdminView Data:', {
     hasFullDataAccess,
     accessibleSchools,
@@ -22526,7 +22522,7 @@ function AdminSchoolInfo({
   const [addFormData, setAddFormData] = useState({});
   const [isAddSaving, setIsAddSaving] = useState(false);
 
-  const filledSchools = new Set(schoolInfo.map(s => s.school));
+  const filledSchools = new Set(schoolInfo.map(s => (s.school || '').toLowerCase().trim()));
 
   const startAdding = (schoolName) => {
     setAddingSchool(schoolName);
@@ -22712,7 +22708,7 @@ function AdminSchoolInfo({
   const allSchools = (propAccessibleSchools && propAccessibleSchools.length > 0)
     ? propAccessibleSchools
     : (typeof SCHOOLS !== 'undefined' ? SCHOOLS : []);
-  const unfilledSchools = allSchools.filter(s => !filledSchools.has(s));
+  const unfilledSchools = allSchools.filter(s => !filledSchools.has((s || '').toLowerCase().trim()));
 
   // Simple add-form helper
   const addField = (label, field, type) => React.createElement("div", { className: "mb-3" },
@@ -28170,7 +28166,7 @@ function StudentFeedbackView({
             id: doc.id,
             ...data,
             submittedAt,
-            rating: data.rating || data.averageRating || 0,
+            rating: data.averageRating ?? data.rating ?? 0,
             explanationQuality: data.explanationQuality || getExplanationSummary(responses),
             doubtResolution: data.doubtResolution || getDoubtSummary(responses),
             teachingPace: data.teachingPace || getPaceSummary(responses),
@@ -28202,8 +28198,16 @@ function StudentFeedbackView({
     fetchData();
   }, []);
   const schoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
-  const accessibleFeedback = hasFullDataAccess ? feedbackList : feedbackList.filter(f => accessibleSchools.includes(f.school));
-  const accessibleTeachers = hasFullDataAccess ? teachers.filter(t => !t.isArchived) : teachers.filter(t => accessibleSchools.includes(t.school) && !t.isArchived);
+  const accessibleFeedback = hasFullDataAccess ? feedbackList : feedbackList.filter(f => {
+    if (!f.school) return false;
+    const fSchool = (f.school || '').toLowerCase().trim();
+    return accessibleSchools.some(s => (s || '').toLowerCase().trim() === fSchool);
+  });
+  const accessibleTeachers = hasFullDataAccess ? teachers.filter(t => !t.isArchived) : teachers.filter(t => {
+    if (!t.school) return false;
+    const tSchool = (t.school || '').toLowerCase().trim();
+    return accessibleSchools.some(s => (s || '').toLowerCase().trim() === tSchool) && !t.isArchived;
+  });
   const teachersForDropdown = filterSchool === 'All' ? accessibleTeachers : accessibleTeachers.filter(t => t.school === filterSchool);
   const getStudentDetails = studentId => {
     return students.find(s => s.id === studentId) || {};
@@ -28273,7 +28277,7 @@ function StudentFeedbackView({
       row['Grade'] = student?.grade || feedback.grade || '';
       row['Teacher Name'] = teacherName || '';
       row['Subject'] = feedback.subject || '';
-      row['Overall Rating (1-5)'] = (feedback.rating || feedback.averageRating || 0).toString();
+      row['Overall Rating (1-5)'] = (feedback.rating ?? feedback.averageRating ?? 0).toFixed(2);
       row['Explanation Quality (summary)'] = feedback.explanationQuality || '';
       row['Doubt Resolution (summary)'] = feedback.doubtResolution || '';
       row['Teaching Pace (summary)'] = feedback.teachingPace || '';
