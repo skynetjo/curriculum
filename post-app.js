@@ -2088,28 +2088,6 @@ body > #root, body > #app, body > div:first-child {
 .__login_blob_2 { width: 450px; height: 450px; background: #E87A1A; bottom: -100px; right: -100px; animation-duration: 25s; animation-delay: -9s; }
 .__login_blob_3 { width: 320px; height: 320px; background: #ff5722; top: 45%; left: 40%; animation-duration: 17s; animation-delay: -5s; }
 
-/* ── Floating stat badges ── */
-.__login_stat_badge {
-  position: fixed !important;
-  z-index: 5 !important;
-  background: rgba(255,255,255,0.07) !important;
-  border: 1px solid rgba(255,255,255,0.15) !important;
-  border-radius: 50px !important;
-  padding: 8px 18px !important;
-  font-family: 'Outfit', system-ui, sans-serif !important;
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  color: rgba(255,255,255,0.65) !important;
-  white-space: nowrap !important;
-  pointer-events: none !important;
-  backdrop-filter: blur(10px) !important;
-  animation: __loginBadgeFloat 6s ease-in-out infinite !important;
-}
-.__login_stat_badge span { color: #F4B41A !important; font-weight: 800 !important; font-size: 15px !important; }
-.__login_stat_b1 { top: 22%; left: 6%; animation-delay: 0s !important; }
-.__login_stat_b2 { top: 34%; right: 6%; animation-delay: -2s !important; }
-.__login_stat_b3 { bottom: 28%; left: 5%; animation-delay: -4s !important; }
-@keyframes __loginBadgeFloat { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-10px);} }
 
 @keyframes __loginBlobFloat {
   0%   { transform: translate(0,0) scale(1); }
@@ -2224,19 +2202,6 @@ body > #root, body > #app, body > div:first-child {
 
         document.body.insertBefore(scene, document.body.firstChild);
 
-        // Inject stat badges directly into body at fixed position (visible above React)
-        var badges = [
-            { cls: '__login_stat_b1', html: '🏫 <span>32</span> JNV Centres' },
-            { cls: '__login_stat_b2', html: '🎓 <span>4000+</span> Students' },
-            { cls: '__login_stat_b3', html: '✏️ <span>120+</span> Teachers' },
-        ];
-        badges.forEach(function(b) {
-            if (document.querySelector('.' + b.cls)) return;
-            var el = document.createElement('div');
-            el.className = '__login_stat_badge ' + b.cls;
-            el.innerHTML = b.html;
-            document.body.appendChild(el);
-        });
     }
 
     // ── Quote rotator ────────────────────────────────────────
@@ -2291,7 +2256,6 @@ body > #root, body > #app, body > div:first-child {
         var bar   = document.getElementById('__login_quote_bar');
         if (scene) scene.remove();
         if (bar)   bar.remove();
-        document.querySelectorAll('.__login_stat_badge').forEach(function(el) { el.remove(); });
         if (_quoteTimer) clearInterval(_quoteTimer);
         console.log('[LoginBG] 🧹 Removed (user logged in)');
     }
