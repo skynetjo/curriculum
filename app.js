@@ -9296,10 +9296,10 @@ function App() {
             React.createElement("div", {style:{color:"rgba(255,255,255,0.45)", fontSize:"11px", letterSpacing:"2px", textTransform:"uppercase"}}, "JNV Curriculum Tracker")
           )
         ),
-        React.createElement("h1", {style:{color:"white", fontSize:"clamp(28px,3.5vw,42px)", fontWeight:"800", lineHeight:"1.15", marginBottom:"20px", letterSpacing:"-0.5px", whiteSpace:"pre-line"}},
-          "Empowering \u{F4B41A}",
+        React.createElement("h1", {style:{color:"white", fontSize:"clamp(28px,3.5vw,42px)", fontWeight:"800", lineHeight:"1.15", marginBottom:"20px", letterSpacing:"-0.5px"}},
+          "Empowering ",
           React.createElement("span", {style:{color:"#F4B41A"}}, "32 JNV"),
-          " Centres,\nOne Day at a Time."
+          " Centres, One Day at a Time."
         ),
         React.createElement("p", {style:{color:"rgba(255,255,255,0.55)", fontSize:"15px", lineHeight:"1.7", maxWidth:"380px", marginBottom:"40px"}},
           "Track curriculum progress, attendance, and student growth across Jawahar Navodaya Vidyalayas \u2014 designed for teachers, built for impact."
@@ -9421,7 +9421,7 @@ function App() {
           )
         ),
         React.createElement("p", {style:{textAlign:"center", color:"#9ca3af", fontSize:"11px", marginTop:"20px", borderTop:"1px solid #e5e7eb", paddingTop:"16px"}},
-          "Avanti Fellows \u00B7 JNV Program \u00B7 v5.5.5"
+          "Avanti Fellows \u00B7 JNV Program \u00B7 v5.5.6"
         )
       )
     ),
