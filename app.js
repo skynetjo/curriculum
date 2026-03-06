@@ -9392,12 +9392,16 @@ function App() {
           )
         ),
         // Tagline
-        React.createElement('h1', {style:{fontSize:'clamp(30px,3.8vw,44px)',fontWeight:'800',color:'white',lineHeight:'1.2',marginBottom:'24px'}},
+        React.createElement('h1', {style:{fontSize:'clamp(30px,3.8vw,44px)',fontWeight:'800',color:'white',lineHeight:'1.2',marginBottom:'14px'}},
           'Every Lesson ',
           React.createElement('span', {style:{background:'linear-gradient(90deg,#F4B41A,#E8B039)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}, 'Counts,'),
           React.createElement('br', null),
           'Every Student ',
           React.createElement('span', {style:{background:'linear-gradient(90deg,#F4B41A,#E8B039)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}, 'Matters.')
+        ),
+        // Subtitle
+        React.createElement('p', {style:{fontSize:'15px',color:'rgba(255,255,255,.45)',fontStyle:'italic',lineHeight:'1.6',marginBottom:'32px',letterSpacing:'0.2px'}},
+          'Centers the human element of teaching and learning.'
         ),
         // Quote
         React.createElement('div', {style:{marginTop:'auto',paddingTop:'32px',borderTop:'1px solid rgba(255,255,255,.08)',maxWidth:'420px'}},
