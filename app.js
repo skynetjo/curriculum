@@ -9392,26 +9392,12 @@ function App() {
           )
         ),
         // Tagline
-        React.createElement('h1', {style:{fontSize:'clamp(30px,3.8vw,44px)',fontWeight:'800',color:'white',lineHeight:'1.15',marginBottom:'20px'}},
-          'Empowering ',
-          React.createElement('span', {style:{background:'linear-gradient(90deg,#F4B41A,#E8B039)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}, '32 JNV'),
+        React.createElement('h1', {style:{fontSize:'clamp(30px,3.8vw,44px)',fontWeight:'800',color:'white',lineHeight:'1.2',marginBottom:'24px'}},
+          'Every Lesson ',
+          React.createElement('span', {style:{background:'linear-gradient(90deg,#F4B41A,#E8B039)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}, 'Counts,'),
           React.createElement('br', null),
-          'Centres, One Day',
-          React.createElement('br', null),
-          'at a Time.'
-        ),
-        // Sub-tagline
-        React.createElement('p', {style:{fontSize:'16px',color:'rgba(255,255,255,.55)',lineHeight:'1.7',maxWidth:'380px',marginBottom:'44px'}},
-          'Track curriculum progress, attendance, and student growth across Jawahar Navodaya Vidyalayas \u2014 designed for teachers, built for impact.'
-        ),
-        // Stat pills
-        React.createElement('div', {style:{display:'flex',gap:'14px',flexWrap:'wrap',marginBottom:'40px'}},
-          [['32','Centres'],['4000+','Students'],['120+','Teachers']].map(([num,label]) =>
-            React.createElement('div', {key:label, style:{background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.12)',borderRadius:'50px',padding:'10px 20px',display:'flex',alignItems:'center',gap:'8px',color:'white',backdropFilter:'blur(8px)'}},
-              React.createElement('span', {style:{fontSize:'18px',fontWeight:'800',color:'#F4B41A'}}, num),
-              React.createElement('span', {style:{fontSize:'13px',fontWeight:'600'}}, label)
-            )
-          )
+          'Every Student ',
+          React.createElement('span', {style:{background:'linear-gradient(90deg,#F4B41A,#E8B039)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}, 'Matters.')
         ),
         // Quote
         React.createElement('div', {style:{marginTop:'auto',paddingTop:'32px',borderTop:'1px solid rgba(255,255,255,.08)',maxWidth:'420px'}},
