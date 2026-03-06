@@ -9277,160 +9277,278 @@ function App() {
     }));
   }
   if (!currentUser) {
-    return React.createElement("div", {
-      style: {minHeight:"100vh", display:"flex", background:"linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)"}
+    // ── Inject login page CSS animations ──────────────────────────────────
+    var loginStyleId = 'login-anim-css';
+    if (!document.getElementById(loginStyleId)) {
+      var s = document.createElement('style');
+      s.id = loginStyleId;
+      s.textContent = `
+        @keyframes loginBlobFloat {
+          0%   { transform: translate(0,0) scale(1); }
+          33%  { transform: translate(30px,-40px) scale(1.05); }
+          66%  { transform: translate(-20px,20px) scale(0.95); }
+          100% { transform: translate(0,0) scale(1); }
+        }
+        @keyframes loginTwinkle { from{opacity:.6} to{opacity:1} }
+        @keyframes loginFloatUp {
+          0%   { transform:translateY(110vh) rotate(0deg); opacity:0; }
+          5%   { opacity:.13; }
+          95%  { opacity:.13; }
+          100% { transform:translateY(-15vh) rotate(360deg); opacity:0; }
+        }
+        @keyframes loginCardIn {
+          from { opacity:0; transform:translateY(28px) scale(.96); }
+          to   { opacity:1; transform:translateY(0) scale(1); }
+        }
+        @keyframes loginFadeQuote { 0%,100%{opacity:.4} 50%{opacity:.75} }
+        .lp-blob {
+          position:absolute; border-radius:50%;
+          filter:blur(80px); opacity:.18;
+          animation:loginBlobFloat linear infinite;
+        }
+        .lp-stars {
+          position:absolute; inset:0;
+          background-image:
+            radial-gradient(1px 1px at 10% 15%,rgba(255,255,255,.6) 0%,transparent 100%),
+            radial-gradient(1px 1px at 25% 60%,rgba(255,255,255,.4) 0%,transparent 100%),
+            radial-gradient(1.5px 1.5px at 50% 20%,rgba(255,255,255,.7) 0%,transparent 100%),
+            radial-gradient(1px 1px at 70% 80%,rgba(255,255,255,.5) 0%,transparent 100%),
+            radial-gradient(1px 1px at 85% 40%,rgba(255,255,255,.6) 0%,transparent 100%),
+            radial-gradient(1px 1px at 38% 85%,rgba(255,255,255,.3) 0%,transparent 100%),
+            radial-gradient(1.5px 1.5px at 62% 50%,rgba(255,255,255,.5) 0%,transparent 100%),
+            radial-gradient(1px 1px at 90% 10%,rgba(255,255,255,.7) 0%,transparent 100%),
+            radial-gradient(1px 1px at 15% 90%,rgba(255,255,255,.4) 0%,transparent 100%),
+            radial-gradient(1px 1px at 45% 45%,rgba(255,255,255,.3) 0%,transparent 100%);
+          animation:loginTwinkle 4s ease-in-out infinite alternate;
+        }
+        .lp-floater {
+          position:absolute; font-size:28px; opacity:.12;
+          animation:loginFloatUp linear infinite;
+          user-select:none; pointer-events:none;
+        }
+        .lp-card { animation:loginCardIn .7s cubic-bezier(.34,1.56,.64,1) forwards; }
+        .lp-input:focus {
+          border-color:#F4B41A !important;
+          background:white !important;
+          box-shadow:0 0 0 4px rgba(244,180,26,.12) !important;
+          outline:none;
+        }
+        .lp-signin:hover { transform:translateY(-2px); box-shadow:0 12px 32px rgba(244,180,26,.45) !important; }
+        .lp-signin:active { transform:translateY(0); }
+        .lp-student:hover { border-color:#F4B41A !important; background:#fffbef !important; }
+        .lp-quote { animation:loginFadeQuote 6s ease-in-out infinite; }
+        @media(max-width:900px){ .lp-left{ display:none!important; } .lp-right{ width:100%!important; max-width:420px!important; } }
+      `;
+      document.head.appendChild(s);
+    }
+
+    const floaterIcons = ['\uD83D\uDCDA','\u270F\uFE0F','\uD83C\uDF93','\uD83D\uDCCF','\uD83D\uDD2C','\uD83D\uDCCA','\uD83C\uDFEB','\uD83D\uDCA1','\uD83D\uDCDD'];
+    const floaterStyles = [
+      {left:'5%', animationDuration:'14s', animationDelay:'0s', fontSize:'24px'},
+      {left:'15%', animationDuration:'17s', animationDelay:'-4s', fontSize:'32px'},
+      {left:'28%', animationDuration:'12s', animationDelay:'-8s', fontSize:'20px'},
+      {left:'42%', animationDuration:'19s', animationDelay:'-2s', fontSize:'28px'},
+      {left:'55%', animationDuration:'15s', animationDelay:'-6s', fontSize:'22px'},
+      {left:'68%', animationDuration:'16s', animationDelay:'-10s', fontSize:'30px'},
+      {left:'78%', animationDuration:'13s', animationDelay:'-3s', fontSize:'26px'},
+      {left:'88%', animationDuration:'18s', animationDelay:'-7s', fontSize:'24px'},
+      {left:'92%', animationDuration:'11s', animationDelay:'-1s', fontSize:'18px'},
+    ];
+
+    const isStudent = loginForm.loginType === 'student';
+
+    return React.createElement('div', {
+      style:{minHeight:'100vh', display:'flex', fontFamily:'Nunito, system-ui, sans-serif', position:'relative', overflow:'hidden', background:'#12122a'}
     },
-    React.createElement("div", {
-      style: {flex:1, display:"none", flexDirection:"column", justifyContent:"space-between", padding:"48px", position:"relative", overflow:"hidden"},
-      className: "login-left-panel"
-    },
-      React.createElement("div", {style:{position:"absolute", top:"-80px", right:"-80px", width:"300px", height:"300px", borderRadius:"50%", background:"rgba(244,180,26,0.06)", pointerEvents:"none"}}),
-      React.createElement("div", {style:{position:"absolute", bottom:"-60px", left:"-60px", width:"240px", height:"240px", borderRadius:"50%", background:"rgba(244,180,26,0.04)", pointerEvents:"none"}}),
-      React.createElement("div", null,
-        React.createElement("div", {style:{display:"flex", alignItems:"center", gap:"12px", marginBottom:"48px"}},
-          React.createElement("div", {style:{width:"52px", height:"52px", borderRadius:"14px", background:"linear-gradient(135deg,#F4B41A,#E8A000)", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 15px rgba(244,180,26,0.4)"}},
-            React.createElement("img", {src:AVANTI_LOGO, alt:"Avanti Fellows", style:{width:"34px", height:"34px", objectFit:"contain"}})
-          ),
-          React.createElement("div", null,
-            React.createElement("div", {style:{color:"white", fontWeight:"700", fontSize:"16px", letterSpacing:"0.3px"}}, "Avanti Fellows"),
-            React.createElement("div", {style:{color:"rgba(255,255,255,0.45)", fontSize:"11px", letterSpacing:"2px", textTransform:"uppercase"}}, "JNV Curriculum Tracker")
+      // ── Animated background ──────────────────────────────────────────────
+      React.createElement('div', {
+        style:{position:'fixed', inset:0, background:'linear-gradient(135deg,#0f0f23 0%,#1a1a38 40%,#0d1117 100%)', overflow:'hidden', zIndex:0}
+      },
+        React.createElement('div', {className:'lp-blob', style:{width:'500px',height:'500px',background:'#F4B41A',top:'-100px',left:'-100px',animationDuration:'18s'}}),
+        React.createElement('div', {className:'lp-blob', style:{width:'400px',height:'400px',background:'#E8B039',bottom:'-80px',right:'-80px',animationDuration:'22s',animationDelay:'-8s'}}),
+        React.createElement('div', {className:'lp-blob', style:{width:'300px',height:'300px',background:'#ff6b35',top:'50%',left:'40%',animationDuration:'15s',animationDelay:'-5s'}}),
+        React.createElement('div', {className:'lp-stars'}),
+        React.createElement('div', {style:{position:'absolute',inset:0,backgroundImage:'linear-gradient(rgba(244,180,26,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(244,180,26,.03) 1px,transparent 1px)',backgroundSize:'50px 50px'}}),
+        React.createElement('div', {style:{position:'absolute',inset:0,pointerEvents:'none'}},
+          floaterIcons.map((icon, i) =>
+            React.createElement('div', {key:i, className:'lp-floater', style:floaterStyles[i]}, icon)
           )
-        ),
-        React.createElement("h1", {style:{color:"white", fontSize:"clamp(28px,3.5vw,42px)", fontWeight:"800", lineHeight:"1.15", marginBottom:"20px", letterSpacing:"-0.5px"}},
-          "Empowering ",
-          React.createElement("span", {style:{color:"#F4B41A"}}, "32 JNV"),
-          " Centres, One Day at a Time."
-        ),
-        React.createElement("p", {style:{color:"rgba(255,255,255,0.55)", fontSize:"15px", lineHeight:"1.7", maxWidth:"380px", marginBottom:"40px"}},
-          "Track curriculum progress, attendance, and student growth across Jawahar Navodaya Vidyalayas \u2014 designed for teachers, built for impact."
-        ),
-        React.createElement("div", {style:{display:"flex", flexWrap:"wrap", gap:"10px"}},
-          [["32","Centres"],["4000+","Students"],["120+","Teachers"]].map(function(item) {
-            return React.createElement("div", {key:item[1], style:{background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.12)", borderRadius:"50px", padding:"10px 18px", display:"flex", alignItems:"center", gap:"6px", backdropFilter:"blur(8px)"}},
-              React.createElement("span", {style:{color:"#F4B41A", fontWeight:"700", fontSize:"15px"}}, item[0]),
-              React.createElement("span", {style:{color:"rgba(255,255,255,0.65)", fontSize:"13px"}}, item[1])
-            );
-          })
         )
       ),
-      React.createElement("div", {style:{borderTop:"1px solid rgba(255,255,255,0.1)", paddingTop:"24px"}},
-        React.createElement("p", {style:{color:"rgba(255,255,255,0.35)", fontSize:"12px", fontStyle:"italic", lineHeight:"1.6"}},
-          "\u201cEducation is the most powerful weapon which you can use to change the world.\u201d"
-        ),
-        React.createElement("p", {style:{color:"rgba(255,255,255,0.25)", fontSize:"11px", marginTop:"4px"}}, "\u2014 Nelson Mandela")
-      )
-    ),
-    React.createElement("div", {
-      style: {display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", width:"100%"},
-      className: "login-right-panel"
-    },
-      React.createElement("div", {
-        style: {background:"#f7f8fa", borderRadius:"24px", padding:"clamp(28px,5vw,44px) clamp(24px,5vw,40px)", width:"100%", maxWidth:"420px", boxShadow:"0 20px 60px rgba(0,0,0,0.35)"}
+
+      // ── Left panel ───────────────────────────────────────────────────────
+      React.createElement('div', {
+        className:'lp-left',
+        style:{flex:1, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'flex-start', padding:'60px 50px', position:'relative', zIndex:2}
       },
-        React.createElement("div", {style:{textAlign:"center", marginBottom:"24px"}},
-          React.createElement("div", {style:{width:"72px", height:"72px", borderRadius:"50%", background:"linear-gradient(135deg,rgba(244,180,26,0.15),rgba(244,180,26,0.05))", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", border:"2px solid rgba(244,180,26,0.3)"}},
-            React.createElement("span", {style:{fontSize:"30px"}}, "\uD83D\uDD10")
+        // Brand logo
+        React.createElement('div', {style:{display:'flex', alignItems:'center', gap:'14px', marginBottom:'48px'}},
+          React.createElement('div', {style:{width:'52px',height:'52px',background:'linear-gradient(135deg,#F4B41A,#E8B039)',borderRadius:'14px',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 8px 24px rgba(244,180,26,.35)',flexShrink:0}},
+            React.createElement('img', {src:AVANTI_LOGO, alt:'Avanti Fellows', style:{width:'34px',height:'34px',objectFit:'contain'}})
           ),
-          React.createElement("h2", {style:{color:"#1a1a2e", fontSize:"22px", fontWeight:"800", margin:"0 0 4px"}}, "Welcome Back!"),
-          React.createElement("p", {style:{color:"#6b7280", fontSize:"13px", margin:0}}, "Sign in to your Avanti account")
-        ),
-        React.createElement("div", {
-          style:{display:"flex", gap:"6px", marginBottom:"24px", background:"#e5e7eb", borderRadius:"12px", padding:"4px"}
-        },
-          React.createElement("button", {
-            onClick: () => setLoginForm({...loginForm, loginType: 'teacher'}),
-            style:{flex:1, padding:"9px", borderRadius:"9px", fontWeight:"600", fontSize:"13px", border:"none", cursor:"pointer", transition:"all 0.2s", background: loginForm.loginType !== 'student' ? "white" : "transparent", color: loginForm.loginType !== 'student' ? "#1a1a2e" : "#9ca3af", boxShadow: loginForm.loginType !== 'student' ? "0 1px 4px rgba(0,0,0,0.12)" : "none"}
-          }, "\uD83D\uDC68\u200D\uD83C\uDFEB Teacher"),
-          React.createElement("button", {
-            onClick: () => setLoginForm({...loginForm, loginType: 'student'}),
-            style:{flex:1, padding:"9px", borderRadius:"9px", fontWeight:"600", fontSize:"13px", border:"none", cursor:"pointer", transition:"all 0.2s", background: loginForm.loginType === 'student' ? "white" : "transparent", color: loginForm.loginType === 'student' ? "#1a1a2e" : "#9ca3af", boxShadow: loginForm.loginType === 'student' ? "0 1px 4px rgba(0,0,0,0.12)" : "none"}
-          }, "\uD83D\uDC68\u200D\uD83C\uDF93 Student")
-        ),
-        React.createElement("div", {style:{display:"flex", flexDirection:"column", gap:"12px"}},
-          loginForm.loginType === 'student' ?
-            React.createElement(React.Fragment, null,
-              React.createElement("div", null,
-                React.createElement("label", {style:{display:"block", color:"#374151", fontSize:"11px", fontWeight:"700", letterSpacing:"1px", textTransform:"uppercase", marginBottom:"6px"}}, "Student ID"),
-                React.createElement("div", {style:{position:"relative"}},
-                  React.createElement("span", {style:{position:"absolute", left:"14px", top:"50%", transform:"translateY(-50%)", fontSize:"15px", opacity:0.5}}, "\uD83C\uDF93"),
-                  React.createElement("input", {
-                    type:"text",
-                    style:{width:"100%", padding:"13px 14px 13px 42px", borderRadius:"10px", border:"1.5px solid #e5e7eb", background:"white", color:"#1a1a2e", fontSize:"14px", outline:"none", boxSizing:"border-box"},
-                    value: loginForm.studentId || '',
-                    onChange: e => setLoginForm({...loginForm, studentId: e.target.value}),
-                    placeholder:"Enter your Student ID"
-                  })
-                )
-              ),
-              React.createElement("div", null,
-                React.createElement("label", {style:{display:"block", color:"#374151", fontSize:"11px", fontWeight:"700", letterSpacing:"1px", textTransform:"uppercase", marginBottom:"6px"}}, "Password"),
-                React.createElement("div", {style:{position:"relative"}},
-                  React.createElement("span", {style:{position:"absolute", left:"14px", top:"50%", transform:"translateY(-50%)", fontSize:"15px", opacity:0.5}}, "\uD83D\uDD12"),
-                  React.createElement("input", {
-                    type:"password",
-                    style:{width:"100%", padding:"13px 14px 13px 42px", borderRadius:"10px", border:"1.5px solid #e5e7eb", background:"white", color:"#1a1a2e", fontSize:"14px", outline:"none", boxSizing:"border-box"},
-                    value: loginForm.password,
-                    onChange: e => setLoginForm({...loginForm, password: e.target.value}),
-                    placeholder:"Password (pass123)",
-                    onKeyPress: e => e.key === 'Enter' && handleLogin()
-                  })
-                )
-              ),
-              React.createElement("p", {style:{fontSize:"12px", color:"#9ca3af", textAlign:"center"}},
-                "Default password: ", React.createElement("strong", {style:{color:"#6b7280"}}, "pass123")
-              )
-            ) :
-            React.createElement(React.Fragment, null,
-              React.createElement("div", null,
-                React.createElement("label", {style:{display:"block", color:"#374151", fontSize:"11px", fontWeight:"700", letterSpacing:"1px", textTransform:"uppercase", marginBottom:"6px"}}, "Email Address"),
-                React.createElement("div", {style:{position:"relative"}},
-                  React.createElement("span", {style:{position:"absolute", left:"14px", top:"50%", transform:"translateY(-50%)", fontSize:"14px", opacity:0.5}}, "\u2709"),
-                  React.createElement("input", {
-                    type:"email",
-                    style:{width:"100%", padding:"13px 14px 13px 42px", borderRadius:"10px", border:"1.5px solid #e5e7eb", background:"white", color:"#1a1a2e", fontSize:"14px", outline:"none", boxSizing:"border-box"},
-                    value: loginForm.email,
-                    onChange: e => setLoginForm({...loginForm, email: e.target.value}),
-                    placeholder:"teacher@avantifellows.org"
-                  })
-                )
-              ),
-              React.createElement("div", null,
-                React.createElement("label", {style:{display:"block", color:"#374151", fontSize:"11px", fontWeight:"700", letterSpacing:"1px", textTransform:"uppercase", marginBottom:"6px"}}, "Password"),
-                React.createElement("div", {style:{position:"relative"}},
-                  React.createElement("span", {style:{position:"absolute", left:"14px", top:"50%", transform:"translateY(-50%)", fontSize:"15px", opacity:0.5}}, "\uD83D\uDD12"),
-                  React.createElement("input", {
-                    type:"password",
-                    style:{width:"100%", padding:"13px 14px 13px 42px", borderRadius:"10px", border:"1.5px solid #e5e7eb", background:"white", color:"#1a1a2e", fontSize:"14px", outline:"none", boxSizing:"border-box"},
-                    value: loginForm.password,
-                    onChange: e => setLoginForm({...loginForm, password: e.target.value}),
-                    placeholder:"Enter your password",
-                    onKeyPress: e => e.key === 'Enter' && handleLogin()
-                  })
-                )
-              )
-            ),
-          React.createElement("button", {
-            onClick: handleLogin,
-            disabled: authLoading,
-            style:{width:"100%", padding:"14px", borderRadius:"12px", fontWeight:"700", fontSize:"15px", border:"none", cursor: authLoading ? "not-allowed" : "pointer", background:"linear-gradient(135deg,#F4B41A 0%,#E8A000 50%,#d97706 100%)", color:"white", opacity: authLoading ? 0.75 : 1, transition:"all 0.2s", marginTop:"4px", boxShadow:"0 4px 14px rgba(244,180,26,0.4)"}
-          }, authLoading ?
-            React.createElement("span", {className:"login-spinner"},
-              React.createElement("span", {className:"login-spinner-icon"}),
-              React.createElement("span", {className:"login-progress-text"}, loginProgress || 'Please wait...')
-            ) : "Sign In \u2192"
+          React.createElement('div', null,
+            React.createElement('div', {style:{fontFamily:'system-ui,sans-serif',fontSize:'22px',fontWeight:'800',color:'white',lineHeight:'1.1'}}, 'Avanti Fellows'),
+            React.createElement('div', {style:{color:'rgba(255,255,255,.5)',fontSize:'12px',fontWeight:'600',letterSpacing:'1.5px',textTransform:'uppercase'}}, 'JNV Curriculum Tracker')
           )
         ),
-        React.createElement("p", {style:{textAlign:"center", color:"#9ca3af", fontSize:"11px", marginTop:"20px", borderTop:"1px solid #e5e7eb", paddingTop:"16px"}},
-          "Avanti Fellows \u00B7 JNV Program \u00B7 v5.5.6"
+        // Tagline
+        React.createElement('h1', {style:{fontSize:'clamp(30px,3.8vw,44px)',fontWeight:'800',color:'white',lineHeight:'1.15',marginBottom:'20px'}},
+          'Empowering ',
+          React.createElement('span', {style:{background:'linear-gradient(90deg,#F4B41A,#E8B039)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}, '32 JNV'),
+          React.createElement('br', null),
+          'Centres, One Day',
+          React.createElement('br', null),
+          'at a Time.'
+        ),
+        // Sub-tagline
+        React.createElement('p', {style:{fontSize:'16px',color:'rgba(255,255,255,.55)',lineHeight:'1.7',maxWidth:'380px',marginBottom:'44px'}},
+          'Track curriculum progress, attendance, and student growth across Jawahar Navodaya Vidyalayas \u2014 designed for teachers, built for impact.'
+        ),
+        // Stat pills
+        React.createElement('div', {style:{display:'flex',gap:'14px',flexWrap:'wrap',marginBottom:'40px'}},
+          [['32','Centres'],['4000+','Students'],['120+','Teachers']].map(([num,label]) =>
+            React.createElement('div', {key:label, style:{background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.12)',borderRadius:'50px',padding:'10px 20px',display:'flex',alignItems:'center',gap:'8px',color:'white',backdropFilter:'blur(8px)'}},
+              React.createElement('span', {style:{fontSize:'18px',fontWeight:'800',color:'#F4B41A'}}, num),
+              React.createElement('span', {style:{fontSize:'13px',fontWeight:'600'}}, label)
+            )
+          )
+        ),
+        // Quote
+        React.createElement('div', {style:{marginTop:'auto',paddingTop:'32px',borderTop:'1px solid rgba(255,255,255,.08)',maxWidth:'420px'}},
+          React.createElement('p', {className:'lp-quote', style:{fontSize:'14px',color:'rgba(255,255,255,.45)',fontStyle:'italic',lineHeight:'1.7'}},
+            '\u201cEducation is the most powerful weapon which you can use to change the world.\u201d \u2014 Nelson Mandela'
+          )
+        )
+      ),
+
+      // ── Right panel ──────────────────────────────────────────────────────
+      React.createElement('div', {
+        className:'lp-right',
+        style:{width:'440px',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px',position:'relative',zIndex:2}
+      },
+        React.createElement('div', {
+          className:'lp-card',
+          style:{background:'rgba(255,255,255,.97)',borderRadius:'28px',padding:'44px 40px',width:'100%',boxShadow:'0 32px 80px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1)'}
+        },
+          // Card header
+          React.createElement('div', {style:{textAlign:'center',marginBottom:'28px'}},
+            React.createElement('div', {style:{width:'64px',height:'64px',margin:'0 auto 16px',background:'linear-gradient(135deg,#fff8e6,#fff0c0)',borderRadius:'20px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'32px',boxShadow:'0 8px 20px rgba(244,180,26,.2)'}},
+              '\uD83D\uDD10'
+            ),
+            React.createElement('div', {style:{fontSize:'26px',fontWeight:'800',color:'#1a1a2e'}}, 'Welcome Back!'),
+            React.createElement('div', {style:{fontSize:'13px',color:'#888',marginTop:'4px'}}, 'Sign in to your Avanti account')
+          ),
+
+          // ── Teacher fields (default) ─────────────────────────────────────
+          !isStudent && React.createElement(React.Fragment, null,
+            // Email
+            React.createElement('div', {style:{marginBottom:'18px'}},
+              React.createElement('label', {style:{display:'block',fontSize:'12px',fontWeight:'700',color:'#555',letterSpacing:'.5px',textTransform:'uppercase',marginBottom:'6px'}}, 'Email Address'),
+              React.createElement('div', {style:{position:'relative'}},
+                React.createElement('span', {style:{position:'absolute',left:'14px',top:'50%',transform:'translateY(-50%)',fontSize:'16px',opacity:.5}}, '\u2709\uFE0F'),
+                React.createElement('input', {
+                  type:'email',
+                  className:'lp-input',
+                  style:{width:'100%',padding:'14px 14px 14px 42px',border:'2px solid #eee',borderRadius:'14px',fontSize:'15px',fontFamily:'inherit',color:'#1a1a2e',background:'#fafafa',transition:'all .2s',outline:'none',boxSizing:'border-box'},
+                  value: loginForm.email,
+                  onChange: e => setLoginForm({...loginForm, email:e.target.value}),
+                  placeholder:'you@avantifellows.org'
+                })
+              )
+            ),
+            // Password
+            React.createElement('div', {style:{marginBottom:'8px'}},
+              React.createElement('label', {style:{display:'block',fontSize:'12px',fontWeight:'700',color:'#555',letterSpacing:'.5px',textTransform:'uppercase',marginBottom:'6px'}}, 'Password'),
+              React.createElement('div', {style:{position:'relative'}},
+                React.createElement('span', {style:{position:'absolute',left:'14px',top:'50%',transform:'translateY(-50%)',fontSize:'16px',opacity:.5}}, '\uD83D\uDD12'),
+                React.createElement('input', {
+                  type:'password',
+                  className:'lp-input',
+                  style:{width:'100%',padding:'14px 14px 14px 42px',border:'2px solid #eee',borderRadius:'14px',fontSize:'15px',fontFamily:'inherit',color:'#1a1a2e',background:'#fafafa',transition:'all .2s',outline:'none',boxSizing:'border-box'},
+                  value: loginForm.password,
+                  onChange: e => setLoginForm({...loginForm, password:e.target.value}),
+                  placeholder:'Enter your password',
+                  onKeyPress: e => e.key === 'Enter' && handleLogin()
+                })
+              )
+            )
+          ),
+
+          // ── Student fields ───────────────────────────────────────────────
+          isStudent && React.createElement(React.Fragment, null,
+            React.createElement('div', {style:{marginBottom:'18px'}},
+              React.createElement('label', {style:{display:'block',fontSize:'12px',fontWeight:'700',color:'#555',letterSpacing:'.5px',textTransform:'uppercase',marginBottom:'6px'}}, 'Student ID'),
+              React.createElement('div', {style:{position:'relative'}},
+                React.createElement('span', {style:{position:'absolute',left:'14px',top:'50%',transform:'translateY(-50%)',fontSize:'16px',opacity:.5}}, '\uD83C\uDF93'),
+                React.createElement('input', {
+                  type:'text',
+                  className:'lp-input',
+                  style:{width:'100%',padding:'14px 14px 14px 42px',border:'2px solid #eee',borderRadius:'14px',fontSize:'15px',fontFamily:'inherit',color:'#1a1a2e',background:'#fafafa',transition:'all .2s',outline:'none',boxSizing:'border-box'},
+                  value: loginForm.studentId || '',
+                  onChange: e => setLoginForm({...loginForm, studentId:e.target.value}),
+                  placeholder:'Enter your Student ID'
+                })
+              )
+            ),
+            React.createElement('div', {style:{marginBottom:'8px'}},
+              React.createElement('label', {style:{display:'block',fontSize:'12px',fontWeight:'700',color:'#555',letterSpacing:'.5px',textTransform:'uppercase',marginBottom:'6px'}}, 'Password'),
+              React.createElement('div', {style:{position:'relative'}},
+                React.createElement('span', {style:{position:'absolute',left:'14px',top:'50%',transform:'translateY(-50%)',fontSize:'16px',opacity:.5}}, '\uD83D\uDD12'),
+                React.createElement('input', {
+                  type:'password',
+                  className:'lp-input',
+                  style:{width:'100%',padding:'14px 14px 14px 42px',border:'2px solid #eee',borderRadius:'14px',fontSize:'15px',fontFamily:'inherit',color:'#1a1a2e',background:'#fafafa',transition:'all .2s',outline:'none',boxSizing:'border-box'},
+                  value: loginForm.password,
+                  onChange: e => setLoginForm({...loginForm, password:e.target.value}),
+                  placeholder:'Password (pass123)',
+                  onKeyPress: e => e.key === 'Enter' && handleLogin()
+                })
+              )
+            ),
+            React.createElement('p', {style:{fontSize:'12px',color:'#aaa',textAlign:'center',marginBottom:'4px'}},
+              'Default password: ', React.createElement('strong', {style:{color:'#777'}}, 'pass123')
+            )
+          ),
+
+          // Sign In button
+          React.createElement('button', {
+            className:'lp-signin',
+            onClick: handleLogin,
+            disabled: authLoading,
+            style:{width:'100%',padding:'16px',background:'linear-gradient(135deg,#F4B41A,#E8B039)',border:'none',borderRadius:'14px',fontSize:'16px',fontWeight:'800',color:'#1a1a2e',cursor:authLoading?'not-allowed':'pointer',marginTop:'12px',boxShadow:'0 8px 24px rgba(244,180,26,.35)',transition:'transform .15s, box-shadow .15s',opacity:authLoading?.75:1}
+          },
+            authLoading
+              ? React.createElement('span', {className:'login-spinner'},
+                  React.createElement('span', {className:'login-spinner-icon'}),
+                  React.createElement('span', {className:'login-progress-text'}, loginProgress || 'Please wait...')
+                )
+              : 'Sign In \u2192'
+          ),
+
+          // Divider + toggle
+          React.createElement('div', {style:{textAlign:'center',margin:'20px 0',color:'#ccc',fontSize:'13px',position:'relative'}},
+            React.createElement('span', {style:{background:'rgba(255,255,255,.97)',padding:'0 12px',position:'relative',zIndex:1}}, 'or'),
+            React.createElement('div', {style:{position:'absolute',top:'50%',left:0,right:0,height:'1px',background:'#eee',zIndex:0}})
+          ),
+
+          isStudent
+            ? React.createElement('button', {
+                className:'lp-student',
+                onClick: () => setLoginForm({...loginForm, loginType:'teacher', password:''}),
+                style:{width:'100%',padding:'13px',background:'white',border:'2px solid #eee',borderRadius:'14px',fontSize:'14px',fontWeight:'700',fontFamily:'inherit',color:'#555',cursor:'pointer',transition:'border-color .2s, background .2s'}
+              }, '\uD83D\uDC68\u200D\uD83C\uDFEB Back to Teacher Login')
+            : React.createElement('button', {
+                className:'lp-student',
+                onClick: () => setLoginForm({...loginForm, loginType:'student', password:''}),
+                style:{width:'100%',padding:'13px',background:'white',border:'2px solid #eee',borderRadius:'14px',fontSize:'14px',fontWeight:'700',fontFamily:'inherit',color:'#555',cursor:'pointer',transition:'border-color .2s, background .2s'}
+              }, '\uD83C\uDF92 Student Login'),
+
+          // Footer
+          React.createElement('div', {style:{textAlign:'center',marginTop:'24px',fontSize:'12px',color:'#bbb'}},
+            'Avanti Fellows \u00B7 JNV Program \u00B7 v5.5.6'
+          )
         )
       )
-    ),
-    React.createElement("style", null, `
-      @media (min-width: 768px) {
-        .login-left-panel { display: flex !important; }
-        .login-right-panel { max-width: 480px; }
-      }
-    `)
     );
   }
 
