@@ -2449,3 +2449,147 @@ console.log('[RecognitionFix] ✅ Fixed in app.js v5.5.6 — no patch needed');
 
 // ✅ SCHOOL FILTER: Fixed natively in app.js (filteredSchoolInfo uses accessibleSchools). No DOM patch needed.
 console.log('[SchoolFilter] ✅ Fixed in app.js v5.5.6 — no patch needed');
+
+
+/* ============================================================
+   ✅ CURSOR MAGIC — Bubble & Sparkle effect (login page only)
+   Glowing bubbles + 4-pointed stars in Avanti brand colors.
+   Canvas-based, touch-friendly, ~0 CPU when logged in.
+   ============================================================ */
+(function initLoginCursorEffect() {
+  let canvas, ctx, particles = [], raf, isActive = false;
+  const COLORS = ['#F4B41A', '#FFD166', '#E8B039', '#FFA040', '#C8342E', '#FF8C42'];
+
+  function onLoginPage() {
+    const mc = document.querySelector('.main-content');
+    return !mc || mc.offsetParent === null;
+  }
+
+  function spawn(x, y) {
+    const count = Math.floor(Math.random() * 3) + 1;
+    for (let i = 0; i < count; i++) {
+      const isStar = Math.random() > 0.5;
+      particles.push({
+        x, y,
+        vx: (Math.random() - 0.5) * 3,
+        vy: -(Math.random() * 3 + 1.2),
+        r: isStar ? Math.random() * 4 + 2 : Math.random() * 13 + 5,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        alpha: 0.9,
+        decay: Math.random() * 0.022 + 0.014,
+        isStar,
+        rot: Math.random() * Math.PI * 2,
+        rotV: (Math.random() - 0.5) * 0.18
+      });
+    }
+  }
+
+  function drawStar(x, y, r, rot) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      const ia = a + Math.PI / 4;
+      i === 0
+        ? ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r)
+        : ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      ctx.lineTo(Math.cos(ia) * r * 0.38, Math.sin(ia) * r * 0.38);
+    }
+    ctx.closePath();
+    ctx.restore();
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles = particles.filter(p => p.alpha > 0.01);
+
+    particles.forEach(p => {
+      p.x  += p.vx;
+      p.y  += p.vy;
+      p.vy -= 0.04;      // gentle gravity reverse (floats up)
+      p.vx *= 0.985;     // slight horizontal drag
+      p.alpha -= p.decay;
+      p.rot  += p.rotV;
+
+      ctx.globalAlpha = Math.max(0, p.alpha);
+
+      if (p.isStar) {
+        ctx.shadowBlur  = 10;
+        ctx.shadowColor = p.color;
+        ctx.fillStyle   = p.color;
+        drawStar(p.x, p.y, p.r, p.rot);
+        ctx.fill();
+        ctx.shadowBlur  = 0;
+      } else {
+        // Bubble: radial gradient with inner highlight
+        const g = ctx.createRadialGradient(
+          p.x - p.r * 0.28, p.y - p.r * 0.28, p.r * 0.05,
+          p.x, p.y, p.r
+        );
+        g.addColorStop(0, p.color + 'FF');
+        g.addColorStop(0.55, p.color + '77');
+        g.addColorStop(1,    p.color + '00');
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = g;
+        ctx.fill();
+      }
+    });
+
+    ctx.globalAlpha = 1;
+    if (isActive) raf = requestAnimationFrame(animate);
+  }
+
+  function activate() {
+    if (isActive) return;
+    if (!canvas) {
+      canvas       = document.createElement('canvas');
+      canvas.id    = 'avanti-cursor-fx';
+      canvas.style.cssText =
+        'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;';
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+      document.body.appendChild(canvas);
+      ctx = canvas.getContext('2d');
+      window.addEventListener('resize', () => {
+        canvas.width  = window.innerWidth;
+        canvas.height = window.innerHeight;
+      });
+    }
+    canvas.style.display = 'block';
+    isActive = true;
+    raf = requestAnimationFrame(animate);
+  }
+
+  function deactivate() {
+    if (!isActive) return;
+    isActive = false;
+    cancelAnimationFrame(raf);
+    if (canvas) {
+      particles = [];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.style.display = 'none';
+    }
+  }
+
+  let lastSpawn = 0;
+  function onMove(x, y) {
+    if (!isActive) return;
+    const now = Date.now();
+    if (now - lastSpawn < 28) return;   // throttle to ~35fps spawn rate
+    lastSpawn = now;
+    spawn(x, y);
+  }
+
+  document.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+  document.addEventListener('touchmove', e => {
+    if (e.touches[0]) onMove(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+
+  // Poll every 900ms — activates on login page, deactivates inside the app
+  setInterval(() => { onLoginPage() ? activate() : deactivate(); }, 900);
+
+  console.log('[CursorFX] ✅ Login bubble & sparkle effect ready');
+})();
