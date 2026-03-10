@@ -4318,6 +4318,11 @@ const INDIAN_BOOKS_DB = {
   }
 };
 async function lookupISBN(isbn) {
+  // Timeout wrapper — critical for teachers on 2G/weak signal (30-40km from cities)
+  const fetchWithTimeout = (url, ms = 6000) => Promise.race([
+    fetch(url),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Network timeout')), ms))
+  ]);
   try {
     const cleanISBN = isbn.replace(/[-\s]/g, '');
     console.log('[ISBN] Looking up:', cleanISBN);
@@ -4335,7 +4340,7 @@ async function lookupISBN(isbn) {
       };
     }
     try {
-      const response = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${cleanISBN}&jscmd=data&format=json`);
+      const response = await fetchWithTimeout(`https://openlibrary.org/api/books?bibkeys=ISBN:${cleanISBN}&jscmd=data&format=json`);
       const data = await response.json();
       const bookData = data[`ISBN:${cleanISBN}`];
       if (bookData) {
@@ -4353,7 +4358,7 @@ async function lookupISBN(isbn) {
       console.log('[ISBN] Open Library error:', e);
     }
     try {
-      const googleResponse = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanISBN}`);
+      const googleResponse = await fetchWithTimeout(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanISBN}`);
       const googleData = await googleResponse.json();
       if (googleData.items && googleData.items.length > 0) {
         const book = googleData.items[0].volumeInfo;
@@ -4389,7 +4394,7 @@ async function lookupISBN(isbn) {
           }
         }
         try {
-          const response = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn10}&jscmd=data&format=json`);
+          const response = await fetchWithTimeout(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn10}&jscmd=data&format=json`);
           const data = await response.json();
           const bookData = data[`ISBN:${isbn10}`];
           if (bookData) {
@@ -4859,6 +4864,7 @@ function AssetManagement({
       }
       if (barcode.startsWith('978') || barcode.startsWith('979')) {
         setLookingUp(true);
+        setShowAddModal(true);
         const result = await lookupISBN(barcode);
         setBookLookupResult({
           ...result,
@@ -4871,8 +4877,8 @@ function AssetManagement({
           isbn: barcode,
           copyNumber: 1
         });
+        setShowAddModal(true);
       }
-      setShowAddModal(true);
     } else if (scanMode === 'assign') {
       const baseBarcode = barcode.split('-copy-')[0];
       const matchingAssets = assets.filter(a => a.barcode === barcode || a.barcode.startsWith(baseBarcode + '-copy-') || a.isbn === barcode);
