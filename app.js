@@ -19729,6 +19729,21 @@ function RemarksModal({
     className: "flex-1 bg-gray-300 py-3 rounded-xl font-semibold"
   }, "Cancel")))));
 }
+function showAttendanceSavedToast(message, type) {
+  const existing = document.getElementById('attToast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.id = 'attToast';
+  const colors = {
+    success: 'background:#16a34a;color:white',
+    warning: 'background:#d97706;color:white',
+    error: 'background:#dc2626;color:white'
+  };
+  toast.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);${colors[type]||colors.success};padding:12px 24px;border-radius:12px;font-size:15px;font-weight:600;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.3);transition:opacity 0.4s`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 400); }, 2500);
+}
 function StudentAttendanceView({
   currentUser,
   students,
@@ -19910,6 +19925,7 @@ function StudentAttendanceView({
           }
           savedSuccessfully = true;
           console.log('✅ Attendance saved:', docId);
+          showAttendanceSavedToast('✅ Saved!', 'success');
         } catch (firebaseError) {
           console.warn('Firebase save failed, queuing offline:', firebaseError.message);
           if (window.OfflineQueue) {
@@ -20033,7 +20049,7 @@ function StudentAttendanceView({
       const newMap = {};
       filteredStudents.forEach(s => newMap[s.id] = 'Present');
       setAttendanceMap(newMap);
-      alert('All students marked present!');
+      showAttendanceSavedToast(`✅ All ${filteredStudents.length} students marked Present!`, 'success');
     } catch (e) {
       alert('Failed: ' + e.message);
     } finally {
