@@ -10583,6 +10583,12 @@ function TeacherView({
       className: "fa-solid fa-graduation-cap"
     })
   }, {
+    id: 'examtracker',
+    label: 'Exam Tracker',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-clipboard-list"
+    })
+  }, {
     id: 'timesheet',
     label: 'Timesheet',
     icon: React.createElement("i", {
@@ -10665,6 +10671,12 @@ function TeacherView({
     label: 'Exam Stats',
     icon: React.createElement("i", {
       className: "fa-solid fa-graduation-cap"
+    })
+  }, {
+    id: 'examtracker',
+    label: 'Exam Tracker',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-clipboard-list"
     })
   }, {
     id: 'myprofile',
@@ -11005,6 +11017,9 @@ function TeacherView({
     setSchoolInfo: setSchoolInfo
   }), activeTab === 'examstats' && React.createElement(TeacherExamStats, {
     currentUser: currentUser
+  }), activeTab === 'examtracker' && window.ExamConductTracker && React.createElement(window.ExamConductTracker, {
+    currentUser: currentUser,
+    isAdmin: false
   }), activeTab === 'assets' && React.createElement(AssetManagement, {
     currentUser: currentUser,
     students: students
@@ -13330,6 +13345,12 @@ function AdminView({
       className: "fa-solid fa-graduation-cap"
     })
   }, {
+    id: 'examtracker',
+    label: 'Exam Tracker',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-clipboard-list"
+    })
+  }, {
     id: 'studentfeedback',
     label: 'Student Feedback',
     icon: React.createElement("i", {
@@ -13673,6 +13694,10 @@ function AdminView({
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
+  }), activeTab === 'examtracker' && window.ExamConductTracker && React.createElement(window.ExamConductTracker, {
+    currentUser: currentUser,
+    isAdmin: true,
+    accessibleSchools: availableSchools
   }), activeTab === 'studentfeedback' && React.createElement(StudentFeedbackView, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
