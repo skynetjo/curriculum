@@ -173,7 +173,9 @@
 
           // Parse header
           const headers = lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/\s+/g,''));
-          const missing = CSV_HEADERS.filter(h=>!headers.includes(h));
+          const missing = CSV_HEADERS
+  .map(h => h.toLowerCase().replace(/\s+/g,''))
+  .filter(h => !headers.includes(h));
           if (missing.length > 0) {
             setError(`Missing columns: ${missing.join(', ')}. Download the sample to see the correct format.`);
             return;
