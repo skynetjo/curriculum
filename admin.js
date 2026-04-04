@@ -542,8 +542,8 @@ function AdminView({
   }, React.createElement("p", null, "Made by Anand with \u2764\uFE0F")));
 }
 function ExamTrackerPage(props) {
-  const [ready, setReady] = React.useState(typeof window.ExamConductTracker === 'function');
-  const [error, setError] = React.useState(false);
+  var [ready, setReady] = React.useState(typeof window.ExamConductTracker === 'function');
+  var [error, setError] = React.useState(false);
   React.useEffect(function() {
     if (typeof window.ExamConductTracker === 'function') { setReady(true); return; }
     var attempts = 0;
@@ -560,7 +560,7 @@ function ExamTrackerPage(props) {
   if (error) return React.createElement('div', { style:{ padding:'60px', textAlign:'center' } },
     React.createElement('div', { style:{ fontSize:'40px', marginBottom:'12px' } }, '⚠️'),
     React.createElement('p', { style:{ color:'#EF4444', fontWeight:'600', fontSize:'16px', marginBottom:'8px' } }, 'Exam Tracker failed to load'),
-    React.createElement('p', { style:{ color:'#9CA3AF', fontSize:'13px' } }, 'Make sure exam-tracker.js is uploaded to your Vercel project root and the page is refreshed.')
+    React.createElement('p', { style:{ color:'#9CA3AF', fontSize:'13px' } }, 'Please make sure exam-tracker.js is in your Vercel project root and refresh the page.')
   );
   if (!ready) return React.createElement('div', { style:{ padding:'60px', textAlign:'center', color:'#9CA3AF' } },
     React.createElement('div', { style:{ fontSize:'32px', marginBottom:'10px' } }, '⏳'),
