@@ -30,15 +30,6 @@
     catch { return ''; }
   }
   function uid() { return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
-  // Sort exams: oldest date first, then alphabetically by testName on same day
-  function sortExams(arr) {
-    return arr.slice().sort(function(a, b) {
-      var da = new Date(a.date || '').getTime() || 0;
-      var db = new Date(b.date || '').getTime() || 0;
-      if (da !== db) return da - db;
-      return (a.testName || '').localeCompare(b.testName || '');
-    });
-  }
 
   // ── status ───────────────────────────────────────────────
   const S = {
@@ -755,16 +746,16 @@ setRows(normalised);
       getDb().collection('system').doc('deletedExamIds').get()
         .then(snap=>{
           const deleted = snap.exists ? (snap.data().ids||[]) : [];
-          return getDb().collection('examSchedule').get()
+          return getDb().collection('examSchedule').orderBy('date').get()
             .then(schedSnap=>{
               if(schedSnap.docs.length>0){
-                // Firestore has custom schedule — filter out globally deleted, then sort
-                setExams(sortExams(schedSnap.docs
+                // Firestore has custom schedule — filter out globally deleted ones
+                setExams(schedSnap.docs
                   .map(d=>({id:d.id,...d.data()}))
-                  .filter(e=>!deleted.includes(e.id))));
+                  .filter(e=>!deleted.includes(e.id)));
               } else {
-                // No custom schedule — use SEED minus deleted, sorted
-                setExams(sortExams(SEED.filter(e=>!deleted.includes(e.id))));
+                // No custom schedule — use SEED minus deleted
+                setExams(SEED.filter(e=>!deleted.includes(e.id)));
               }
             });
         })
@@ -798,7 +789,7 @@ setRows(normalised);
       setExams(prev=>{
         const idx=prev.findIndex(e=>e.id===exam.id);
         if(idx>=0){const c=[...prev];c[idx]=exam;return c;}
-        return sortExams([...prev,exam]);
+        return [...prev,exam].sort((a,b)=>a.date.localeCompare(b.date));
       });
     },[]);
 
@@ -807,7 +798,7 @@ setRows(normalised);
       setExams(prev=>{
         const map={}; prev.forEach(e=>{map[e.id]=e;});
         newExams.forEach(e=>{map[e.id]=e;});
-        return sortExams(Object.values(map));
+        return Object.values(map).sort((a,b)=>a.date.localeCompare(b.date));
       });
     },[]);
 
@@ -849,7 +840,7 @@ setRows(normalised);
 
     const filtered = useMemo(()=>{
       const sc=primarySchool||school;
-      const result = exams.filter(e=>{
+      return exams.filter(e=>{
         if(fGrade!=='All'&&e.grade!==fGrade)   return false;
         if(fStream!=='All'&&e.stream!==fStream) return false;
         if(fMonth!=='All'&&monthLbl(e.date)!==fMonth) return false;
@@ -868,26 +859,27 @@ setRows(normalised);
         }
         return true;
       });
-      // Always sort by date, then testName — this is the authoritative display sort
-      return sortExams(result);
     },[exams,fGrade,fStream,fMonth,fStatus,fMode,search,conductMap,primarySchool,school]);
 
     const stats = useMemo(()=>{
       const sc=primarySchool||school;
-      const past=exams.filter(e=>new Date(e.date)<new Date());
-      let conducted=0,missed=0,partial=0,online=0,offline=0,total=0,scoreCount=0;
+      // Exclude N/A (excluded) exams from all counts — they don't apply to this school
+      const isExcluded = e => { const c=conductMap[`${sc}_${e.id}`]; return c&&c.excluded; };
+      const activeExams = exams.filter(e=>!isExcluded(e));
+      const past = activeExams.filter(e=>new Date(e.date)<new Date());
+      let conducted=0,missed=0,partial=0,online=0,offline=0,totalScore=0,scoreCount=0;
       past.forEach(e=>{
-        const c=conductMap[`${sc}_${e.id}`]; if(!c||c.excluded) return;
+        const c=conductMap[`${sc}_${e.id}`]; if(!c) return;
         if(c.status==='conducted') conducted++;
         if(c.status==='missed')   missed++;
         if(c.status==='partial')  partial++;
         if(c.mode==='Online')     online++;
         if(c.mode==='Offline')    offline++;
-        if(c.avgScore!=null){total+=c.avgScore;scoreCount++;}
+        if(c.avgScore!=null){totalScore+=c.avgScore;scoreCount++;}
       });
-      return{total:exams.length,past:past.length,conducted,missed,
+      return{total:activeExams.length,past:past.length,conducted,missed,
              pending:past.length-conducted-missed-partial,online,offline,
-             avgScore:scoreCount>0?Math.round(total/scoreCount):null};
+             avgScore:scoreCount>0?Math.round(totalScore/scoreCount):null};
     },[exams,conductMap,primarySchool,school]);
 
     const selExamArr      = exams.filter(e=>selExamIds.has(e.id));
@@ -954,7 +946,7 @@ setRows(normalised);
             React.createElement('button',{onClick:()=>{setFGrade('All');setFStream('All');setFMonth('All');setFStatus('All');setFMode('All');setSearch('');},
               style:{padding:'9px 13px',background:'#F3F4F6',border:'none',borderRadius:'9px',fontSize:'12px',cursor:'pointer',fontWeight:'600',color:'#6B7280'}},'↺ Reset')
           ),
-          React.createElement('div',{style:{marginTop:'10px',fontSize:'12px',color:'#9CA3AF'}},`Showing ${filtered.length} of ${exams.length} exams`)
+          React.createElement('div',{style:{marginTop:'10px',fontSize:'12px',color:'#9CA3AF'}},`Showing ${filtered.length} of ${stats.total} active exams`)
         ),
 
         // Table
