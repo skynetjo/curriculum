@@ -11017,7 +11017,7 @@ function TeacherView({
     setSchoolInfo: setSchoolInfo
   }), activeTab === 'examstats' && React.createElement(TeacherExamStats, {
     currentUser: currentUser
-  }), activeTab === 'examtracker' && window.ExamConductTracker && React.createElement(window.ExamConductTracker, {
+  }), activeTab === 'examtracker' && React.createElement(ExamTrackerPage, {
     currentUser: currentUser,
     isAdmin: false
   }), activeTab === 'assets' && React.createElement(AssetManagement, {
@@ -11038,6 +11038,38 @@ function TeacherView({
   }))), React.createElement("footer", {
     className: "bg-gray-800 text-white text-center py-4"
   }, React.createElement("p", null, "Made by Anand with \u2764\uFE0F")));
+}
+// ── ExamTrackerPage: safe wrapper that waits for exam-tracker.js to load ──
+// Fixes the silent blank-page bug when window.ExamConductTracker is checked
+// before the defer script has finished executing.
+function ExamTrackerPage(props) {
+  const [ready, setReady] = useState(typeof window.ExamConductTracker === 'function');
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (typeof window.ExamConductTracker === 'function') { setReady(true); return; }
+    var attempts = 0;
+    var interval = setInterval(function() {
+      attempts++;
+      if (typeof window.ExamConductTracker === 'function') {
+        setReady(true);
+        clearInterval(interval);
+      } else if (attempts > 50) { // 5 seconds timeout
+        setError(true);
+        clearInterval(interval);
+      }
+    }, 100);
+    return function() { clearInterval(interval); };
+  }, []);
+  if (error) return React.createElement('div', {
+    style: { padding:'60px', textAlign:'center' }
+  }, React.createElement('div', { style:{ fontSize:'40px', marginBottom:'16px' } }, '⚠️'),
+    React.createElement('p', { style:{ fontSize:'16px', color:'#EF4444', fontWeight:'600', marginBottom:'8px' } }, 'Exam Tracker failed to load'),
+    React.createElement('p', { style:{ fontSize:'13px', color:'#9CA3AF' } }, 'Please refresh the page. If the issue persists, check that exam-tracker.js is uploaded to your Vercel project.'));
+  if (!ready) return React.createElement('div', {
+    style: { padding:'60px', textAlign:'center', color:'#9CA3AF' }
+  }, React.createElement('div', { style:{ fontSize:'32px', marginBottom:'12px' } }, '⏳'),
+    React.createElement('p', { style:{ fontSize:'15px' } }, 'Loading Exam Tracker...'));
+  return React.createElement(window.ExamConductTracker, props);
 }
 function AdminExamStats({
   accessibleSchools = [],
@@ -13694,7 +13726,7 @@ function AdminView({
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
-  }), activeTab === 'examtracker' && window.ExamConductTracker && React.createElement(window.ExamConductTracker, {
+  }), activeTab === 'examtracker' && React.createElement(ExamTrackerPage, {
     currentUser: currentUser,
     isAdmin: true,
     accessibleSchools: availableSchools
