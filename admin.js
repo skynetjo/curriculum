@@ -181,6 +181,12 @@ function AdminView({
       className: "fa-solid fa-graduation-cap"
     })
   }, {
+    id: 'examtracker',
+    label: 'Exam Tracker',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-clipboard-list"
+    })
+  }, {
     id: 'studentfeedback',
     label: 'Student Feedback',
     icon: React.createElement("i", {
@@ -523,6 +529,10 @@ function AdminView({
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
+  }), activeTab === 'examtracker' && React.createElement(ExamTrackerPage, {
+    currentUser: currentUser,
+    isAdmin: true,
+    accessibleSchools: availableSchools
   }), activeTab === 'studentfeedback' && React.createElement(StudentFeedbackView, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
@@ -531,6 +541,32 @@ function AdminView({
     className: "bg-gray-800 text-white text-center py-4"
   }, React.createElement("p", null, "Made by Anand with \u2764\uFE0F")));
 }
+function ExamTrackerPage(props) {
+  const [ready, setReady] = React.useState(typeof window.ExamConductTracker === 'function');
+  const [error, setError] = React.useState(false);
+  React.useEffect(function() {
+    if (typeof window.ExamConductTracker === 'function') { setReady(true); return; }
+    var attempts = 0;
+    var interval = setInterval(function() {
+      attempts++;
+      if (typeof window.ExamConductTracker === 'function') {
+        setReady(true); clearInterval(interval);
+      } else if (attempts > 80) {
+        setError(true); clearInterval(interval);
+      }
+    }, 100);
+    return function() { clearInterval(interval); };
+  }, []);
+  if (error) return React.createElement('div', { style:{ padding:'60px', textAlign:'center' } },
+    React.createElement('div', { style:{ fontSize:'40px', marginBottom:'12px' } }, '⚠️'),
+    React.createElement('p', { style:{ color:'#EF4444', fontWeight:'600', fontSize:'16px', marginBottom:'8px' } }, 'Exam Tracker failed to load'),
+    React.createElement('p', { style:{ color:'#9CA3AF', fontSize:'13px' } }, 'Make sure exam-tracker.js is uploaded to your Vercel project root and the page is refreshed.')
+  );
+  if (!ready) return React.createElement('div', { style:{ padding:'60px', textAlign:'center', color:'#9CA3AF' } },
+    React.createElement('div', { style:{ fontSize:'32px', marginBottom:'10px' } }, '⏳'),
+    React.createElement('p', null, 'Loading Exam Tracker...')
+  );
+  return React.createElement(window.ExamConductTracker, props);
 function TeacherOverview({
   currentUser,
   curriculum,
