@@ -544,7 +544,6 @@ function AdminView({
 function ExamTrackerPage(props) {
   const [ready, setReady] = React.useState(typeof window.ExamConductTracker === 'function');
   const [error, setError] = React.useState(false);
-  const [previewData, setPreviewData] = React.useState([]);
   React.useEffect(function() {
     if (typeof window.ExamConductTracker === 'function') { setReady(true); return; }
     var attempts = 0;
@@ -567,101 +566,8 @@ function ExamTrackerPage(props) {
     React.createElement('div', { style:{ fontSize:'32px', marginBottom:'10px' } }, '⏳'),
     React.createElement('p', null, 'Loading Exam Tracker...')
   );
-  async function handleCSVUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const text = await file.text();
-  const rows = text.split('\n').map(r => r.split(','));
-
-  const headers = rows[0].map(h => h.trim());
-
-  const required = ['school','grade','subject','examName','date'];
-  const isValid = required.every(r => headers.includes(r));
-
-  if (!isValid) {
-    alert('Invalid CSV. Download sample.');
-    return;
-  }
-
-  const dataRows = rows.slice(1);
-
-  const parsed = dataRows.map(row => {
-    const obj = {};
-    headers.forEach((h, i) => {
-      obj[h] = row[i]?.trim();
-    });
-    return obj;
-  }).filter(r => r.examName);
-
-  setPreviewData(parsed);
+  return React.createElement(window.ExamConductTracker, props);
 }
-
-async function saveCSVToFirebase() {
-  if (!previewData.length) return;
-
-  const db = firebase.firestore();
-  const batch = db.batch();
-
-  previewData.forEach(exam => {
-    const ref = db.collection('exams').doc();
-    batch.set(ref, {
-      ...exam,
-      hidden: false,
-      createdAt: new Date().toISOString()
-    });
-  });
-
-  await batch.commit();
-  alert('Uploaded successfully');
-  window.location.reload();
-}
-
-function downloadSampleCSV() {
-  const csv = `school,grade,subject,examName,date
-JNV Hassan,11,Physics,Test 1,2026-04-10`;
-
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = window.URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'sample.csv';
-  a.click();
-}
-  return React.createElement("div", null,
-
-  // ✅ CSV Upload (Admin only)
-  (['super_admin','program_manager','associate_program_manager','director'].includes(props.currentUser?.role)) &&
-    React.createElement("div", { style: { marginBottom: '15px' } },
-
-      // Upload button
-      React.createElement("input", {
-        type: "file",
-        accept: ".csv",
-        onChange: handleCSVUpload
-      }),
-
-      // Download sample
-      React.createElement("button", {
-        onClick: downloadSampleCSV,
-        style: { marginLeft: '10px' }
-      }, "Download Sample CSV")
-    ),
-
-  // Preview Table
-  previewData.length > 0 &&
-    React.createElement("div", null,
-      React.createElement("h4", null, "Preview"),
-      React.createElement("pre", null, JSON.stringify(previewData, null, 2)),
-
-      React.createElement("button", {
-        onClick: saveCSVToFirebase
-      }, "Confirm Upload")
-    ),
-
-  React.createElement(window.ExamConductTracker, props)
-);
 function TeacherOverview({
   currentUser,
   curriculum,
