@@ -752,10 +752,11 @@ setRows(normalised);
                 // Firestore has custom schedule — filter out globally deleted ones
                 setExams(schedSnap.docs
                   .map(d=>({id:d.id,...d.data()}))
-                  .filter(e=>!deleted.includes(e.id)));
+                  .filter(e=>!deleted.includes(e.id))
+                  .sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.testName||'').localeCompare(b.testName||'')));
               } else {
                 // No custom schedule — use SEED minus deleted
-                setExams(SEED.filter(e=>!deleted.includes(e.id)));
+                setExams(SEED.filter(e=>!deleted.includes(e.id)).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.testName||'').localeCompare(b.testName||'')));
               }
             });
         })
@@ -858,6 +859,10 @@ setRows(normalised);
           if(fStatus==='excluded'  &&k!=='excluded')  return false;
         }
         return true;
+      // Sort by date ascending, then testName for same-date exams
+      }).sort(function(a, b) {
+        var d = (a.date||'').localeCompare(b.date||'');
+        return d !== 0 ? d : (a.testName||'').localeCompare(b.testName||'');
       });
     },[exams,fGrade,fStream,fMonth,fStatus,fMode,search,conductMap,primarySchool,school]);
 
