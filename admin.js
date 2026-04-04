@@ -566,7 +566,39 @@ function ExamTrackerPage(props) {
     React.createElement('div', { style:{ fontSize:'32px', marginBottom:'10px' } }, '⏳'),
     React.createElement('p', null, 'Loading Exam Tracker...')
   );
-  return React.createElement(window.ExamConductTracker, props);
+  return React.createElement("div", null,
+
+  // ✅ CSV Upload (Admin only)
+  (props.currentUser?.role === 'admin' || props.currentUser?.role === 'superadmin') &&
+    React.createElement("div", { style: { marginBottom: '15px' } },
+
+      // Upload button
+      React.createElement("input", {
+        type: "file",
+        accept: ".csv",
+        onChange: handleCSVUpload
+      }),
+
+      // Download sample
+      React.createElement("button", {
+        onClick: downloadSampleCSV,
+        style: { marginLeft: '10px' }
+      }, "Download Sample CSV")
+    ),
+
+  // Preview Table
+  previewData.length > 0 &&
+    React.createElement("div", null,
+      React.createElement("h4", null, "Preview"),
+      React.createElement("pre", null, JSON.stringify(previewData, null, 2)),
+
+      React.createElement("button", {
+        onClick: saveCSVToFirebase
+      }, "Confirm Upload")
+    ),
+
+  React.createElement(window.ExamConductTracker, props)
+);
 function TeacherOverview({
   currentUser,
   curriculum,
