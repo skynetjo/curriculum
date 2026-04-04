@@ -30,6 +30,15 @@
     catch { return ''; }
   }
   function uid() { return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+  // Master sort: by date ascending, then testName alphabetically for same-day exams
+  function sortExams(arr) {
+    return arr.slice().sort(function(a, b) {
+      var da = a.date ? new Date(a.date).getTime() : 0;
+      var db = b.date ? new Date(b.date).getTime() : 0;
+      if (da !== db) return da - db;
+      return (a.testName||'').localeCompare(b.testName||'');
+    });
+  }
 
   // ── status ───────────────────────────────────────────────
   const S = {
@@ -746,16 +755,14 @@ setRows(normalised);
       getDb().collection('system').doc('deletedExamIds').get()
         .then(snap=>{
           const deleted = snap.exists ? (snap.data().ids||[]) : [];
-          return getDb().collection('examSchedule').orderBy('date').get()
+          return getDb().collection('examSchedule').get()
             .then(schedSnap=>{
               if(schedSnap.docs.length>0){
-                // Firestore has custom schedule — filter out globally deleted ones
-                setExams(schedSnap.docs
+                setExams(sortExams(schedSnap.docs
                   .map(d=>({id:d.id,...d.data()}))
-                  .filter(e=>!deleted.includes(e.id)));
+                  .filter(e=>!deleted.includes(e.id))));
               } else {
-                // No custom schedule — use SEED minus deleted
-                setExams(SEED.filter(e=>!deleted.includes(e.id)));
+                setExams(sortExams(SEED.filter(e=>!deleted.includes(e.id))));
               }
             });
         })
@@ -789,7 +796,7 @@ setRows(normalised);
       setExams(prev=>{
         const idx=prev.findIndex(e=>e.id===exam.id);
         if(idx>=0){const c=[...prev];c[idx]=exam;return c;}
-        return [...prev,exam].sort((a,b)=>a.date.localeCompare(b.date));
+        return sortExams([...prev, exam]);
       });
     },[]);
 
@@ -798,7 +805,7 @@ setRows(normalised);
       setExams(prev=>{
         const map={}; prev.forEach(e=>{map[e.id]=e;});
         newExams.forEach(e=>{map[e.id]=e;});
-        return Object.values(map).sort((a,b)=>a.date.localeCompare(b.date));
+        return sortExams(Object.values(map));
       });
     },[]);
 
@@ -840,7 +847,7 @@ setRows(normalised);
 
     const filtered = useMemo(()=>{
       const sc=primarySchool||school;
-      return exams.filter(e=>{
+      const result = exams.filter(e=>{
         if(fGrade!=='All'&&e.grade!==fGrade)   return false;
         if(fStream!=='All'&&e.stream!==fStream) return false;
         if(fMonth!=='All'&&monthLbl(e.date)!==fMonth) return false;
@@ -859,13 +866,13 @@ setRows(normalised);
         }
         return true;
       });
+      return sortExams(result);
     },[exams,fGrade,fStream,fMonth,fStatus,fMode,search,conductMap,primarySchool,school]);
 
     const stats = useMemo(()=>{
       const sc=primarySchool||school;
-      // Exclude N/A (excluded) exams from all counts — they don't apply to this school
-      const isExcluded = e => { const c=conductMap[`${sc}_${e.id}`]; return c&&c.excluded; };
-      const activeExams = exams.filter(e=>!isExcluded(e));
+      // N/A exams don't apply to this school — exclude from all counts
+      const activeExams = exams.filter(e=>{ const c=conductMap[`${sc}_${e.id}`]; return !(c&&c.excluded); });
       const past = activeExams.filter(e=>new Date(e.date)<new Date());
       let conducted=0,missed=0,partial=0,online=0,offline=0,totalScore=0,scoreCount=0;
       past.forEach(e=>{
