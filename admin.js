@@ -567,10 +567,72 @@ function ExamTrackerPage(props) {
     React.createElement('div', { style:{ fontSize:'32px', marginBottom:'10px' } }, '⏳'),
     React.createElement('p', null, 'Loading Exam Tracker...')
   );
+  async function handleCSVUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const text = await file.text();
+  const rows = text.split('\n').map(r => r.split(','));
+
+  const headers = rows[0].map(h => h.trim());
+
+  const required = ['school','grade','subject','examName','date'];
+  const isValid = required.every(r => headers.includes(r));
+
+  if (!isValid) {
+    alert('Invalid CSV. Download sample.');
+    return;
+  }
+
+  const dataRows = rows.slice(1);
+
+  const parsed = dataRows.map(row => {
+    const obj = {};
+    headers.forEach((h, i) => {
+      obj[h] = row[i]?.trim();
+    });
+    return obj;
+  }).filter(r => r.examName);
+
+  setPreviewData(parsed);
+}
+
+async function saveCSVToFirebase() {
+  if (!previewData.length) return;
+
+  const db = firebase.firestore();
+  const batch = db.batch();
+
+  previewData.forEach(exam => {
+    const ref = db.collection('exams').doc();
+    batch.set(ref, {
+      ...exam,
+      hidden: false,
+      createdAt: new Date().toISOString()
+    });
+  });
+
+  await batch.commit();
+  alert('Uploaded successfully');
+  window.location.reload();
+}
+
+function downloadSampleCSV() {
+  const csv = `school,grade,subject,examName,date
+JNV Hassan,11,Physics,Test 1,2026-04-10`;
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'sample.csv';
+  a.click();
+}
   return React.createElement("div", null,
 
   // ✅ CSV Upload (Admin only)
-  (props.currentUser?.role === 'admin' || props.currentUser?.role === 'superadmin') &&
+  (['super_admin','program_manager','associate_program_manager','director'].includes(props.currentUser?.role)) &&
     React.createElement("div", { style: { marginBottom: '15px' } },
 
       // Upload button
@@ -7556,71 +7618,3 @@ function TeacherAttendanceView({
     className: "text-xs text-green-600 mt-1"
   }, "\u2713 GPS Verified")))));
 }
-// ✅ CSV FUNCTIONS START HERE
-
-async function handleCSVUpload(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const text = await file.text();
-  const rows = text.split('\n').map(r => r.split(','));
-
-  const headers = rows[0].map(h => h.trim());
-
-  const required = ['school','grade','subject','examName','date'];
-  const isValid = required.every(r => headers.includes(r));
-
-  if (!isValid) {
-    alert('❌ Invalid CSV format. Please download sample.');
-    return;
-  }
-
-  const dataRows = rows.slice(1);
-
-  const parsed = dataRows.map(row => {
-    const obj = {};
-    headers.forEach((h, i) => {
-      obj[h] = row[i]?.trim();
-    });
-    return obj;
-  }).filter(r => r.examName);
-
-  setPreviewData(parsed);
-}
-
-async function saveCSVToFirebase() {
-  if (!previewData.length) return;
-
-  const db = firebase.firestore();
-  const batch = db.batch();
-
-  previewData.forEach(exam => {
-    const ref = db.collection('exams').doc();
-    batch.set(ref, {
-      ...exam,
-      hidden: false,
-      createdAt: new Date().toISOString()
-    });
-  });
-
-  await batch.commit();
-  alert('✅ Uploaded successfully');
-
-  window.location.reload();
-}
-
-function downloadSampleCSV() {
-  const csv = `school,grade,subject,examName,date
-JNV Hassan,11,Physics,Test 1,2026-04-10
-JNV Mysore,12,Chemistry,Test 2,2026-04-12`;
-
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = window.URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'sample_exams.csv';
-  a.click();
-}
-
-// ✅ CSV FUNCTIONS END
