@@ -1,6 +1,11 @@
 // ============================================================
-// EXAM CONDUCT TRACKER  v4.3.0
+// EXAM CONDUCT TRACKER  v4.4.0
 // Avanti Fellows Curriculum Tracker
+//
+// v4.4.0 additions:
+//   2. ATTENDANCE DISPLAY — Students column now shows
+//      "X / Total (Y%)" with colour-coded % (green ≥80,
+//      amber ≥60, red <60). Totals hard-coded per school+grade.
 //
 // v4.3.0 fix:
 //   1. RESULTS UPLOAD — fix: conductMap now updates instantly
@@ -130,6 +135,20 @@
   const STREAMS  = ['Engineering','Medical','Foundation'];
   const FORMATS  = ['MT','Major Test','Mock Test','Part Test','Baseline','Midline'];
   const PURPOSES = ['Monthly Test','Practice Test','Baseline','Midline','Half Yearly','Final'];
+
+  // Total enrolled students per school per grade
+  // Used to show attendance as  "X / Total (Y%)"
+  const SCHOOL_TOTALS = {
+    'CoE Barwani':  { '11': 40, '12': 41 },
+    'CoE Cuttack':  { '11': 40, '12': 40 },
+    'CoE Bundi':    { '11': 50, '12': 50 },
+    'CoE Mahisagar':{ '11': 33 },
+    'EMRS Bhopal':  { '11': 51 },
+    'JNV Bharuch':  { '11': 37, '12': 32 },
+  };
+  function getTotal(school, grade) {
+    return (SCHOOL_TOTALS[school] || {})[String(grade)] || null;
+  }
 
   // CSV columns we expect
   const CSV_HEADERS = ['date','grade','stream','testName','format','purpose'];
@@ -998,7 +1017,7 @@ setRows(normalised);
   // ─────────────────────────────────────────────────────────
   // TABLE ROW
   // ─────────────────────────────────────────────────────────
-  function ExamRow({ exam, cond, checked, onCheck, onUpdate, onEditSchedule, onDeleteSchedule, onRestore, canManage, canHide }) {
+  function ExamRow({ exam, cond, checked, onCheck, onUpdate, onEditSchedule, onDeleteSchedule, onRestore, canManage, canHide, school }) {
     const sk = sKey(cond, exam.date);
     const scfg = S[sk];
     const isExcluded = sk==='excluded';
@@ -1023,8 +1042,19 @@ setRows(normalised);
       ),
       React.createElement('td',{style:{padding:'11px 8px',textAlign:'center'}},pill(scfg.e+' '+scfg.label,scfg.bg,scfg.c,scfg.b)),
       React.createElement('td',{style:{padding:'11px 8px',textAlign:'center'}},!isExcluded&&React.createElement(ModePill,{mode:cond?.mode||null})),
-      React.createElement('td',{style:{padding:'11px 8px',textAlign:'center',fontSize:'13px',fontWeight:'600',color:'#374151'}},
-        !isExcluded&&cond?.participants!=null?cond.participants:React.createElement('span',{style:{color:'#D1D5DB'}},'—')
+      React.createElement('td',{style:{padding:'11px 8px',textAlign:'center'}},
+        !isExcluded && cond?.participants!=null
+          ? (function(){
+              const total = getTotal(school, exam.grade);
+              const pct   = total ? Math.round(cond.participants/total*100) : null;
+              const color = pct==null?'#374151':pct>=80?'#059669':pct>=60?'#D97706':'#DC2626';
+              return React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:'2px'}},
+                React.createElement('span',{style:{fontWeight:'700',fontSize:'13px',color:'#1F2937'}},
+                  total ? cond.participants+' / '+total : cond.participants),
+                pct!=null&&React.createElement('span',{style:{fontSize:'11px',fontWeight:'700',color}},pct+'%')
+              );
+            })()
+          : React.createElement('span',{style:{color:'#D1D5DB',fontSize:'13px'}},'—')
       ),
       React.createElement('td',{style:{padding:'11px 8px',textAlign:'center'}},
         !isExcluded&&cond?.avgScore!=null
@@ -1370,6 +1400,7 @@ setRows(normalised);
                             onRestore:restoreExam,
                             canManage,
                             canHide,
+                            school: sc,
                           });
                         })
                   )
@@ -1460,6 +1491,6 @@ setRows(normalised);
   }
 
   window.ExamConductTracker = ExamConductTracker;
-  console.log('✅ ExamConductTracker v4.3.0 loaded');
+  console.log('✅ ExamConductTracker v4.4.0 loaded');
 
 })();
