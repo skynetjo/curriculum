@@ -1,9 +1,11 @@
 // ============================================================
-// EXAM CONDUCT TRACKER  v4.2.0
+// EXAM CONDUCT TRACKER  v4.3.0
 // Avanti Fellows Curriculum Tracker
 //
-// v4.2.0 additions:
-//   1. RESULTS BULK UPLOAD — admin + manager role.
+// v4.3.0 fix:
+//   1. RESULTS UPLOAD — fix: conductMap now updates instantly
+//      after bulk upload so tracker reflects data without
+//      needing a page refresh. Also passes mode to parent.
 //      Upload the student-level results CSV (from dashboard)
 //      to auto-fill conduct records: participants, avg score,
 //      and subject-wise avg accuracy (P/C/M/B) for each
@@ -550,7 +552,11 @@ setRows(normalised);
           await batch.commit();
         }
         setDone(true);
-        onSaved && onSaved(matched);
+        // Pass matched rows WITH their selected mode so the parent can update conductMap immediately
+        onSaved && onSaved(matched.map(r => ({
+          ...r,
+          mode: modeMap[r.schoolName+'||'+r.testName] || 'Offline',
+        })));
       } catch(err) {
         alert('Upload failed: ' + err.message);
         setSaving(false);
@@ -1414,12 +1420,46 @@ setRows(normalised);
         exams,
         currentUser,
         onClose:()=>setResultsModal(false),
-        onSaved:()=>{ setResultsModal(false); },
+        onSaved:(matched)=>{
+          // Immediately update conductMap so the tracker reflects the upload
+          // without needing a full page refresh
+          if (matched && matched.length > 0) {
+            setConductMap(prev => {
+              const updates = {};
+              matched.forEach(r => {
+                const exam  = r.matchedExam;
+                const sc    = r.schoolName;
+                const docId = sc + '_' + exam.id;
+                updates[docId] = {
+                  id:           docId,
+                  school:       sc,
+                  examId:       exam.id,
+                  examName:     exam.testName,
+                  examDate:     exam.date,
+                  grade:        exam.grade,
+                  stream:       exam.stream,
+                  excluded:     false,
+                  status:       'conducted',
+                  mode:         r.mode || 'Offline',
+                  participants: r.participants,
+                  avgScore:     r.avgScore,
+                  avgPhysics:   r.avgPhysics,
+                  avgChemistry: r.avgChemistry,
+                  avgMaths:     r.avgMaths,
+                  avgBiology:   r.avgBiology,
+                  notes:        '',
+                };
+              });
+              return {...prev, ...updates};
+            });
+          }
+          setResultsModal(false);
+        },
       })
     );
   }
 
   window.ExamConductTracker = ExamConductTracker;
-  console.log('✅ ExamConductTracker v4.2.0 loaded');
+  console.log('✅ ExamConductTracker v4.3.0 loaded');
 
 })();
