@@ -1,6 +1,10 @@
 // ============================================================
-// EXAM CONDUCT TRACKER  v4.4.0
+// EXAM CONDUCT TRACKER  v4.5.0
 // Avanti Fellows Curriculum Tracker
+//
+// v4.5.0 fixes:
+//   1. CoE Cuttak spelling fix in SCHOOL_TOTALS
+//   2. Subject avg cards (P/C/M/B) added above the table
 //
 // v4.4.0 additions:
 //   2. ATTENDANCE DISPLAY — Students column now shows
@@ -140,7 +144,7 @@
   // Used to show attendance as  "X / Total (Y%)"
   const SCHOOL_TOTALS = {
     'CoE Barwani':  { '11': 40, '12': 41 },
-    'CoE Cuttack':  { '11': 40, '12': 40 },
+    'CoE Cuttak':  { '11': 40, '12': 40 },
     'CoE Bundi':    { '11': 50, '12': 50 },
     'CoE Mahisagar':{ '11': 33 },
     'EMRS Bhopal':  { '11': 51 },
@@ -1277,6 +1281,7 @@ setRows(normalised);
       const activeExams = exams.filter(e=>{ const c=conductMap[`${sc}_${e.id}`]; return !(c&&c.excluded); });
       const past = activeExams.filter(e=>new Date(e.date)<new Date());
       let conducted=0,missed=0,partial=0,online=0,offline=0,totalScore=0,scoreCount=0;
+      let totPhy=0,cntPhy=0,totChe=0,cntChe=0,totMat=0,cntMat=0,totBio=0,cntBio=0;
       past.forEach(e=>{
         const c=conductMap[`${sc}_${e.id}`]; if(!c) return;
         if(c.status==='conducted') conducted++;
@@ -1284,11 +1289,20 @@ setRows(normalised);
         if(c.status==='partial')  partial++;
         if(c.mode==='Online')     online++;
         if(c.mode==='Offline')    offline++;
-        if(c.avgScore!=null){totalScore+=c.avgScore;scoreCount++;}
+        if(c.avgScore    !=null){totalScore+=c.avgScore;    scoreCount++;}
+        if(c.avgPhysics  !=null){totPhy+=c.avgPhysics;   cntPhy++;}
+        if(c.avgChemistry!=null){totChe+=c.avgChemistry; cntChe++;}
+        if(c.avgMaths    !=null){totMat+=c.avgMaths;     cntMat++;}
+        if(c.avgBiology  !=null){totBio+=c.avgBiology;   cntBio++;}
       });
       return{total:activeExams.length,past:past.length,conducted,missed,
              pending:past.length-conducted-missed-partial,online,offline,
-             avgScore:scoreCount>0?Math.round(totalScore/scoreCount):null};
+             avgScore:   scoreCount>0?Math.round(totalScore/scoreCount):null,
+             avgPhysics:   cntPhy>0?Math.round(totPhy/cntPhy*10)/10:null,
+             avgChemistry: cntChe>0?Math.round(totChe/cntChe*10)/10:null,
+             avgMaths:     cntMat>0?Math.round(totMat/cntMat*10)/10:null,
+             avgBiology:   cntBio>0?Math.round(totBio/cntBio*10)/10:null,
+      };
     },[exams,conductMap,primarySchool,school]);
 
     const selExamArr      = exams.filter(e=>selExamIds.has(e.id));
@@ -1329,8 +1343,8 @@ setRows(normalised);
 
       React.createElement('div',{style:{maxWidth:'1300px',margin:'0 auto',padding:'0 16px'}},
 
-        // Stats
-        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'12px',marginBottom:'22px'}},
+        // Stats — row 1: conduct summary
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'12px',marginBottom:'12px'}},
           React.createElement(StatCard,{label:'Total Exams',value:stats.total, emoji:'📅',color:'#6366F1',sub:`${stats.past} past`}),
           React.createElement(StatCard,{label:'Conducted',  value:stats.conducted,emoji:'✅',color:'#10B981',sub:stats.past>0?`${Math.round(stats.conducted/stats.past*100)}% rate`:''}),
           React.createElement(StatCard,{label:'Not Updated',value:stats.pending,  emoji:'⏳',color:'#F59E0B',sub:'need review'}),
@@ -1338,6 +1352,34 @@ setRows(normalised);
           React.createElement(StatCard,{label:'Online',     value:stats.online,   emoji:'🌐',color:'#1D4ED8',sub:'conducted online'}),
           React.createElement(StatCard,{label:'Offline',    value:stats.offline,  emoji:'📄',color:'#6D28D9',sub:'conducted offline'}),
           React.createElement(StatCard,{label:'Avg Score',  value:stats.avgScore!=null?stats.avgScore+'%':'—',emoji:'📊',color:'#3B82F6',sub:'across conducted'}),
+        ),
+
+        // Stats — row 2: subject averages (only shown when data exists)
+        (stats.avgPhysics!=null||stats.avgChemistry!=null||stats.avgMaths!=null||stats.avgBiology!=null) &&
+        React.createElement('div',{style:{marginBottom:'22px'}},
+          React.createElement('div',{style:{fontSize:'11px',fontWeight:'700',color:'#9CA3AF',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'8px',paddingLeft:'2px'}},'Subject Avg Accuracy (across conducted exams)'),
+          React.createElement('div',{style:{display:'flex',gap:'12px',flexWrap:'wrap'}},
+            ...[
+              stats.avgPhysics   !=null ? {label:'Physics',   val:stats.avgPhysics,   color:'#1D4ED8', bg:'#EFF6FF', border:'#BFDBFE', emoji:'⚛️'} : null,
+              stats.avgChemistry !=null ? {label:'Chemistry', val:stats.avgChemistry, color:'#7C3AED', bg:'#F5F3FF', border:'#DDD6FE', emoji:'🧪'} : null,
+              stats.avgMaths     !=null ? {label:'Maths',     val:stats.avgMaths,     color:'#0F766E', bg:'#F0FDFA', border:'#99F6E4', emoji:'📐'} : null,
+              stats.avgBiology   !=null ? {label:'Biology',   val:stats.avgBiology,   color:'#15803D', bg:'#F0FDF4', border:'#BBF7D0', emoji:'🌿'} : null,
+            ].filter(Boolean).map(s=>{
+              const scoreColor = s.val>=70?'#059669':s.val>=50?'#D97706':'#DC2626';
+              return React.createElement('div',{key:s.label,style:{
+                background:s.bg, border:`1.5px solid ${s.border}`, borderRadius:'14px',
+                padding:'14px 20px', display:'flex', alignItems:'center', gap:'14px',
+                boxShadow:'0 2px 8px rgba(0,0,0,0.05)', flex:'1', minWidth:'160px',
+              }},
+                React.createElement('div',{style:{fontSize:'28px'}},s.emoji),
+                React.createElement('div',null,
+                  React.createElement('div',{style:{fontSize:'24px',fontWeight:'800',color:scoreColor,lineHeight:'1.1'}},s.val+'%'),
+                  React.createElement('div',{style:{fontSize:'12px',fontWeight:'700',color:s.color,marginTop:'2px'}},'Avg '+s.label),
+                  React.createElement('div',{style:{fontSize:'11px',color:'#9CA3AF'}},'accuracy')
+                )
+              );
+            })
+          )
         ),
 
         // Filters
@@ -1491,6 +1533,6 @@ setRows(normalised);
   }
 
   window.ExamConductTracker = ExamConductTracker;
-  console.log('✅ ExamConductTracker v4.4.0 loaded');
+  console.log('✅ ExamConductTracker v4.5.0 loaded');
 
 })();
