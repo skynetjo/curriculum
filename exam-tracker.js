@@ -1,6 +1,12 @@
 // ============================================================
-// EXAM CONDUCT TRACKER  v4.0.0
+// EXAM CONDUCT TRACKER  v4.1.0
 // Avanti Fellows Curriculum Tracker
+//
+// v4.1.0 additions:
+//   1. SUBJECT AVG SCORES — Physics, Chemistry, Maths, Biology
+//      avg accuracy shown in table row (compact chips) and
+//      editable fields in the Conduct modal.
+//      Auto-populated from CSV import; also manually editable.
 //
 // v4.0.0 fixes:
 //   1. DELETE PERSISTENCE — global deletes now written to
@@ -441,6 +447,10 @@ setRows(normalised);
     const [participants, setParticipants] = useState(conduct?.participants != null ? String(conduct.participants) : '');
     const [avgScore,     setAvgScore]     = useState(conduct?.avgScore     != null ? String(conduct.avgScore)     : '');
     const [topScore,     setTopScore]     = useState(conduct?.topScore     != null ? String(conduct.topScore)     : '');
+    const [avgPhysics,   setAvgPhysics]   = useState(conduct?.avgPhysics   != null ? String(conduct.avgPhysics)   : '');
+    const [avgChemistry, setAvgChemistry] = useState(conduct?.avgChemistry != null ? String(conduct.avgChemistry) : '');
+    const [avgMaths,     setAvgMaths]     = useState(conduct?.avgMaths     != null ? String(conduct.avgMaths)     : '');
+    const [avgBiology,   setAvgBiology]   = useState(conduct?.avgBiology   != null ? String(conduct.avgBiology)   : '');
     const [notes,        setNotes]        = useState(conduct?.notes        || '');
     const [saving,       setSaving]       = useState(false);
 
@@ -450,7 +460,12 @@ setRows(normalised);
         await onSave({status,mode,
           participants:participants!==''?Number(participants):null,
           avgScore:avgScore!==''?Number(avgScore):null,
-          topScore:topScore!==''?Number(topScore):null,notes});
+          topScore:topScore!==''?Number(topScore):null,
+          avgPhysics:avgPhysics!==''?Number(avgPhysics):null,
+          avgChemistry:avgChemistry!==''?Number(avgChemistry):null,
+          avgMaths:avgMaths!==''?Number(avgMaths):null,
+          avgBiology:avgBiology!==''?Number(avgBiology):null,
+          notes});
         onClose();
       } catch { alert('Save failed. Try again.'); setSaving(false); }
     };
@@ -502,7 +517,7 @@ setRows(normalised);
 
         status!=='missed' && React.createElement('div',null,
           React.createElement('p',{style:{fontSize:'12px',fontWeight:'700',color:'#374151',marginBottom:'8px'}},'Results'),
-          React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px',marginBottom:'14px'}},
+          React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px',marginBottom:'10px'}},
             [['👥 Students present',participants,setParticipants,'e.g. 28'],
              ['📊 Avg score (%)',    avgScore,   setAvgScore,   'e.g. 64'],
              ['🏆 Top score (%)',    topScore,   setTopScore,   'e.g. 89']
@@ -510,6 +525,19 @@ setRows(normalised);
               React.createElement('div',{key:lbl},
                 React.createElement('label',{style:{fontSize:'11px',fontWeight:'600',color:'#374151',display:'block',marginBottom:'5px'}},lbl),
                 React.createElement('input',{type:'number',min:'0',max:'200',value:val,placeholder:ph,onChange:e=>set(e.target.value),style:inp})
+              )
+            )
+          ),
+          React.createElement('p',{style:{fontSize:'12px',fontWeight:'700',color:'#374151',marginBottom:'8px'}},'Subject Avg Accuracy (%)'),
+          React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'14px'}},
+            [['⚛️ Physics',   avgPhysics,   setAvgPhysics,   'e.g. 72', exam.stream!=='Medical'],
+             ['🧪 Chemistry', avgChemistry, setAvgChemistry, 'e.g. 68', true],
+             ['📐 Maths',     avgMaths,     setAvgMaths,     'e.g. 75', exam.stream!=='Medical'],
+             ['🧬 Biology',   avgBiology,   setAvgBiology,   'e.g. 70', exam.stream==='Medical'],
+            ].filter(([,,,,show])=>show).map(([lbl,val,set,ph])=>
+              React.createElement('div',{key:lbl},
+                React.createElement('label',{style:{fontSize:'11px',fontWeight:'600',color:'#374151',display:'block',marginBottom:'5px'}},lbl),
+                React.createElement('input',{type:'number',min:'0',max:'100',step:'0.1',value:val,placeholder:ph,onChange:e=>set(e.target.value),style:inp})
               )
             )
           )
@@ -682,6 +710,26 @@ setRows(normalised);
               cond.topScore!=null&&React.createElement('span',{style:{fontSize:'11px',color:'#9CA3AF'}},'Top: '+cond.topScore+'%')
             )
           : React.createElement('span',{style:{color:'#D1D5DB',fontSize:'13px'}},'—')
+      ),
+      // Subject Avg column
+      React.createElement('td',{style:{padding:'8px',textAlign:'center',minWidth:'130px'}},
+        !isExcluded && (cond?.avgPhysics!=null||cond?.avgChemistry!=null||cond?.avgMaths!=null||cond?.avgBiology!=null)
+          ? React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'3px',alignItems:'center'}},
+              ...[
+                cond.avgPhysics   != null ? ['P', cond.avgPhysics,   '#1D4ED8','#DBEAFE'] : null,
+                cond.avgChemistry != null ? ['C', cond.avgChemistry, '#7C3AED','#EDE9FE'] : null,
+                cond.avgMaths     != null ? ['M', cond.avgMaths,     '#0F766E','#CCFBF1'] : null,
+                cond.avgBiology   != null ? ['B', cond.avgBiology,   '#15803D','#DCFCE7'] : null,
+              ].filter(Boolean).map(([subj,val,color,bg])=>
+                React.createElement('div',{key:subj,style:{display:'flex',alignItems:'center',gap:'5px'}},
+                  React.createElement('span',{style:{background:bg,color,fontSize:'10px',fontWeight:'800',
+                    padding:'1px 5px',borderRadius:'4px',minWidth:'16px',textAlign:'center'}},subj),
+                  React.createElement('span',{style:{fontSize:'12px',fontWeight:'700',
+                    color:val>=70?'#059669':val>=50?'#D97706':'#DC2626'}},val+'%')
+                )
+              )
+            )
+          : React.createElement('span',{style:{color:'#D1D5DB',fontSize:'12px'}},'—')
       ),
       React.createElement('td',{style:{padding:'11px 8px',maxWidth:'110px'}},
         cond?.notes&&!isExcluded
@@ -961,7 +1009,7 @@ setRows(normalised);
           ? React.createElement('div',{style:{textAlign:'center',padding:'80px',color:'#9CA3AF',fontSize:'15px'}},'⏳ Loading…')
           : React.createElement('div',{style:{background:'#fff',borderRadius:'14px',boxShadow:'0 2px 10px rgba(0,0,0,0.07)',overflow:'hidden'}},
               React.createElement('div',{style:{overflowX:'auto'}},
-                React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:canManage?'1100px':'980px'}},
+                React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:canManage?'1280px':'1140px'}},
                   React.createElement('thead',null,
                     React.createElement('tr',{style:{background:'linear-gradient(135deg,#1a1a2e,#16213e)',color:'#fff'}},
                       React.createElement('th',{style:{padding:'12px 8px',width:'36px'}},
@@ -970,16 +1018,16 @@ setRows(normalised);
                           onChange:()=>toggleAllExams(filtered.filter(e=>sKey(conductMap[`${primarySchool||school}_${e.id}`],e.date)!=='excluded')),
                           style:{width:'16px',height:'16px',cursor:'pointer',accentColor:'#F4B41A'}})
                       ),
-                      ['Date','Grade','Stream','Test Name','Status','Mode','Students','Avg Score','Notes','Update',
+                      ['Date','Grade','Stream','Test Name','Status','Mode','Students','Avg Score','Subject Avg','Notes','Update',
                        ...(canManage?['Schedule']:[])
                       ].map(h=>React.createElement('th',{key:h,style:{padding:'12px 10px',
-                        textAlign:['Grade','Status','Mode','Students','Avg Score','Update','Schedule'].includes(h)?'center':'left',
+                        textAlign:['Grade','Status','Mode','Students','Avg Score','Subject Avg','Update','Schedule'].includes(h)?'center':'left',
                         fontSize:'11px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.05em',whiteSpace:'nowrap'}},h))
                     )
                   ),
                   React.createElement('tbody',null,
                     filtered.length===0
-                      ? React.createElement('tr',null,React.createElement('td',{colSpan:canManage?12:11,style:{padding:'60px',textAlign:'center',color:'#9CA3AF',fontSize:'15px'}},'📭 No exams match your filters'))
+                      ? React.createElement('tr',null,React.createElement('td',{colSpan:canManage?13:12,style:{padding:'60px',textAlign:'center',color:'#9CA3AF',fontSize:'15px'}},'📭 No exams match your filters'))
                       : filtered.map(exam=>{
                           const sc=primarySchool||school;
                           return React.createElement(ExamRow,{
@@ -1043,6 +1091,6 @@ setRows(normalised);
   }
 
   window.ExamConductTracker = ExamConductTracker;
-  console.log('✅ ExamConductTracker v4.0.0 loaded');
+  console.log('✅ ExamConductTracker v4.1.0 loaded');
 
 })();
