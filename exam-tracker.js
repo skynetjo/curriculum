@@ -1,6 +1,15 @@
 // ============================================================
-// EXAM CONDUCT TRACKER  v4.1.0
+// EXAM CONDUCT TRACKER  v4.2.0
 // Avanti Fellows Curriculum Tracker
+//
+// v4.2.0 additions:
+//   1. RESULTS BULK UPLOAD — admin + manager role.
+//      Upload the student-level results CSV (from dashboard)
+//      to auto-fill conduct records: participants, avg score,
+//      and subject-wise avg accuracy (P/C/M/B) for each
+//      school × exam combination. Preview table with match
+//      confirmation + per-row Online/Offline mode selector.
+//      Unmatched test names are highlighted and skipped.
 //
 // v4.1.0 additions:
 //   1. SUBJECT AVG SCORES — Physics, Chemistry, Maths, Biology
@@ -360,6 +369,314 @@ setRows(normalised);
         done && React.createElement('button',{onClick:onClose,style:{width:'100%',padding:'12px',background:'#1a1a2e',
           color:'#fff',border:'none',borderRadius:'12px',fontSize:'14px',fontWeight:'700',cursor:'pointer'}},
           '✓ Close')
+      )
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // RESULTS BULK UPLOAD MODAL  (admin + manager)
+  // Reads the student-level results CSV and auto-fills
+  // examConduct records: participants, avg score, P/C/M/B avg
+  // ─────────────────────────────────────────────────────────
+  function ResultsBulkUploadModal({ exams, currentUser, onClose, onSaved }) {
+    const [rows,    setRows]    = useState([]);
+    const [error,   setError]   = useState('');
+    const [saving,  setSaving]  = useState(false);
+    const [done,    setDone]    = useState(false);
+    const [modeMap, setModeMap] = useState({});
+    const fileRef = useRef(null);
+
+    function downloadSample() {
+      const lines = [
+        'Student ID,Student Name,School Name,Student Grade,Test Grade,Gender,Category,Test Name,Total Marks,Total Att Rate,Total Acc,Physics Marks,Physics Att Rate,Physics Acc,Chemistry Marks,Chemistry Att Rate,Chemistry Acc,Maths Marks,Marks Att Rate,Maths Acc,Biology Marks,Biology Att Rate,Biology Acc,start_quiz_time (Date)',
+        '1001,Rahul Sharma,JNV Bharuch,12,12,Male,OBC,Mock-09-G12-PCB,350,65.5,78.3,45,55,72.1,80,60,80.5,null,null,null,225,78.9,80.0,"Jan 17, 2026"',
+        '1002,Priya Patel,JNV Bharuch,12,12,Female,SC,Mock-09-G12-PCB,310,58.2,70.1,38,48,65.0,72,55,72.3,null,null,null,200,68.2,73.5,"Jan 17, 2026"',
+      ].join('\n');
+      const a = document.createElement('a');
+      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(lines);
+      a.download = 'results-bulk-upload-sample.csv';
+      a.click();
+    }
+
+    function parseNum(val) {
+      if (!val || val === 'null' || val.trim() === '') return null;
+      const n = parseFloat(val);
+      return isNaN(n) ? null : n;
+    }
+
+    function avg(arr) {
+      const valid = arr.filter(v => v !== null && v !== undefined);
+      if (!valid.length) return null;
+      return Math.round((valid.reduce((s, v) => s + v, 0) / valid.length) * 10) / 10;
+    }
+
+    // Normalize a header string to a simple key for matching
+    function normKey(h) {
+      return h.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function handleFile(e) {
+      setError(''); setRows([]); setDone(false);
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        try {
+          const text = ev.target.result;
+          const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l=>l.trim());
+          if (lines.length < 2) { setError('CSV has no data rows.'); return; }
+
+          // Parse header — normalize for flexible matching
+          const rawHeaders = lines[0].split(',').map(h => h.replace(/^"|"$/g,'').trim());
+          const normHeaders = rawHeaders.map(normKey);
+
+          // Required columns (normalized)
+          const need = { schoolname:'School Name', testname:'Test Name', totalacc:'Total Acc' };
+          const missing = Object.entries(need).filter(([k]) => !normHeaders.includes(k)).map(([,v])=>v);
+          if (missing.length) {
+            setError(`Missing required columns: ${missing.join(', ')}. Use the exact column names from your dashboard export.`);
+            return;
+          }
+
+          // Helper to find column index
+          const idx = key => normHeaders.indexOf(normKey(key));
+          const iSchool  = idx('School Name');
+          const iTest    = idx('Test Name');
+          const iAcc     = idx('Total Acc');
+          const iPhysAcc = idx('Physics Acc');
+          const iChemAcc = idx('Chemistry Acc');
+          const iMathAcc = idx('Maths Acc');     // CSV says "Maths Acc"
+          const iBioAcc  = idx('Biology Acc');
+
+          // Parse student rows
+          const studentRows = lines.slice(1).map(line => {
+            // Handle quoted fields
+            const cols = [];
+            let inQ = false, cur = '';
+            for (let ci = 0; ci < line.length; ci++) {
+              const ch = line[ci];
+              if (ch === '"') { inQ = !inQ; }
+              else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+              else { cur += ch; }
+            }
+            cols.push(cur.trim());
+            return cols;
+          }).filter(c => c[iSchool] && c[iTest]);
+
+          if (!studentRows.length) { setError('No valid rows found in CSV.'); return; }
+
+          // Group by school + testName
+          const groups = {};
+          studentRows.forEach(c => {
+            const sc = c[iSchool] || '';
+            const tn = c[iTest]   || '';
+            if (!sc || !tn) return;
+            const key = sc + '||' + tn;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(c);
+          });
+
+          // Aggregate per group
+          const aggregated = Object.entries(groups).map(([key, arr]) => {
+            const [schoolName, testName] = key.split('||');
+            const participants  = arr.length;
+            const avgScore      = avg(arr.map(c => parseNum(c[iAcc])));
+            const avgPhysics    = iPhysAcc  >= 0 ? avg(arr.map(c => parseNum(c[iPhysAcc])))  : null;
+            const avgChemistry  = iChemAcc  >= 0 ? avg(arr.map(c => parseNum(c[iChemAcc])))  : null;
+            const avgMaths      = iMathAcc  >= 0 ? avg(arr.map(c => parseNum(c[iMathAcc])))  : null;
+            const avgBiology    = iBioAcc   >= 0 ? avg(arr.map(c => parseNum(c[iBioAcc])))   : null;
+
+            // Match against exam schedule — exact first, then case-insensitive
+            const matchedExam = exams.find(ex => ex.testName === testName)
+              || exams.find(ex => ex.testName.toLowerCase().trim() === testName.toLowerCase().trim());
+
+            return { schoolName, testName, participants, avgScore, avgPhysics, avgChemistry, avgMaths, avgBiology, matchedExam };
+          });
+
+          // Sort: matched first, then by school + test
+          aggregated.sort((a, b) => {
+            if (!!a.matchedExam !== !!b.matchedExam) return a.matchedExam ? -1 : 1;
+            return a.schoolName.localeCompare(b.schoolName) || a.testName.localeCompare(b.testName);
+          });
+
+          setRows(aggregated);
+          // Default mode = Offline for all rows
+          const m = {};
+          aggregated.forEach(r => { m[r.schoolName+'||'+r.testName] = 'Offline'; });
+          setModeMap(m);
+
+        } catch(err) {
+          setError('Could not parse the file. Please make sure it is a valid CSV from the teacher dashboard. Error: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    async function handleSave() {
+      setSaving(true);
+      try {
+        const db = getDb();
+        const matched = rows.filter(r => r.matchedExam);
+        const BATCH_SIZE = 400;
+        for (let i = 0; i < matched.length; i += BATCH_SIZE) {
+          const batch = db.batch();
+          matched.slice(i, i + BATCH_SIZE).forEach(r => {
+            const exam  = r.matchedExam;
+            const sc    = r.schoolName;
+            const key   = sc + '||' + r.testName;
+            const docId = sc + '_' + exam.id;
+            const payload = {
+              school:       sc,
+              examId:       exam.id,
+              examName:     exam.testName,
+              examDate:     exam.date,
+              grade:        exam.grade,
+              stream:       exam.stream,
+              excluded:     false,
+              status:       'conducted',
+              mode:         modeMap[key] || 'Offline',
+              participants: r.participants,
+              avgScore:     r.avgScore,
+              avgPhysics:   r.avgPhysics,
+              avgChemistry: r.avgChemistry,
+              avgMaths:     r.avgMaths,
+              avgBiology:   r.avgBiology,
+              notes:        '',
+              updatedBy:    currentUser?.name || currentUser?.email || 'Bulk Upload',
+              updatedAt:    new Date().toISOString(),
+            };
+            batch.set(db.collection('examConduct').doc(docId), payload, { merge: true });
+          });
+          await batch.commit();
+        }
+        setDone(true);
+        onSaved && onSaved(matched);
+      } catch(err) {
+        alert('Upload failed: ' + err.message);
+        setSaving(false);
+      }
+    }
+
+    const matchedCount   = rows.filter(r =>  r.matchedExam).length;
+    const unmatchedCount = rows.filter(r => !r.matchedExam).length;
+    const btnStyle = (bg, c, extra) => ({padding:'10px 18px',background:bg,color:c,border:'none',borderRadius:'10px',fontSize:'13px',fontWeight:'700',cursor:'pointer',...extra});
+    const scoreColor = v => v==null?'#D1D5DB':v>=70?'#059669':v>=50?'#D97706':'#DC2626';
+
+    return React.createElement('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'},onClick:onClose},
+      React.createElement('div',{onClick:e=>e.stopPropagation(),style:{background:'#fff',borderRadius:'20px',width:'100%',maxWidth:'920px',padding:'26px',boxShadow:'0 20px 60px rgba(0,0,0,0.3)',maxHeight:'93vh',overflowY:'auto'}},
+
+        // ── Header ──
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'20px'}},
+          React.createElement('div',null,
+            React.createElement('h3',{style:{fontSize:'18px',fontWeight:'800',color:'#1F2937',marginBottom:'4px'}},'📊 Bulk Results Upload'),
+            React.createElement('p',{style:{fontSize:'13px',color:'#6B7280',margin:0}},'Upload your student results CSV — the system will auto-calculate participants, avg scores, and subject averages per school & exam.')
+          ),
+          React.createElement('button',{onClick:onClose,style:{background:'#F3F4F6',border:'none',borderRadius:'50%',width:'34px',height:'34px',cursor:'pointer',fontSize:'18px',color:'#6B7280'}},'×')
+        ),
+
+        done
+          // ── Success ──
+          ? React.createElement('div',{style:{textAlign:'center',padding:'40px 20px'}},
+              React.createElement('div',{style:{fontSize:'52px',marginBottom:'12px'}},'✅'),
+              React.createElement('h3',{style:{fontSize:'18px',fontWeight:'700',color:'#065F46',marginBottom:'6px'}},matchedCount+' exam records saved!'),
+              React.createElement('p',{style:{color:'#6B7280',fontSize:'14px',marginBottom:'24px'}},'Conduct records have been updated in the database. Refresh the tracker to see the changes.'),
+              React.createElement('button',{onClick:onClose,style:btnStyle('#1a1a2e','#fff')},'✓ Close')
+            )
+
+          // ── Upload & Preview ──
+          : React.createElement('div',null,
+
+              // Step 1: File picker + sample download
+              React.createElement('div',{style:{background:'#F9FAFB',border:'1.5px solid #E5E7EB',borderRadius:'14px',padding:'18px',marginBottom:'16px'}},
+                React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'10px',marginBottom:'12px'}},
+                  React.createElement('p',{style:{fontSize:'14px',fontWeight:'700',color:'#374151',margin:0}},'① Select your student results CSV file'),
+                  React.createElement('button',{onClick:downloadSample,style:btnStyle('#EFF6FF','#1D4ED8',{border:'1px solid #BFDBFE',fontSize:'12px',padding:'8px 14px'})},'⬇ Download Sample Format')
+                ),
+                React.createElement('div',{style:{border:'2px dashed #D1D5DB',borderRadius:'10px',padding:'20px',textAlign:'center',background:'#fff',cursor:'pointer'},onClick:()=>fileRef.current&&fileRef.current.click()},
+                  React.createElement('div',{style:{fontSize:'30px',marginBottom:'8px'}},'📂'),
+                  React.createElement('p',{style:{fontSize:'14px',fontWeight:'600',color:'#374151',margin:'0 0 4px'}},'Click here to choose your CSV file'),
+                  React.createElement('p',{style:{fontSize:'12px',color:'#9CA3AF',margin:0}},'This is the same file you download from the Teacher Dashboard — Teacher_Dashboard_Results_Summary_Table.csv'),
+                  React.createElement('input',{ref:fileRef,type:'file',accept:'.csv',onChange:handleFile,style:{display:'none'}})
+                )
+              ),
+
+              // Error message
+              error && React.createElement('div',{style:{background:'#FEF2F2',border:'1px solid #FCA5A5',borderRadius:'10px',padding:'12px 16px',marginBottom:'14px',fontSize:'13px',color:'#991B1B',fontWeight:'600'}},
+                '❌ ' + error),
+
+              // Preview table
+              rows.length > 0 && React.createElement('div',null,
+
+                // Summary badges
+                React.createElement('div',{style:{display:'flex',gap:'10px',flexWrap:'wrap',marginBottom:'14px',alignItems:'center'}},
+                  React.createElement('span',{style:{fontSize:'13px',fontWeight:'700',color:'#374151'}},'② Review & Confirm:'),
+                  React.createElement('span',{style:{background:'#ECFDF5',color:'#065F46',border:'1px solid #6EE7B7',padding:'5px 12px',borderRadius:'99px',fontSize:'12px',fontWeight:'700'}},
+                    '✅ '+matchedCount+' will be uploaded'),
+                  unmatchedCount>0 && React.createElement('span',{style:{background:'#FEF2F2',color:'#991B1B',border:'1px solid #FCA5A5',padding:'5px 12px',borderRadius:'99px',fontSize:'12px',fontWeight:'700'}},
+                    '⚠ '+unmatchedCount+' unmatched – will be skipped')
+                ),
+
+                React.createElement('div',{style:{overflowX:'auto',border:'1px solid #E5E7EB',borderRadius:'12px',marginBottom:'14px'}},
+                  React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:'12px',minWidth:'780px'}},
+                    React.createElement('thead',null,
+                      React.createElement('tr',{style:{background:'linear-gradient(135deg,#1a1a2e,#16213e)',color:'#fff'}},
+                        ['School','Test Name','Students','Avg Score','Phy','Che','Mat','Bio','Mode','Match?'].map(h=>
+                          React.createElement('th',{key:h,style:{padding:'10px 10px',textAlign:'center',fontSize:'11px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'.05em',whiteSpace:'nowrap'}},h)
+                        )
+                      )
+                    ),
+                    React.createElement('tbody',null,
+                      rows.map((r,i)=>{
+                        const key = r.schoolName+'||'+r.testName;
+                        const isMatch = !!r.matchedExam;
+                        const rowBg = !isMatch ? '#FEF2F2' : i%2===0 ? '#fff' : '#F9FAFB';
+                        const td = (content, extra) => React.createElement('td',{style:{padding:'9px 10px',textAlign:'center',borderBottom:'1px solid #F3F4F6',...extra}},content);
+                        return React.createElement('tr',{key:i,style:{background:rowBg}},
+                          td(r.schoolName,{textAlign:'left',fontWeight:'600',color:'#1F2937',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontSize:'11px'}),
+                          td(r.testName,{textAlign:'left',color:'#374151',maxWidth:'200px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}),
+                          td(r.participants,{fontWeight:'700',color:'#374151'}),
+                          td(r.avgScore!=null?r.avgScore+'%':'—',{fontWeight:'700',color:scoreColor(r.avgScore)}),
+                          ...[r.avgPhysics,r.avgChemistry,r.avgMaths,r.avgBiology].map((v,j)=>
+                            td(v!=null?v+'%':'—',{key:j,color:scoreColor(v),fontWeight:'600'})
+                          ),
+                          // Mode dropdown
+                          React.createElement('td',{style:{padding:'6px',textAlign:'center',borderBottom:'1px solid #F3F4F6'}},
+                            React.createElement('select',{
+                              value:modeMap[key]||'Offline',
+                              onChange:ev=>setModeMap(prev=>({...prev,[key]:ev.target.value})),
+                              disabled:!isMatch,
+                              style:{fontSize:'11px',padding:'4px 6px',borderRadius:'6px',border:'1px solid #E5E7EB',cursor:isMatch?'pointer':'not-allowed',background:isMatch?'#fff':'#F3F4F6'}
+                            },
+                              React.createElement('option',{value:'Offline'},'📄 Offline'),
+                              React.createElement('option',{value:'Online'},'🌐 Online')
+                            )
+                          ),
+                          td(isMatch
+                            ? React.createElement('span',{style:{color:'#059669',fontWeight:'800'}},'✓ Match')
+                            : React.createElement('span',{title:'Test name not found in schedule. Check spelling.',style:{color:'#DC2626',fontWeight:'700',cursor:'help',fontSize:'11px'}},'✗ No match'),
+                          {})
+                        );
+                      })
+                    )
+                  )
+                ),
+
+                // Guidance for unmatched
+                unmatchedCount > 0 && React.createElement('div',{style:{background:'#FFFBEB',border:'1px solid #FCD34D',borderRadius:'10px',padding:'12px 16px',marginBottom:'14px',fontSize:'13px',color:'#92400E'}},
+                  React.createElement('strong',null,'⚠ Why are some rows unmatched? '),
+                  'The "Test Name" in your CSV must exactly match the "Test Name" in the exam schedule. Red rows will be skipped — you can still manually update them using the ✏️ Edit button on the tracker.'
+                ),
+
+                // Action buttons
+                React.createElement('div',{style:{display:'flex',justifyContent:'flex-end',gap:'10px'}},
+                  React.createElement('button',{onClick:onClose,style:btnStyle('#F3F4F6','#374151')},'Cancel'),
+                  matchedCount > 0 && React.createElement('button',{
+                    onClick:handleSave, disabled:saving,
+                    style:btnStyle(saving?'#9CA3AF':'linear-gradient(135deg,#059669,#047857)','#fff',{opacity:saving?0.8:1})
+                  }, saving ? '⏳ Saving…' : '✅ Upload '+matchedCount+' Records')
+                )
+              )
+            )
       )
     );
   }
@@ -790,6 +1107,7 @@ setRows(normalised);
     const [scheduleModal, setScheduleModal] = useState(null);
     const [deleteModal,   setDeleteModal]   = useState(null);
     const [csvModal,      setCSVModal]      = useState(false);
+    const [resultsModal,  setResultsModal]  = useState(false);
 
     const primarySchool = useMemo(()=>
       selSchools.length===1?selSchools[0]:(selSchools[0]||school||allSchools[0]||''),
@@ -953,6 +1271,11 @@ setRows(normalised);
               isAdmin?(selSchools.length===0?`${allSchools.length} schools accessible`:selSchools.length===1?`Viewing: ${selSchools[0]}`:`Viewing ${selSchools.length} schools`):`Tracking exams for ${school}`)
           ),
           React.createElement('div',{style:{display:'flex',gap:'10px',flexWrap:'wrap'}},
+            // Results Bulk Upload — admin + manager
+            isAdmin && React.createElement('button',{onClick:()=>setResultsModal(true),style:{
+              background:'rgba(16,185,129,0.2)',color:'#6EE7B7',border:'1px solid rgba(110,231,183,0.4)',
+              borderRadius:'10px',padding:'10px 16px',fontSize:'13px',fontWeight:'600',cursor:'pointer'}},
+              '📊 Upload Results'),
             // CSV Upload — super_admin only
             canCSV && React.createElement('button',{onClick:()=>setCSVModal(true),style:{
               background:'rgba(255,255,255,0.15)',color:'#fff',border:'1px solid rgba(255,255,255,0.3)',
@@ -1086,11 +1409,17 @@ setRows(normalised);
       }),
       csvModal && React.createElement(CSVUploadModal,{
         onClose:()=>setCSVModal(false),onSaved:onCSVSaved,
+      }),
+      resultsModal && React.createElement(ResultsBulkUploadModal,{
+        exams,
+        currentUser,
+        onClose:()=>setResultsModal(false),
+        onSaved:()=>{ setResultsModal(false); },
       })
     );
   }
 
   window.ExamConductTracker = ExamConductTracker;
-  console.log('✅ ExamConductTracker v4.1.0 loaded');
+  console.log('✅ ExamConductTracker v4.2.0 loaded');
 
 })();
