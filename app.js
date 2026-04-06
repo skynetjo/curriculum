@@ -12651,6 +12651,15 @@ function AcademicYearManagement({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [newAcademicYear, setNewAcademicYear] = useState('');
   const [archivedYears, setArchivedYears] = useState([]);
+  // --- Syllabus Archive state ---
+  const [archiveSelections, setArchiveSelections] = useState({});
+  const [archiveAY, setArchiveAY] = useState(academicYearSettings?.currentYear || CURRENT_ACADEMIC_YEAR);
+  const [archiveStep, setArchiveStep] = useState('select');
+  const [archivePreviewData, setArchivePreviewData] = useState([]);
+  const [archiveLog, setArchiveLog] = useState([]);
+  const [archiveProgress, setArchiveProgress] = useState(0);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [showArchiveSection, setShowArchiveSection] = useState(false);
   useEffect(() => {
     const fetchArchived = async () => {
       const archiveSnap = await db.collection('archives').get();
@@ -12910,6 +12919,133 @@ function AcademicYearManagement({
       setIsTransitioning(false);
     }
   };
+  // --- Syllabus Archive helpers ---
+  const GRADES = ['11', '12'];
+  const archiveGetDocId = (school, subject, grade, isNEET) =>
+    isNEET ? `${school}_NEET_${subject}_${grade}` : `${school}_${subject}_${grade}`;
+  const archiveGetKey = (school, subject, grade, isNEET) =>
+    isNEET ? `${school}|NEET_${subject}|${grade}` : `${school}|${subject}|${grade}`;
+  const archiveChapterCount = (school, subject, grade, isNEET) => {
+    const docId = archiveGetDocId(school, subject, grade, isNEET);
+    return (curriculum[docId]?.chapters || []).length;
+  };
+  const archiveHasNEET = (school, subject, grade) => {
+    if (school !== 'EMRS Bhopal') return false;
+    if (subject !== 'Physics' && subject !== 'Chemistry') return false;
+    return archiveChapterCount(school, subject, grade, true) > 0;
+  };
+  const archiveToggle = (school, subject, grade, isNEET) => {
+    const key = archiveGetKey(school, subject, grade, isNEET);
+    setArchiveSelections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+  const archiveSelectAllForSchool = school => {
+    const s = { ...archiveSelections };
+    SUBJECTS.forEach(sub => GRADES.forEach(g => {
+      s[archiveGetKey(school, sub, g, false)] = true;
+      if (archiveHasNEET(school, sub, g)) s[archiveGetKey(school, sub, g, true)] = true;
+    }));
+    setArchiveSelections(s);
+  };
+  const archiveClearSchool = school => {
+    const s = { ...archiveSelections };
+    SUBJECTS.forEach(sub => GRADES.forEach(g => {
+      s[archiveGetKey(school, sub, g, false)] = false;
+      s[archiveGetKey(school, sub, g, true)] = false;
+    }));
+    setArchiveSelections(s);
+  };
+  const archiveGetSelected = () =>
+    Object.entries(archiveSelections)
+      .filter(([, v]) => v)
+      .map(([key]) => {
+        const isNEET = key.includes('|NEET_');
+        if (isNEET) {
+          const [school, neetSub, grade] = key.split('|');
+          return { school, subject: neetSub.replace('NEET_', ''), grade, isNEET: true };
+        }
+        const [school, subject, grade] = key.split('|');
+        return { school, subject, grade, isNEET: false };
+      });
+  const archiveBuildPreview = () => {
+    if (!archiveAY || !archiveAY.match(/^\d{4}-\d{2,4}$/)) {
+      alert('Please enter a valid academic year (e.g., 2024-25)');
+      return;
+    }
+    const selected = archiveGetSelected();
+    if (selected.length === 0) { alert('Please select at least one combination'); return; }
+    setArchivePreviewData(selected.map(({ school, subject, grade, isNEET }) => {
+      const docId = archiveGetDocId(school, subject, grade, isNEET);
+      const chapters = curriculum[docId]?.chapters || [];
+      return { school, subject, grade, isNEET, docId, chapterCount: chapters.length, chapterIds: chapters.map(c => c.id) };
+    }));
+    setArchiveStep('preview');
+  };
+  const archiveExecute = async () => {
+    setArchiveStep('running');
+    setArchiveLog([]);
+    setArchiveProgress(0);
+    setIsArchiving(true);
+    const log = msg => setArchiveLog(prev => [...prev, `${new Date().toLocaleTimeString()} \u2014 ${msg}`]);
+    try {
+      log(`\uD83D\uDDC4\uFE0F Starting Syllabus Archive | AY: ${archiveAY}`);
+      log(`\uD83D\uDCCB ${archivePreviewData.length} curriculum(s) selected`);
+      for (let i = 0; i < archivePreviewData.length; i++) {
+        const { school, subject, grade, isNEET, docId, chapterIds, chapterCount } = archivePreviewData[i];
+        const label = isNEET ? `${subject} (NEET)` : subject;
+        log(`[${i + 1}/${archivePreviewData.length}] ${school} \u2014 ${label} Gr.${grade}`);
+        const currRef = db.collection('curriculum').doc(docId);
+        const currDoc = await currRef.get();
+        if (currDoc.exists) {
+          await db.collection('archives').doc(`curriculum_${archiveAY}_${docId}`).set({
+            ...currDoc.data(), originalDocId: docId, school,
+            subject: isNEET ? `NEET_${subject}` : subject,
+            grade, academicYear: archiveAY, archivedAt: new Date().toISOString(), type: 'curriculum'
+          });
+          log(`   \u2705 Curriculum archived (${chapterCount} chapters)`);
+        } else {
+          log(`   \u26A0\uFE0F No curriculum doc found \u2014 skipped`);
+        }
+        let progressArchived = 0;
+        const CHUNK = 200;
+        for (let j = 0; j < chapterIds.length; j += CHUNK) {
+          const chunk = chapterIds.slice(j, j + CHUNK);
+          const batch = db.batch();
+          for (const chId of chunk) {
+            const pId = `${school}_${chId}`;
+            const pRef = db.collection('chapterProgress').doc(pId);
+            const pDoc = await pRef.get();
+            if (pDoc.exists) {
+              batch.set(db.collection('archives').doc(`chapterProgress_${archiveAY}_${pId}`), {
+                ...pDoc.data(), originalDocId: pId, academicYear: archiveAY,
+                archivedAt: new Date().toISOString(), type: 'chapterProgress'
+              });
+              batch.delete(pRef);
+              progressArchived++;
+            }
+          }
+          await batch.commit();
+        }
+        log(`   \u2705 ${progressArchived} progress records archived & cleared`);
+        await currRef.set({ chapters: [] });
+        log(`   \u2705 Live curriculum cleared \u2014 ready for new syllabus`);
+        setArchiveProgress(Math.round(((i + 1) / archivePreviewData.length) * 100));
+      }
+      log(`\uD83C\uDF89 Done! ${archivePreviewData.length} curriculum(s) archived for ${archiveAY}.`);
+      setArchiveStep('done');
+    } catch (e) {
+      log(`\u274C Error: ${e.message}`);
+      console.error('Archive error', e);
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+  const archiveReset = () => {
+    setArchiveStep('select');
+    setArchiveSelections({});
+    setArchivePreviewData([]);
+    setArchiveLog([]);
+    setArchiveProgress(0);
+  };
   return React.createElement("div", {
     className: "space-y-6"
   }, React.createElement("div", {
@@ -13009,7 +13145,205 @@ function AcademicYearManagement({
   }, archivedYears.map(year => React.createElement("div", {
     key: year,
     className: "px-4 py-2 bg-gray-100 rounded-xl font-semibold"
-  }, "\uD83D\uDCC5 ", year)))), showConfirmModal && React.createElement("div", {
+  }, "\uD83D\uDCC5 ", year)))),
+  React.createElement("div", {className: "bg-white p-6 rounded-2xl shadow-lg"},
+    React.createElement("div", {className: "flex items-center justify-between mb-2"},
+      React.createElement("h3", {className: "text-xl font-bold"}, "\uD83D\uDDC4\uFE0F Archive Syllabus"),
+      React.createElement("button", {
+        onClick: () => { setShowArchiveSection(!showArchiveSection); archiveReset(); },
+        className: showArchiveSection ? "px-4 py-2 rounded-xl font-semibold text-sm bg-gray-200 text-gray-700 hover:bg-gray-300" : "px-4 py-2 rounded-xl font-semibold text-sm bg-blue-600 text-white hover:bg-blue-700"
+      }, showArchiveSection ? "Close" : "\uD83D\uDDC4\uFE0F Open Syllabus Archive")
+    ),
+    React.createElement("p", {className: "text-sm text-gray-500 mb-4"},
+      "Archive syllabus school-by-school. Schools still in progress can be skipped \u2014 no need to archive everything at once."
+    ),
+    showArchiveSection && archiveStep === 'select' && React.createElement("div", null,
+      React.createElement("div", {className: "mb-4 flex flex-wrap gap-4 items-start bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4"},
+        React.createElement("div", null,
+          React.createElement("label", {className: "block text-sm font-bold text-yellow-800 mb-1"}, "\uD83D\uDCC5 Academic Year to Archive"),
+          React.createElement("input", {
+            type: "text", value: archiveAY,
+            onChange: e => setArchiveAY(e.target.value),
+            placeholder: "2024-25",
+            className: "border-2 border-yellow-300 rounded-lg px-3 py-2 font-mono w-32 text-sm"
+          }),
+          React.createElement("p", {className: "text-xs text-yellow-600 mt-1"}, "Format: YYYY-YY  e.g. 2024-25")
+        ),
+        React.createElement("p", {className: "text-sm text-yellow-700 max-w-sm mt-1"},
+          "\u26A0\uFE0F This will save the chapter list + all teacher progress records, then clear the live curriculum so new syllabus can be uploaded."
+        )
+      ),
+      SCHOOLS.map(school => React.createElement("div", {key: school, className: "mb-4 border-2 border-gray-200 rounded-xl overflow-hidden"},
+        React.createElement("div", {className: "bg-gray-50 border-b border-gray-200 px-4 py-2 flex items-center justify-between"},
+          React.createElement("span", {className: "font-bold text-gray-800 text-sm"}, "\uD83C\uDFEB " + school),
+          React.createElement("div", {className: "flex gap-2"},
+            React.createElement("button", {
+              onClick: () => archiveSelectAllForSchool(school),
+              className: "text-xs px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 font-medium"
+            }, "Select All"),
+            React.createElement("button", {
+              onClick: () => archiveClearSchool(school),
+              className: "text-xs px-3 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 font-medium"
+            }, "Clear")
+          )
+        ),
+        React.createElement("table", {className: "w-full text-sm"},
+          React.createElement("thead", null,
+            React.createElement("tr", {className: "text-gray-400 text-xs uppercase"},
+              React.createElement("th", {className: "text-left px-4 py-2 w-40"}, "Subject"),
+              React.createElement("th", {className: "text-center px-6 py-2"}, "Grade 11"),
+              React.createElement("th", {className: "text-center px-6 py-2"}, "Grade 12")
+            )
+          ),
+          React.createElement("tbody", null,
+            SUBJECTS.flatMap(subject => {
+              const rows = [];
+              rows.push(React.createElement("tr", {key: subject, className: "border-t border-gray-100 hover:bg-gray-50"},
+                React.createElement("td", {className: "px-4 py-2 font-medium text-gray-700"}, subject),
+                ['11','12'].map(grade => {
+                  const count = archiveChapterCount(school, subject, grade, false);
+                  const key = archiveGetKey(school, subject, grade, false);
+                  return React.createElement("td", {key: grade, className: "px-6 py-2 text-center"},
+                    React.createElement("label", {className: "inline-flex flex-col items-center gap-0.5 cursor-pointer"},
+                      React.createElement("input", {
+                        type: "checkbox", checked: !!archiveSelections[key],
+                        onChange: () => archiveToggle(school, subject, grade, false),
+                        className: "w-4 h-4 accent-blue-600 cursor-pointer"
+                      }),
+                      React.createElement("span", {className: count > 0 ? "text-xs text-green-700 font-medium" : "text-xs text-gray-400"},
+                        count + " ch"
+                      )
+                    )
+                  );
+                })
+              ));
+              if (['11','12'].some(g => archiveHasNEET(school, subject, g))) {
+                rows.push(React.createElement("tr", {key: subject + "-neet", className: "border-t border-orange-100 bg-orange-50"},
+                  React.createElement("td", {className: "px-4 py-2 text-orange-700 text-xs font-medium"},
+                    subject + " ",
+                    React.createElement("span", {className: "bg-orange-200 text-orange-800 px-1.5 py-0.5 rounded text-xs font-bold"}, "NEET")
+                  ),
+                  ['11','12'].map(grade => {
+                    const count = archiveChapterCount(school, subject, grade, true);
+                    const key = archiveGetKey(school, subject, grade, true);
+                    return React.createElement("td", {key: grade, className: "px-6 py-2 text-center"},
+                      React.createElement("label", {className: "inline-flex flex-col items-center gap-0.5 cursor-pointer"},
+                        React.createElement("input", {
+                          type: "checkbox", checked: !!archiveSelections[key],
+                          onChange: () => archiveToggle(school, subject, grade, true),
+                          className: "w-4 h-4 accent-orange-500 cursor-pointer"
+                        }),
+                        React.createElement("span", {className: count > 0 ? "text-xs text-orange-700 font-medium" : "text-xs text-gray-400"},
+                          count + " ch"
+                        )
+                      )
+                    );
+                  })
+                ));
+              }
+              return rows;
+            })
+          )
+        )
+      )),
+      React.createElement("div", {className: "flex justify-between items-center mt-4 pt-4 border-t border-gray-200"},
+        React.createElement("span", {className: "text-sm text-gray-500"},
+          archiveGetSelected().length + " combination(s) selected"
+        ),
+        React.createElement("button", {
+          onClick: archiveBuildPreview,
+          disabled: archiveGetSelected().length === 0,
+          className: "px-6 py-2.5 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        }, "Preview Archive \u2192")
+      )
+    ),
+    showArchiveSection && archiveStep === 'preview' && React.createElement("div", null,
+      React.createElement("div", {className: "bg-orange-50 border-2 border-orange-300 rounded-xl p-4 mb-4"},
+        React.createElement("p", {className: "font-bold text-orange-800 mb-2"}, "\u26A0\uFE0F This will:"),
+        React.createElement("ul", {className: "text-sm text-orange-700 space-y-1 list-disc ml-5"},
+          React.createElement("li", null, "Archive syllabus for ", React.createElement("strong", null, archivePreviewData.length + " combination(s)"), " under AY ", React.createElement("strong", null, archiveAY)),
+          React.createElement("li", null, "Archive & delete all chapter progress records for those combinations"),
+          React.createElement("li", null, "Clear the live curriculum so new syllabus can be uploaded"),
+          React.createElement("li", null, "All data saved in Firestore ", React.createElement("code", {className: "bg-orange-100 px-1 rounded"}, "archives"), " collection")
+        )
+      ),
+      React.createElement("div", {className: "border-2 border-gray-200 rounded-xl overflow-hidden mb-4"},
+        React.createElement("table", {className: "w-full text-sm"},
+          React.createElement("thead", null,
+            React.createElement("tr", {className: "bg-gray-50 text-gray-500 text-xs uppercase border-b border-gray-200"},
+              React.createElement("th", {className: "text-left px-4 py-2"}, "School"),
+              React.createElement("th", {className: "text-left px-4 py-2"}, "Subject"),
+              React.createElement("th", {className: "text-center px-4 py-2"}, "Grade"),
+              React.createElement("th", {className: "text-center px-4 py-2"}, "Chapters")
+            )
+          ),
+          React.createElement("tbody", null,
+            archivePreviewData.map((row, idx) =>
+              React.createElement("tr", {key: idx, className: "border-t border-gray-100" + (row.isNEET ? " bg-orange-50" : "")},
+                React.createElement("td", {className: "px-4 py-2 text-gray-800"}, row.school),
+                React.createElement("td", {className: "px-4 py-2 font-medium text-gray-800"}, row.isNEET ? row.subject + " (NEET)" : row.subject),
+                React.createElement("td", {className: "px-4 py-2 text-center text-gray-700"}, row.grade),
+                React.createElement("td", {className: "px-4 py-2 text-center font-bold text-blue-700"}, row.chapterCount)
+              )
+            ),
+            React.createElement("tr", {className: "bg-gray-100 border-t-2 border-gray-300"},
+              React.createElement("td", {className: "px-4 py-2 font-bold text-gray-800", colSpan: 3}, "Total (" + archivePreviewData.length + " combinations)"),
+              React.createElement("td", {className: "px-4 py-2 text-center font-bold text-blue-800 text-base"},
+                archivePreviewData.reduce((s, d) => s + d.chapterCount, 0)
+              )
+            )
+          )
+        )
+      ),
+      React.createElement("div", {className: "flex gap-3"},
+        React.createElement("button", {
+          onClick: () => setArchiveStep('select'),
+          className: "px-5 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-300"
+        }, "\u2190 Back & Edit"),
+        React.createElement("button", {
+          onClick: archiveExecute,
+          className: "px-6 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700"
+        }, "\uD83D\uDDC4\uFE0F Confirm & Archive AY " + archiveAY)
+      )
+    ),
+    showArchiveSection && archiveStep === 'running' && React.createElement("div", null,
+      React.createElement("div", {className: "mb-3"},
+        React.createElement("div", {className: "flex justify-between text-sm mb-1"},
+          React.createElement("span", {className: "font-medium"}, "Progress"),
+          React.createElement("span", {className: "font-bold"}, archiveProgress + "%")
+        ),
+        React.createElement("div", {className: "h-3 bg-gray-200 rounded-full overflow-hidden"},
+          React.createElement("div", {
+            className: "h-full bg-blue-500 rounded-full transition-all duration-500",
+            style: {width: archiveProgress + "%"}
+          })
+        )
+      ),
+      React.createElement("div", {className: "bg-gray-900 text-green-400 font-mono text-xs p-4 rounded-xl h-56 overflow-y-auto leading-relaxed"},
+        archiveLog.map((line, i) => React.createElement("div", {key: i, className: "whitespace-pre-wrap"}, line))
+      ),
+      React.createElement("p", {className: "text-xs text-gray-400 mt-2 text-center"}, "\u26A0\uFE0F Do not close this tab while archiving is in progress")
+    ),
+    showArchiveSection && archiveStep === 'done' && React.createElement("div", {className: "text-center py-6"},
+      React.createElement("div", {className: "text-5xl mb-3"}, "\uD83C\uDF89"),
+      React.createElement("h4", {className: "text-xl font-bold text-gray-800 mb-2"}, "Archive Complete!"),
+      React.createElement("p", {className: "text-gray-500 text-sm mb-2"},
+        archivePreviewData.length + " curriculum(s) archived for " + archiveAY + "."
+      ),
+      React.createElement("p", {className: "text-gray-500 text-sm mb-5"}, "Live curricula are now empty and ready for new syllabus upload."),
+      React.createElement("div", {className: "flex gap-3 justify-center"},
+        React.createElement("button", {
+          onClick: archiveReset,
+          className: "px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700"
+        }, "\uD83D\uDD04 Archive More"),
+        React.createElement("button", {
+          onClick: () => window.location.reload(),
+          className: "px-5 py-2.5 bg-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-300"
+        }, "\uD83D\uDD03 Reload App")
+      )
+    )
+  ),
+  showConfirmModal && React.createElement("div", {
     className: "modal-overlay",
     onClick: () => setShowConfirmModal(false)
   }, React.createElement("div", {
