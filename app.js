@@ -3929,6 +3929,14 @@ function StudentExamRegistration({
   return React.createElement("div", {
     className: "space-y-6"
   }, React.createElement("div", {
+    className: "flex gap-2 bg-white rounded-xl p-2 shadow-sm w-full md:w-fit"
+  }, React.createElement("button", {
+    onClick: () => setActiveSchoolTab('info'),
+    className: "px-4 py-2 rounded-lg font-semibold avanti-gradient text-white"
+  }, "\uD83C\uDFEB School Info"), React.createElement("button", {
+    onClick: () => setActiveSchoolTab('timetable'),
+    className: "px-4 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700"
+  }, "\uD83D\uDCC5 Timetable")), React.createElement("div", {
     className: "flex justify-between items-center"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
@@ -5467,6 +5475,14 @@ function StudentAssets({
   return React.createElement("div", {
     className: "space-y-6"
   }, React.createElement("div", {
+    className: "flex gap-2 bg-white rounded-xl p-2 shadow-sm w-full md:w-fit"
+  }, React.createElement("button", {
+    onClick: () => setActiveSchoolTab('info'),
+    className: "px-4 py-2 rounded-lg font-semibold avanti-gradient text-white"
+  }, "\uD83C\uDFEB School Info"), React.createElement("button", {
+    onClick: () => setActiveSchoolTab('timetable'),
+    className: "px-4 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700"
+  }, "\uD83D\uDCC5 Timetable")), React.createElement("div", {
     className: "flex justify-between items-center"
   }, React.createElement("h2", {
     className: "text-2xl font-bold"
@@ -11221,6 +11237,14 @@ function AdminExamStats({
   return React.createElement("div", {
     className: "space-y-6"
   }, React.createElement("div", {
+    className: "flex gap-2 bg-white rounded-xl p-2 shadow-sm w-full md:w-fit"
+  }, React.createElement("button", {
+    onClick: () => setActiveSchoolTab('info'),
+    className: "px-4 py-2 rounded-lg font-semibold avanti-gradient text-white"
+  }, "\uD83C\uDFEB School Info"), React.createElement("button", {
+    onClick: () => setActiveSchoolTab('timetable'),
+    className: "px-4 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700"
+  }, "\uD83D\uDCC5 Timetable")), React.createElement("div", {
     className: "flex justify-between items-center"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
@@ -21704,6 +21728,9 @@ function SchoolInfoView({
   schoolInfo,
   setSchoolInfo
 }) {
+  const TIMETABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const TIMETABLE_PERIODS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'];
+  const [activeSchoolTab, setActiveSchoolTab] = useState('info');
   const mySchool = currentUser.school;
   const existingInfo = schoolInfo.find(info => info.school === mySchool);
   const [isEditing, setIsEditing] = useState(false);
@@ -21771,6 +21798,288 @@ function SchoolInfoView({
       setIsEditing(true);
     }
   }, [existingInfo]);
+  const [timetable, setTimetable] = useState(null);
+  const [teachers, setTeachers] = useState([]);
+  const [isTimetableSaving, setIsTimetableSaving] = useState(false);
+  const [isTimetableLoading, setIsTimetableLoading] = useState(true);
+  const [teacherViewId, setTeacherViewId] = useState('');
+  const emptyTimetable = useMemo(() => {
+    const buildSlot = () => ({
+      teacherId: '',
+      teacherName: '',
+      subject: ''
+    });
+    const buildClass = () => TIMETABLE_DAYS.reduce((acc, day) => {
+      acc[day] = TIMETABLE_PERIODS.reduce((periodAcc, period) => {
+        periodAcc[period] = buildSlot();
+        return periodAcc;
+      }, {});
+      return acc;
+    }, {});
+    return {
+      class11: buildClass(),
+      class12: buildClass()
+    };
+  }, [TIMETABLE_DAYS, TIMETABLE_PERIODS]);
+  const subjectOptions = useMemo(() => {
+    const fromTeachers = Array.from(new Set(teachers.map(t => (t.subject || '').trim()).filter(Boolean)));
+    const merged = Array.from(new Set([...SUBJECTS, ...fromTeachers]));
+    return merged.sort((a, b) => a.localeCompare(b));
+  }, [teachers]);
+  useEffect(() => {
+    let mounted = true;
+    const loadTimetableData = async () => {
+      setIsTimetableLoading(true);
+      try {
+        const [teacherSnap, timetableDoc] = await Promise.all([db.collection('teachers').where('school', '==', mySchool).where('isArchived', '!=', true).get(), db.collection('schoolTimetables').doc(mySchool.replace(/\s+/g, '_')).get()]);
+        if (!mounted) return;
+        const teacherData = teacherSnap.docs.map(d => ({
+          ...d.data(),
+          docId: d.id
+        }));
+        setTeachers(teacherData);
+        if (timetableDoc.exists && timetableDoc.data()?.timetable) {
+          setTimetable({
+            ...emptyTimetable,
+            ...timetableDoc.data().timetable
+          });
+        } else {
+          setTimetable(emptyTimetable);
+        }
+      } catch (error) {
+        console.error('Failed to load timetable data:', error);
+        setTimetable(emptyTimetable);
+      } finally {
+        if (mounted) {
+          setIsTimetableLoading(false);
+        }
+      }
+    };
+    loadTimetableData();
+    return () => {
+      mounted = false;
+    };
+  }, [mySchool, emptyTimetable]);
+  const setTimetableCell = (classKey, day, period, updates) => {
+    setTimetable(prev => {
+      const source = prev || emptyTimetable;
+      return {
+        ...source,
+        [classKey]: {
+          ...source[classKey],
+          [day]: {
+            ...source[classKey][day],
+            [period]: {
+              ...source[classKey][day][period],
+              ...updates
+            }
+          }
+        }
+      };
+    });
+  };
+  const clashes = useMemo(() => {
+    if (!timetable) return [];
+    const out = [];
+    TIMETABLE_DAYS.forEach(day => {
+      TIMETABLE_PERIODS.forEach(period => {
+        const c11 = timetable.class11?.[day]?.[period];
+        const c12 = timetable.class12?.[day]?.[period];
+        if (c11?.teacherId && c12?.teacherId && c11.teacherId === c12.teacherId) {
+          out.push({
+            day,
+            period,
+            teacherName: c11.teacherName || c12.teacherName || c11.teacherId
+          });
+        }
+      });
+    });
+    return out;
+  }, [timetable, TIMETABLE_DAYS, TIMETABLE_PERIODS]);
+  const saveTimetable = async () => {
+    if (!timetable) return;
+    if (clashes.length > 0) {
+      alert('❌ Resolve teacher clashes before saving timetable.');
+      return;
+    }
+    setIsTimetableSaving(true);
+    try {
+      const docId = mySchool.replace(/\s+/g, '_');
+      await db.collection('schoolTimetables').doc(docId).set({
+        school: mySchool,
+        timetable: timetable,
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser.name || currentUser.email || 'Unknown'
+      }, {
+        merge: true
+      });
+      alert('✅ Timetable saved successfully!');
+    } catch (error) {
+      console.error('Timetable save failed:', error);
+      alert('❌ Failed to save timetable: ' + error.message);
+    } finally {
+      setIsTimetableSaving(false);
+    }
+  };
+  const exportTimetable = () => {
+    if (!timetable) return;
+    const rows = [];
+    ['class11', 'class12'].forEach(classKey => {
+      TIMETABLE_DAYS.forEach(day => {
+        TIMETABLE_PERIODS.forEach(period => {
+          const slot = timetable[classKey]?.[day]?.[period] || {};
+          rows.push({
+            School: mySchool,
+            Class: classKey === 'class11' ? 'Class 11' : 'Class 12',
+            Day: day,
+            Period: period,
+            Subject: slot.subject || '',
+            Teacher: slot.teacherName || ''
+          });
+        });
+      });
+    });
+    exportToExcel(rows, `${mySchool}_timetable`);
+  };
+  const teacherWiseRows = useMemo(() => {
+    if (!timetable || !teacherViewId) return [];
+    const rows = [];
+    ['class11', 'class12'].forEach(classKey => {
+      TIMETABLE_DAYS.forEach(day => {
+        TIMETABLE_PERIODS.forEach(period => {
+          const slot = timetable[classKey]?.[day]?.[period] || {};
+          if (slot.teacherId === teacherViewId) {
+            rows.push({
+              className: classKey === 'class11' ? 'Class 11' : 'Class 12',
+              day,
+              period,
+              subject: slot.subject || '—'
+            });
+          }
+        });
+      });
+    });
+    return rows;
+  }, [timetable, teacherViewId, TIMETABLE_DAYS, TIMETABLE_PERIODS]);
+  if (activeSchoolTab === 'timetable') {
+    const classSections = ['class11', 'class12'].map(classKey => {
+      const dayBlocks = TIMETABLE_DAYS.map(day => {
+        const periodFields = TIMETABLE_PERIODS.map(period => {
+          const cell = timetable?.[classKey]?.[day]?.[period] || {};
+          const filteredTeachers = cell.subject ? teachers.filter(t => (t.subject || '') === cell.subject) : teachers;
+          return React.createElement("div", {
+            key: period,
+            className: "bg-gray-50 rounded-lg p-2 space-y-1"
+          }, React.createElement("div", {
+            className: "text-xs font-semibold text-gray-700"
+          }, day, " • ", period), React.createElement("select", {
+            value: cell.subject || '',
+            onChange: e => setTimetableCell(classKey, day, period, {
+              subject: e.target.value
+            }),
+            className: "w-full border rounded px-2 py-1 text-xs"
+          }, React.createElement("option", {
+            value: ""
+          }, "Subject"), subjectOptions.map(subject => React.createElement("option", {
+            key: subject,
+            value: subject
+          }, subject))), React.createElement("select", {
+            value: cell.teacherId || '',
+            onChange: e => {
+              const selected = teachers.find(t => (t.afid || t.docId || t.id) === e.target.value);
+              setTimetableCell(classKey, day, period, {
+                teacherId: e.target.value,
+                teacherName: selected?.name || '',
+                subject: selected?.subject || cell.subject || ''
+              });
+            },
+            className: "w-full border rounded px-2 py-1 text-xs"
+          }, React.createElement("option", {
+            value: ""
+          }, "Teacher"), filteredTeachers.map(teacher => {
+            const tId = teacher.afid || teacher.docId || teacher.id;
+            return React.createElement("option", {
+              key: tId,
+              value: tId
+            }, teacher.name, teacher.subject ? ` (${teacher.subject})` : '');
+          })));
+        });
+        return React.createElement("div", {
+          key: day,
+          className: "space-y-2"
+        }, React.createElement("h5", {
+          className: "font-semibold text-sm"
+        }, day), React.createElement("div", {
+          className: "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2"
+        }, periodFields));
+      });
+      return React.createElement("div", {
+        key: classKey,
+        className: "border rounded-xl p-4 space-y-4"
+      }, React.createElement("h4", {
+        className: "font-bold text-lg"
+      }, classKey === 'class11' ? 'Class 11' : 'Class 12'), dayBlocks);
+    });
+    return React.createElement("div", {
+      className: "space-y-6"
+    }, React.createElement("div", {
+      className: "flex gap-2 bg-white rounded-xl p-2 shadow-sm w-full md:w-fit"
+    }, React.createElement("button", {
+      onClick: () => setActiveSchoolTab('info'),
+      className: "px-4 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700"
+    }, "\uD83C\uDFEB School Info"), React.createElement("button", {
+      onClick: () => setActiveSchoolTab('timetable'),
+      className: "px-4 py-2 rounded-lg font-semibold avanti-gradient text-white"
+    }, "\uD83D\uDCC5 Timetable")), React.createElement("div", {
+      className: "bg-white rounded-2xl shadow-lg p-4 md:p-6 space-y-4"
+    }, React.createElement("div", {
+      className: "flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+    }, React.createElement("h3", {
+      className: "text-2xl font-bold"
+    }, "\uD83D\uDCC5 Class Timetable - ", mySchool), React.createElement("div", {
+      className: "flex flex-wrap gap-2"
+    }, React.createElement("button", {
+      onClick: exportTimetable,
+      className: "px-4 py-2 rounded-lg bg-green-600 text-white font-semibold"
+    }, "\uD83D\uDCE5 Export"), React.createElement("button", {
+      onClick: saveTimetable,
+      disabled: isTimetableSaving,
+      className: "px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold disabled:bg-gray-400"
+    }, isTimetableSaving ? '⏳ Saving...' : '💾 Save Timetable'))), clashes.length > 0 && React.createElement("div", {
+      className: "bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm"
+    }, React.createElement("div", {
+      className: "font-bold mb-1"
+    }, "⚠️ Teacher conflict detected"), clashes.map((c, idx) => React.createElement("div", {
+      key: idx
+    }, c.day, " ", c.period, " - ", c.teacherName))), isTimetableLoading && React.createElement("p", {
+      className: "text-gray-500"
+    }, "Loading timetable..."), !isTimetableLoading && classSections, React.createElement("div", {
+      className: "border rounded-xl p-3 md:p-4"
+    }, React.createElement("h4", {
+      className: "font-bold mb-3"
+    }, "\uD83D\uDC69\u200D\uD83C\uDFEB Teacher-wise Timetable"), React.createElement("select", {
+      value: teacherViewId,
+      onChange: e => setTeacherViewId(e.target.value),
+      className: "w-full md:w-96 border rounded-lg px-3 py-2 mb-3"
+    }, React.createElement("option", {
+      value: ""
+    }, "Select Teacher"), teachers.map(teacher => {
+      const tId = teacher.afid || teacher.docId || teacher.id;
+      return React.createElement("option", {
+        key: tId,
+        value: tId
+      }, teacher.name, teacher.subject ? ` (${teacher.subject})` : '');
+    })), teacherViewId && teacherWiseRows.length === 0 && React.createElement("p", {
+      className: "text-gray-500 text-sm"
+    }, "No classes assigned."), teacherWiseRows.length > 0 && React.createElement("div", {
+      className: "space-y-2"
+    }, teacherWiseRows.map((row, idx) => React.createElement("div", {
+      key: idx,
+      className: "bg-gray-50 rounded-lg p-2 text-sm flex flex-wrap gap-3"
+    }, React.createElement("span", {
+      className: "font-semibold"
+    }, row.className), React.createElement("span", null, row.day), React.createElement("span", null, row.period), React.createElement("span", null, row.subject)))))));
+  }
   const handleAddBook = () => {
     setFormData({
       ...formData,
@@ -22026,6 +22335,14 @@ function SchoolInfoView({
   return React.createElement("div", {
     className: "space-y-6"
   }, React.createElement("div", {
+    className: "flex gap-2 bg-white rounded-xl p-2 shadow-sm w-full md:w-fit"
+  }, React.createElement("button", {
+    onClick: () => setActiveSchoolTab('info'),
+    className: "px-4 py-2 rounded-lg font-semibold avanti-gradient text-white"
+  }, "\uD83C\uDFEB School Info"), React.createElement("button", {
+    onClick: () => setActiveSchoolTab('timetable'),
+    className: "px-4 py-2 rounded-lg font-semibold bg-gray-100 text-gray-700"
+  }, "\uD83D\uDCC5 Timetable")), React.createElement("div", {
     className: "flex justify-between items-center"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
