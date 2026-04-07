@@ -13698,6 +13698,11 @@ function AdminView({
     icon: React.createElement("i", {
       className: "fa-solid fa-school"
     })
+    {
+  id: 'timetable',
+  label: '📅 Timetable',
+  icon: React.createElement("i", { className: "fa-solid fa-calendar" })
+}
   }, {
     id: 'studentprofiles',
     label: 'Student Profiles',
@@ -14068,6 +14073,8 @@ function AdminView({
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
+    activeTab === 'timetable' &&
+  React.createElement(TimetablePage, { currentUser, teachers })
   }))), React.createElement("footer", {
     className: "bg-gray-800 text-white text-center py-4"
   }, React.createElement("p", null, "Made by Anand with \u2764\uFE0F")));
