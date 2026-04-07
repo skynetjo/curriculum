@@ -21727,26 +21727,30 @@ function TimetableAdminSection({ currentUser, availableSchools }) {
   var [selectedSchool, setSelectedSchool] = useState(schools.length === 1 ? schools[0] : '');
   if (!selectedSchool) {
     return React.createElement('div', { className: 'space-y-4' },
+      React.createElement('div', { className: 'bg-gradient-to-r from-yellow-500 via-yellow-600 to-red-600 text-white p-6 rounded-2xl shadow-lg' },
+        React.createElement('h2', { className: 'text-2xl font-bold mb-1' }, '📅 Class Timetable'),
+        React.createElement('p', { className: 'text-sm opacity-80' }, 'Select a school to view or edit the timetable')
+      ),
       React.createElement('div', { className: 'bg-white rounded-2xl shadow p-6' },
-        React.createElement('h4', { className: 'font-bold text-gray-700 mb-3' }, '🏫 Select a School to View / Edit Timetable'),
+        React.createElement('label', { className: 'block text-sm font-semibold text-gray-700 mb-2' }, '🏫 School'),
         React.createElement('select', {
           value: selectedSchool,
           onChange: function(e) { setSelectedSchool(e.target.value); },
-          className: 'w-full border-2 border-gray-200 rounded-xl p-3 text-sm focus:border-purple-400 focus:outline-none bg-white'
+          className: 'w-full border-2 border-gray-200 rounded-xl p-3 text-sm focus:border-yellow-400 focus:outline-none bg-white'
         },
-          React.createElement('option', { value: '' }, '— Select School —'),
+          React.createElement('option', { value: '' }, '— Select a School —'),
           schools.map(function(s) { return React.createElement('option', { key: s, value: s }, s); })
         )
       )
     );
   }
   return React.createElement('div', { className: 'space-y-3' },
-    React.createElement('div', { className: 'flex items-center gap-3 flex-wrap' },
+    schools.length > 1 && React.createElement('div', { className: 'flex items-center gap-3 flex-wrap bg-white rounded-xl shadow px-4 py-2' },
       React.createElement('label', { className: 'text-sm font-semibold text-gray-600' }, '🏫 School:'),
       React.createElement('select', {
         value: selectedSchool,
         onChange: function(e) { setSelectedSchool(e.target.value); },
-        className: 'border-2 border-gray-200 rounded-xl p-2 text-sm focus:border-purple-400 focus:outline-none bg-white'
+        className: 'border-2 border-gray-200 rounded-xl p-2 text-sm focus:border-yellow-400 focus:outline-none bg-white flex-1'
       },
         schools.map(function(s) { return React.createElement('option', { key: s, value: s }, s); })
       )
@@ -21938,15 +21942,18 @@ function TimetablePage({ currentUser, mySchool }) {
   var totalFilled=Object.keys(currentTT).filter(function(k){ return currentTT[k]&&(currentTT[k].subject||currentTT[k].teacherName); }).length;
   var subjects=getAllSubjects(); var editable=canEdit();
   return React.createElement('div',{className:'space-y-4'},
-    React.createElement('div',{className:'flex flex-wrap gap-3 items-start justify-between'},
-      React.createElement('div',null,
-        React.createElement('h3',{className:'text-xl font-bold text-gray-800'},'📅 Class Timetable — '+mySchool),
-        lastSaved&&React.createElement('p',{className:'text-xs text-gray-400 mt-1'},'Last saved: '+new Date(lastSaved).toLocaleString('en-IN'))
-      ),
-      React.createElement('div',{className:'flex flex-wrap gap-2'},
-        React.createElement('button',{onClick:function(){setActiveView('teacher');},className:'px-3 py-2 bg-purple-600 text-white rounded-xl font-semibold text-xs hover:bg-purple-700'},'👩‍🏫 Teacher View'),
-        React.createElement('button',{onClick:exportCSV,className:'px-3 py-2 bg-blue-600 text-white rounded-xl font-semibold text-xs hover:bg-blue-700'},'📤 Export CSV'),
-        editable&&React.createElement('button',{onClick:saveTimetable,disabled:isSaving,className:'px-4 py-2 rounded-xl font-semibold text-sm text-white '+(isSaving?'bg-gray-400 cursor-not-allowed':'bg-green-600 hover:bg-green-700')},isSaving?'⏳ Saving...':'💾 Save')
+    React.createElement('div',{className:'bg-gradient-to-r from-yellow-500 via-yellow-600 to-red-600 text-white p-5 rounded-2xl shadow-lg'},
+      React.createElement('div',{className:'flex flex-wrap gap-3 items-start justify-between'},
+        React.createElement('div',null,
+          React.createElement('h2',{className:'text-2xl font-bold tracking-tight'},'📅 Class Timetable'),
+          React.createElement('p',{className:'text-sm opacity-90 mt-0.5'},mySchool+(lastSaved?' · Last saved: '+new Date(lastSaved).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}):''))
+        ),
+        React.createElement('div',{className:'flex flex-wrap gap-2 items-center'},
+          React.createElement('button',{onClick:function(){setActiveView('teacher');},className:'px-3 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-xl font-semibold text-xs border border-white border-opacity-30'},'👩‍🏫 Teacher View'),
+          React.createElement('button',{onClick:exportCSV,className:'px-3 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-xl font-semibold text-xs border border-white border-opacity-30'},'📤 Export'),
+          editable&&React.createElement('button',{onClick:saveTimetable,disabled:isSaving,className:'px-4 py-2 rounded-xl font-semibold text-sm bg-white text-yellow-700 hover:bg-yellow-50 disabled:opacity-60 disabled:cursor-not-allowed shadow'},isSaving?'⏳ Saving...':'💾 Save'),
+          !editable&&React.createElement('span',{className:'px-3 py-1 bg-white bg-opacity-20 rounded-full text-xs border border-white border-opacity-30'},'👁️ View only')
+        )
       )
     ),
     saveMsg&&React.createElement('div',{className:'p-3 rounded-xl text-sm font-semibold '+(saveMsg.startsWith('✅')?'bg-green-50 text-green-700 border border-green-200':'bg-red-50 text-red-700 border border-red-200')},saveMsg),
@@ -21960,13 +21967,12 @@ function TimetablePage({ currentUser, mySchool }) {
         ['11','12'].map(function(cls){ return React.createElement('button',{key:cls,onClick:function(){setActiveClass(cls);},className:'px-5 py-2 rounded-xl font-bold text-sm '+(activeClass===cls?'avanti-gradient text-white shadow-md':'bg-white border-2 border-gray-200 text-gray-600 hover:border-purple-300')},(cls==='11'?'📗':'📘')+' Class '+cls); })
       ),
       React.createElement('div',{className:'text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full'},totalFilled+' / '+(DAYS.length*PERIODS.length)+' periods filled'),
-      React.createElement('div',{className:'flex items-center gap-1 bg-white border border-gray-200 rounded-full px-2 py-0.5'},
+      editable&&React.createElement('div',{className:'flex items-center gap-1 bg-white border border-gray-200 rounded-full px-2 py-0.5'},
         React.createElement('span',{className:'text-xs text-gray-500 mr-1'},'Periods:'),
         React.createElement('button',{onClick:removePeriod,disabled:numPeriods<=1,className:'w-5 h-5 flex items-center justify-center rounded-full text-gray-500 hover:bg-red-100 hover:text-red-600 disabled:opacity-30 font-bold text-sm leading-none'},'-'),
         React.createElement('span',{className:'text-xs font-bold text-gray-700 w-4 text-center'},numPeriods),
         React.createElement('button',{onClick:addPeriod,disabled:numPeriods>=12,className:'w-5 h-5 flex items-center justify-center rounded-full text-gray-500 hover:bg-green-100 hover:text-green-600 disabled:opacity-30 font-bold text-sm leading-none'},'+')
-      ),
-      !editable&&React.createElement('span',{className:'text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full border border-yellow-200'},'👁️ View only')
+      )
     ),
     React.createElement('p',{className:'text-xs text-blue-600 bg-blue-50 p-2 rounded-lg md:hidden'},'👉 Scroll right to see all periods'),
     React.createElement('div',{className:'overflow-x-auto rounded-2xl shadow-lg'},

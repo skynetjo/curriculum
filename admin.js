@@ -539,9 +539,9 @@ function AdminView({
     currentUser: currentUser,
     isAdmin: true,
     accessibleSchools: availableSchools
-  }), activeTab === 'timetable' && React.createElement(TimetablePage, {
+  }), activeTab === 'timetable' && React.createElement(TimetableAdminSection, {
     currentUser: currentUser,
-    mySchool: currentUser?.school
+    availableSchools: availableSchools
   }), activeTab === 'studentfeedback' && React.createElement(StudentFeedbackView, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
