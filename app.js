@@ -3,7 +3,7 @@
 document.addEventListener('touchstart', function(){}, {passive: true});
 document.addEventListener('touchmove', function(){}, {passive: true});
 document.addEventListener('wheel', function(){}, {passive: true});
- 
+
 const {
   useState,
   useEffect,
@@ -21799,6 +21799,16 @@ function TimetablePage({ currentUser, mySchool }) {
   }
   // CBSE Teacher constant – always available in teacher dropdowns
   var CBSE_TEACHER = {docId:'__cbse__', afid:'__cbse__', name:'CBSE Teacher', subject:'', isCbse:true};
+  // Subjects that are always taught by CBSE Teacher (language / PT)
+  var CBSE_SUBJECTS = ['English','Hindi','Sanskrit','Marathi','Gujarati','PT','Physical Education','Sports','Language'];
+  function isCbseSubject(sub){ return sub && CBSE_SUBJECTS.some(function(cs){ return sub.toLowerCase().includes(cs.toLowerCase()); }); }
+  // All subjects = teacher subjects + always-show language subjects
+  function getAllSubjects(){
+    var seen={}; var s=[];
+    teachers.forEach(function(t){ if(t.subject&&!seen[t.subject]){seen[t.subject]=true;s.push(t.subject);} });
+    CBSE_SUBJECTS.forEach(function(cs){ if(!seen[cs]){seen[cs]=true;s.push(cs);} });
+    return s.sort();
+  }
   useEffect(function() {
     if (!mySchool) return;
     var db = getFirestore();
@@ -21838,12 +21848,34 @@ function TimetablePage({ currentUser, mySchool }) {
   }
   function getTId(t){ return t.afid||t.docId; }
   function getSubjects(){ var seen={}; var s=[]; teachers.forEach(function(t){ if(t.subject&&!seen[t.subject]){seen[t.subject]=true;s.push(t.subject);} }); return s.sort(); }
-  function getTeachersForSubject(sub){ var filtered=sub?teachers.filter(function(t){ return t.subject===sub; }):teachers; return filtered.concat([CBSE_TEACHER]); }
+  function getTeachersForSubject(sub){
+    if(!sub) return teachers.concat([CBSE_TEACHER]);
+    if(isCbseSubject(sub)) return [CBSE_TEACHER].concat(teachers.filter(function(t){ return t.subject===sub; }));
+    var filtered=teachers.filter(function(t){ return t.subject===sub; });
+    return filtered.concat([CBSE_TEACHER]);
+  }
   function getSlot(grade,day,period){ var key=day+'_'+period; return grade==='11'?(timetable11[key]||{}):(timetable12[key]||{}); }
   function updateSlot(grade,day,period,updates){ var key=day+'_'+period; var setter=grade==='11'?setTimetable11:setTimetable12; setter(function(prev){ return Object.assign({},prev,{[key]:Object.assign({},prev[key]||{},updates)}); }); }
   function clearSlot(grade,day,period){ var key=day+'_'+period; var setter=grade==='11'?setTimetable11:setTimetable12; setter(function(prev){ var n=Object.assign({},prev); delete n[key]; return n; }); }
   function isConflict(day,period){ return conflicts.some(function(c){ return c.day===day&&c.period===period; }); }
-  function handleSubjectChange(grade,day,period,subject){ var cur=getSlot(grade,day,period); var upd={subject:subject}; if(cur.teacherId){ var t=teachers.find(function(x){ return getTId(x)===cur.teacherId; }); if(t&&t.subject!==subject){upd.teacherId='';upd.teacherName='';} } updateSlot(grade,day,period,upd); }
+  function handleSubjectChange(grade,day,period,subject){
+    var cur=getSlot(grade,day,period);
+    var upd={subject:subject};
+    if(!subject){ upd.teacherId=''; upd.teacherName=''; }
+    else if(isCbseSubject(subject)){
+      // Language/PT → auto-select CBSE Teacher
+      upd.teacherId=CBSE_TEACHER.docId; upd.teacherName=CBSE_TEACHER.name;
+    } else {
+      // Non-CBSE: auto-select if exactly one teacher for this subject
+      var matching=teachers.filter(function(t){ return t.subject===subject; });
+      if(matching.length===1){ upd.teacherId=getTId(matching[0]); upd.teacherName=matching[0].name||''; }
+      else if(cur.teacherId){
+        var t=teachers.find(function(x){ return getTId(x)===cur.teacherId; });
+        if(t&&t.subject!==subject){ upd.teacherId=''; upd.teacherName=''; }
+      }
+    }
+    updateSlot(grade,day,period,upd);
+  }
   function handleTeacherChange(grade,day,period,teacherId){ var t=teachers.find(function(x){ return getTId(x)===teacherId; }); var cur=getSlot(grade,day,period); updateSlot(grade,day,period,{teacherId:teacherId,teacherName:t?(t.name||''):'',subject:t?(t.subject||cur.subject||''):(cur.subject||'')}); }
   async function saveTimetable(){
     if(conflicts.length>0){setSaveMsg('❌ Fix all conflicts before saving!'); setTimeout(function(){setSaveMsg('');},4000); return;}
@@ -21899,7 +21931,7 @@ function TimetablePage({ currentUser, mySchool }) {
   }
   var currentTT=activeClass==='11'?timetable11:timetable12;
   var totalFilled=Object.keys(currentTT).filter(function(k){ return currentTT[k]&&(currentTT[k].subject||currentTT[k].teacherName); }).length;
-  var subjects=getSubjects(); var editable=canEdit();
+  var subjects=getAllSubjects(); var editable=canEdit();
   return React.createElement('div',{className:'space-y-4'},
     React.createElement('div',{className:'flex flex-wrap gap-3 items-start justify-between'},
       React.createElement('div',null,
@@ -21937,11 +21969,12 @@ function TimetablePage({ currentUser, mySchool }) {
         React.createElement('div',{className:'grid bg-gray-800 text-white text-xs font-bold',style:{gridTemplateColumns:'90px repeat('+numPeriods+', 1fr)'}},
           React.createElement('div',{className:'p-2 border-r border-gray-600'},'Day'),
           FULL_SCHEDULE.filter(function(s){return s.type==='period';}).map(function(s,i){
+            var displayTime=periodTimes[i]||s.time;
             return React.createElement('div',{key:s.key,className:'p-1 border-r border-gray-600 text-center cursor-pointer select-none hover:bg-gray-700 group',onClick:function(){setEditingTime(function(prev){return prev===i?null:i;});}},
-              React.createElement('div',{className:'font-bold text-xs'},s.label),
+              React.createElement('div',{className:'font-bold text-xs leading-tight'},s.label),
               editingTime===i
-                ?React.createElement('input',{autoFocus:true,className:'mt-1 w-full text-xs text-gray-900 rounded px-1 py-0.5 border-0 focus:outline-none text-center',placeholder:'e.g. 9:30-10:30',value:periodTimes[i]||s.time,onChange:function(e){updatePeriodTime(i,e.target.value);},onBlur:function(){setEditingTime(null);},onClick:function(e){e.stopPropagation();}})
-                :React.createElement('div',{className:'text-gray-400 font-normal text-xs mt-0.5 group-hover:text-gray-200 leading-tight'},periodTimes[i]||s.time)
+                ?React.createElement('input',{autoFocus:true,className:'mt-0.5 w-full text-xs text-gray-900 rounded px-1 py-0.5 border-0 focus:outline-none text-center',placeholder:'e.g. 9:30-10:30',defaultValue:displayTime,onChange:function(e){updatePeriodTime(i,e.target.value);},onBlur:function(){setEditingTime(null);},onClick:function(e){e.stopPropagation();}})
+                :React.createElement('div',{className:'text-yellow-300 font-normal leading-tight mt-0.5',style:{fontSize:'10px'}},displayTime)
             );
           })
         ),
@@ -21979,14 +22012,20 @@ function TimetablePage({ currentUser, mySchool }) {
                       editable?React.createElement('div',{className:'space-y-1'},
                         React.createElement('select',{value:s.subject||'',onChange:function(e){handleSubjectChange(activeClass,day,p,e.target.value);},className:'w-full border border-gray-300 rounded-lg text-xs p-1 focus:border-purple-400 focus:outline-none bg-white'},
                           React.createElement('option',{value:''},'— Sub —'),
-                          subjects.map(function(sub){ return React.createElement('option',{key:sub,value:sub},sub); })
+                          React.createElement('optgroup',{label:'📚 Regular Subjects'},
+                            subjects.filter(function(sub){return !isCbseSubject(sub);}).map(function(sub){ return React.createElement('option',{key:sub,value:sub},sub); })
+                          ),
+                          React.createElement('optgroup',{label:'🏫 Language / PT (CBSE)'},
+                            subjects.filter(function(sub){return isCbseSubject(sub);}).map(function(sub){ return React.createElement('option',{key:sub,value:sub},sub); })
+                          )
                         ),
-                        React.createElement('select',{value:s.teacherId||'',onChange:function(e){handleTeacherChange(activeClass,day,p,e.target.value);},className:'w-full border rounded-lg text-xs p-1 focus:border-purple-400 focus:outline-none bg-white '+(conf?'border-red-400':'border-gray-300')},
+                        React.createElement('select',{value:s.teacherId||'',onChange:function(e){handleTeacherChange(activeClass,day,p,e.target.value);},className:'w-full border rounded-lg text-xs p-1 focus:border-purple-400 focus:outline-none bg-white '+(conf?'border-red-400':s.teacherId===CBSE_TEACHER.docId?'border-blue-300 bg-blue-50':'border-gray-300')},
                           React.createElement('option',{value:''},'— Teacher —'),
                           tfs.map(function(t){ return React.createElement('option',{key:getTId(t),value:getTId(t)},t.isCbse?'🏫 CBSE Teacher':t.name); })
                         ),
+                        s.teacherId===CBSE_TEACHER.docId&&React.createElement('div',{className:'text-xs text-blue-500 leading-none text-center'},'🏫 CBSE'),
                         (s.subject||s.teacherId)&&React.createElement('button',{onClick:function(){clearSlot(activeClass,day,p);},className:'w-full text-xs text-gray-400 hover:text-red-500 text-right leading-none'},'✕ clear')
-                      ):React.createElement('div',{className:'p-1'},s.subject?React.createElement('div',null,React.createElement('div',{className:'text-xs font-bold text-purple-700'},s.subject),React.createElement('div',{className:'text-xs text-gray-600 mt-1'},s.teacherName||'—')):React.createElement('span',{className:'text-gray-300 text-xs'},'—'))
+                      ):React.createElement('div',{className:'p-1'},s.subject?React.createElement('div',null,React.createElement('div',{className:'text-xs font-bold '+(isCbseSubject(s.subject)?'text-blue-700':'text-purple-700')},s.subject),React.createElement('div',{className:'text-xs text-gray-600 mt-1'},s.teacherName||'—')):React.createElement('span',{className:'text-gray-300 text-xs'},'—'))
                     ):null
                   );
                 })
