@@ -479,6 +479,9 @@ function TimetablePage({ currentUser, mySchool }) {
   }).length;
   var subjects = getSubjects();
   var editable = canEdit();
+  var columnWidth = editable ? 230 : 170;
+  var gridTemplate = '90px repeat(' + periodIds().length + ', ' + columnWidth + 'px)';
+  var gridMinWidth = (90 + (periodIds().length * columnWidth)) + 'px';
 
   return React.createElement('div', { className: 'space-y-4' },
 
@@ -556,6 +559,10 @@ function TimetablePage({ currentUser, mySchool }) {
 
     // Grid
     React.createElement('div', { className: 'overflow-x-auto rounded-2xl shadow-lg' },
+      React.createElement('div', { style: { minWidth: gridMinWidth } },
+        React.createElement('div', {
+          className: 'grid bg-gray-800 text-white text-xs font-bold',
+          style: { gridTemplateColumns: gridTemplate }
       React.createElement('div', { className: 'min-w-[900px]' },
         React.createElement('div', {
           className: 'grid bg-gray-800 text-white text-xs font-bold',
@@ -601,6 +608,7 @@ function TimetablePage({ currentUser, mySchool }) {
           return React.createElement('div', {
             key: day,
             className: 'grid border-b border-gray-200 ' + (dayIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'),
+            style: { gridTemplateColumns: gridTemplate }
             style: { gridTemplateColumns: '90px repeat(' + periodIds().length + ', minmax(145px, 1fr))' }
           },
             React.createElement('div', {
