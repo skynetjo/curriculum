@@ -21978,7 +21978,6 @@ function TimetablePage({ currentUser, mySchool }) {
 
   var displayTime = periodTimes[i] || s.time;
 
-  // ✅ For Break / Lunch / Assembly
   if(s.type !== 'period'){
     return React.createElement(
       'div',
@@ -21989,6 +21988,17 @@ function TimetablePage({ currentUser, mySchool }) {
       s.label + (displayTime ? ' (' + displayTime + ')' : '')
     );
   }
+
+  return React.createElement(
+    'div',
+    {
+      key:s.key,
+      className:'p-2 border-r border-gray-600'
+    },
+    s.label + (displayTime ? ' (' + displayTime + ')' : '')
+  );
+
+})
 
   // ✅ For normal periods
   return React.createElement(
