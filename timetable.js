@@ -563,6 +563,10 @@ function TimetablePage({ currentUser, mySchool }) {
         React.createElement('div', {
           className: 'grid bg-gray-800 text-white text-xs font-bold',
           style: { gridTemplateColumns: gridTemplate }
+      React.createElement('div', { className: 'min-w-[900px]' },
+        React.createElement('div', {
+          className: 'grid bg-gray-800 text-white text-xs font-bold',
+          style: { gridTemplateColumns: '90px repeat(' + periodIds().length + ', minmax(145px, 1fr))' }
         },
           React.createElement('div', { className: 'p-2 border-r border-gray-600' }, 'Day'),
           periodConfigs.map(function(p) {
@@ -605,6 +609,7 @@ function TimetablePage({ currentUser, mySchool }) {
             key: day,
             className: 'grid border-b border-gray-200 ' + (dayIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'),
             style: { gridTemplateColumns: gridTemplate }
+            style: { gridTemplateColumns: '90px repeat(' + periodIds().length + ', minmax(145px, 1fr))' }
           },
             React.createElement('div', {
               className: 'p-2 border-r border-gray-200 font-bold text-xs text-gray-700 flex items-center justify-center bg-gray-100'
