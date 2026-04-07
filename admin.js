@@ -163,6 +163,12 @@ function AdminView({
       className: "fa-solid fa-boxes-stacked"
     })
   }, {
+    id: 'timetable',
+    label: 'Timetable',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-calendar-days"
+    })
+  }, {
     id: 'schoolinfo',
     label: 'School Info',
     icon: React.createElement("i", {
@@ -511,6 +517,9 @@ function AdminView({
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
+  }), activeTab === 'timetable' && React.createElement(TimetableAdminSection, {
+    currentUser: currentUser,
+    availableSchools: availableSchools
   }), activeTab === 'schoolinfo' && React.createElement(AdminSchoolInfo, {
     schoolInfo: filteredSchoolInfo,
     setSchoolInfo: setSchoolInfo,
