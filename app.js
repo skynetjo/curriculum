@@ -10571,12 +10571,6 @@ function TeacherView({
       className: "fa-solid fa-boxes-stacked"
     })
   }, {
-    id: 'timetable',
-    label: 'Timetable',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-calendar-days"
-    })
-  }, {
     id: 'schoolinfo',
     label: 'School Info',
     icon: React.createElement("i", {
@@ -11017,9 +11011,6 @@ function TeacherView({
     currentUser: currentUser,
     teacherAttendance: teacherAttendance,
     leaveAdjustments: leaveAdjustments
-  }), activeTab === 'timetable' && React.createElement(TimetableAdminSection, {
-    currentUser: currentUser,
-    availableSchools: [currentUser.school].filter(Boolean)
   }), activeTab === 'schoolinfo' && React.createElement(SchoolInfoView, {
     currentUser: currentUser,
     schoolInfo: schoolInfo,
@@ -13702,12 +13693,6 @@ function AdminView({
       className: "fa-solid fa-boxes-stacked"
     })
   }, {
-    id: 'timetable',
-    label: 'Timetable',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-calendar-days"
-    })
-  }, {
     id: 'schoolinfo',
     label: 'School Info',
     icon: React.createElement("i", {
@@ -14056,9 +14041,6 @@ function AdminView({
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
-  }), activeTab === 'timetable' && React.createElement(TimetableAdminSection, {
-    currentUser: currentUser,
-    availableSchools: availableSchools
   }), activeTab === 'schoolinfo' && React.createElement(AdminSchoolInfo, {
     schoolInfo: filteredSchoolInfo,
     setSchoolInfo: setSchoolInfo,
@@ -22052,7 +22034,6 @@ function SchoolInfoView({
   setSchoolInfo
 }) {
   const mySchool = currentUser.school;
-  const [activeInfoTab, setActiveInfoTab] = useState('info');
   const existingInfo = schoolInfo.find(info => info.school === mySchool);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -22371,33 +22352,9 @@ function SchoolInfoView({
     }
     return options;
   };
-  if (activeInfoTab === 'timetable') {
-    return React.createElement('div', { className: 'space-y-4' },
-      React.createElement('div', { className: 'flex gap-2 overflow-x-auto pb-2' },
-        React.createElement('button', {
-          onClick: function() { setActiveInfoTab('info'); },
-          className: 'px-4 py-2 rounded-xl font-semibold bg-white border-2 border-gray-200 text-gray-600 hover:border-purple-300 text-sm'
-        }, '🏫 School Info'),
-        React.createElement('button', {
-          onClick: function() { setActiveInfoTab('timetable'); },
-          className: 'px-4 py-2 rounded-xl font-semibold avanti-gradient text-white text-sm'
-        }, '📅 Timetable')
-      ),
-      React.createElement(TimetablePage, { currentUser: currentUser, mySchool: mySchool })
-    );
-  }
   return React.createElement("div", {
     className: "space-y-6"
-  }, React.createElement('div', { className: 'flex gap-2 overflow-x-auto pb-2 mb-2' },
-    React.createElement('button', {
-      onClick: function() { setActiveInfoTab('info'); },
-      className: 'px-4 py-2 rounded-xl font-semibold avanti-gradient text-white text-sm'
-    }, '🏫 School Info'),
-    React.createElement('button', {
-      onClick: function() { setActiveInfoTab('timetable'); },
-      className: 'px-4 py-2 rounded-xl font-semibold bg-white border-2 border-gray-200 text-gray-600 hover:border-purple-300 text-sm'
-    }, '📅 Timetable')
-  ), React.createElement("div", {
+  }, React.createElement("div", {
     className: "flex justify-between items-center"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
