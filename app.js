@@ -13701,7 +13701,9 @@ function AdminView({
   }, {
     id: 'timetable',
     label: '📅 Timetable',
-    icon: React.createElement("i", { className: "fa-solid fa-calendar" })
+    icon: React.createElement("i", {
+      className: "fa-solid fa-calendar"
+    })
   }, {
     id: 'studentprofiles',
     label: 'Student Profiles',
