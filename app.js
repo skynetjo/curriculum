@@ -10571,6 +10571,12 @@ function TeacherView({
       className: "fa-solid fa-boxes-stacked"
     })
   }, {
+    id: 'timetable',
+    label: 'Timetable',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-calendar-days"
+    })
+  }, {
     id: 'schoolinfo',
     label: 'School Info',
     icon: React.createElement("i", {
@@ -11011,6 +11017,9 @@ function TeacherView({
     currentUser: currentUser,
     teacherAttendance: teacherAttendance,
     leaveAdjustments: leaveAdjustments
+  }), activeTab === 'timetable' && React.createElement(TimetableAdminSection, {
+    currentUser: currentUser,
+    availableSchools: [currentUser.school].filter(Boolean)
   }), activeTab === 'schoolinfo' && React.createElement(SchoolInfoView, {
     currentUser: currentUser,
     schoolInfo: schoolInfo,
@@ -13693,6 +13702,12 @@ function AdminView({
       className: "fa-solid fa-boxes-stacked"
     })
   }, {
+    id: 'timetable',
+    label: 'Timetable',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-calendar-days"
+    })
+  }, {
     id: 'schoolinfo',
     label: 'School Info',
     icon: React.createElement("i", {
@@ -14041,6 +14056,9 @@ function AdminView({
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
+  }), activeTab === 'timetable' && React.createElement(TimetableAdminSection, {
+    currentUser: currentUser,
+    availableSchools: availableSchools
   }), activeTab === 'schoolinfo' && React.createElement(AdminSchoolInfo, {
     schoolInfo: filteredSchoolInfo,
     setSchoolInfo: setSchoolInfo,
@@ -21916,28 +21934,28 @@ function TimetablePage({ currentUser, mySchool }) {
     React.createElement('p',{className:'text-xs text-blue-600 bg-blue-50 p-2 rounded-lg md:hidden'},'👉 Scroll right to see all periods'),
     React.createElement('div',{className:'overflow-x-auto rounded-2xl shadow-lg'},
       React.createElement('div',{className:'min-w-[700px]'},
-        React.createElement('div',{className:'grid bg-gray-800 text-white text-xs font-bold',style:{gridTemplateColumns:'130px repeat('+numPeriods+', 1fr)'}},
-          React.createElement('div',{className:'p-2 border-r border-gray-600'},'Day / Time'),
-          FULL_SCHEDULE.filter(function(s){return s.type==='period';}).map(function(s,i){ return React.createElement('div',{key:s.key,className:'p-2 border-r border-gray-600 text-center cursor-pointer select-none hover:bg-gray-700 group',onClick:function(){setEditingTime(function(prev){return prev===i?null:i;});}},
-            React.createElement('div',{className:'font-bold'},s.label),
-            editingTime===i
-              ?React.createElement('input',{autoFocus:true,className:'mt-1 w-full text-xs text-gray-900 rounded px-1 py-0.5 border-0 focus:outline-none text-center',placeholder:'e.g. 9:30-10:30',value:periodTimes[i]||s.time,onChange:function(e){updatePeriodTime(i,e.target.value);},onBlur:function(){setEditingTime(null);},onClick:function(e){e.stopPropagation();}})
-              :React.createElement('div',{className:'text-gray-400 font-normal text-xs mt-0.5 group-hover:text-gray-200'},periodTimes[i]||s.time)
-          ); })
+        React.createElement('div',{className:'grid bg-gray-800 text-white text-xs font-bold',style:{gridTemplateColumns:'90px repeat('+numPeriods+', 1fr)'}},
+          React.createElement('div',{className:'p-2 border-r border-gray-600'},'Day'),
+          FULL_SCHEDULE.filter(function(s){return s.type==='period';}).map(function(s,i){
+            return React.createElement('div',{key:s.key,className:'p-1 border-r border-gray-600 text-center cursor-pointer select-none hover:bg-gray-700 group',onClick:function(){setEditingTime(function(prev){return prev===i?null:i;});}},
+              React.createElement('div',{className:'font-bold text-xs'},s.label),
+              editingTime===i
+                ?React.createElement('input',{autoFocus:true,className:'mt-1 w-full text-xs text-gray-900 rounded px-1 py-0.5 border-0 focus:outline-none text-center',placeholder:'e.g. 9:30-10:30',value:periodTimes[i]||s.time,onChange:function(e){updatePeriodTime(i,e.target.value);},onBlur:function(){setEditingTime(null);},onClick:function(e){e.stopPropagation();}})
+                :React.createElement('div',{className:'text-gray-400 font-normal text-xs mt-0.5 group-hover:text-gray-200 leading-tight'},periodTimes[i]||s.time)
+            );
+          })
         ),
         DAYS.map(function(day,di){
           var rowBg=di%2===0?'bg-white':'bg-gray-50';
-          return React.createElement('div',{key:day},
+          return React.createElement('div',{key:day,className:'border-b-2 border-gray-300'},
             FULL_SCHEDULE.map(function(sch){
               if(sch.type==='break'){
-                return React.createElement('div',{key:sch.key,className:'flex items-center border-b border-gray-200 '+sch.color,style:{minHeight:'28px'}},
-                  React.createElement('div',{className:'w-[130px] shrink-0 px-2 font-bold text-xs border-r border-gray-300 flex items-center gap-1'},
-                    React.createElement('span',null,
-                      sch.key==='BRK_ASSEMBLY'?'🎒':sch.key==='BRK_BREAKFAST'?'🍳':sch.key==='BRK_LUNCH'?'🍱':sch.key==='BRK_SNACK'?'🍎':sch.key==='BRK_DINNER'?'🍽️':'⏸️'
-                    ),
-                    React.createElement('span',null,sch.label)
+                return React.createElement('div',{key:sch.key,className:'flex items-center border-b border-gray-100 '+sch.color,style:{minHeight:'24px'}},
+                  React.createElement('div',{className:'w-[90px] shrink-0 px-2 text-sm border-r border-opacity-20 flex items-center justify-center'},
+                    sch.key==='BRK_ASSEMBLY'?'🎒':sch.key==='BRK_BREAKFAST'?'🍳':sch.key==='BRK_LUNCH'?'🍱':sch.key==='BRK_SNACK'?'🍎':sch.key==='BRK_DINNER'?'🍽️':'⏸️'
                   ),
-                  React.createElement('div',{className:'flex-1 px-2 text-xs opacity-70'},sch.time)
+                  React.createElement('div',{className:'flex-1 px-2 text-xs font-semibold'},sch.label),
+                  React.createElement('div',{className:'px-3 text-xs opacity-60 italic whitespace-nowrap'},sch.time)
                 );
               }
               var period=sch.key;
@@ -21945,28 +21963,31 @@ function TimetablePage({ currentUser, mySchool }) {
               var slot=getSlot(activeClass,day,period); var conflict=isConflict(day,period);
               var teachersForSub=getTeachersForSubject(slot.subject);
               var cellBg=conflict?'bg-red-50':(slot.subject||slot.teacherName)?'bg-purple-50':rowBg;
-              return React.createElement('div',{key:period,className:'grid border-b border-gray-200',style:{gridTemplateColumns:'130px repeat('+numPeriods+', 1fr)'}},
-                React.createElement('div',{className:'p-2 border-r border-gray-200 font-bold text-xs text-gray-700 flex flex-col justify-center items-start bg-gray-100 pl-3'},
-                  React.createElement('span',{className:'font-bold text-gray-800'},day.substring(0,3).toUpperCase()),
-                  React.createElement('span',{className:'text-gray-400 font-normal text-xs'},periodTimes[periodIdx]||sch.time)
+              return React.createElement('div',{key:period,className:'grid border-b border-gray-100',style:{gridTemplateColumns:'90px repeat('+numPeriods+', 1fr)'}},
+                React.createElement('div',{className:'px-2 py-1 border-r border-gray-200 text-xs flex flex-col justify-center bg-gray-50 font-semibold text-gray-600'},
+                  day.substring(0,3).toUpperCase()
                 ),
                 PERIODS.map(function(p,pi){
-                  var s=getSlot(activeClass,day,p); var conf=isConflict(day,p);
-                  var tfs=getTeachersForSubject(s.subject);
-                  var cbg=conf?'bg-red-50':(s.subject||s.teacherName)?'bg-purple-50':rowBg;
-                  return React.createElement('div',{key:pi,className:'border-r border-gray-200 p-1 '+cbg,style:{minHeight:editable?'80px':'50px'}},
-                    conf&&React.createElement('div',{className:'text-xs font-bold text-red-500 text-center leading-none mb-1'},'⚠️'),
-                    editable?React.createElement('div',{className:'space-y-1'},
-                      React.createElement('select',{value:s.subject||'',onChange:function(e){handleSubjectChange(activeClass,day,p,e.target.value);},className:'w-full border border-gray-300 rounded-lg text-xs p-1 focus:border-purple-400 focus:outline-none bg-white'},
-                        React.createElement('option',{value:''},'— Sub —'),
-                        subjects.map(function(sub){ return React.createElement('option',{key:sub,value:sub},sub); })
-                      ),
-                      React.createElement('select',{value:s.teacherId||'',onChange:function(e){handleTeacherChange(activeClass,day,p,e.target.value);},className:'w-full border rounded-lg text-xs p-1 focus:border-purple-400 focus:outline-none bg-white '+(conf?'border-red-400':'border-gray-300')},
-                        React.createElement('option',{value:''},'— Teacher —'),
-                        tfs.map(function(t){ return React.createElement('option',{key:getTId(t),value:getTId(t)},t.isCbse?'🏫 CBSE Teacher':t.name); })
-                      ),
-                      (s.subject||s.teacherId)&&React.createElement('button',{onClick:function(){clearSlot(activeClass,day,p);},className:'w-full text-xs text-gray-400 hover:text-red-500 text-right leading-none'},'✕ clear')
-                    ):React.createElement('div',{className:'p-1'},s.subject?React.createElement('div',null,React.createElement('div',{className:'text-xs font-bold text-purple-700'},s.subject),React.createElement('div',{className:'text-xs text-gray-600 mt-1'},s.teacherName||'—')):React.createElement('span',{className:'text-gray-300 text-xs'},'—'))
+                  var isCurrent=(p===period);
+                  var s=isCurrent?slot:getSlot(activeClass,day,p);
+                  var conf=isCurrent?conflict:isConflict(day,p);
+                  var tfs=isCurrent?teachersForSub:getTeachersForSubject(s.subject);
+                  var bg=isCurrent?cellBg:rowBg;
+                  return React.createElement('div',{key:pi,className:'border-r border-gray-200 p-1 '+bg,style:{minHeight:editable?'72px':'44px'}},
+                    isCurrent&&conf&&React.createElement('div',{className:'text-xs font-bold text-red-500 text-center leading-none mb-1'},'⚠️'),
+                    isCurrent?(
+                      editable?React.createElement('div',{className:'space-y-1'},
+                        React.createElement('select',{value:s.subject||'',onChange:function(e){handleSubjectChange(activeClass,day,p,e.target.value);},className:'w-full border border-gray-300 rounded-lg text-xs p-1 focus:border-purple-400 focus:outline-none bg-white'},
+                          React.createElement('option',{value:''},'— Sub —'),
+                          subjects.map(function(sub){ return React.createElement('option',{key:sub,value:sub},sub); })
+                        ),
+                        React.createElement('select',{value:s.teacherId||'',onChange:function(e){handleTeacherChange(activeClass,day,p,e.target.value);},className:'w-full border rounded-lg text-xs p-1 focus:border-purple-400 focus:outline-none bg-white '+(conf?'border-red-400':'border-gray-300')},
+                          React.createElement('option',{value:''},'— Teacher —'),
+                          tfs.map(function(t){ return React.createElement('option',{key:getTId(t),value:getTId(t)},t.isCbse?'🏫 CBSE Teacher':t.name); })
+                        ),
+                        (s.subject||s.teacherId)&&React.createElement('button',{onClick:function(){clearSlot(activeClass,day,p);},className:'w-full text-xs text-gray-400 hover:text-red-500 text-right leading-none'},'✕ clear')
+                      ):React.createElement('div',{className:'p-1'},s.subject?React.createElement('div',null,React.createElement('div',{className:'text-xs font-bold text-purple-700'},s.subject),React.createElement('div',{className:'text-xs text-gray-600 mt-1'},s.teacherName||'—')):React.createElement('span',{className:'text-gray-300 text-xs'},'—'))
+                    ):null
                   );
                 })
               );
