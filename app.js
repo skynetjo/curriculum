@@ -14075,7 +14075,7 @@ function AdminView({
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
   }), activeTab === 'timetable' &&
-  React.createElement(TimetablePage, { currentUser: currentUser, teachers: teachers })
+  React.createElement(TimetableAdminSection, { currentUser: currentUser, availableSchools: availableSchools })
   )), React.createElement("footer", {
     className: "bg-gray-800 text-white text-center py-4"
   }, React.createElement("p", null, "Made by Anand with \u2764\uFE0F")));
