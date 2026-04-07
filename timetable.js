@@ -1,5 +1,6 @@
-// ✅ TIMETABLE PAGE v1.1.0 - Avanti Fellows Curriculum Tracker
-// Fixes: canEdit() now works for teachers (userType check), admin school picker added
+// ✅ TIMETABLE PAGE v1.2.0 - Avanti Fellows Curriculum Tracker
+// Updates: configurable periods/timings, break/assembly/lunch labels, CBSE teacher option,
+// auto teacher by subject (changeable), extra subject options, add/remove period rows
 
 // ─── Admin wrapper (shown in Admin view schoolinfo section) ──────────────────
 function TimetableAdminSection({ currentUser, availableSchools, isSuperAdmin }) {
@@ -55,6 +56,7 @@ function TimetablePage({ currentUser, mySchool }) {
   var [teachers, setTeachers] = useState([]);
   var [timetable11, setTimetable11] = useState({});
   var [timetable12, setTimetable12] = useState({});
+  var [periodConfigs, setPeriodConfigs] = useState([]);
   var [isSaving, setIsSaving] = useState(false);
   var [isLoading, setIsLoading] = useState(true);
   var [saveMsg, setSaveMsg] = useState('');
@@ -63,8 +65,37 @@ function TimetablePage({ currentUser, mySchool }) {
   var [lastSaved, setLastSaved] = useState(null);
 
   var DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  var PERIODS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'];
-  var PERIOD_LABELS = ['Period 1', 'Period 2', 'Period 3', 'Period 4', 'Period 5', 'Period 6', 'Period 7', 'Period 8'];
+  var EXTRA_SUBJECTS = ['English', 'CS', 'Hindi', 'PT', 'Other'];
+
+  function getDefaultPeriodConfigs() {
+    return [
+      { id: 'P1', label: 'Period 1', time: '08:00 - 08:45', type: 'class' },
+      { id: 'P2', label: 'Period 2', time: '08:45 - 09:30', type: 'class' },
+      { id: 'P3', label: 'Assembly', time: '09:30 - 09:45', type: 'assembly' },
+      { id: 'P4', label: 'Period 3', time: '09:45 - 10:30', type: 'class' },
+      { id: 'P5', label: 'Lunch', time: '10:30 - 11:00', type: 'lunch' },
+      { id: 'P6', label: 'Period 4', time: '11:00 - 11:45', type: 'class' },
+      { id: 'P7', label: 'Period 5', time: '11:45 - 12:30', type: 'class' },
+      { id: 'P8', label: 'Break', time: '12:30 - 12:45', type: 'break' }
+    ];
+  }
+  function normalizePeriodConfigs(list) {
+    var fallback = getDefaultPeriodConfigs();
+    if (!Array.isArray(list) || list.length === 0) return fallback;
+    return list.map(function(p, idx) {
+      var fallbackP = fallback[idx] || {};
+      return {
+        id: p.id || ('P' + (idx + 1)),
+        label: p.label || fallbackP.label || ('Period ' + (idx + 1)),
+        time: p.time || fallbackP.time || '',
+        type: p.type || fallbackP.type || 'class'
+      };
+    });
+  }
+
+  function periodIds() {
+    return periodConfigs.map(function(p) { return p.id; });
+  }
 
   // ─── Load data ───────────────────────────────────────────────────────────────
   useEffect(function() {
@@ -74,6 +105,7 @@ function TimetablePage({ currentUser, mySchool }) {
     setTeachers([]);
     setTimetable11({});
     setTimetable12({});
+    setPeriodConfigs(getDefaultPeriodConfigs());
     setLastSaved(null);
     Promise.all([
       db.collection('teachers').where('school', '==', mySchool).get(),
@@ -85,14 +117,23 @@ function TimetablePage({ currentUser, mySchool }) {
         .filter(function(t) { return !t.isArchived; })
         .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
       setTeachers(tList);
+
+      var loadedPeriodConfigs = null;
+
       if (results[1].exists) {
-        setTimetable11(results[1].data().slots || {});
-        setLastSaved(results[1].data().updatedAt || null);
+        var d11 = results[1].data();
+        setTimetable11(d11.slots || {});
+        loadedPeriodConfigs = d11.periodConfigs || loadedPeriodConfigs;
+        setLastSaved(d11.updatedAt || null);
       }
       if (results[2].exists) {
-        setTimetable12(results[2].data().slots || {});
-        if (!results[1].exists && results[2].data().updatedAt) setLastSaved(results[2].data().updatedAt);
+        var d12 = results[2].data();
+        setTimetable12(d12.slots || {});
+        loadedPeriodConfigs = loadedPeriodConfigs || d12.periodConfigs;
+        if (!results[1].exists && d12.updatedAt) setLastSaved(d12.updatedAt);
       }
+
+      setPeriodConfigs(normalizePeriodConfigs(loadedPeriodConfigs));
     }).catch(function(e) {
       console.error('Timetable load error:', e);
     }).finally(function() { setIsLoading(false); });
@@ -102,23 +143,20 @@ function TimetablePage({ currentUser, mySchool }) {
   useEffect(function() {
     var found = [];
     DAYS.forEach(function(day) {
-      PERIODS.forEach(function(period) {
-        var key = day + '_' + period;
+      periodConfigs.forEach(function(periodCfg) {
+        if (periodCfg.type !== 'class') return;
+        var key = day + '_' + periodCfg.id;
         var s11 = timetable11[key] || {};
         var s12 = timetable12[key] || {};
         if (s11.teacherId && s12.teacherId && s11.teacherId === s12.teacherId) {
-          found.push({ day: day, period: period, teacherName: s11.teacherName || 'Unknown' });
+          found.push({ day: day, periodId: periodCfg.id, period: periodCfg.label || periodCfg.id, teacherName: s11.teacherName || 'Unknown' });
         }
       });
     });
     setConflicts(found);
-  }, [timetable11, timetable12]);
+  }, [timetable11, timetable12, periodConfigs]);
 
   // ─── Role check ───────────────────────────────────────────────────────────────
-  // ✅ FIX: Check BOTH userType AND role.
-  // Teachers → userType='teacher' (no role field)
-  // Managers → userType='manager', role='pm'/'apm' etc.
-  // Super Admin → userType='superadmin'
   function canEdit() {
     if (!currentUser) return false;
     var utype = (currentUser.userType || '').toLowerCase();
@@ -133,30 +171,39 @@ function TimetablePage({ currentUser, mySchool }) {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
   function getTId(t) { return t.afid || t.docId; }
+
   function getSubjects() {
-    var seen = {}; var subs = [];
+    var seen = {};
+    var subs = [];
     teachers.forEach(function(t) {
       if (t.subject && !seen[t.subject]) { seen[t.subject] = true; subs.push(t.subject); }
     });
+    EXTRA_SUBJECTS.forEach(function(s) {
+      if (!seen[s]) { seen[s] = true; subs.push(s); }
+    });
     return subs.sort();
   }
+
   function getTeachersForSubject(subject) {
-    if (!subject) return teachers;
-    return teachers.filter(function(t) { return t.subject === subject; });
+    if (!subject || subject === 'Other') return teachers;
+    return teachers.filter(function(t) { return (t.subject || '').toLowerCase() === String(subject).toLowerCase(); });
   }
-  function getSlot(grade, day, period) {
-    var key = day + '_' + period;
+
+  function getSlot(grade, day, periodId) {
+    var key = day + '_' + periodId;
     return grade === '11' ? (timetable11[key] || {}) : (timetable12[key] || {});
   }
-  function updateSlot(grade, day, period, updates) {
-    var key = day + '_' + period;
+
+  function updateSlot(grade, day, periodId, updates) {
+    var key = day + '_' + periodId;
     var setter = grade === '11' ? setTimetable11 : setTimetable12;
     setter(function(prev) {
       return Object.assign({}, prev, { [key]: Object.assign({}, prev[key] || {}, updates) });
     });
   }
-  function clearSlot(grade, day, period) {
-    var key = day + '_' + period;
+
+  function clearSlot(grade, day, periodId) {
+    var key = day + '_' + periodId;
     var setter = grade === '11' ? setTimetable11 : setTimetable12;
     setter(function(prev) {
       var next = Object.assign({}, prev);
@@ -164,25 +211,91 @@ function TimetablePage({ currentUser, mySchool }) {
       return next;
     });
   }
-  function isConflict(day, period) {
-    return conflicts.some(function(c) { return c.day === day && c.period === period; });
+
+  function isConflict(day, periodId) {
+    return conflicts.some(function(c) { return c.day === day && c.periodId === periodId; });
   }
-  function handleSubjectChange(grade, day, period, subject) {
-    var current = getSlot(grade, day, period);
-    var updates = { subject: subject };
-    if (current.teacherId) {
-      var t = teachers.find(function(x) { return getTId(x) === current.teacherId; });
-      if (t && t.subject !== subject) { updates.teacherId = ''; updates.teacherName = ''; }
+
+  function findDefaultTeacherForSubject(subject) {
+    if (!subject || subject === 'Other') return null;
+    var match = teachers.find(function(t) {
+      return (t.subject || '').toLowerCase() === String(subject).toLowerCase();
+    });
+    return match || null;
+  }
+
+  function handleSubjectChange(grade, day, periodId, subject) {
+    var defaultTeacher = findDefaultTeacherForSubject(subject);
+    if (defaultTeacher) {
+      updateSlot(grade, day, periodId, {
+        subject: subject,
+        teacherId: getTId(defaultTeacher),
+        teacherName: defaultTeacher.name || ''
+      });
+      return;
     }
-    updateSlot(grade, day, period, updates);
+
+    var current = getSlot(grade, day, periodId);
+    var updates = { subject: subject };
+    if (current.teacherId && current.teacherId !== '__cbse__') {
+      var t = teachers.find(function(x) { return getTId(x) === current.teacherId; });
+      if (t && (t.subject || '').toLowerCase() !== String(subject).toLowerCase()) {
+        updates.teacherId = '';
+        updates.teacherName = '';
+      }
+    }
+    updateSlot(grade, day, periodId, updates);
   }
-  function handleTeacherChange(grade, day, period, teacherId) {
+
+  function handleTeacherChange(grade, day, periodId, teacherId) {
+    var current = getSlot(grade, day, periodId);
+    if (teacherId === '__cbse__') {
+      updateSlot(grade, day, periodId, {
+        teacherId: '__cbse__',
+        teacherName: 'CBSE Teacher',
+        subject: current.subject || ''
+      });
+      return;
+    }
     var t = teachers.find(function(x) { return getTId(x) === teacherId; });
-    var current = getSlot(grade, day, period);
-    updateSlot(grade, day, period, {
+    updateSlot(grade, day, periodId, {
       teacherId: teacherId,
       teacherName: t ? (t.name || '') : '',
       subject: t ? (t.subject || current.subject || '') : (current.subject || '')
+    });
+  }
+
+  function updatePeriodConfig(periodId, updates) {
+    setPeriodConfigs(function(prev) {
+      return prev.map(function(p) {
+        return p.id === periodId ? Object.assign({}, p, updates) : p;
+      });
+    });
+  }
+
+  function addPeriodColumn() {
+    setPeriodConfigs(function(prev) {
+      var id = 'P' + (prev.length + 1);
+      return prev.concat([{ id: id, label: 'Period ' + (prev.length + 1), time: '', type: 'class' }]);
+    });
+  }
+
+  function removeLastPeriodColumn() {
+    setPeriodConfigs(function(prev) {
+      if (prev.length <= 1) return prev;
+      var removed = prev[prev.length - 1];
+      var next = prev.slice(0, -1);
+      ['11', '12'].forEach(function(grade) {
+        var setter = grade === '11' ? setTimetable11 : setTimetable12;
+        setter(function(existing) {
+          var cleaned = Object.assign({}, existing);
+          DAYS.forEach(function(day) {
+            delete cleaned[day + '_' + removed.id];
+          });
+          return cleaned;
+        });
+      });
+      return next;
     });
   }
 
@@ -199,6 +312,7 @@ function TimetablePage({ currentUser, mySchool }) {
       var now = new Date().toISOString();
       var base = {
         school: mySchool, updatedAt: now,
+        periodConfigs: periodConfigs,
         updatedBy: (currentUser && (currentUser.afid || currentUser.email)) || '',
         updatedByName: (currentUser && currentUser.name) || ''
       };
@@ -216,18 +330,29 @@ function TimetablePage({ currentUser, mySchool }) {
   // ─── Export CSV ───────────────────────────────────────────────────────────────
   function exportCSV() {
     var tt = activeClass === '11' ? timetable11 : timetable12;
-    var rows = [['Day'].concat(PERIOD_LABELS)];
+    var header = ['Day'];
+    periodConfigs.forEach(function(p) {
+      header.push((p.label || p.id) + (p.time ? ' (' + p.time + ')' : ''));
+    });
+    var rows = [header];
+
     DAYS.forEach(function(day) {
       var row = [day];
-      PERIODS.forEach(function(p) {
-        var slot = tt[day + '_' + p] || {};
-        row.push(slot.subject ? slot.subject + (slot.teacherName ? ' (' + slot.teacherName + ')' : '') : '');
+      periodConfigs.forEach(function(p) {
+        var slot = tt[day + '_' + p.id] || {};
+        if (p.type !== 'class') {
+          row.push((p.label || p.id) + (p.time ? ' [' + p.time + ']' : ''));
+        } else {
+          row.push(slot.subject ? slot.subject + (slot.teacherName ? ' (' + slot.teacherName + ')' : '') : '');
+        }
       });
       rows.push(row);
     });
+
     var csv = rows.map(function(r) {
       return r.map(function(c) { return '"' + String(c).replace(/"/g, '""') + '"'; }).join(',');
     }).join('\n');
+
     var blob = new Blob([csv], { type: 'text/csv' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -250,11 +375,12 @@ function TimetablePage({ currentUser, mySchool }) {
     function getTeacherSchedule(teacherId) {
       var schedule = {};
       DAYS.forEach(function(day) {
-        PERIODS.forEach(function(period) {
-          var key = day + '_' + period;
+        periodConfigs.forEach(function(periodCfg) {
+          if (periodCfg.type !== 'class') return;
+          var key = day + '_' + periodCfg.id;
           var s11 = timetable11[key] || {}; var s12 = timetable12[key] || {};
-          if (s11.teacherId === teacherId) schedule[key] = { grade: '11', subject: s11.subject || '' };
-          else if (s12.teacherId === teacherId) schedule[key] = { grade: '12', subject: s12.subject || '' };
+          if (s11.teacherId === teacherId) schedule[key] = { grade: '11', subject: s11.subject || '', periodLabel: periodCfg.label || periodCfg.id };
+          else if (s12.teacherId === teacherId) schedule[key] = { grade: '12', subject: s12.subject || '', periodLabel: periodCfg.label || periodCfg.id };
         });
       });
       return schedule;
@@ -296,8 +422,8 @@ function TimetablePage({ currentUser, mySchool }) {
                   React.createElement('thead', null,
                     React.createElement('tr', { className: 'bg-gray-100' },
                       React.createElement('th', { className: 'border p-2 text-left' }, 'Day'),
-                      PERIOD_LABELS.map(function(p, i) {
-                        return React.createElement('th', { key: i, className: 'border p-2 text-center' }, p);
+                      periodConfigs.map(function(p, i) {
+                        return React.createElement('th', { key: i, className: 'border p-2 text-center' }, p.label || p.id);
                       })
                     )
                   ),
@@ -305,8 +431,11 @@ function TimetablePage({ currentUser, mySchool }) {
                     DAYS.map(function(day) {
                       return React.createElement('tr', { key: day, className: 'odd:bg-white even:bg-gray-50' },
                         React.createElement('td', { className: 'border p-2 font-semibold whitespace-nowrap' }, day),
-                        PERIODS.map(function(period, i) {
-                          var slot = sch[day + '_' + period];
+                        periodConfigs.map(function(periodCfg, i) {
+                          var slot = sch[day + '_' + periodCfg.id];
+                          if (periodCfg.type !== 'class') {
+                            return React.createElement('td', { key: i, className: 'border p-1 text-center text-gray-400' }, '—');
+                          }
                           return React.createElement('td', { key: i, className: 'border p-1 text-center ' + (slot ? 'bg-green-50' : '') },
                             slot
                               ? React.createElement('div', null,
@@ -362,6 +491,14 @@ function TimetablePage({ currentUser, mySchool }) {
         )
       ),
       React.createElement('div', { className: 'flex flex-wrap gap-2' },
+        editable && React.createElement('button', {
+          onClick: addPeriodColumn,
+          className: 'px-3 py-2 bg-indigo-600 text-white rounded-xl font-semibold text-xs hover:bg-indigo-700'
+        }, '➕ Add Row/Period'),
+        editable && React.createElement('button', {
+          onClick: removeLastPeriodColumn,
+          className: 'px-3 py-2 bg-orange-500 text-white rounded-xl font-semibold text-xs hover:bg-orange-600'
+        }, '➖ Remove Last'),
         React.createElement('button', {
           onClick: function() { setActiveView('teacher'); },
           className: 'px-3 py-2 bg-purple-600 text-white rounded-xl font-semibold text-xs hover:bg-purple-700'
@@ -409,7 +546,7 @@ function TimetablePage({ currentUser, mySchool }) {
         })
       ),
       React.createElement('div', { className: 'text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full' },
-        totalFilled + ' / ' + (DAYS.length * PERIODS.length) + ' periods filled'
+        totalFilled + ' / ' + (DAYS.length * periodIds().length) + ' periods filled'
       ),
       !editable && React.createElement('span', { className: 'text-xs bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full border border-yellow-200' }, '👁️ View only')
     ),
@@ -419,30 +556,73 @@ function TimetablePage({ currentUser, mySchool }) {
 
     // Grid
     React.createElement('div', { className: 'overflow-x-auto rounded-2xl shadow-lg' },
-      React.createElement('div', { className: 'min-w-[700px]' },
+      React.createElement('div', { className: 'min-w-[900px]' },
         React.createElement('div', {
           className: 'grid bg-gray-800 text-white text-xs font-bold',
-          style: { gridTemplateColumns: '80px repeat(8, 1fr)' }
+          style: { gridTemplateColumns: '90px repeat(' + periodIds().length + ', minmax(145px, 1fr))' }
         },
           React.createElement('div', { className: 'p-2 border-r border-gray-600' }, 'Day'),
-          PERIOD_LABELS.map(function(p) {
-            return React.createElement('div', { key: p, className: 'p-2 border-r border-gray-600 text-center' }, p);
+          periodConfigs.map(function(p) {
+            return React.createElement('div', { key: p.id, className: 'p-2 border-r border-gray-600 text-center' },
+              editable
+                ? React.createElement('div', { className: 'space-y-1' },
+                    React.createElement('input', {
+                      value: p.label || '',
+                      onChange: function(e) { updatePeriodConfig(p.id, { label: e.target.value }); },
+                      className: 'w-full rounded bg-white/10 border border-white/20 text-[11px] p-1 text-center',
+                      placeholder: 'Period label'
+                    }),
+                    React.createElement('input', {
+                      value: p.time || '',
+                      onChange: function(e) { updatePeriodConfig(p.id, { time: e.target.value }); },
+                      className: 'w-full rounded bg-white/10 border border-white/20 text-[11px] p-1 text-center',
+                      placeholder: 'Time'
+                    }),
+                    React.createElement('select', {
+                      value: p.type || 'class',
+                      onChange: function(e) { updatePeriodConfig(p.id, { type: e.target.value }); },
+                      className: 'w-full rounded bg-white/10 border border-white/20 text-[11px] p-1 text-center'
+                    },
+                      React.createElement('option', { value: 'class' }, 'Class'),
+                      React.createElement('option', { value: 'assembly' }, 'Assembly'),
+                      React.createElement('option', { value: 'lunch' }, 'Lunch'),
+                      React.createElement('option', { value: 'break' }, 'Break'),
+                      React.createElement('option', { value: 'custom' }, 'Custom')
+                    )
+                  )
+                : React.createElement('div', { className: 'leading-tight' },
+                    React.createElement('div', null, p.label || p.id),
+                    React.createElement('div', { className: 'text-[10px] opacity-90 mt-1' }, p.time || '—')
+                  )
+            );
           })
         ),
         DAYS.map(function(day, dayIdx) {
           return React.createElement('div', {
             key: day,
             className: 'grid border-b border-gray-200 ' + (dayIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'),
-            style: { gridTemplateColumns: '80px repeat(8, 1fr)' }
+            style: { gridTemplateColumns: '90px repeat(' + periodIds().length + ', minmax(145px, 1fr))' }
           },
             React.createElement('div', {
               className: 'p-2 border-r border-gray-200 font-bold text-xs text-gray-700 flex items-center justify-center bg-gray-100'
             }, day.substring(0, 3).toUpperCase()),
-            PERIODS.map(function(period, pIdx) {
-              var slot = getSlot(activeClass, day, period);
-              var conflict = isConflict(day, period);
+            periodConfigs.map(function(periodCfg, pIdx) {
+              var slot = getSlot(activeClass, day, periodCfg.id);
+              var conflict = isConflict(day, periodCfg.id);
               var teachersForSub = getTeachersForSubject(slot.subject);
+              var isClassPeriod = periodCfg.type === 'class';
               var cellBg = conflict ? 'bg-red-50' : (slot.subject || slot.teacherName) ? 'bg-purple-50' : '';
+
+              if (!isClassPeriod) {
+                return React.createElement('div', {
+                  key: pIdx,
+                  className: 'border-r border-b border-gray-200 p-2 bg-amber-50'
+                },
+                  React.createElement('div', { className: 'text-xs font-semibold text-amber-700' }, periodCfg.label || 'Special Period'),
+                  React.createElement('div', { className: 'text-[11px] text-amber-600 mt-1' }, periodCfg.time || 'Edit timing in header')
+                );
+              }
+
               return React.createElement('div', {
                 key: pIdx,
                 className: 'border-r border-b border-gray-200 p-1 ' + cellBg,
@@ -453,7 +633,7 @@ function TimetablePage({ currentUser, mySchool }) {
                   ? React.createElement('div', { className: 'space-y-1' },
                       React.createElement('select', {
                         value: slot.subject || '',
-                        onChange: function(e) { handleSubjectChange(activeClass, day, period, e.target.value); },
+                        onChange: function(e) { handleSubjectChange(activeClass, day, periodCfg.id, e.target.value); },
                         className: 'w-full border border-gray-300 rounded-lg text-xs p-1 focus:border-purple-400 focus:outline-none bg-white'
                       },
                         React.createElement('option', { value: '' }, '— Sub —'),
@@ -461,16 +641,17 @@ function TimetablePage({ currentUser, mySchool }) {
                       ),
                       React.createElement('select', {
                         value: slot.teacherId || '',
-                        onChange: function(e) { handleTeacherChange(activeClass, day, period, e.target.value); },
+                        onChange: function(e) { handleTeacherChange(activeClass, day, periodCfg.id, e.target.value); },
                         className: 'w-full border rounded-lg text-xs p-1 focus:border-purple-400 focus:outline-none bg-white ' + (conflict ? 'border-red-400' : 'border-gray-300')
                       },
                         React.createElement('option', { value: '' }, '— Teacher —'),
+                        React.createElement('option', { value: '__cbse__' }, 'CBSE Teacher'),
                         teachersForSub.map(function(t) {
                           return React.createElement('option', { key: getTId(t), value: getTId(t) }, t.name);
                         })
                       ),
                       (slot.subject || slot.teacherId) && React.createElement('button', {
-                        onClick: function() { clearSlot(activeClass, day, period); },
+                        onClick: function() { clearSlot(activeClass, day, periodCfg.id); },
                         className: 'w-full text-xs text-gray-400 hover:text-red-500 text-right leading-none'
                       }, '✕ clear')
                     )
@@ -491,7 +672,8 @@ function TimetablePage({ currentUser, mySchool }) {
 
     // Legend
     React.createElement('div', { className: 'flex flex-wrap gap-4 text-xs text-gray-500 p-3 bg-gray-50 rounded-xl' },
-      React.createElement('span', null, React.createElement('span', { className: 'inline-block w-3 h-3 bg-purple-50 border border-purple-200 rounded mr-1' }), 'Filled'),
+      React.createElement('span', null, React.createElement('span', { className: 'inline-block w-3 h-3 bg-purple-50 border border-purple-200 rounded mr-1' }), 'Filled class'),
+      React.createElement('span', null, React.createElement('span', { className: 'inline-block w-3 h-3 bg-amber-50 border border-amber-200 rounded mr-1' }), 'Break/Assembly/Lunch period'),
       React.createElement('span', null, React.createElement('span', { className: 'inline-block w-3 h-3 bg-red-50 border border-red-300 rounded mr-1' }), 'Conflict — same teacher double-booked')
     ),
 
