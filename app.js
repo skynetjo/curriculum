@@ -3,7 +3,7 @@
 document.addEventListener('touchstart', function(){}, {passive: true});
 document.addEventListener('touchmove', function(){}, {passive: true});
 document.addEventListener('wheel', function(){}, {passive: true});
-
+ 
 const {
   useState,
   useEffect,
