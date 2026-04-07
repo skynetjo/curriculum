@@ -169,6 +169,12 @@ function AdminView({
       className: "fa-solid fa-school"
     })
   }, {
+    id: 'timetable',
+    label: '📅 Timetable',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-calendar"
+    })
+  }, {
     id: 'studentprofiles',
     label: 'Student Profiles',
     icon: React.createElement("i", {
@@ -533,6 +539,9 @@ function AdminView({
     currentUser: currentUser,
     isAdmin: true,
     accessibleSchools: availableSchools
+  }), activeTab === 'timetable' && React.createElement(TimetablePage, {
+    currentUser: currentUser,
+    mySchool: currentUser?.school
   }), activeTab === 'studentfeedback' && React.createElement(StudentFeedbackView, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
