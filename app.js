@@ -21975,8 +21975,32 @@ function TimetablePage({ currentUser, mySchool }) {
         React.createElement('div',{className:'grid bg-gray-800 text-white text-xs font-bold',style:{gridTemplateColumns:'90px repeat('+numPeriods+', 1fr)'}},
           React.createElement('div',{className:'p-2 border-r border-gray-600'},'Day'),
           FULL_SCHEDULE.map(function(s,i){
-            var displayTime=periodTimes[i]||s.time;
-            if(s.type !== 'period'){
+
+  var displayTime = periodTimes[i] || s.time;
+
+  // ✅ For Break / Lunch / Assembly
+  if(s.type !== 'period'){
+    return React.createElement(
+      'div',
+      {
+        key:s.key,
+        className:'p-1 border-r border-gray-600 text-center bg-yellow-100 text-yellow-700 font-bold'
+      },
+      s.label + (displayTime ? ' (' + displayTime + ')' : '')
+    );
+  }
+
+  // ✅ For normal periods
+  return React.createElement(
+    'div',
+    {
+      key:s.key,
+      className:'p-2 border-r border-gray-600'
+    },
+    s.label + (displayTime ? ' (' + displayTime + ')' : '')
+  );
+
+})            if(s.type !== 'period'){
   return React.createElement(
     'div',
     {
