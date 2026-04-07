@@ -21809,7 +21809,7 @@ function TimetablePage({ currentUser, mySchool }) {
   function exportCSV(){
     var tt=activeClass==='11'?timetable11:timetable12;
     var rows=[['Day'].concat(PLABELS)];
-    DAYS.forEach(function(day){ var row=[day]; PERIODS.forEach(function(p){ var slot=tt[day+'_'+p]||{}; row.push(slot.subject?slot.subject+(slot.teacherName?' ('+slot.teacherName+')'):''); }); rows.push(row); });
+    DAYS.forEach(function(day){ var row=[day]; PERIODS.forEach(function(p){ var slot=tt[day+'_'+p]||{}; row.push(slot.subject?slot.subject+(slot.teacherName?' ('+slot.teacherName+')':''):''); }); rows.push(row); });
     var csv=rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
     var blob=new Blob([csv],{type:'text/csv'}); var url=URL.createObjectURL(blob);
     var a=document.createElement('a'); a.href=url; a.download='Timetable_Class'+activeClass+'_'+(mySchool||'').replace(/\s+/g,'_')+'.csv';
