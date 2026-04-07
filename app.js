@@ -10589,6 +10589,12 @@ function TeacherView({
       className: "fa-solid fa-clipboard-list"
     })
   }, {
+    id: 'timetable',
+    label: 'Timetable',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-calendar"
+    })
+  }, {
     id: 'timesheet',
     label: 'Timesheet',
     icon: React.createElement("i", {
@@ -10677,6 +10683,12 @@ function TeacherView({
     label: 'Exam Tracker',
     icon: React.createElement("i", {
       className: "fa-solid fa-clipboard-list"
+    })
+  }, {
+    id: 'timetable',
+    label: 'Timetable',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-calendar"
     })
   }, {
     id: 'myprofile',
@@ -11020,6 +11032,9 @@ function TeacherView({
   }), activeTab === 'examtracker' && React.createElement(ExamTrackerPage, {
     currentUser: currentUser,
     isAdmin: false
+  }), activeTab === 'timetable' && React.createElement(TimetablePage, {
+    currentUser: currentUser,
+    mySchool: currentUser?.school
   }), activeTab === 'assets' && React.createElement(AssetManagement, {
     currentUser: currentUser,
     students: students
