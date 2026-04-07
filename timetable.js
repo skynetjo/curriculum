@@ -560,6 +560,9 @@ function getDayEmoji(day) {
   return map[day] || '📅';
 }
 
+// Export to global scope so app.js can access it
+window.TimetablePage = TimetablePage;
+
 // ============================================================
 // 👇 HOW TO PLUG THIS INTO app.js:
 // ============================================================
