@@ -1,6 +1,6 @@
 // ============================================================
 // 📅 TIMETABLE PAGE - Avanti Fellows Curriculum Tracker
-// Version: 1.0.0 | Add <script src="timetable.js"></script>
+// Version: 5.6.8 | Add <script src="timetable.js"></script>
 // in index.html BEFORE app.js closing </body>
 // ============================================================
 

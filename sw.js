@@ -1,6 +1,6 @@
 // ========================================
 // CURRICULUM TRACKER - SERVICE WORKER
-// Version: 5.5.2 - Version Sync + Performance
+// Version: 5.6.8
 // ========================================
 
 const CACHE_NAME = 'curriculum-tracker-v5.6.8';

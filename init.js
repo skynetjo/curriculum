@@ -1,4 +1,4 @@
-// ✅ INIT.JS v5.3.1 - Fixed deprecation warnings
+// ✅ INIT.JS v5.6.8 - Fixed deprecation warnings
 // Firebase + Connection Manager + Offline Queue + Chart Config
 
 // ── Firebase Initialization ──────────────────────────────
@@ -304,9 +304,7 @@ window.addEventListener('load', function() {
   // v5.4.0: No preloading - LazyLibs loads libraries only when needed.
   // Removed: Chart.js, firebase-messaging, firebase-storage preloads.
   // Saves ~650KB on every page load for all teachers across all 32 centres.
-  console.log('✅ Init.js v5.4.0 - lazy loading active');
+  console.log('✅ Init.js v5.6.8 - lazy loading active');
 });
 
-console.log('✅ Init.js v5.4.0 loaded - performance enhanced');
-
-console.log('✅ Init.js v5.3.1 loaded - warnings fixed');
+console.log('✅ Init.js v5.6.8 loaded - performance enhanced');

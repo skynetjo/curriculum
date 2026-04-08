@@ -1,4 +1,4 @@
-// ✅ PRE-COMPILED JAVASCRIPT v5.5.5 - Performance Optimized
+// ✅ PRE-COMPILED JAVASCRIPT v5.6.8 - Performance Optimized
 // ✅ PERFORMANCE: Use passive event listeners for scroll/touch
 document.addEventListener('touchstart', function(){}, {passive: true});
 document.addEventListener('touchmove', function(){}, {passive: true});
@@ -9541,7 +9541,7 @@ function App() {
 
           // Footer
           React.createElement('div', {style:{textAlign:'center',marginTop:'24px',fontSize:'12px',color:'#bbb'}},
-            'Avanti Fellows \u00B7 JNV Program \u00B7 v5.5.6'
+            'Avanti Fellows \u00B7 JNV Program \u00B7 v5.6.8'
           )
         )
       )
