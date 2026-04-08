@@ -1115,6 +1115,105 @@ setRows(normalised);
   }
 
   // ─────────────────────────────────────────────────────────
+  // SCHOOL SUMMARY TABLE  (managers / admins only)
+  // Matrix view: rows = exams, columns = schools, cells = status
+  // ─────────────────────────────────────────────────────────
+  function SchoolSummaryTable({ exams, conductMap, allSchools }) {
+    const [sgGrade,  setSgGrade]  = useState('All');
+    const [sgStream, setSgStream] = useState('All');
+
+    const gOpts = useMemo(()=>['All',...Array.from(new Set(exams.map(e=>e.grade))).sort((a,b)=>Number(a)-Number(b))],[exams]);
+    const sOpts = useMemo(()=>['All',...Array.from(new Set(exams.map(e=>e.stream))).sort()],[exams]);
+
+    const rows = useMemo(()=>exams.filter(e=>{
+      if(sgGrade!=='All'&&e.grade!==sgGrade) return false;
+      if(sgStream!=='All'&&e.stream!==sgStream) return false;
+      return true;
+    }),[exams,sgGrade,sgStream]);
+
+    const CELL = {
+      conducted:{ bg:'#DCFCE7', c:'#15803D', b:'#86EFAC', label:'Conducted' },
+      partial:  { bg:'#FEF9C3', c:'#854D0E', b:'#FDE047', label:'Partial'   },
+      missed:   { bg:'#FEE2E2', c:'#B91C1C', b:'#FCA5A5', label:'Missed'    },
+      upcoming: { bg:'#EEF2FF', c:'#3730A3', b:'#A5B4FC', label:'Upcoming'  },
+      unset:    { bg:'#FFF7ED', c:'#C2410C', b:'#FDBA74', label:'Pending'   },
+      excluded: { bg:'#F3F4F6', c:'#9CA3AF', b:'#D1D5DB', label:'N/A'       },
+    };
+    const selInp = {padding:'7px 10px',border:'1.5px solid rgba(255,255,255,0.25)',borderRadius:'8px',fontSize:'12px',background:'rgba(255,255,255,0.1)',color:'#fff',cursor:'pointer',outline:'none'};
+
+    return React.createElement('div',{style:{background:'#fff',borderRadius:'14px',boxShadow:'0 2px 10px rgba(0,0,0,0.07)',marginBottom:'20px',overflow:'hidden'}},
+
+      // Card header
+      React.createElement('div',{style:{padding:'14px 18px',borderBottom:'1px solid rgba(255,255,255,0.08)',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'10px',background:'linear-gradient(135deg,#1a1a2e,#16213e)'}},
+        React.createElement('div',null,
+          React.createElement('div',{style:{fontWeight:'800',fontSize:'15px',color:'#fff'}},'🏫 School-wise Status Overview'),
+          React.createElement('div',{style:{fontSize:'12px',color:'rgba(255,255,255,0.5)',marginTop:'2px'}},
+            rows.length+' exam'+(rows.length!==1?'s':'')+' × '+allSchools.length+' school'+(allSchools.length!==1?'s':''))
+        ),
+        React.createElement('div',{style:{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}},
+          React.createElement('select',{value:sgGrade, onChange:e=>setSgGrade(e.target.value), style:selInp},
+            gOpts.map(o=>React.createElement('option',{key:o,value:o,style:{background:'#1a1a2e',color:'#fff'}},o==='All'?'All Grades':'Grade '+o))),
+          React.createElement('select',{value:sgStream,onChange:e=>setSgStream(e.target.value),style:selInp},
+            sOpts.map(o=>React.createElement('option',{key:o,value:o,style:{background:'#1a1a2e',color:'#fff'}},o==='All'?'All Streams':o))),
+          React.createElement('button',{onClick:()=>{setSgGrade('All');setSgStream('All');},title:'Reset filters',
+            style:{padding:'7px 11px',background:'rgba(255,255,255,0.12)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:'8px',fontSize:'12px',cursor:'pointer',color:'rgba(255,255,255,0.8)',fontWeight:'600'}},'↺')
+        )
+      ),
+
+      // Scrollable matrix table
+      React.createElement('div',{style:{overflowX:'auto'}},
+        React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:(280+allSchools.length*140)+'px'}},
+          React.createElement('thead',null,
+            React.createElement('tr',{style:{background:'#F8FAFC'}},
+              React.createElement('th',{style:{padding:'11px 16px',textAlign:'left',fontSize:'11px',fontWeight:'700',color:'#6B7280',textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'2px solid #E5E7EB',minWidth:'270px',position:'sticky',left:0,background:'#F8FAFC',zIndex:2,boxShadow:'2px 0 4px rgba(0,0,0,0.04)'}},'Exam'),
+              ...allSchools.map(sc=>React.createElement('th',{key:sc,style:{padding:'11px 10px',textAlign:'center',fontSize:'11px',fontWeight:'700',color:'#374151',textTransform:'uppercase',letterSpacing:'.04em',borderBottom:'2px solid #E5E7EB',minWidth:'130px',whiteSpace:'nowrap'}},sc))
+            )
+          ),
+          React.createElement('tbody',null,
+            rows.length===0
+              ? React.createElement('tr',null,React.createElement('td',{colSpan:allSchools.length+1,style:{padding:'48px',textAlign:'center',color:'#9CA3AF',fontSize:'14px'}},'No exams match the selected filters'))
+              : rows.map((exam,i)=>{
+                  const rowBg = i%2===0?'#fff':'#FAFAFA';
+                  return React.createElement('tr',{key:exam.id,style:{borderBottom:'1px solid #F3F4F6'}},
+                    // Sticky exam info cell
+                    React.createElement('td',{style:{padding:'10px 16px',position:'sticky',left:0,background:rowBg,zIndex:1,borderRight:'1px solid #E5E7EB',boxShadow:'2px 0 4px rgba(0,0,0,0.03)'}},
+                      React.createElement('div',{style:{fontWeight:'700',fontSize:'12px',color:'#111827',marginBottom:'4px',lineHeight:'1.3'}},exam.testName),
+                      React.createElement('div',{style:{display:'flex',gap:'5px',flexWrap:'wrap',alignItems:'center'}},
+                        React.createElement('span',{style:{background:'#EFF6FF',color:'#1D4ED8',borderRadius:'4px',padding:'1px 7px',fontSize:'10px',fontWeight:'700',border:'1px solid #BFDBFE'}},'G'+exam.grade),
+                        React.createElement('span',{style:{background:'#F5F3FF',color:'#6D28D9',borderRadius:'4px',padding:'1px 7px',fontSize:'10px',fontWeight:'700',border:'1px solid #DDD6FE'}},exam.stream),
+                        React.createElement('span',{style:{color:'#9CA3AF',fontSize:'10px',fontWeight:'500'}},fmtDate(exam.date))
+                      )
+                    ),
+                    // Status cell per school
+                    ...allSchools.map(sc=>{
+                      const cond = conductMap[sc+'_'+exam.id];
+                      const key  = sKey(cond, exam.date);
+                      const cfg  = CELL[key]||CELL.unset;
+                      return React.createElement('td',{key:sc,style:{padding:'8px 6px',textAlign:'center',background:rowBg}},
+                        React.createElement('span',{style:{
+                          display:'inline-block',background:cfg.bg,color:cfg.c,
+                          border:'1px solid '+cfg.b,borderRadius:'6px',
+                          padding:'4px 11px',fontSize:'11px',fontWeight:'700',whiteSpace:'nowrap',
+                        }},cfg.label)
+                      );
+                    })
+                  );
+                })
+          )
+        )
+      ),
+
+      // Legend footer
+      React.createElement('div',{style:{padding:'10px 16px',background:'#F9FAFB',borderTop:'1px solid #F3F4F6',display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}},
+        React.createElement('span',{style:{fontSize:'11px',color:'#9CA3AF',fontWeight:'600',marginRight:'2px'}},'Legend:'),
+        ...Object.entries(CELL).map(([k,v])=>
+          React.createElement('span',{key:k,style:{background:v.bg,color:v.c,border:'1px solid '+v.b,borderRadius:'5px',padding:'2px 9px',fontSize:'10px',fontWeight:'700'}},v.label)
+        )
+      )
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────
   // MAIN COMPONENT
   // ─────────────────────────────────────────────────────────
   function ExamConductTracker({ currentUser, isAdmin, accessibleSchools }) {
@@ -1148,6 +1247,7 @@ setRows(normalised);
     const [deleteModal,   setDeleteModal]   = useState(null);
     const [csvModal,      setCSVModal]      = useState(false);
     const [resultsModal,  setResultsModal]  = useState(false);
+    const [showSummary,   setShowSummary]   = useState(true);
 
     const primarySchool = useMemo(()=>
       selSchools.length===1?selSchools[0]:(selSchools[0]||school||allSchools[0]||''),
@@ -1380,6 +1480,22 @@ setRows(normalised);
               );
             })
           )
+        ),
+
+        // School Summary Table — managers / admins only
+        isAdmin && allSchools.length > 1 && React.createElement('div',{style:{marginBottom:'4px'}},
+          React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}},
+            React.createElement('div',{style:{fontSize:'12px',color:'#6B7280',fontWeight:'600',textTransform:'uppercase',letterSpacing:'.06em'}},'School Overview'),
+            React.createElement('button',{
+              onClick:()=>setShowSummary(v=>!v),
+              style:{padding:'5px 12px',background:'#F3F4F6',border:'1px solid #E5E7EB',borderRadius:'7px',fontSize:'12px',cursor:'pointer',color:'#374151',fontWeight:'600',display:'flex',alignItems:'center',gap:'5px'}
+            }, showSummary ? '▲ Hide' : '▼ Show')
+          ),
+          showSummary && React.createElement(SchoolSummaryTable,{
+            exams,
+            conductMap,
+            allSchools,
+          })
         ),
 
         // Filters
