@@ -1,4 +1,4 @@
-// ✅ PRE-COMPILED JAVASCRIPT v5.5.5 - Performance Optimized
+// ✅ PRE-COMPILED JAVASCRIPT v5.6.8 - Performance Optimized
 // ✅ PERFORMANCE: Use passive event listeners for scroll/touch
 document.addEventListener('touchstart', function(){}, {passive: true});
 document.addEventListener('touchmove', function(){}, {passive: true});
@@ -9541,7 +9541,7 @@ function App() {
 
           // Footer
           React.createElement('div', {style:{textAlign:'center',marginTop:'24px',fontSize:'12px',color:'#bbb'}},
-            'Avanti Fellows \u00B7 JNV Program \u00B7 v5.5.6'
+            'Avanti Fellows \u00B7 JNV Program \u00B7 v5.6.8'
           )
         )
       )
@@ -21772,6 +21772,7 @@ function TimetablePage({ currentUser, mySchool }) {
   var [lastSaved, setLastSaved] = useState(null);
   var [numPeriods, setNumPeriods] = useState(8);
   var [periodTimes, setPeriodTimes] = useState(['6:00–7:00','7:30–9:00','9:30–10:30','10:30–12:00','12:00–1:30','3:00–4:30','5:00–8:00','9:00–10:30']);
+  var [breakTimes, setBreakTimes] = useState({});
   var [editingTime, setEditingTime] = useState(null);
   var [periodLabels, setPeriodLabels] = useState({});
   var [colTypes, setColTypes] = useState({});
@@ -21844,6 +21845,7 @@ function TimetablePage({ currentUser, mySchool }) {
         if(d1.periodLabels){setPeriodLabels(d1.periodLabels);metaLoaded=true;}
         if(d1.colTypes){setColTypes(d1.colTypes);metaLoaded=true;}
         if(d1.periodTimes){setPeriodTimes(d1.periodTimes);metaLoaded=true;}
+        if(d1.breakTimes){setBreakTimes(d1.breakTimes);}
       }
       if (r[2].exists) {
         var d2=r[2].data();
@@ -21852,6 +21854,7 @@ function TimetablePage({ currentUser, mySchool }) {
           if(d2.periodLabels)setPeriodLabels(d2.periodLabels);
           if(d2.colTypes)setColTypes(d2.colTypes);
           if(d2.periodTimes)setPeriodTimes(d2.periodTimes);
+          if(d2.breakTimes)setBreakTimes(d2.breakTimes);
         }
       }
     }).catch(function(e){ console.error('Timetable load error:',e); })
@@ -21875,7 +21878,7 @@ function TimetablePage({ currentUser, mySchool }) {
     if(autoSaveRef.current) clearTimeout(autoSaveRef.current);
     autoSaveRef.current=setTimeout(function(){saveTimetable(true);},3000);
     return function(){if(autoSaveRef.current)clearTimeout(autoSaveRef.current);};
-  },[timetable11,timetable12,periodLabels,colTypes,periodTimes]);
+  },[timetable11,timetable12,periodLabels,colTypes,periodTimes,breakTimes]);
   function canEdit() {
     if (!currentUser) return false;
     var utype = (currentUser.userType||'').toLowerCase();
@@ -21920,7 +21923,7 @@ function TimetablePage({ currentUser, mySchool }) {
     if(isAutoSave)setSaveMsg('Auto-saving...');
     try{
       var db=getFirestore(); var now=new Date().toISOString();
-      var meta={periodLabels:periodLabels,colTypes:colTypes,periodTimes:periodTimes};
+      var meta={periodLabels:periodLabels,colTypes:colTypes,periodTimes:periodTimes,breakTimes:breakTimes};
       var base=Object.assign({school:mySchool,updatedAt:now,updatedBy:(currentUser&&(currentUser.afid||currentUser.email))||'',updatedByName:(currentUser&&currentUser.name)||''},meta);
       await Promise.all([
         db.collection('timetables').doc(mySchool+'_class11').set(Object.assign({},base,{grade:'11',slots:timetable11})),
@@ -22062,10 +22065,14 @@ function TimetablePage({ currentUser, mySchool }) {
           React.createElement('div',{className:'bg-slate-900',style:{width:'72px',minHeight:'30px',borderRight:'1px solid #475569',flexShrink:0}}),
           FULL_SCHEDULE.map(function(col){
             var pidx=PERIODS.indexOf(col.key);
-            var dispTime=pidx>=0&&periodTimes[pidx]?periodTimes[pidx]:col.time;
+            var dispTime=col.type==='break'?(breakTimes[col.key]||col.time):(pidx>=0&&periodTimes[pidx]?periodTimes[pidx]:col.time);
             return React.createElement('div',{key:'h2_'+col.key,className:'bg-slate-900 flex items-center justify-center text-xs text-white',style:{width:'160px',minHeight:'30px',borderLeft:'1px solid #475569',padding:'2px 8px',flexShrink:0}},
-              editable&&col.type==='period'
-                ?React.createElement('input',{className:'w-full text-center text-xs bg-transparent text-white border-0 border-b border-slate-600 focus:outline-none focus:border-yellow-400 py-0.5',value:dispTime,onChange:function(e){if(pidx>=0)updatePeriodTime(pidx,e.target.value);}})
+              editable
+                ?React.createElement('input',{className:'w-full text-center text-xs bg-transparent text-white border-0 border-b border-slate-600 focus:outline-none focus:border-yellow-400 py-0.5',value:dispTime,
+                  onChange:function(e){
+                    if(col.type==='break'){setBreakTimes(function(prev){return Object.assign({},prev,{[col.key]:e.target.value});});}
+                    else if(pidx>=0){updatePeriodTime(pidx,e.target.value);}
+                  }})
                 :React.createElement('span',null,dispTime)
             );
           })
@@ -22115,7 +22122,7 @@ function TimetablePage({ currentUser, mySchool }) {
               if(isBreakType){
                 var pidx=PERIODS.indexOf(col.key);
                 var breakLabel=periodLabels[col.key]||col.label.replace(/\s*&.*/,'').trim();
-                var breakTime=pidx>=0&&periodTimes[pidx]?periodTimes[pidx]:col.time;
+                var breakTime=col.type==='break'?(breakTimes[col.key]||col.time):(pidx>=0&&periodTimes[pidx]?periodTimes[pidx]:col.time);
                 return React.createElement('div',{key:col.key,className:'flex flex-col items-start justify-center',style:{width:'160px',minHeight:'90px',background:'#fef9ee',borderLeft:'1px solid #e5e7eb',padding:'10px 14px',flexShrink:0}},
                   React.createElement('div',{className:'font-bold text-amber-700',style:{fontSize:'13px',lineHeight:'1.3'}},currentType!==defaultType?currentType:breakLabel),
                   React.createElement('div',{className:'text-amber-500 text-xs mt-1'},breakTime)
