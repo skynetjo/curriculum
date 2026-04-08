@@ -1,6 +1,11 @@
 // ============================================================
-// EXAM CONDUCT TRACKER  v4.5.0
+// EXAM CONDUCT TRACKER  v4.6.0
 // Avanti Fellows Curriculum Tracker
+//
+// v4.6.0 additions:
+//   1. SCHOOL OVERVIEW TABLE — managers/admins see a matrix
+//      of exams × schools with colour-coded status badges.
+//      Filters: exam search, grade, stream. Collapsible.
 //
 // v4.5.0 fixes:
 //   1. CoE Cuttak spelling fix in SCHOOL_TOTALS
@@ -1160,8 +1165,7 @@ setRows(normalised);
             React.createElement('input',{type:'text',value:sgSearch,onChange:e=>setSgSearch(e.target.value),
               placeholder:'Search exam…',
               style:{padding:'7px 10px 7px 30px',border:'1.5px solid rgba(255,255,255,0.25)',borderRadius:'8px',
-                fontSize:'12px',background:'rgba(255,255,255,0.1)',color:'#fff',outline:'none',width:'160px',
-                '::placeholder':{color:'rgba(255,255,255,0.4)'}}}})
+                fontSize:'12px',background:'rgba(255,255,255,0.1)',color:'rgba(255,255,255,0.9)',outline:'none',width:'160px'}})
           ),
 
           React.createElement('select',{value:sgGrade, onChange:e=>setSgGrade(e.target.value), style:selInp},
