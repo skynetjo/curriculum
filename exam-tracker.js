@@ -1119,30 +1119,19 @@ setRows(normalised);
   // Matrix view: rows = exams, columns = schools, cells = status
   // ─────────────────────────────────────────────────────────
   function SchoolSummaryTable({ exams, conductMap, allSchools }) {
-    const [sgGrade,   setSgGrade]   = useState('All');
-    const [sgStream,  setSgStream]  = useState('All');
-    const [sgSchools, setSgSchools] = useState([]);   // empty = all schools
-    const [schoolDdOpen, setSchoolDdOpen] = useState(false);
-    const ddRef = useRef(null);
-
-    useEffect(()=>{
-      function h(e){ if(ddRef.current&&!ddRef.current.contains(e.target)) setSchoolDdOpen(false); }
-      document.addEventListener('mousedown',h);
-      return ()=>document.removeEventListener('mousedown',h);
-    },[]);
+    const [sgGrade,  setSgGrade]  = useState('All');
+    const [sgStream, setSgStream] = useState('All');
+    const [sgSearch, setSgSearch] = useState('');
 
     const gOpts = useMemo(()=>['All',...Array.from(new Set(exams.map(e=>e.grade))).sort((a,b)=>Number(a)-Number(b))],[exams]);
     const sOpts = useMemo(()=>['All',...Array.from(new Set(exams.map(e=>e.stream))).sort()],[exams]);
 
-    const visibleSchools = useMemo(()=>
-      sgSchools.length===0 ? allSchools : allSchools.filter(s=>sgSchools.includes(s))
-    ,[allSchools,sgSchools]);
-
     const rows = useMemo(()=>exams.filter(e=>{
       if(sgGrade!=='All'&&e.grade!==sgGrade) return false;
       if(sgStream!=='All'&&e.stream!==sgStream) return false;
+      if(sgSearch){const q=sgSearch.toLowerCase();if(!e.testName.toLowerCase().includes(q)) return false;}
       return true;
-    }),[exams,sgGrade,sgStream]);
+    }),[exams,sgGrade,sgStream,sgSearch]);
 
     const CELL = {
       conducted:{ bg:'#DCFCE7', c:'#15803D', b:'#86EFAC', label:'Conducted' },
@@ -1154,10 +1143,6 @@ setRows(normalised);
     };
     const selInp = {padding:'7px 10px',border:'1.5px solid rgba(255,255,255,0.25)',borderRadius:'8px',fontSize:'12px',background:'rgba(255,255,255,0.1)',color:'#fff',cursor:'pointer',outline:'none'};
 
-    const schoolBtnLabel = sgSchools.length===0 ? '🏫 All Schools'
-      : sgSchools.length===1 ? sgSchools[0]
-      : sgSchools.length+' schools';
-
     return React.createElement('div',{style:{background:'#fff',borderRadius:'14px',boxShadow:'0 2px 10px rgba(0,0,0,0.07)',marginBottom:'20px',overflow:'hidden'}},
 
       // Card header
@@ -1165,74 +1150,41 @@ setRows(normalised);
         React.createElement('div',null,
           React.createElement('div',{style:{fontWeight:'800',fontSize:'15px',color:'#fff'}},'🏫 School-wise Status Overview'),
           React.createElement('div',{style:{fontSize:'12px',color:'rgba(255,255,255,0.5)',marginTop:'2px'}},
-            rows.length+' exam'+(rows.length!==1?'s':'')+' × '+visibleSchools.length+' school'+(visibleSchools.length!==1?'s':''))
+            rows.length+' exam'+(rows.length!==1?'s':'')+' × '+allSchools.length+' school'+(allSchools.length!==1?'s':''))
         ),
         React.createElement('div',{style:{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}},
 
-          // School multi-select dropdown
-          React.createElement('div',{ref:ddRef,style:{position:'relative'}},
-            React.createElement('button',{onClick:()=>setSchoolDdOpen(v=>!v),style:{
-              padding:'7px 12px',background:'rgba(255,255,255,0.12)',border:'1.5px solid rgba(255,255,255,0.25)',
-              borderRadius:'8px',fontSize:'12px',cursor:'pointer',color:'#fff',fontWeight:'600',
-              display:'flex',alignItems:'center',gap:'7px',whiteSpace:'nowrap'}},
-              React.createElement('span',null,schoolBtnLabel),
-              React.createElement('span',{style:{fontSize:'9px',opacity:'.7'}},schoolDdOpen?'▲':'▼')
-            ),
-            schoolDdOpen && React.createElement('div',{style:{
-              position:'absolute',top:'calc(100% + 6px)',right:0,zIndex:9999,
-              background:'#fff',border:'1px solid #E5E7EB',borderRadius:'12px',
-              boxShadow:'0 8px 30px rgba(0,0,0,0.18)',minWidth:'200px',padding:'6px'}},
-              // All schools option
-              React.createElement('div',{
-                onClick:()=>setSgSchools([]),
-                style:{display:'flex',alignItems:'center',gap:'10px',padding:'8px 12px',borderRadius:'8px',
-                  cursor:'pointer',background:sgSchools.length===0?'#EFF6FF':'transparent',marginBottom:'2px'}},
-                React.createElement('div',{style:{width:'17px',height:'17px',borderRadius:'4px',flexShrink:0,
-                  border:'2px solid '+(sgSchools.length===0?'#1D4ED8':'#D1D5DB'),
-                  background:sgSchools.length===0?'#1D4ED8':'#fff',
-                  display:'flex',alignItems:'center',justifyContent:'center'}},
-                  sgSchools.length===0&&React.createElement('span',{style:{color:'#fff',fontSize:'10px',fontWeight:'800'}},'✓')),
-                React.createElement('span',{style:{fontSize:'13px',fontWeight:'700',color:'#1D4ED8'}},'All Schools')
-              ),
-              React.createElement('div',{style:{height:'1px',background:'#F3F4F6',margin:'4px 0'}}),
-              // Individual schools
-              ...allSchools.map(sc=>{
-                const chk = sgSchools.includes(sc);
-                return React.createElement('div',{key:sc,
-                  onClick:()=>setSgSchools(chk?sgSchools.filter(s=>s!==sc):[...sgSchools,sc]),
-                  style:{display:'flex',alignItems:'center',gap:'10px',padding:'8px 12px',borderRadius:'8px',
-                    cursor:'pointer',background:chk?'#F0F9FF':'transparent'}},
-                  React.createElement('div',{style:{width:'17px',height:'17px',borderRadius:'4px',flexShrink:0,
-                    border:'2px solid '+(chk?'#1D4ED8':'#D1D5DB'),background:chk?'#1D4ED8':'#fff',
-                    display:'flex',alignItems:'center',justifyContent:'center'}},
-                    chk&&React.createElement('span',{style:{color:'#fff',fontSize:'10px',fontWeight:'800'}},'✓')),
-                  React.createElement('span',{style:{fontSize:'13px',color:'#374151'}},sc)
-                );
-              })
-            )
+          // Exam search input
+          React.createElement('div',{style:{position:'relative'}},
+            React.createElement('span',{style:{position:'absolute',left:'9px',top:'50%',transform:'translateY(-50%)',fontSize:'13px',opacity:'.7'}},'🔍'),
+            React.createElement('input',{type:'text',value:sgSearch,onChange:e=>setSgSearch(e.target.value),
+              placeholder:'Search exam…',
+              style:{padding:'7px 10px 7px 30px',border:'1.5px solid rgba(255,255,255,0.25)',borderRadius:'8px',
+                fontSize:'12px',background:'rgba(255,255,255,0.1)',color:'#fff',outline:'none',width:'160px',
+                '::placeholder':{color:'rgba(255,255,255,0.4)'}}}})
           ),
 
           React.createElement('select',{value:sgGrade, onChange:e=>setSgGrade(e.target.value), style:selInp},
             gOpts.map(o=>React.createElement('option',{key:o,value:o,style:{background:'#1a1a2e',color:'#fff'}},o==='All'?'All Grades':'Grade '+o))),
           React.createElement('select',{value:sgStream,onChange:e=>setSgStream(e.target.value),style:selInp},
             sOpts.map(o=>React.createElement('option',{key:o,value:o,style:{background:'#1a1a2e',color:'#fff'}},o==='All'?'All Streams':o))),
-          React.createElement('button',{onClick:()=>{setSgGrade('All');setSgStream('All');setSgSchools([]);},title:'Reset filters',
+          React.createElement('button',{onClick:()=>{setSgGrade('All');setSgStream('All');setSgSearch('');},title:'Reset filters',
             style:{padding:'7px 11px',background:'rgba(255,255,255,0.12)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:'8px',fontSize:'12px',cursor:'pointer',color:'rgba(255,255,255,0.8)',fontWeight:'600'}},'↺')
         )
       ),
 
       // Scrollable matrix table
       React.createElement('div',{style:{overflowX:'auto'}},
-        React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:(280+visibleSchools.length*140)+'px'}},
+        React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',minWidth:(280+allSchools.length*140)+'px'}},
           React.createElement('thead',null,
             React.createElement('tr',{style:{background:'#F8FAFC'}},
               React.createElement('th',{style:{padding:'11px 16px',textAlign:'left',fontSize:'11px',fontWeight:'700',color:'#6B7280',textTransform:'uppercase',letterSpacing:'.05em',borderBottom:'2px solid #E5E7EB',minWidth:'270px',position:'sticky',left:0,background:'#F8FAFC',zIndex:2,boxShadow:'2px 0 4px rgba(0,0,0,0.04)'}},'Exam'),
-              ...visibleSchools.map(sc=>React.createElement('th',{key:sc,style:{padding:'11px 10px',textAlign:'center',fontSize:'11px',fontWeight:'700',color:'#374151',textTransform:'uppercase',letterSpacing:'.04em',borderBottom:'2px solid #E5E7EB',minWidth:'130px',whiteSpace:'nowrap'}},sc))
+              ...allSchools.map(sc=>React.createElement('th',{key:sc,style:{padding:'11px 10px',textAlign:'center',fontSize:'11px',fontWeight:'700',color:'#374151',textTransform:'uppercase',letterSpacing:'.04em',borderBottom:'2px solid #E5E7EB',minWidth:'130px',whiteSpace:'nowrap'}},sc))
             )
           ),
           React.createElement('tbody',null,
             rows.length===0
-              ? React.createElement('tr',null,React.createElement('td',{colSpan:visibleSchools.length+1,style:{padding:'48px',textAlign:'center',color:'#9CA3AF',fontSize:'14px'}},'No exams match the selected filters'))
+              ? React.createElement('tr',null,React.createElement('td',{colSpan:allSchools.length+1,style:{padding:'48px',textAlign:'center',color:'#9CA3AF',fontSize:'14px'}},'No exams match the selected filters'))
               : rows.map((exam,i)=>{
                   const rowBg = i%2===0?'#fff':'#FAFAFA';
                   return React.createElement('tr',{key:exam.id,style:{borderBottom:'1px solid #F3F4F6'}},
@@ -1245,8 +1197,8 @@ setRows(normalised);
                         React.createElement('span',{style:{color:'#9CA3AF',fontSize:'10px',fontWeight:'500'}},fmtDate(exam.date))
                       )
                     ),
-                    // Status cell per visible school
-                    ...visibleSchools.map(sc=>{
+                    // Status cell per school
+                    ...allSchools.map(sc=>{
                       const cond = conductMap[sc+'_'+exam.id];
                       const key  = sKey(cond, exam.date);
                       const cfg  = CELL[key]||CELL.unset;
