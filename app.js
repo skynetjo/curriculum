@@ -11086,6 +11086,464 @@ function ExamTrackerPage(props) {
     React.createElement('p', { style:{ fontSize:'15px' } }, 'Loading Exam Tracker...'));
   return React.createElement(window.ExamConductTracker, props);
 }
+// ═══════════════════════════════════════════════════════════════════════════
+// EXAM MATRIX OVERVIEW — For Managers & Above Only
+//
+// Collections used:
+//   examSchedule  → exam list (testName, date, grade, stream, format)
+//   examConduct   → conduct records (school, examId, excluded)
+//   Doc ID format: {school}_{examId}   e.g. "CoE Barwani_e001"
+// ═══════════════════════════════════════════════════════════════════════════
+
+function ExamMatrixOverview({
+  accessibleSchools,
+  isSuperAdmin,
+  isDirector
+}) {
+  const [scheduleExams, setScheduleExams] = React.useState([]);
+  const [conductMap, setConductMap]       = React.useState({}); // { examId: { school: {excluded,docId} } }
+  const [allConductIds, setAllConductIds] = React.useState([]); // unique examIds seen in examConduct
+  const [loading, setLoading]             = React.useState(true);
+  const [error, setError]                 = React.useState(null);
+  const [filterGrade, setFilterGrade]     = React.useState('All');
+  const [filterStream, setFilterStream]   = React.useState('All');
+  const [lastRefreshed, setLastRefreshed] = React.useState(null);
+
+  // Which schools this user can see
+  const schoolsToShow = React.useMemo(() => {
+    if (isSuperAdmin || isDirector) return SCHOOLS;
+    return accessibleSchools || [];
+  }, [isSuperAdmin, isDirector, accessibleSchools]);
+
+  // ── Fetch ────────────────────────────────────────────────────────────────
+  const fetchData = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Parallel fetch — faster on low bandwidth
+      const [schedSnap, conductSnap] = await Promise.all([
+        db.collection('examSchedule').get(),
+        db.collection('examConduct').get()
+      ]);
+
+      // ── examSchedule → exam list ────────────────────────────────────────
+      const exams = schedSnap.docs.map(d => {
+        const data = d.data();
+        return {
+          docId:    d.id,
+          examId:   data.examId || data.id || d.id,  // try multiple fields
+          testName: data.testName || data.name || data.examName || d.id,
+          date:     data.date     || null,
+          grade:    String(data.grade || '').replace('Class ', '').trim(),
+          stream:   data.stream   || '',
+          format:   data.format   || '',
+          purpose:  data.purpose  || '',
+        };
+      });
+
+      // Sort: soonest first, then undated last
+      exams.sort((a, b) => {
+        const da = a.date ? new Date(a.date) : new Date('9999');
+        const db_ = b.date ? new Date(b.date) : new Date('9999');
+        return da - db_;
+      });
+
+      // ── examConduct → build lookup ──────────────────────────────────────
+      // conductMap[examId][school] = { excluded: bool, docId: string }
+      const cmap = {};
+      const uniqueExamIds = new Set();
+
+      conductSnap.docs.forEach(d => {
+        const data   = d.data();
+        const school = data.school || '';
+        const examId = data.examId || '';
+        if (!examId || !school) return;
+
+        uniqueExamIds.add(examId);
+        if (!cmap[examId]) cmap[examId] = {};
+        cmap[examId][school] = {
+          excluded: data.excluded === true,
+          docId:    d.id,
+        };
+      });
+
+      setScheduleExams(exams);
+      setConductMap(cmap);
+      setAllConductIds([...uniqueExamIds].sort());
+      setLastRefreshed(new Date());
+    } catch (e) {
+      console.error('[ExamMatrix] fetch error:', e);
+      setError('Could not load exam data. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => { fetchData(); }, [fetchData]);
+
+  // ── Filtered exam rows (for grade/stream filters) ─────────────────────
+  const examRows = React.useMemo(() => {
+    let rows = scheduleExams;
+
+    // Add any examIds from examConduct that are NOT in examSchedule
+    // (handles legacy short IDs like "e001" that pre-date random schedule IDs)
+    const scheduleIds = new Set(scheduleExams.map(e => e.docId));
+    const scheduledExamIds = new Set(scheduleExams.map(e => e.examId));
+    allConductIds.forEach(eid => {
+      if (!scheduleIds.has(eid) && !scheduledExamIds.has(eid)) {
+        rows = [...rows, {
+          docId:    eid,
+          examId:   eid,
+          testName: `Exam ${eid}`,
+          date:     null,
+          grade:    '',
+          stream:   '',
+          format:   '',
+          purpose:  '',
+          _orphan:  true,  // from conduct only, no schedule match
+        }];
+      }
+    });
+
+    // Apply grade filter
+    if (filterGrade !== 'All') {
+      rows = rows.filter(e => !e.grade || e.grade === filterGrade);
+    }
+
+    // Apply stream filter
+    if (filterStream !== 'All') {
+      rows = rows.filter(e => !e.stream || e.stream === filterStream);
+    }
+
+    return rows;
+  }, [scheduleExams, allConductIds, filterGrade, filterStream]);
+
+  // ── Unique streams for filter pill ───────────────────────────────────
+  const streams = React.useMemo(() => {
+    const s = new Set(scheduleExams.map(e => e.stream).filter(Boolean));
+    return s.size > 1 ? ['All', ...s] : [];
+  }, [scheduleExams]);
+
+  // ── Get status for one cell ────────────────────────────────────────────
+  // Strategy: try matching examConduct.examId to:
+  //   1. exam.docId  (the Firestore document ID of examSchedule)
+  //   2. exam.examId (the examId field inside examSchedule doc, if different)
+  const getStatus = React.useCallback((exam, school) => {
+    let rec =
+      conductMap[exam.docId]?.[school] ||
+      (exam.examId !== exam.docId ? conductMap[exam.examId]?.[school] : undefined);
+
+    if (!rec) {
+      // If exam date is in the past and no conduct record → treat as conducted
+      // (only for exams with a date; prevents wrongly showing past scheduled exams as Pending)
+      if (exam.date) {
+        const examDate = new Date(exam.date);
+        const today    = new Date();
+        // Give 7-day buffer after exam date before auto-assuming conducted
+        today.setDate(today.getDate() - 7);
+        if (examDate < today) return 'not_recorded'; // past exam, no record
+      }
+      return 'pending';
+    }
+
+    return rec.excluded ? 'excluded' : 'conducted';
+  }, [conductMap]);
+
+  // ── Summary stats ─────────────────────────────────────────────────────
+  const stats = React.useMemo(() => {
+    let conducted = 0, pending = 0, excluded = 0, not_recorded = 0;
+    examRows.forEach(exam => {
+      schoolsToShow.forEach(school => {
+        const s = getStatus(exam, school);
+        if (s === 'conducted')    conducted++;
+        else if (s === 'pending') pending++;
+        else if (s === 'excluded') excluded++;
+        else                      not_recorded++;
+      });
+    });
+    const total = conducted + pending + not_recorded;
+    return {
+      conducted,
+      pending,
+      excluded,
+      not_recorded,
+      pct: total > 0 ? Math.round(conducted / total * 100) : 0,
+    };
+  }, [examRows, schoolsToShow, getStatus]);
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+  const fmtDate = (ds) => {
+    if (!ds) return '';
+    try {
+      const d = new Date(ds);
+      if (isNaN(d)) return ds;
+      return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+    } catch { return ds; }
+  };
+
+  const abbr = (name) =>
+    name.replace('Jawahar Navodaya Vidyalaya', 'JNV')
+        .replace('Centre of Excellence', 'CoE')
+        .replace('English Medium Residential School', 'EMRS')
+        .trim();
+
+  const STATUS = {
+    conducted:    { bg: 'bg-emerald-100', border: 'border-emerald-300', text: 'text-emerald-800', icon: '✓',  label: 'Conducted',    dot: '#10b981' },
+    pending:      { bg: 'bg-amber-50',    border: 'border-amber-300',   text: 'text-amber-800',   icon: '◷',  label: 'Pending',      dot: '#f59e0b' },
+    excluded:     { bg: 'bg-gray-100',    border: 'border-gray-300',    text: 'text-gray-500',    icon: '—',  label: 'Excluded',     dot: '#9ca3af' },
+    not_recorded: { bg: 'bg-blue-50',     border: 'border-blue-200',    text: 'text-blue-600',    icon: '?',  label: 'Not Recorded', dot: '#3b82f6' },
+  };
+
+  // ── LOADING ───────────────────────────────────────────────────────────
+  if (loading) {
+    return React.createElement('div', { className: 'bg-white rounded-2xl shadow-lg p-8 mb-6' },
+      React.createElement('div', { className: 'flex items-center gap-3 text-gray-400' },
+        React.createElement('div', {
+          className: 'w-5 h-5 rounded-full border-4 border-indigo-400 border-t-transparent animate-spin'
+        }),
+        React.createElement('span', null, 'Loading exam matrix...')
+      )
+    );
+  }
+
+  // ── ERROR ─────────────────────────────────────────────────────────────
+  if (error) {
+    return React.createElement('div', { className: 'bg-red-50 border border-red-200 rounded-2xl p-5 mb-6 flex items-start gap-3' },
+      React.createElement('span', { className: 'text-2xl' }, '⚠️'),
+      React.createElement('div', null,
+        React.createElement('p', { className: 'text-red-700 font-semibold' }, 'Could not load exam data'),
+        React.createElement('p', { className: 'text-red-500 text-sm mt-0.5' }, error),
+        React.createElement('button', {
+          onClick: fetchData,
+          className: 'mt-3 px-4 py-2 bg-red-600 text-white text-sm rounded-lg font-semibold hover:bg-red-700'
+        }, '↻ Try again')
+      )
+    );
+  }
+
+  // ── EMPTY ─────────────────────────────────────────────────────────────
+  if (examRows.length === 0) {
+    return React.createElement('div', { className: 'bg-amber-50 border-2 border-dashed border-amber-300 rounded-2xl p-10 mb-6 text-center' },
+      React.createElement('div', { className: 'text-5xl mb-3' }, '📋'),
+      React.createElement('p', { className: 'text-amber-800 font-bold text-lg' }, 'No Exams Scheduled'),
+      React.createElement('p', { className: 'text-amber-600 text-sm mt-1' },
+        'Add exams to the Exam Schedule to see this overview matrix.'
+      )
+    );
+  }
+
+  // ── RENDER ────────────────────────────────────────────────────────────
+  return React.createElement('div', { className: 'bg-white rounded-2xl shadow-lg mb-6 overflow-hidden' },
+
+    // ── Header bar ───────────────────────────────────────────────────────
+    React.createElement('div', {
+      style: { background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)' },
+      className: 'px-6 py-4'
+    },
+      React.createElement('div', { className: 'flex flex-wrap gap-4 items-start justify-between' },
+
+        // Title & subtitle
+        React.createElement('div', null,
+          React.createElement('h2', { className: 'text-white font-bold text-xl flex items-center gap-2' },
+            React.createElement('span', null, '🏫'),
+            'School-wise Exam Status'
+          ),
+          React.createElement('p', { className: 'text-indigo-200 text-xs mt-0.5' },
+            `${examRows.length} exam${examRows.length !== 1 ? 's' : ''}` +
+            ` · ${schoolsToShow.length} school${schoolsToShow.length !== 1 ? 's' : ''}` +
+            (lastRefreshed ? ` · Updated ${lastRefreshed.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : '')
+          )
+        ),
+
+        // Filters + Refresh
+        React.createElement('div', { className: 'flex flex-wrap gap-2 items-center' },
+
+          // Grade filter
+          React.createElement('div', { className: 'flex items-center bg-white/10 rounded-xl p-1 gap-0.5' },
+            ['All', '11', '12'].map(g =>
+              React.createElement('button', {
+                key: g,
+                onClick: () => setFilterGrade(g),
+                className: `px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                  filterGrade === g
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`
+              }, g === 'All' ? 'All Classes' : `Class ${g}`)
+            )
+          ),
+
+          // Stream filter (only when multiple streams exist)
+          streams.length > 0 && React.createElement('div', { className: 'flex items-center bg-white/10 rounded-xl p-1 gap-0.5' },
+            streams.map(s =>
+              React.createElement('button', {
+                key: s,
+                onClick: () => setFilterStream(s),
+                className: `px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                  filterStream === s
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`
+              }, s)
+            )
+          ),
+
+          // Refresh button
+          React.createElement('button', {
+            onClick: fetchData,
+            title: 'Refresh data',
+            className: 'w-8 h-8 bg-white/15 hover:bg-white/25 rounded-full flex items-center justify-center text-white text-base transition-all'
+          }, '↻')
+        )
+      )
+    ),
+
+    // ── Summary stat pills ────────────────────────────────────────────────
+    React.createElement('div', { className: 'grid grid-cols-4 border-b border-gray-100 divide-x divide-gray-100' },
+      [
+        { icon: '✅', label: 'Conducted',    val: stats.conducted,    cls: 'bg-emerald-50 text-emerald-700' },
+        { icon: '⏳', label: 'Pending',      val: stats.pending,      cls: 'bg-amber-50 text-amber-700'   },
+        { icon: '⛔', label: 'Excluded',     val: stats.excluded,     cls: 'bg-gray-50 text-gray-500'     },
+        { icon: '📊', label: 'Progress',     val: stats.pct + '%',    cls: 'bg-indigo-50 text-indigo-700' },
+      ].map(({ icon, label, val, cls }) =>
+        React.createElement('div', { key: label, className: `${cls} py-3 text-center` },
+          React.createElement('div', { className: 'font-bold text-xl' }, `${icon} ${val}`),
+          React.createElement('div', { className: 'text-xs opacity-70 mt-0.5' }, label)
+        )
+      )
+    ),
+
+    // ── Progress bar ──────────────────────────────────────────────────────
+    React.createElement('div', { className: 'h-1.5 bg-gray-100' },
+      React.createElement('div', {
+        className: 'h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-500',
+        style: { width: `${stats.pct}%` }
+      })
+    ),
+
+    // ── Matrix table ──────────────────────────────────────────────────────
+    React.createElement('div', { className: 'overflow-x-auto' },
+      React.createElement('table', { className: 'w-full border-collapse text-sm' },
+
+        // — Column headers —
+        React.createElement('thead', null,
+          React.createElement('tr', { className: 'bg-gray-50 border-b-2 border-gray-200' },
+
+            // Sticky exam name column header
+            React.createElement('th', {
+              className: 'sticky left-0 z-20 bg-gray-50 px-4 py-3 text-left font-bold text-xs text-gray-500 uppercase tracking-wider border-r-2 border-gray-200 min-w-[200px]'
+            },
+              React.createElement('div', null, 'Exam'),
+              React.createElement('div', { className: 'font-normal text-gray-400 normal-case text-xs' }, 'Date · Class · Stream')
+            ),
+
+            // School headers
+            ...schoolsToShow.map(school =>
+              React.createElement('th', {
+                key: school,
+                className: 'px-3 py-3 text-center font-bold text-xs text-gray-500 uppercase tracking-wider border-r border-gray-100 min-w-[115px]'
+              },
+                React.createElement('div', { className: 'leading-snug' }, abbr(school))
+              )
+            )
+          )
+        ),
+
+        // — Rows —
+        React.createElement('tbody', null,
+          examRows.map((exam, idx) => {
+            const rowConducted = schoolsToShow.filter(s => getStatus(exam, s) === 'conducted').length;
+            const isEven = idx % 2 === 0;
+
+            return React.createElement('tr', {
+              key: exam.docId,
+              className: `${isEven ? 'bg-white' : 'bg-gray-50/40'} hover:bg-indigo-50/30 transition-colors`
+            },
+
+              // Sticky exam info cell
+              React.createElement('td', {
+                className: `sticky left-0 z-10 px-4 py-3 border-b border-r-2 border-gray-200 ${isEven ? 'bg-white' : 'bg-gray-50'}`
+              },
+                React.createElement('div', { className: 'font-semibold text-gray-800 leading-tight text-sm' },
+                  exam.testName
+                ),
+                // Tags row
+                React.createElement('div', { className: 'flex flex-wrap gap-1 mt-1.5' },
+                  exam.date && React.createElement('span', {
+                    className: 'text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-md'
+                  }, fmtDate(exam.date)),
+                  exam.grade && React.createElement('span', {
+                    className: 'text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md font-medium'
+                  }, `Cl ${exam.grade}`),
+                  exam.stream && React.createElement('span', {
+                    className: 'text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-md'
+                  }, exam.stream),
+                  exam.format && React.createElement('span', {
+                    className: 'text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md'
+                  }, exam.format)
+                ),
+                // Progress micro-bar
+                React.createElement('div', { className: 'mt-2 flex items-center gap-1.5' },
+                  React.createElement('div', { className: 'flex-1 h-1 bg-gray-200 rounded-full overflow-hidden' },
+                    React.createElement('div', {
+                      className: 'h-full bg-emerald-400 rounded-full',
+                      style: {
+                        width: schoolsToShow.length > 0
+                          ? `${Math.round(rowConducted / schoolsToShow.length * 100)}%`
+                          : '0%'
+                      }
+                    })
+                  ),
+                  React.createElement('span', { className: 'text-xs text-gray-400 whitespace-nowrap' },
+                    `${rowConducted}/${schoolsToShow.length}`
+                  )
+                )
+              ),
+
+              // Status cells for each school
+              ...schoolsToShow.map(school => {
+                const status = getStatus(exam, school);
+                const cfg    = STATUS[status];
+                return React.createElement('td', {
+                  key: school,
+                  className: 'px-2 py-3 text-center border-b border-r border-gray-100'
+                },
+                  React.createElement('span', {
+                    className: `inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-semibold ${cfg.bg} ${cfg.border} ${cfg.text}`
+                  },
+                    React.createElement('span', { className: 'text-base leading-none' }, cfg.icon),
+                    cfg.label
+                  )
+                );
+              })
+            );
+          })
+        )
+      )
+    ),
+
+    // ── Legend ────────────────────────────────────────────────────────────
+    React.createElement('div', { className: 'px-5 py-3 bg-gray-50 border-t border-gray-100 flex flex-wrap items-center gap-5' },
+      React.createElement('span', { className: 'text-xs font-bold text-gray-400 uppercase tracking-wide' }, 'Legend:'),
+      Object.entries(STATUS).map(([key, cfg]) =>
+        React.createElement('div', { key, className: 'flex items-center gap-1.5' },
+          React.createElement('span', {
+            style: { backgroundColor: cfg.dot, width: 10, height: 10, borderRadius: '50%', display: 'inline-block' }
+          }),
+          React.createElement('span', { className: 'text-xs text-gray-500' }, cfg.label)
+        )
+      ),
+      // Explainer for Not Recorded
+      React.createElement('span', { className: 'text-xs text-gray-400 italic ml-auto' },
+        '? = Exam date passed but no record entered'
+      )
+    )
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// END OF ExamMatrixOverview
+// ═══════════════════════════════════════════════════════════════════════════
 function AdminExamStats({
   accessibleSchools = [],
   isSuperAdmin = false,
@@ -14077,11 +14535,20 @@ function AdminView({
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
-  }), activeTab === 'settings' && isSuperAdmin && React.createElement(AdminSettings, null), activeTab === 'examstats' && React.createElement(AdminExamStats, {
+  }), activeTab === 'settings' && isSuperAdmin && React.createElement(AdminSettings, null), activeTab === 'examstats' && React.createElement("div", {
+    className: "space-y-0"
+  },
+  React.createElement(ExamMatrixOverview, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
-  }), activeTab === 'examtracker' && React.createElement(ExamTrackerPage, {
+  }),
+  React.createElement(AdminExamStats, {
+    accessibleSchools: availableSchools,
+    isSuperAdmin: isSuperAdmin,
+    isDirector: isDirector
+  })
+  ), activeTab === 'examtracker' && React.createElement(ExamTrackerPage, {
     currentUser: currentUser,
     isAdmin: true,
     accessibleSchools: availableSchools
