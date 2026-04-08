@@ -3,8 +3,8 @@
 // Version: 5.6.8
 // ========================================
 
-const CACHE_NAME = 'curriculum-tracker-v5.6.8';
-const APP_SHELL_CACHE = 'app-shell-v5.6.8';
+const CACHE_NAME = 'curriculum-tracker-v5.6.9';
+const APP_SHELL_CACHE = 'app-shell-v5.6.9';
 
 // App Shell - Only cache our own files, NOT external CDNs
 const APP_SHELL_FILES = [
