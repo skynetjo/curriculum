@@ -411,7 +411,8 @@ document.addEventListener('click', function initSound() {
 }, {
   once: true
 });
-let SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Bundi', 'CoE Mahisagar', 'EMRS Bhopal', 'JNV Bharuch'];
+const APPROVED_SCHOOLS = ['CoE Barwani', 'CoE Cuttack', 'CoE Bundi', 'CoE Mahisagar', 'EMRS Bhopal', 'EMRS NEET', 'JNV Bharuch'];
+let SCHOOLS = [...APPROVED_SCHOOLS];
 let ALL_SCHOOLS_COUNT = 0;
 function extractSchoolsFromCurriculum(curriculum) {
   const schools = new Set();
@@ -1057,20 +1058,20 @@ function calculateLeaveBalance(teacherAttendance, teacherId, leaveAdjustments = 
   return {
     entitled: {
       total: 35,
-      used: entitledUsed,
-      remaining: Math.max(0, 35 - entitledUsed),
+      used: Math.max(0, entitledUsed),
+      remaining: Math.min(35, Math.max(0, 35 - entitledUsed)),
       adjustment: adjustment.entitled || 0
     },
     maternity: {
       total: 180,
-      used: maternityUsed,
-      remaining: Math.max(0, 180 - maternityUsed),
+      used: Math.max(0, maternityUsed),
+      remaining: Math.min(180, Math.max(0, 180 - maternityUsed)),
       adjustment: adjustment.maternity || 0
     },
     paternity: {
       total: 15,
-      used: paternityUsed,
-      remaining: Math.max(0, 15 - paternityUsed),
+      used: Math.max(0, paternityUsed),
+      remaining: Math.min(15, Math.max(0, 15 - paternityUsed)),
       adjustment: adjustment.paternity || 0
     }
   };
@@ -16626,7 +16627,7 @@ function TeacherManagement({
     className: "flex justify-between items-center mb-4"
   }, React.createElement("h3", {
     className: "text-2xl font-bold"
-  }, "\uD83D\uDCCA Leave Balance - ", selectedTeacherLeave.teacher.name), !isEditingLeave && React.createElement("button", {
+  }, "\uD83D\uDCCA Leave Balance - ", selectedTeacherLeave.teacher.name), !isEditingLeave && isSuperAdmin && React.createElement("button", {
     onClick: () => setIsEditingLeave(true),
     className: "px-4 py-2 bg-yellow-400 rounded-lg font-semibold text-sm"
   }, "\u270F\uFE0F Edit")), isEditingLeave ? React.createElement("div", {
@@ -16635,67 +16636,70 @@ function TeacherManagement({
     className: "bg-yellow-50 p-4 rounded-xl border-2 border-yellow-300 mb-4"
   }, React.createElement("p", {
     className: "text-sm text-yellow-800"
-  }, React.createElement("strong", null, "\uD83D\uDCDD Adjust Prior Leaves:"), " Enter the number of leaves already taken before this system was implemented. These will be added to the system-tracked leaves.")), React.createElement("div", {
+  }, React.createElement("strong", null, "\uD83D\uDEE1\uFE0F Admin Leave Override:"), " Use positive values to reduce a teacher\u2019s leave balance (mark as used), or negative values to add back leave (increase remaining). Set to 0 to reset to system-tracked leaves only."), React.createElement("button", {
+    onClick: () => setLeaveForm({ entitled: 0, maternity: 0, paternity: 0 }),
+    className: "mt-2 px-3 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-semibold hover:bg-red-200"
+  }, "\uD83D\uDD04 Reset All Adjustments to 0")), React.createElement("div", {
     className: "bg-blue-50 p-4 rounded-xl border-2 border-blue-200"
   }, React.createElement("label", {
     className: "block font-bold text-blue-800 mb-2"
-  }, "Entitled Leave (Prior Adjustment)"), React.createElement("div", {
+  }, "Entitled Leave Adjustment"), React.createElement("div", {
     className: "flex items-center gap-3"
   }, React.createElement("input", {
     type: "number",
-    min: "0",
+    min: "-35",
     max: "35",
     value: leaveForm.entitled,
     onChange: e => setLeaveForm({
       ...leaveForm,
-      entitled: Math.min(35, Math.max(0, parseInt(e.target.value) || 0))
+      entitled: Math.min(35, Math.max(-35, parseInt(e.target.value) || 0))
     }),
     className: "w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
   }), React.createElement("span", {
     className: "text-blue-700"
-  }, "days taken before system")), React.createElement("p", {
+  }, leaveForm.entitled >= 0 ? "days deducted (reduces balance)" : "days added back (increases balance)")), React.createElement("p", {
     className: "text-xs text-blue-600 mt-2"
-  }, "Max: 35 days (Personal, Sick, Emergency combined)")), React.createElement("div", {
+  }, "Range: -35 to +35 days (Personal, Sick, Emergency combined)")), React.createElement("div", {
     className: "bg-pink-50 p-4 rounded-xl border-2 border-pink-200"
   }, React.createElement("label", {
     className: "block font-bold text-pink-800 mb-2"
-  }, "Maternity Leave (Prior Adjustment)"), React.createElement("div", {
+  }, "Maternity Leave Adjustment"), React.createElement("div", {
     className: "flex items-center gap-3"
   }, React.createElement("input", {
     type: "number",
-    min: "0",
+    min: "-180",
     max: "180",
     value: leaveForm.maternity,
     onChange: e => setLeaveForm({
       ...leaveForm,
-      maternity: Math.min(180, Math.max(0, parseInt(e.target.value) || 0))
+      maternity: Math.min(180, Math.max(-180, parseInt(e.target.value) || 0))
     }),
     className: "w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
   }), React.createElement("span", {
     className: "text-pink-700"
-  }, "days taken before system")), React.createElement("p", {
+  }, leaveForm.maternity >= 0 ? "days deducted (reduces balance)" : "days added back (increases balance)")), React.createElement("p", {
     className: "text-xs text-pink-600 mt-2"
-  }, "Max: 180 days")), React.createElement("div", {
+  }, "Range: -180 to +180 days")), React.createElement("div", {
     className: "bg-purple-50 p-4 rounded-xl border-2 border-purple-200"
   }, React.createElement("label", {
     className: "block font-bold text-purple-800 mb-2"
-  }, "Paternity Leave (Prior Adjustment)"), React.createElement("div", {
+  }, "Paternity Leave Adjustment"), React.createElement("div", {
     className: "flex items-center gap-3"
   }, React.createElement("input", {
     type: "number",
-    min: "0",
+    min: "-15",
     max: "15",
     value: leaveForm.paternity,
     onChange: e => setLeaveForm({
       ...leaveForm,
-      paternity: Math.min(15, Math.max(0, parseInt(e.target.value) || 0))
+      paternity: Math.min(15, Math.max(-15, parseInt(e.target.value) || 0))
     }),
     className: "w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
   }), React.createElement("span", {
     className: "text-purple-700"
-  }, "days taken before system")), React.createElement("p", {
+  }, leaveForm.paternity >= 0 ? "days deducted (reduces balance)" : "days added back (increases balance)")), React.createElement("p", {
     className: "text-xs text-purple-600 mt-2"
-  }, "Max: 15 days")), React.createElement("div", {
+  }, "Range: -15 to +15 days")), React.createElement("div", {
     className: "flex gap-3 mt-6"
   }, React.createElement("button", {
     onClick: handleSaveLeaveAdjustment,
@@ -19006,7 +19010,97 @@ function AdminSettings() {
     className: "text-gray-500"
   }, "Database"), React.createElement("div", {
     className: "font-bold text-lg"
-  }, "Firebase Firestore")))));
+  }, "Firebase Firestore")))), React.createElement(SchoolCleanupTool, null));
+}
+function SchoolCleanupTool() {
+  const [status, setStatus] = useState('idle');
+  const [preview, setPreview] = useState(null);
+  const [log, setLog] = useState([]);
+  const addLog = msg => setLog(prev => [...prev, msg]);
+  const handlePreview = async () => {
+    setStatus('loading');
+    setPreview(null);
+    setLog([]);
+    try {
+      const [teachersSnap, schoolsListSnap] = await Promise.all([
+        db.collection('teachers').get(),
+        db.collection('schoolsList').get()
+      ]);
+      const foreignTeachers = teachersSnap.docs.filter(d => {
+        const school = d.data().school;
+        return school && !APPROVED_SCHOOLS.includes(school);
+      }).map(d => ({ id: d.id, name: d.data().name, school: d.data().school, isArchived: d.data().isArchived }));
+      const foreignSchoolsList = schoolsListSnap.docs.filter(d => {
+        const name = d.data().name;
+        return name && !APPROVED_SCHOOLS.includes(name);
+      }).map(d => ({ id: d.id, name: d.data().name }));
+      setPreview({ foreignTeachers, foreignSchoolsList });
+      setStatus('idle');
+    } catch (e) {
+      setStatus('idle');
+      alert('Preview failed: ' + e.message);
+    }
+  };
+  const handleCleanup = async () => {
+    if (!preview) return;
+    const totalItems = preview.foreignTeachers.length + preview.foreignSchoolsList.length;
+    if (totalItems === 0) { alert('Nothing to clean up!'); return; }
+    if (!confirm(`⚠️ PERMANENT DELETE\n\nThis will permanently delete:\n• ${preview.foreignTeachers.length} teacher(s) not in approved schools\n• ${preview.foreignSchoolsList.length} school(s) from schoolsList\n\nApproved schools: ${APPROVED_SCHOOLS.join(', ')}\n\nThis CANNOT be undone. Continue?`)) return;
+    setStatus('cleaning');
+    setLog(['Starting cleanup...']);
+    try {
+      for (const t of preview.foreignTeachers) {
+        await db.collection('teachers').doc(t.id).delete();
+        addLog(`Deleted teacher: ${t.name} (${t.school})`);
+      }
+      for (const s of preview.foreignSchoolsList) {
+        await db.collection('schoolsList').doc(s.id).delete();
+        addLog(`Deleted from schoolsList: ${s.name}`);
+      }
+      addLog('✅ Cleanup complete!');
+      setStatus('done');
+      setPreview(null);
+    } catch (e) {
+      addLog('❌ Error: ' + e.message);
+      setStatus('idle');
+    }
+  };
+  return React.createElement("div", { className: "bg-red-50 p-6 rounded-2xl border-2 border-red-300 mt-6" },
+    React.createElement("h3", { className: "text-xl font-bold mb-2 text-red-700" }, "🏫 School Data Cleanup (Admin Only)"),
+    React.createElement("p", { className: "text-sm text-red-600 mb-3" }, "Approved schools: " + APPROVED_SCHOOLS.join(', ')),
+    React.createElement("p", { className: "text-xs text-gray-600 mb-4" }, "This tool removes teachers and schoolsList entries for any school NOT in the approved list above. Note: curriculum, attendance, and archive data in other collections must be cleaned up separately from Firebase Console."),
+    React.createElement("div", { className: "flex gap-3 flex-wrap" },
+      React.createElement("button", {
+        onClick: handlePreview,
+        disabled: status === 'loading' || status === 'cleaning',
+        className: "px-4 py-2 bg-yellow-500 text-white rounded-lg font-semibold disabled:opacity-50"
+      }, status === 'loading' ? 'Scanning...' : '🔍 Preview What Will Be Deleted'),
+      preview && (preview.foreignTeachers.length + preview.foreignSchoolsList.length) > 0 && React.createElement("button", {
+        onClick: handleCleanup,
+        disabled: status === 'cleaning',
+        className: "px-4 py-2 bg-red-600 text-white rounded-lg font-semibold disabled:opacity-50"
+      }, status === 'cleaning' ? 'Deleting...' : '🗑️ Delete All Foreign School Data')
+    ),
+    preview && React.createElement("div", { className: "mt-4 space-y-3" },
+      React.createElement("div", { className: "bg-white p-3 rounded-xl border" },
+        React.createElement("p", { className: "font-bold text-sm mb-2" }, "Teachers to delete (" + preview.foreignTeachers.length + "):"),
+        preview.foreignTeachers.length === 0
+          ? React.createElement("p", { className: "text-green-600 text-sm" }, "✅ None — all teachers are in approved schools")
+          : React.createElement("ul", { className: "text-sm space-y-1 max-h-40 overflow-y-auto" },
+              preview.foreignTeachers.map(t => React.createElement("li", { key: t.id, className: "text-red-700" },
+                "• " + t.name + " (" + t.school + ")" + (t.isArchived ? " [archived]" : ""))))
+      ),
+      React.createElement("div", { className: "bg-white p-3 rounded-xl border" },
+        React.createElement("p", { className: "font-bold text-sm mb-2" }, "Schools list entries to delete (" + preview.foreignSchoolsList.length + "):"),
+        preview.foreignSchoolsList.length === 0
+          ? React.createElement("p", { className: "text-green-600 text-sm" }, "✅ None — schoolsList is clean")
+          : React.createElement("ul", { className: "text-sm space-y-1" },
+              preview.foreignSchoolsList.map(s => React.createElement("li", { key: s.id, className: "text-red-700" }, "• " + s.name)))
+      )
+    ),
+    log.length > 0 && React.createElement("div", { className: "mt-4 bg-gray-900 text-green-400 p-3 rounded-xl text-xs font-mono max-h-40 overflow-y-auto" },
+      log.map((l, i) => React.createElement("div", { key: i }, l)))
+  );
 }
 function AdminAssetManagement({
   accessibleSchools = [],
@@ -24527,7 +24621,7 @@ function TeacherDirectory({
   const getSchoolColor = school => {
     const colors = {
       'CoE Barwani': 'from-blue-500 to-blue-600',
-      'CoE Cuttak': 'from-green-500 to-green-600',
+      'CoE Cuttack': 'from-green-500 to-green-600',
       'CoE Bundi': 'from-purple-500 to-purple-600',
       'CoE Mahisagar': 'from-orange-500 to-orange-600',
       'EMRS Bhopal': 'from-pink-500 to-pink-600',
