@@ -1,4 +1,4 @@
-// ✅ PRE-COMPILED JAVASCRIPT v5.6.8 - Performance Optimized
+// ✅ PRE-COMPILED JAVASCRIPT v5.7.0 - Performance Optimized
 // ✅ PERFORMANCE: Use passive event listeners for scroll/touch
 document.addEventListener('touchstart', function(){}, {passive: true});
 document.addEventListener('touchmove', function(){}, {passive: true});
@@ -7776,10 +7776,45 @@ function ProfileCompletionCard({
     }
   })));
 }
+function MaintenanceScreen({ onAdminLogin }) {
+  return React.createElement('div', {
+    style: { minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%)',color:'white',textAlign:'center',padding:'24px',fontFamily:'inherit' }
+  },
+    React.createElement('style', null, `
+      @keyframes maintFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-18px)}}
+      @keyframes maintPulse{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:.9;transform:scale(1.08)}}
+      @keyframes maintSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+      @keyframes maintFadeIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+      .maint-gear{display:inline-block;animation:maintSpin 4s linear infinite}
+      .maint-gear2{display:inline-block;animation:maintSpin 3s linear infinite reverse}
+      .maint-icon{animation:maintFloat 3s ease-in-out infinite}
+      .maint-card{animation:maintFadeIn .8s ease-out both}
+      .maint-dot{width:10px;height:10px;border-radius:50%;background:#F4B41A;display:inline-block;margin:0 4px;animation:maintPulse 1.4s ease-in-out infinite}
+      .maint-dot:nth-child(2){animation-delay:.2s}.maint-dot:nth-child(3){animation-delay:.4s}
+    `),
+    React.createElement('div',{className:'maint-card',style:{maxWidth:'480px',width:'100%'}},
+      React.createElement('div',{className:'maint-icon',style:{fontSize:'72px',marginBottom:'16px'}},'🔧'),
+      React.createElement('div',{style:{display:'flex',justifyContent:'center',gap:'8px',marginBottom:'24px'}},
+        React.createElement('span',{className:'maint-gear',style:{fontSize:'28px'}},'⚙️'),
+        React.createElement('span',{className:'maint-gear2',style:{fontSize:'22px',marginTop:'6px'}},'⚙️'),
+        React.createElement('span',{className:'maint-gear',style:{fontSize:'20px',marginTop:'12px'}},'⚙️')),
+      React.createElement('h1',{style:{fontSize:'36px',fontWeight:800,marginBottom:'12px',letterSpacing:'-0.5px'}},'Under Maintenance'),
+      React.createElement('p',{style:{fontSize:'18px',color:'rgba(255,255,255,0.75)',marginBottom:'32px',lineHeight:1.6}},"We'll be back soon! Our team is working hard to improve your experience."),
+      React.createElement('div',{style:{display:'flex',justifyContent:'center',marginBottom:'40px'}},
+        React.createElement('span',{className:'maint-dot'}),
+        React.createElement('span',{className:'maint-dot'}),
+        React.createElement('span',{className:'maint-dot'})),
+      React.createElement('div',{style:{background:'rgba(255,255,255,0.08)',borderRadius:'16px',padding:'20px 24px',border:'1px solid rgba(255,255,255,0.15)',marginBottom:'24px'}},
+        React.createElement('p',{style:{fontSize:'14px',color:'rgba(255,255,255,0.6)',margin:0}},'🏫 Avanti Fellows Curriculum Tracker')),
+      React.createElement('button',{onClick:onAdminLogin,style:{background:'transparent',border:'1px solid rgba(255,255,255,0.2)',color:'rgba(255,255,255,0.4)',fontSize:'12px',padding:'8px 16px',borderRadius:'8px',cursor:'pointer'}},'Admin Login'))
+  );
+}
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [showAdminLoginFromMaintenance, setShowAdminLoginFromMaintenance] = useState(false);
   const [managerProfile, setManagerProfile] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [loginForm, setLoginForm] = useState({
@@ -7944,6 +7979,11 @@ function App() {
       console.warn('⚠️ No schools found for this manager. Please contact admin to assign schools.');
     }
     return uniqueSchools;
+  }, []);
+  useEffect(() => {
+    db.collection('app_settings').doc('global').get().then(doc => {
+      if (doc.exists && doc.data().maintenanceMode) setMaintenanceMode(true);
+    }).catch(() => {});
   }, []);
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async user => {
@@ -9283,6 +9323,9 @@ function App() {
       onCancel: cancel2FA
     }));
   }
+  if (maintenanceMode && !isSuperAdmin && !showAdminLoginFromMaintenance) {
+    return React.createElement(MaintenanceScreen, { onAdminLogin: () => setShowAdminLoginFromMaintenance(true) });
+  }
   if (!currentUser) {
     // ── Inject login page CSS animations ──────────────────────────────────
     var loginStyleId = 'login-anim-css';
@@ -9542,7 +9585,7 @@ function App() {
 
           // Footer
           React.createElement('div', {style:{textAlign:'center',marginTop:'24px',fontSize:'12px',color:'#bbb'}},
-            'Avanti Fellows \u00B7 JNV Program \u00B7 v5.6.8'
+            'Avanti Fellows \u00B7 JNV Program \u00B7 v5.7.0'
           )
         )
       )
@@ -18668,349 +18711,65 @@ function AdminChapterDetails({
   }, ch.notes)))))));
 }
 function AdminSettings() {
-  const [settings, setSettings] = useState({
-    managerCanViewStudents: true,
-    managerCanViewStudentProfiles: true,
-    managerCanViewAnalytics: true,
-    managerCanViewAttendance: true,
-    managerCanViewObservations: true,
-    managerCanExportData: true,
-    teacherCanEditOwnAttendance: false,
-    studentCanViewFeedback: true,
-    enableEmailNotifications: true,
-    enablePushNotifications: true,
-    notifyOnNewTeacher: true,
-    notifyOnNewStudent: true,
-    notifyOnAttendanceAlert: true,
-    autoArchiveAfterDays: 365,
-    dataRetentionMonths: 24,
-    appName: 'Curriculum Tracker',
-    primaryColor: '#F4B41A',
-    enableDarkMode: false,
-    showWelcomeMessage: true,
-    maintenanceMode: false
-  });
+  const [settings, setSettings] = useState({ maintenanceMode: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const doc = await db.collection('app_settings').doc('global').get();
-        if (doc.exists) {
-          setSettings(prev => ({
-            ...prev,
-            ...doc.data()
-          }));
-        }
-        setLoading(false);
-      } catch (e) {
-        console.error('Error loading settings:', e);
-        setLoading(false);
-      }
-    };
-    loadSettings();
+    db.collection('app_settings').doc('global').get().then(doc => {
+      if (doc.exists) setSettings(prev => ({ ...prev, ...doc.data() }));
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
   const handleSave = async () => {
     setSaving(true);
     try {
-      await db.collection('app_settings').doc('global').set({
-        ...settings,
-        updatedAt: new Date().toISOString()
-      });
-      setSuccessMessage('✅ Settings saved successfully!');
+      await db.collection('app_settings').doc('global').set({ ...settings, updatedAt: new Date().toISOString() });
+      setSuccessMessage('\u2705 Settings saved!');
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (e) {
-      console.error('Error saving settings:', e);
-      alert('❌ Error saving settings: ' + e.message);
-    }
+    } catch (e) { alert('\u274c Error: ' + e.message); }
     setSaving(false);
   };
-  const ToggleSwitch = ({
-    checked,
-    onChange,
-    label,
-    description
-  }) => React.createElement("div", {
-    className: "flex items-center justify-between py-3 border-b border-gray-100 last:border-0"
-  }, React.createElement("div", null, React.createElement("div", {
-    className: "font-medium text-gray-800"
-  }, label), description && React.createElement("div", {
-    className: "text-sm text-gray-500"
-  }, description)), React.createElement("button", {
-    onClick: () => onChange(!checked),
-    className: `relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-green-500' : 'bg-gray-300'}`
-  }, React.createElement("span", {
-    className: `inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`
-  })));
-  if (loading) {
-    return React.createElement("div", {
-      className: "text-center py-12"
-    }, React.createElement("div", {
-      className: "animate-spin text-4xl mb-4"
-    }, "\u23F3"), React.createElement("p", null, "Loading settings..."));
-  }
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("div", null, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "\u2699\uFE0F Admin Settings"), React.createElement("p", {
-    className: "text-gray-500 mt-1"
-  }, "Configure application settings and access controls")), React.createElement("button", {
-    onClick: handleSave,
-    disabled: saving,
-    className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50"
-  }, saving ? '💾 Saving...' : '💾 Save Settings')), successMessage && React.createElement("div", {
-    className: "bg-green-50 border-2 border-green-300 p-4 rounded-xl text-green-800 font-semibold"
-  }, successMessage), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83D\uDC54 Manager Access Controls"), React.createElement("p", {
-    className: "text-sm text-gray-500 mb-4"
-  }, "Configure what managers (PM, APM, APH) can access"), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanViewStudents,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanViewStudents: val
-    }),
-    label: "View Student Management",
-    description: "Allow managers to view student list (read-only)"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanViewStudentProfiles,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanViewStudentProfiles: val
-    }),
-    label: "View Student Profiles",
-    description: "Allow managers to view detailed student profiles with demographics"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanViewAnalytics,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanViewAnalytics: val
-    }),
-    label: "View Analytics",
-    description: "Allow managers to access analytics dashboards"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanViewAttendance,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanViewAttendance: val
-    }),
-    label: "View Attendance",
-    description: "Allow managers to view attendance records"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanViewObservations,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanViewObservations: val
-    }),
-    label: "View Classroom Observations",
-    description: "Allow managers to view and create classroom observations"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanExportData,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanExportData: val
-    }),
-    label: "Export Data",
-    description: "Allow managers to export data to Excel/CSV"
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83D\uDC65 Teacher Settings"), React.createElement(ToggleSwitch, {
-    checked: settings.teacherCanEditOwnAttendance,
-    onChange: val => setSettings({
-      ...settings,
-      teacherCanEditOwnAttendance: val
-    }),
-    label: "Edit Own Attendance",
-    description: "Allow teachers to modify their own attendance records"
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83C\uDF93 Student Settings"), React.createElement(ToggleSwitch, {
-    checked: settings.studentCanViewFeedback,
-    onChange: val => setSettings({
-      ...settings,
-      studentCanViewFeedback: val
-    }),
-    label: "View Feedback Results",
-    description: "Allow students to view feedback summary for their teachers"
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83D\uDD14 Notification Settings"), React.createElement(ToggleSwitch, {
-    checked: settings.enableEmailNotifications,
-    onChange: val => setSettings({
-      ...settings,
-      enableEmailNotifications: val
-    }),
-    label: "Email Notifications",
-    description: "Enable email notifications for important events"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.enablePushNotifications,
-    onChange: val => setSettings({
-      ...settings,
-      enablePushNotifications: val
-    }),
-    label: "Push Notifications",
-    description: "Enable browser push notifications"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.notifyOnNewTeacher,
-    onChange: val => setSettings({
-      ...settings,
-      notifyOnNewTeacher: val
-    }),
-    label: "New Teacher Alert",
-    description: "Notify when a new teacher is added"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.notifyOnNewStudent,
-    onChange: val => setSettings({
-      ...settings,
-      notifyOnNewStudent: val
-    }),
-    label: "New Student Alert",
-    description: "Notify when new students are added"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.notifyOnAttendanceAlert,
-    onChange: val => setSettings({
-      ...settings,
-      notifyOnAttendanceAlert: val
-    }),
-    label: "Attendance Alerts",
-    description: "Notify when attendance drops below threshold"
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83D\uDDC4\uFE0F Data Management"), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Auto-archive after (days)"), React.createElement("input", {
-    type: "number",
-    value: settings.autoArchiveAfterDays,
-    onChange: e => setSettings({
-      ...settings,
-      autoArchiveAfterDays: parseInt(e.target.value) || 365
-    }),
-    className: "w-full border-2 px-4 py-3 rounded-xl",
-    min: "30",
-    max: "730"
-  }), React.createElement("p", {
-    className: "text-xs text-gray-500 mt-1"
-  }, "Old data will be archived after this many days")), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Data retention (months)"), React.createElement("input", {
-    type: "number",
-    value: settings.dataRetentionMonths,
-    onChange: e => setSettings({
-      ...settings,
-      dataRetentionMonths: parseInt(e.target.value) || 24
-    }),
-    className: "w-full border-2 px-4 py-3 rounded-xl",
-    min: "6",
-    max: "60"
-  }), React.createElement("p", {
-    className: "text-xs text-gray-500 mt-1"
-  }, "Archived data will be retained for this duration")))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83C\uDFA8 App Customization"), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4 mb-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "App Name"), React.createElement("input", {
-    type: "text",
-    value: settings.appName,
-    onChange: e => setSettings({
-      ...settings,
-      appName: e.target.value
-    }),
-    className: "w-full border-2 px-4 py-3 rounded-xl"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Primary Color"), React.createElement("div", {
-    className: "flex gap-2"
-  }, React.createElement("input", {
-    type: "color",
-    value: settings.primaryColor,
-    onChange: e => setSettings({
-      ...settings,
-      primaryColor: e.target.value
-    }),
-    className: "w-16 h-12 border-2 rounded-xl cursor-pointer"
-  }), React.createElement("input", {
-    type: "text",
-    value: settings.primaryColor,
-    onChange: e => setSettings({
-      ...settings,
-      primaryColor: e.target.value
-    }),
-    className: "flex-1 border-2 px-4 py-3 rounded-xl font-mono"
-  })))), React.createElement(ToggleSwitch, {
-    checked: settings.showWelcomeMessage,
-    onChange: val => setSettings({
-      ...settings,
-      showWelcomeMessage: val
-    }),
-    label: "Show Welcome Message",
-    description: "Display welcome message on dashboard"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.enableDarkMode,
-    onChange: val => setSettings({
-      ...settings,
-      enableDarkMode: val
-    }),
-    label: "Enable Dark Mode Option",
-    description: "Allow users to switch to dark mode (coming soon)"
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg border-2 border-red-200"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2 text-red-600"
-  }, "\uD83D\uDEA7 Maintenance Mode"), React.createElement(ToggleSwitch, {
-    checked: settings.maintenanceMode,
-    onChange: val => setSettings({
-      ...settings,
-      maintenanceMode: val
-    }),
-    label: "Enable Maintenance Mode",
-    description: "\u26A0\uFE0F When enabled, only Super Admins can access the application"
-  }), settings.maintenanceMode && React.createElement("div", {
-    className: "mt-4 p-4 bg-red-50 rounded-xl text-red-800"
-  }, React.createElement("strong", null, "\u26A0\uFE0F Warning:"), " Maintenance mode is enabled. All users except Super Admins will see a maintenance message.")), React.createElement("div", {
-    className: "bg-gray-50 p-6 rounded-2xl"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4"
-  }, "\uD83D\uDCCA System Information"), React.createElement("div", {
-    className: "grid md:grid-cols-3 gap-4 text-sm"
-  }, React.createElement("div", {
-    className: "bg-white p-4 rounded-xl"
-  }, React.createElement("div", {
-    className: "text-gray-500"
-  }, "Version"), React.createElement("div", {
-    className: "font-bold text-lg"
-  }, "2.0.0")), React.createElement("div", {
-    className: "bg-white p-4 rounded-xl"
-  }, React.createElement("div", {
-    className: "text-gray-500"
-  }, "Last Updated"), React.createElement("div", {
-    className: "font-bold text-lg"
-  }, new Date().toLocaleDateString())), React.createElement("div", {
-    className: "bg-white p-4 rounded-xl"
-  }, React.createElement("div", {
-    className: "text-gray-500"
-  }, "Database"), React.createElement("div", {
-    className: "font-bold text-lg"
-  }, "Firebase Firestore")))), React.createElement(SchoolCleanupTool, null));
+  const ToggleSwitch = ({ checked, onChange, label, description }) =>
+    React.createElement('div', { className: 'flex items-center justify-between py-3 border-b border-gray-100 last:border-0' },
+      React.createElement('div', null,
+        React.createElement('div', { className: 'font-medium text-gray-800' }, label),
+        description && React.createElement('div', { className: 'text-sm text-gray-500' }, description)),
+      React.createElement('button', {
+        onClick: () => onChange(!checked),
+        className: `relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? 'bg-green-500' : 'bg-gray-300'}`
+      }, React.createElement('span', { className: `inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}` })));
+  if (loading) return React.createElement('div', { className: 'text-center py-12' }, React.createElement('div', { className: 'animate-spin text-4xl mb-4' }, '\u23f3'), React.createElement('p', null, 'Loading...'));
+  return React.createElement('div', { className: 'space-y-6' },
+    React.createElement('div', { className: 'flex justify-between items-center' },
+      React.createElement('div', null,
+        React.createElement('h2', { className: 'text-3xl font-bold' }, '\u2699\uFE0F Admin Settings'),
+        React.createElement('p', { className: 'text-gray-500 mt-1' }, 'System controls')),
+      React.createElement('button', { onClick: handleSave, disabled: saving, className: 'px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50' }, saving ? '\ud83d\udcbe Saving...' : '\ud83d\udcbe Save Settings')),
+    successMessage && React.createElement('div', { className: 'bg-green-50 border-2 border-green-300 p-4 rounded-xl text-green-800 font-semibold' }, successMessage),
+    React.createElement('div', { className: 'bg-white p-6 rounded-2xl shadow-lg border-2 border-red-200' },
+      React.createElement('h3', { className: 'text-xl font-bold mb-4 flex items-center gap-2 text-red-600' }, '\ud83d\udea7 Maintenance Mode'),
+      React.createElement(ToggleSwitch, {
+        checked: settings.maintenanceMode,
+        onChange: val => setSettings({ ...settings, maintenanceMode: val }),
+        label: 'Enable Maintenance Mode',
+        description: '\u26a0\ufe0f When enabled, all non-admin users see a maintenance screen'
+      }),
+      settings.maintenanceMode && React.createElement('div', { className: 'mt-4 p-4 bg-red-50 rounded-xl border border-red-300 text-red-800 font-semibold' },
+        '\u26a0\ufe0f Maintenance mode is ON. Only Super Admins can access the app. Remember to Save!')),
+    React.createElement('div', { className: 'bg-gray-50 p-6 rounded-2xl' },
+      React.createElement('h3', { className: 'text-xl font-bold mb-4' }, '\ud83d\udcca System Information'),
+      React.createElement('div', { className: 'grid md:grid-cols-3 gap-4 text-sm' },
+        React.createElement('div', { className: 'bg-white p-4 rounded-xl' },
+          React.createElement('div', { className: 'text-gray-500' }, 'Version'),
+          React.createElement('div', { className: 'font-bold text-lg' }, '2.0.0')),
+        React.createElement('div', { className: 'bg-white p-4 rounded-xl' },
+          React.createElement('div', { className: 'text-gray-500' }, 'Last Updated'),
+          React.createElement('div', { className: 'font-bold text-lg' }, new Date().toLocaleDateString())),
+        React.createElement('div', { className: 'bg-white p-4 rounded-xl' },
+          React.createElement('div', { className: 'text-gray-500' }, 'Database'),
+          React.createElement('div', { className: 'font-bold text-lg' }, 'Firebase Firestore')))),
+    React.createElement(SchoolCleanupTool, null));
 }
 function SchoolCleanupTool() {
   const [status, setStatus] = useState('idle');
@@ -21270,13 +21029,9 @@ function TeacherAttendanceView({
     return d.toISOString().split('T')[0];
   }, []);
   const allAttendance = useMemo(() => {
-    const merged = [...teacherAttendance];
-    localSubmittedAttendance.forEach(local => {
-      if (!merged.some(a => a.teacherId === local.teacherId && a.date === local.date)) {
-        merged.push(local);
-      }
-    });
-    return merged;
+    const localKeys = new Set(localSubmittedAttendance.map(a => `${a.teacherId}_${a.date}`));
+    const filtered = teacherAttendance.filter(a => !localKeys.has(`${a.teacherId}_${a.date}`));
+    return [...filtered, ...localSubmittedAttendance];
   }, [teacherAttendance, localSubmittedAttendance]);
   const todayRecord = allAttendance.find(a => a.teacherId === currentUser.afid && a.date === selectedDate);
   const hasExistingAttendance = useMemo(() => {
