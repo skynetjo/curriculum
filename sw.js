@@ -49,7 +49,7 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
 
-  // ✅ CRITICAL: Skip ALL external domains - prevents CORS issues with CDNs
+  // CRITICAL: Skip ALL external domains - prevents CORS issues with CDNs
   if (url.origin !== self.location.origin) return;
 
   // Skip non-http protocols
@@ -60,7 +60,6 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
         if (cachedResponse) {
-          // Return cached, update in background
           fetch(event.request).then((networkResponse) => {
             if (networkResponse && networkResponse.ok) {
               caches.open(APP_SHELL_CACHE).then((cache) => {
@@ -87,7 +86,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // All other same-origin: Network first, cache fallback
   event.respondWith(
     fetch(event.request)
       .then((response) => {
@@ -103,7 +101,6 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Background Sync
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-attendance' || event.tag === 'sync-curriculum') {
     event.waitUntil(
@@ -116,7 +113,6 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-// Message handler
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
