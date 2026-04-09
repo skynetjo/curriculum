@@ -22244,6 +22244,7 @@ function TimetablePage({ currentUser, mySchool }) {
   var [periodLabels, setPeriodLabels] = useState({});
   var [colTypes, setColTypes] = useState({});
   var [editingLabel, setEditingLabel] = useState(null);
+  var [weeklyOffDays, setWeeklyOffDays] = useState({Sunday:true});
   var autoSaveRef = React.useRef(null);
   var initialLoadDone = React.useRef(false);
   // Full daily schedule including breaks – 'break' rows are read-only dividers
@@ -22313,6 +22314,7 @@ function TimetablePage({ currentUser, mySchool }) {
         if(d1.colTypes){setColTypes(d1.colTypes);metaLoaded=true;}
         if(d1.periodTimes){setPeriodTimes(d1.periodTimes);metaLoaded=true;}
         if(d1.breakTimes){setBreakTimes(d1.breakTimes);}
+        if(d1.weeklyOffDays){setWeeklyOffDays(d1.weeklyOffDays);}
       }
       if (r[2].exists) {
         var d2=r[2].data();
@@ -22390,7 +22392,7 @@ function TimetablePage({ currentUser, mySchool }) {
     if(isAutoSave)setSaveMsg('Auto-saving...');
     try{
       var db=getFirestore(); var now=new Date().toISOString();
-      var meta={periodLabels:periodLabels,colTypes:colTypes,periodTimes:periodTimes,breakTimes:breakTimes};
+      var meta={periodLabels:periodLabels,colTypes:colTypes,periodTimes:periodTimes,breakTimes:breakTimes,weeklyOffDays:weeklyOffDays};
       var base=Object.assign({school:mySchool,updatedAt:now,updatedBy:(currentUser&&(currentUser.afid||currentUser.email))||'',updatedByName:(currentUser&&currentUser.name)||''},meta);
       await Promise.all([
         db.collection('timetables').doc(mySchool+'_class11').set(Object.assign({},base,{grade:'11',slots:timetable11})),
@@ -22417,9 +22419,16 @@ function TimetablePage({ currentUser, mySchool }) {
           if(!teacher) return;
           var targetDay=dayMap[day]; var timeStr=periodTimes[pi]||'';
           var timeParts=timeStr.split(/[–\-]/); if(timeParts.length<1) return;
-          var startRaw=timeParts[0].trim().replace(/\s*(AM|PM)/i,'');
+          var startRaw=timeParts[0].trim();
+          // Determine AM/PM: prefer explicit AM/PM in the stored time,
+          // fall back to the FULL_SCHEDULE reference time for this period
+          var fsEntry=FULL_SCHEDULE.find(function(fs){return fs.key===PERIODS[pi];});
+          var refTime=fsEntry?fsEntry.time:'';
+          var hasPM=/pm/i.test(startRaw)||(!(/am/i.test(startRaw))&&/pm/i.test(refTime));
+          startRaw=startRaw.replace(/\s*(AM|PM)/i,'');
           var hm=startRaw.split(':'); if(hm.length<2) return;
           var h=parseInt(hm[0])||0; var m=parseInt(hm[1])||0;
+          if(hasPM&&h!==12) h+=12; else if(!hasPM&&h===12) h=0;
           var next=new Date(); next.setHours(h,m,0,0);
           var diff=targetDay-now.getDay(); if(diff<0||(diff===0&&next<=now)) diff+=7;
           next.setDate(next.getDate()+diff);
@@ -22509,6 +22518,16 @@ function TimetablePage({ currentUser, mySchool }) {
         React.createElement('button',{onClick:addPeriod,disabled:numPeriods>=12,className:'w-5 h-5 flex items-center justify-center rounded-full text-gray-500 hover:bg-green-100 hover:text-green-600 disabled:opacity-30 font-bold text-sm leading-none'},'+')
       )
     ),
+    React.createElement('div',{className:'bg-white p-3 rounded-2xl shadow flex flex-wrap gap-2 items-center'},
+      React.createElement('span',{className:'text-xs font-bold text-gray-500 uppercase tracking-wide mr-1'},'📆 Weekly Off:'),
+      DAYS.map(function(day){
+        var isOff=!!weeklyOffDays[day];
+        return React.createElement('label',{key:day,className:'flex items-center gap-1.5 text-xs cursor-pointer px-2.5 py-1.5 rounded-lg border transition '+(isOff?'bg-red-50 border-red-200 text-red-700 font-semibold':'bg-gray-50 border-gray-200 text-gray-600')},
+          React.createElement('input',{type:'checkbox',checked:isOff,disabled:!editable,onChange:function(e){setWeeklyOffDays(function(p){var n=Object.assign({},p);if(e.target.checked){n[day]=true;}else{delete n[day];}return n;});},className:'w-3.5 h-3.5 accent-yellow-500'}),
+          day==='Sunday'?'☀️ Sunday':day.slice(0,3)
+        );
+      })
+    ),
     React.createElement('p',{className:'text-xs text-blue-600 bg-blue-50 p-2 rounded-lg md:hidden'},'👉 Scroll right to see all periods'),
     React.createElement('div',{className:'overflow-x-auto rounded-2xl shadow-lg border border-gray-200'},
       React.createElement('div',{style:{minWidth:'max-content'}},
@@ -22564,7 +22583,8 @@ function TimetablePage({ currentUser, mySchool }) {
                   React.createElement('option',{value:'Sports'},'Sports'),
                   React.createElement('option',{value:'Self Study'},'Self Study'),
                   React.createElement('option',{value:'Free Period'},'Free Period'),
-                  React.createElement('option',{value:'Exam'},'Exam')
+                  React.createElement('option',{value:'Exam'},'Exam'),
+                  React.createElement('option',{value:'Weekly Off'},'Weekly Off')
                 )
                 :React.createElement('select',{className:'w-full text-xs text-white bg-slate-700 border border-slate-600 rounded px-2 py-1 focus:outline-none text-center cursor-default',value:currentType,disabled:true},
                   React.createElement('option',{value:currentType},currentType)
@@ -22575,6 +22595,21 @@ function TimetablePage({ currentUser, mySchool }) {
         // ── Day Rows
         DAYS.map(function(day,di){
           var rowBg=di%2===0?'#ffffff':'#f9fafb';
+          // Weekly Off row
+          if(weeklyOffDays[day]){
+            return React.createElement('div',{key:day,className:'flex',style:{borderTop:'1px solid #e5e7eb',background:'#f8f9fa'}},
+              React.createElement('div',{className:'bg-slate-800 text-white font-bold text-xs flex flex-col items-center justify-center gap-1',style:{width:'72px',minHeight:'60px',borderRight:'1px solid #475569',flexShrink:0,padding:'4px',textAlign:'center'}},
+                React.createElement('span',null,day.substring(0,3).toUpperCase()),
+                editable&&React.createElement('button',{onClick:function(){setWeeklyOffDays(function(p){var n=Object.assign({},p);delete n[day];return n;});},style:{fontSize:'9px',color:'#fbbf24',background:'none',border:'1px solid #fbbf24',borderRadius:'3px',padding:'1px 5px',cursor:'pointer',lineHeight:'1.5',marginTop:'2px'}},'Enable')
+              ),
+              React.createElement('div',{style:{flex:1,display:'flex',alignItems:'center',justifyContent:'center',borderLeft:'1px solid #e5e7eb',background:'#f3f4f6'}},
+                React.createElement('div',{style:{textAlign:'center'}},
+                  React.createElement('div',{style:{fontSize:'20px',marginBottom:'3px'}},'🌟'),
+                  React.createElement('div',{style:{fontSize:'12px',fontWeight:'700',color:'#9ca3af',textTransform:'uppercase',letterSpacing:'.06em'}},'Weekly Off')
+                )
+              )
+            );
+          }
           return React.createElement('div',{key:day,className:'flex',style:{borderTop:'1px solid #e5e7eb',background:rowBg}},
             // Day label cell
             React.createElement('div',{className:'bg-slate-800 text-white font-bold text-xs flex items-center justify-center',style:{width:'72px',minHeight:'90px',borderRight:'1px solid #475569',flexShrink:0}},
@@ -22584,7 +22619,8 @@ function TimetablePage({ currentUser, mySchool }) {
             FULL_SCHEDULE.map(function(col){
               var defaultType=col.type==='break'?(col.key==='BRK_ASSEMBLY'?'Assembly':col.key==='BRK_BREAKFAST'?'Breakfast':col.key==='BRK_LUNCH'?'Lunch':col.key==='BRK_SNACK'?'Snack':'Dinner'):'Class';
               var currentType=colTypes[col.key]||defaultType;
-              var isBreakType=currentType!=='Class'&&currentType!=='Exam';
+              var isSelfStudy=currentType==='Self Study';
+              var isBreakType=currentType!=='Class'&&currentType!=='Exam'&&!isSelfStudy;
               // Render as break cell if type is a break type
               if(isBreakType){
                 var pidx=PERIODS.indexOf(col.key);
@@ -22593,6 +22629,22 @@ function TimetablePage({ currentUser, mySchool }) {
                 return React.createElement('div',{key:col.key,className:'flex flex-col items-start justify-center',style:{width:'160px',minHeight:'90px',background:'#fef9ee',borderLeft:'1px solid #e5e7eb',padding:'10px 14px',flexShrink:0}},
                   React.createElement('div',{className:'font-bold text-amber-700',style:{fontSize:'13px',lineHeight:'1.3'}},currentType!==defaultType?currentType:breakLabel),
                   React.createElement('div',{className:'text-amber-500 text-xs mt-1'},breakTime)
+                );
+              }
+              // Self Study cell – amber label + invigilator teacher dropdown
+              if(isSelfStudy){
+                var sSS=getSlot(activeClass,day,col.key);
+                var pidxSS=PERIODS.indexOf(col.key);
+                var timeSS=pidxSS>=0&&periodTimes[pidxSS]?periodTimes[pidxSS]:col.time;
+                return React.createElement('div',{key:col.key,className:'flex flex-col justify-center',style:{width:'160px',minHeight:'90px',background:sSS.teacherId?'#fffbeb':'#fef9ee',borderLeft:'1px solid #e5e7eb',padding:'8px 10px',flexShrink:0}},
+                  React.createElement('div',{style:{fontSize:'11px',fontWeight:'700',color:'#b45309',marginBottom:'5px'}},'📚 Self Study'),
+                  React.createElement('div',{style:{fontSize:'10px',color:'#d97706',marginBottom:'6px'}},timeSS),
+                  editable
+                    ?React.createElement('select',{value:sSS.teacherId||'',onChange:function(e){var t=teachers.find(function(x){return getTId(x)===e.target.value;});updateSlot(activeClass,day,col.key,{teacherId:e.target.value,teacherName:t?t.name||'':'',subject:'Self Study'});},className:'w-full border border-amber-300 rounded text-xs py-1 px-1.5 bg-white focus:border-amber-400 focus:outline-none'},
+                      React.createElement('option',{value:''},'— Invigilator —'),
+                      teachers.map(function(t){return React.createElement('option',{key:getTId(t),value:getTId(t)},t.name);})
+                    )
+                    :React.createElement('div',{style:{fontSize:'11px',fontWeight:'600',color:'#374151'}},sSS.teacherName||React.createElement('span',{style:{color:'#d1d5db'}},'—'))
                 );
               }
               var period=col.key;
