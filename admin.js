@@ -4661,25 +4661,6 @@ function AdminChapterDetails({
 }
 function AdminSettings() {
   const [settings, setSettings] = useState({
-    managerCanViewStudents: true,
-    managerCanViewStudentProfiles: true,
-    managerCanViewAnalytics: true,
-    managerCanViewAttendance: true,
-    managerCanViewObservations: true,
-    managerCanExportData: true,
-    teacherCanEditOwnAttendance: false,
-    studentCanViewFeedback: true,
-    enableEmailNotifications: true,
-    enablePushNotifications: true,
-    notifyOnNewTeacher: true,
-    notifyOnNewStudent: true,
-    notifyOnAttendanceAlert: true,
-    autoArchiveAfterDays: 365,
-    dataRetentionMonths: 24,
-    appName: 'Curriculum Tracker',
-    primaryColor: '#F4B41A',
-    enableDarkMode: false,
-    showWelcomeMessage: true,
     maintenanceMode: false
   });
   const [loading, setLoading] = useState(true);
@@ -4736,273 +4717,275 @@ function AdminSettings() {
     className: `inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`
   })));
   if (loading) {
-    return React.createElement("div", {
-      className: "text-center py-12"
-    }, React.createElement("div", {
-      className: "animate-spin text-4xl mb-4"
-    }, "\u23F3"), React.createElement("p", null, "Loading settings..."));
+    return React.createElement('div', { className: 'text-center py-12' },
+      React.createElement('div', { className: 'animate-spin text-4xl mb-4' }, '\u23f3'),
+      React.createElement('p', null, 'Loading settings...'));
   }
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("div", null, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "\u2699\uFE0F Admin Settings"), React.createElement("p", {
-    className: "text-gray-500 mt-1"
-  }, "Configure application settings and access controls")), React.createElement("button", {
-    onClick: handleSave,
-    disabled: saving,
-    className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50"
-  }, saving ? '💾 Saving...' : '💾 Save Settings')), successMessage && React.createElement("div", {
-    className: "bg-green-50 border-2 border-green-300 p-4 rounded-xl text-green-800 font-semibold"
-  }, successMessage), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83D\uDC54 Manager Access Controls"), React.createElement("p", {
-    className: "text-sm text-gray-500 mb-4"
-  }, "Configure what managers (PM, APM, APH) can access"), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanViewStudents,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanViewStudents: val
-    }),
-    label: "View Student Management",
-    description: "Allow managers to view student list (read-only)"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanViewStudentProfiles,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanViewStudentProfiles: val
-    }),
-    label: "View Student Profiles",
-    description: "Allow managers to view detailed student profiles with demographics"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanViewAnalytics,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanViewAnalytics: val
-    }),
-    label: "View Analytics",
-    description: "Allow managers to access analytics dashboards"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanViewAttendance,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanViewAttendance: val
-    }),
-    label: "View Attendance",
-    description: "Allow managers to view attendance records"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanViewObservations,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanViewObservations: val
-    }),
-    label: "View Classroom Observations",
-    description: "Allow managers to view and create classroom observations"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.managerCanExportData,
-    onChange: val => setSettings({
-      ...settings,
-      managerCanExportData: val
-    }),
-    label: "Export Data",
-    description: "Allow managers to export data to Excel/CSV"
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83D\uDC65 Teacher Settings"), React.createElement(ToggleSwitch, {
-    checked: settings.teacherCanEditOwnAttendance,
-    onChange: val => setSettings({
-      ...settings,
-      teacherCanEditOwnAttendance: val
-    }),
-    label: "Edit Own Attendance",
-    description: "Allow teachers to modify their own attendance records"
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83C\uDF93 Student Settings"), React.createElement(ToggleSwitch, {
-    checked: settings.studentCanViewFeedback,
-    onChange: val => setSettings({
-      ...settings,
-      studentCanViewFeedback: val
-    }),
-    label: "View Feedback Results",
-    description: "Allow students to view feedback summary for their teachers"
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83D\uDD14 Notification Settings"), React.createElement(ToggleSwitch, {
-    checked: settings.enableEmailNotifications,
-    onChange: val => setSettings({
-      ...settings,
-      enableEmailNotifications: val
-    }),
-    label: "Email Notifications",
-    description: "Enable email notifications for important events"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.enablePushNotifications,
-    onChange: val => setSettings({
-      ...settings,
-      enablePushNotifications: val
-    }),
-    label: "Push Notifications",
-    description: "Enable browser push notifications"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.notifyOnNewTeacher,
-    onChange: val => setSettings({
-      ...settings,
-      notifyOnNewTeacher: val
-    }),
-    label: "New Teacher Alert",
-    description: "Notify when a new teacher is added"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.notifyOnNewStudent,
-    onChange: val => setSettings({
-      ...settings,
-      notifyOnNewStudent: val
-    }),
-    label: "New Student Alert",
-    description: "Notify when new students are added"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.notifyOnAttendanceAlert,
-    onChange: val => setSettings({
-      ...settings,
-      notifyOnAttendanceAlert: val
-    }),
-    label: "Attendance Alerts",
-    description: "Notify when attendance drops below threshold"
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83D\uDDC4\uFE0F Data Management"), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Auto-archive after (days)"), React.createElement("input", {
-    type: "number",
-    value: settings.autoArchiveAfterDays,
-    onChange: e => setSettings({
-      ...settings,
-      autoArchiveAfterDays: parseInt(e.target.value) || 365
-    }),
-    className: "w-full border-2 px-4 py-3 rounded-xl",
-    min: "30",
-    max: "730"
-  }), React.createElement("p", {
-    className: "text-xs text-gray-500 mt-1"
-  }, "Old data will be archived after this many days")), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Data retention (months)"), React.createElement("input", {
-    type: "number",
-    value: settings.dataRetentionMonths,
-    onChange: e => setSettings({
-      ...settings,
-      dataRetentionMonths: parseInt(e.target.value) || 24
-    }),
-    className: "w-full border-2 px-4 py-3 rounded-xl",
-    min: "6",
-    max: "60"
-  }), React.createElement("p", {
-    className: "text-xs text-gray-500 mt-1"
-  }, "Archived data will be retained for this duration")))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2"
-  }, "\uD83C\uDFA8 App Customization"), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4 mb-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "App Name"), React.createElement("input", {
-    type: "text",
-    value: settings.appName,
-    onChange: e => setSettings({
-      ...settings,
-      appName: e.target.value
-    }),
-    className: "w-full border-2 px-4 py-3 rounded-xl"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Primary Color"), React.createElement("div", {
-    className: "flex gap-2"
-  }, React.createElement("input", {
-    type: "color",
-    value: settings.primaryColor,
-    onChange: e => setSettings({
-      ...settings,
-      primaryColor: e.target.value
-    }),
-    className: "w-16 h-12 border-2 rounded-xl cursor-pointer"
-  }), React.createElement("input", {
-    type: "text",
-    value: settings.primaryColor,
-    onChange: e => setSettings({
-      ...settings,
-      primaryColor: e.target.value
-    }),
-    className: "flex-1 border-2 px-4 py-3 rounded-xl font-mono"
-  })))), React.createElement(ToggleSwitch, {
-    checked: settings.showWelcomeMessage,
-    onChange: val => setSettings({
-      ...settings,
-      showWelcomeMessage: val
-    }),
-    label: "Show Welcome Message",
-    description: "Display welcome message on dashboard"
-  }), React.createElement(ToggleSwitch, {
-    checked: settings.enableDarkMode,
-    onChange: val => setSettings({
-      ...settings,
-      enableDarkMode: val
-    }),
-    label: "Enable Dark Mode Option",
-    description: "Allow users to switch to dark mode (coming soon)"
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg border-2 border-red-200"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4 flex items-center gap-2 text-red-600"
-  }, "\uD83D\uDEA7 Maintenance Mode"), React.createElement(ToggleSwitch, {
-    checked: settings.maintenanceMode,
-    onChange: val => setSettings({
-      ...settings,
-      maintenanceMode: val
-    }),
-    label: "Enable Maintenance Mode",
-    description: "\u26A0\uFE0F When enabled, only Super Admins can access the application"
-  }), settings.maintenanceMode && React.createElement("div", {
-    className: "mt-4 p-4 bg-red-50 rounded-xl text-red-800"
-  }, React.createElement("strong", null, "\u26A0\uFE0F Warning:"), " Maintenance mode is enabled. All users except Super Admins will see a maintenance message.")), React.createElement("div", {
-    className: "bg-gray-50 p-6 rounded-2xl"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4"
-  }, "\uD83D\uDCCA System Information"), React.createElement("div", {
-    className: "grid md:grid-cols-3 gap-4 text-sm"
-  }, React.createElement("div", {
-    className: "bg-white p-4 rounded-xl"
-  }, React.createElement("div", {
-    className: "text-gray-500"
-  }, "Version"), React.createElement("div", {
-    className: "font-bold text-lg"
-  }, "2.0.0")), React.createElement("div", {
-    className: "bg-white p-4 rounded-xl"
-  }, React.createElement("div", {
-    className: "text-gray-500"
-  }, "Last Updated"), React.createElement("div", {
-    className: "font-bold text-lg"
-  }, new Date().toLocaleDateString())), React.createElement("div", {
-    className: "bg-white p-4 rounded-xl"
-  }, React.createElement("div", {
-    className: "text-gray-500"
-  }, "Database"), React.createElement("div", {
-    className: "font-bold text-lg"
-  }, "Firebase Firestore")))));
+  return React.createElement('div', { className: 'space-y-6' },
+    React.createElement('div', { className: 'flex justify-between items-center' },
+      React.createElement('div', null,
+        React.createElement('h2', { className: 'text-3xl font-bold' }, '\u2699\ufe0f Admin Settings'),
+        React.createElement('p', { className: 'text-gray-500 mt-1' }, 'System controls for Super Admin')),
+      React.createElement('button', {
+        onClick: handleSave,
+        disabled: saving,
+        className: 'px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50'
+      }, saving ? '\ud83d\udcbe Saving...' : '\ud83d\udcbe Save Settings')),
+    successMessage && React.createElement('div', { className: 'bg-green-50 border-2 border-green-300 p-4 rounded-xl text-green-800 font-semibold' }, successMessage),
+    React.createElement(LeaveManagementPanel, null),
+    React.createElement(SchoolCleanupPanel, null),
+    React.createElement('div', { className: 'bg-white p-6 rounded-2xl shadow-lg border-2 border-red-200' },
+      React.createElement('h3', { className: 'text-xl font-bold mb-4 flex items-center gap-2 text-red-600' }, '\ud83d\udea7 Maintenance Mode'),
+      React.createElement('div', { className: 'flex items-center justify-between py-3' },
+        React.createElement('div', null,
+          React.createElement('div', { className: 'font-medium text-gray-800' }, 'Enable Maintenance Mode'),
+          React.createElement('div', { className: 'text-sm text-gray-500' }, '\u26a0\ufe0f When enabled, only Super Admins can access the application')),
+        React.createElement('button', {
+          onClick: () => setSettings({ ...settings, maintenanceMode: !settings.maintenanceMode }),
+          className: `relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.maintenanceMode ? 'bg-red-500' : 'bg-gray-300'}`
+        }, React.createElement('span', { className: `inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.maintenanceMode ? 'translate-x-6' : 'translate-x-1'}` }))),
+      settings.maintenanceMode && React.createElement('div', { className: 'mt-4 p-4 bg-red-50 rounded-xl border border-red-300 text-red-800 font-semibold' },
+        '\u26a0\ufe0f Maintenance mode is ON. All non-admin users will see the maintenance screen. Remember to Save!')));
+}
+function LeaveManagementPanel() {
+  const [teachers, setTeachers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedTeacher, setSelectedTeacher] = useState(null);
+  const [leaveData, setLeaveData] = useState(null);
+  const [loadingLeave, setLoadingLeave] = useState(false);
+  const [adjustForm, setAdjustForm] = useState({ entitled: 0, maternity: 0, paternity: 0 });
+  const [saving, setSaving] = useState(false);
+  const [leaveAdjustments, setLeaveAdjustments] = useState({});
+  useEffect(() => {
+    Promise.all([
+      db.collection('teachers').where('isArchived', '==', false).get(),
+      db.collection('leaveAdjustments').get()
+    ]).then(([tSnap, adjSnap]) => {
+      setTeachers(tSnap.docs.map(d => ({ ...d.data(), docId: d.id })).filter(t => APPROVED_SCHOOLS.includes(t.school)));
+      const adjMap = {};
+      adjSnap.docs.forEach(d => { adjMap[d.id] = d.data(); });
+      setLeaveAdjustments(adjMap);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+  const filteredTeachers = teachers.filter(t =>
+    t.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    t.afid?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    t.school?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  const openTeacherLeave = async teacher => {
+    setSelectedTeacher(teacher);
+    setLoadingLeave(true);
+    setLeaveData(null);
+    const adj = (leaveAdjustments[teacher.afid] || { entitled: 0, maternity: 0, paternity: 0 });
+    setAdjustForm({ entitled: adj.entitled || 0, maternity: adj.maternity || 0, paternity: adj.paternity || 0 });
+    try {
+      const snap = await db.collection('teacherAttendance')
+        .where('teacherId', '==', teacher.afid)
+        .where('status', '==', 'On Leave')
+        .get();
+      const leaves = snap.docs.map(d => d.data());
+      const balance = calculateLeaveBalance(leaves, teacher.afid, leaveAdjustments);
+      setLeaveData(balance);
+    } catch (e) { setLeaveData(null); }
+    setLoadingLeave(false);
+  };
+  const handleSave = async () => {
+    if (!selectedTeacher) return;
+    setSaving(true);
+    try {
+      const adj = { entitled: parseInt(adjustForm.entitled) || 0, maternity: parseInt(adjustForm.maternity) || 0, paternity: parseInt(adjustForm.paternity) || 0, updatedAt: new Date().toISOString(), updatedBy: 'admin' };
+      await db.collection('leaveAdjustments').doc(selectedTeacher.afid).set(adj);
+      const newAdjs = { ...leaveAdjustments, [selectedTeacher.afid]: adj };
+      setLeaveAdjustments(newAdjs);
+      const snap = await db.collection('teacherAttendance').where('teacherId', '==', selectedTeacher.afid).where('status', '==', 'On Leave').get();
+      const leaves = snap.docs.map(d => d.data());
+      setLeaveData(calculateLeaveBalance(leaves, selectedTeacher.afid, newAdjs));
+      alert('\u2705 Leave adjustment saved!');
+    } catch (e) { alert('\u274c Failed: ' + e.message); }
+    setSaving(false);
+  };
+  const handleReset = async () => {
+    if (!selectedTeacher) return;
+    if (!confirm('Reset all leave adjustments for ' + selectedTeacher.name + ' to zero?')) return;
+    setSaving(true);
+    try {
+      await db.collection('leaveAdjustments').doc(selectedTeacher.afid).set({ entitled: 0, maternity: 0, paternity: 0, updatedAt: new Date().toISOString(), updatedBy: 'admin' });
+      setAdjustForm({ entitled: 0, maternity: 0, paternity: 0 });
+      const newAdjs = { ...leaveAdjustments, [selectedTeacher.afid]: { entitled: 0, maternity: 0, paternity: 0 } };
+      setLeaveAdjustments(newAdjs);
+      const snap = await db.collection('teacherAttendance').where('teacherId', '==', selectedTeacher.afid).where('status', '==', 'On Leave').get();
+      setLeaveData(calculateLeaveBalance(snap.docs.map(d => d.data()), selectedTeacher.afid, newAdjs));
+      alert('\u2705 Leave adjustments reset to zero!');
+    } catch (e) { alert('\u274c Failed: ' + e.message); }
+    setSaving(false);
+  };
+  return React.createElement('div', { className: 'bg-white p-6 rounded-2xl shadow-lg' },
+    React.createElement('h3', { className: 'text-xl font-bold mb-2 flex items-center gap-2' }, '\ud83d\udcc5 Leave Management'),
+    React.createElement('p', { className: 'text-sm text-gray-500 mb-4' }, 'View and adjust teacher leave balances. Positive adjustment = deduct from balance. Negative = add back days.'),
+    loading ? React.createElement('div', { className: 'text-center py-6 text-gray-400' }, 'Loading teachers...') :
+    React.createElement('div', { className: 'flex gap-6' },
+      React.createElement('div', { className: 'w-64 flex-shrink-0' },
+        React.createElement('input', {
+          type: 'text',
+          placeholder: 'Search by name, AFID, school...',
+          value: searchTerm,
+          onChange: e => setSearchTerm(e.target.value),
+          className: 'w-full border-2 px-3 py-2 rounded-xl mb-3 text-sm'
+        }),
+        React.createElement('div', { className: 'max-h-96 overflow-y-auto space-y-1' },
+          filteredTeachers.map(t => React.createElement('button', {
+            key: t.docId,
+            onClick: () => openTeacherLeave(t),
+            className: `w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${selectedTeacher?.afid === t.afid ? 'bg-blue-100 border-2 border-blue-400 font-semibold' : 'hover:bg-gray-100 border-2 border-transparent'}`
+          },
+            React.createElement('div', { className: 'font-medium' }, t.name),
+            React.createElement('div', { className: 'text-xs text-gray-500' }, t.school + ' \u2022 ' + t.afid))))),
+      selectedTeacher ? React.createElement('div', { className: 'flex-1' },
+        React.createElement('div', { className: 'flex items-center justify-between mb-4' },
+          React.createElement('h4', { className: 'font-bold text-lg' }, selectedTeacher.name),
+          React.createElement('span', { className: 'text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-lg' }, selectedTeacher.school)),
+        loadingLeave ? React.createElement('div', { className: 'text-center py-8 text-gray-400' }, '\u23f3 Loading leave history...') :
+        leaveData ? React.createElement('div', { className: 'space-y-4' },
+          React.createElement('div', { className: 'grid grid-cols-3 gap-3 mb-4' },
+            React.createElement('div', { className: 'bg-blue-50 border-2 border-blue-200 rounded-xl p-3 text-center' },
+              React.createElement('div', { className: 'text-xs text-blue-600 font-medium mb-1' }, 'Entitled'),
+              React.createElement('div', { className: 'text-2xl font-bold text-blue-700' }, leaveData.entitled.remaining),
+              React.createElement('div', { className: 'text-xs text-blue-500' }, 'of ' + leaveData.entitled.total + ' remaining'),
+              React.createElement('div', { className: 'text-xs text-gray-500 mt-1' }, leaveData.entitled.used + ' used')),
+            React.createElement('div', { className: 'bg-pink-50 border-2 border-pink-200 rounded-xl p-3 text-center' },
+              React.createElement('div', { className: 'text-xs text-pink-600 font-medium mb-1' }, 'Maternity'),
+              React.createElement('div', { className: 'text-2xl font-bold text-pink-700' }, leaveData.maternity.remaining),
+              React.createElement('div', { className: 'text-xs text-pink-500' }, 'of ' + leaveData.maternity.total + ' remaining'),
+              React.createElement('div', { className: 'text-xs text-gray-500 mt-1' }, leaveData.maternity.used + ' used')),
+            React.createElement('div', { className: 'bg-purple-50 border-2 border-purple-200 rounded-xl p-3 text-center' },
+              React.createElement('div', { className: 'text-xs text-purple-600 font-medium mb-1' }, 'Paternity'),
+              React.createElement('div', { className: 'text-2xl font-bold text-purple-700' }, leaveData.paternity.remaining),
+              React.createElement('div', { className: 'text-xs text-purple-500' }, 'of ' + leaveData.paternity.total + ' remaining'),
+              React.createElement('div', { className: 'text-xs text-gray-500 mt-1' }, leaveData.paternity.used + ' used'))),
+          React.createElement('div', { className: 'bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4' },
+            React.createElement('p', { className: 'text-sm font-bold text-yellow-800 mb-3' }, '\u270f\ufe0f Adjust Leave Balance'),
+            React.createElement('p', { className: 'text-xs text-yellow-700 mb-3' }, 'Enter positive days to deduct from balance, negative to add back days.'),
+            React.createElement('div', { className: 'grid grid-cols-3 gap-3 mb-3' },
+              React.createElement('div', null,
+                React.createElement('label', { className: 'block text-xs font-bold text-blue-700 mb-1' }, 'Entitled adj.'),
+                React.createElement('input', { type: 'number', min: '-35', max: '35', value: adjustForm.entitled, onChange: e => setAdjustForm({ ...adjustForm, entitled: parseInt(e.target.value) || 0 }), className: 'w-full border-2 px-2 py-1 rounded-lg text-center font-bold' })),
+              React.createElement('div', null,
+                React.createElement('label', { className: 'block text-xs font-bold text-pink-700 mb-1' }, 'Maternity adj.'),
+                React.createElement('input', { type: 'number', min: '-180', max: '180', value: adjustForm.maternity, onChange: e => setAdjustForm({ ...adjustForm, maternity: parseInt(e.target.value) || 0 }), className: 'w-full border-2 px-2 py-1 rounded-lg text-center font-bold' })),
+              React.createElement('div', null,
+                React.createElement('label', { className: 'block text-xs font-bold text-purple-700 mb-1' }, 'Paternity adj.'),
+                React.createElement('input', { type: 'number', min: '-15', max: '15', value: adjustForm.paternity, onChange: e => setAdjustForm({ ...adjustForm, paternity: parseInt(e.target.value) || 0 }), className: 'w-full border-2 px-2 py-1 rounded-lg text-center font-bold' }))),
+            React.createElement('div', { className: 'flex gap-2' },
+              React.createElement('button', { onClick: handleSave, disabled: saving, className: 'flex-1 bg-green-600 text-white py-2 rounded-xl font-semibold text-sm disabled:opacity-50' }, saving ? 'Saving...' : '\ud83d\udcbe Save Adjustment'),
+              React.createElement('button', { onClick: handleReset, disabled: saving, className: 'px-4 py-2 bg-red-100 text-red-700 rounded-xl font-semibold text-sm hover:bg-red-200 disabled:opacity-50' }, '\ud83d\udd04 Reset to 0')))) :
+        React.createElement('div', { className: 'text-center py-8 text-gray-400' }, 'Could not load leave data')) :
+      React.createElement('div', { className: 'flex-1 flex items-center justify-center text-gray-400 py-12' },
+        React.createElement('div', { className: 'text-center' },
+          React.createElement('div', { className: 'text-4xl mb-3' }, '\u27a4'),
+          React.createElement('p', null, 'Select a teacher to view and adjust their leave balance')))));
+}
+function SchoolCleanupPanel() {
+  const [status, setStatus] = useState('idle');
+  const [preview, setPreview] = useState(null);
+  const [log, setLog] = useState([]);
+  const addLog = msg => setLog(prev => [...prev, msg]);
+  const handlePreview = async () => {
+    setStatus('loading');
+    setPreview(null);
+    setLog([]);
+    try {
+      const [teachersSnap, schoolsListSnap, teacherHistorySnap, archivesSnap] = await Promise.all([
+        db.collection('teachers').get(),
+        db.collection('schoolsList').get(),
+        db.collection('teacherHistory').get(),
+        db.collection('archives').get()
+      ]);
+      const foreignTeachers = teachersSnap.docs.filter(d => {
+        const school = d.data().school;
+        return school && !APPROVED_SCHOOLS.includes(school);
+      }).map(d => ({ id: d.id, name: d.data().name, school: d.data().school }));
+      const foreignSchoolsList = schoolsListSnap.docs.filter(d => {
+        const name = d.data().name;
+        return name && !APPROVED_SCHOOLS.includes(name);
+      }).map(d => ({ id: d.id, name: d.data().name }));
+      const foreignHistory = teacherHistorySnap.docs.filter(d => {
+        const school = d.data().school;
+        return school && !APPROVED_SCHOOLS.includes(school);
+      }).map(d => ({ id: d.id, name: d.data().name || d.data().teacherName || d.id, school: d.data().school }));
+      const foreignArchives = archivesSnap.docs.filter(d => {
+        const school = d.data().school;
+        return school && !APPROVED_SCHOOLS.includes(school);
+      }).map(d => ({ id: d.id, school: d.data().school }));
+      setPreview({ foreignTeachers, foreignSchoolsList, foreignHistory, foreignArchives });
+      setStatus('idle');
+    } catch (e) {
+      setStatus('idle');
+      alert('Preview failed: ' + e.message);
+    }
+  };
+  const handleCleanup = async () => {
+    if (!preview) return;
+    const total = preview.foreignTeachers.length + preview.foreignSchoolsList.length + preview.foreignHistory.length + preview.foreignArchives.length;
+    if (total === 0) { alert('Nothing to clean up!'); return; }
+    if (!confirm('\u26a0\ufe0f PERMANENT DELETE\n\nThis will delete data for schools NOT in: ' + APPROVED_SCHOOLS.join(', ') + '\n\n\u2022 ' + preview.foreignTeachers.length + ' teacher(s)\n\u2022 ' + preview.foreignSchoolsList.length + ' school list entries\n\u2022 ' + preview.foreignHistory.length + ' teacher history records\n\u2022 ' + preview.foreignArchives.length + ' archive records\n\nThis CANNOT be undone. Continue?')) return;
+    setStatus('cleaning');
+    setLog(['Starting cleanup...']);
+    try {
+      for (const t of preview.foreignTeachers) {
+        await db.collection('teachers').doc(t.id).delete();
+        addLog('Deleted teacher: ' + t.name + ' (' + t.school + ')');
+      }
+      for (const s of preview.foreignSchoolsList) {
+        await db.collection('schoolsList').doc(s.id).delete();
+        addLog('Deleted school: ' + s.name);
+      }
+      for (const h of preview.foreignHistory) {
+        await db.collection('teacherHistory').doc(h.id).delete();
+        addLog('Deleted teacher history: ' + h.name + ' (' + h.school + ')');
+      }
+      for (const a of preview.foreignArchives) {
+        await db.collection('archives').doc(a.id).delete();
+        addLog('Deleted archive: ' + a.id + ' (' + a.school + ')');
+      }
+      addLog('\u2705 Cleanup complete!');
+      setStatus('done');
+      setPreview(null);
+    } catch (e) {
+      addLog('\u274c Error: ' + e.message);
+      setStatus('idle');
+    }
+  };
+  return React.createElement('div', { className: 'bg-red-50 p-6 rounded-2xl border-2 border-red-300' },
+    React.createElement('h3', { className: 'text-xl font-bold mb-2 text-red-700' }, '\ud83c\udfe7 School Data Cleanup'),
+    React.createElement('p', { className: 'text-sm text-red-600 mb-1' }, 'Approved schools: ' + APPROVED_SCHOOLS.join(', ')),
+    React.createElement('p', { className: 'text-xs text-gray-600 mb-4' }, 'Removes teachers, school list entries, teacher history, and archives for non-approved schools.'),
+    React.createElement('div', { className: 'flex gap-3 flex-wrap' },
+      React.createElement('button', { onClick: handlePreview, disabled: status === 'loading' || status === 'cleaning', className: 'px-4 py-2 bg-yellow-500 text-white rounded-lg font-semibold disabled:opacity-50' },
+        status === 'loading' ? 'Scanning...' : '\ud83d\udd0d Preview What Will Be Deleted'),
+      preview && (preview.foreignTeachers.length + preview.foreignSchoolsList.length + preview.foreignHistory.length + preview.foreignArchives.length) > 0 &&
+      React.createElement('button', { onClick: handleCleanup, disabled: status === 'cleaning', className: 'px-4 py-2 bg-red-600 text-white rounded-lg font-semibold disabled:opacity-50' },
+        status === 'cleaning' ? 'Deleting...' : '\ud83d\uddd1\ufe0f Delete All Foreign School Data')),
+    preview && React.createElement('div', { className: 'mt-4 space-y-2' },
+      React.createElement('div', { className: 'bg-white p-3 rounded-xl border' },
+        React.createElement('p', { className: 'font-bold text-sm mb-1' }, 'Teachers to delete (' + preview.foreignTeachers.length + '):'),
+        preview.foreignTeachers.length === 0 ? React.createElement('p', { className: 'text-green-600 text-sm' }, '\u2705 None') :
+        React.createElement('ul', { className: 'text-sm space-y-0.5 max-h-32 overflow-y-auto' }, preview.foreignTeachers.map(t => React.createElement('li', { key: t.id, className: 'text-red-700' }, '\u2022 ' + t.name + ' (' + t.school + ')')))),
+      React.createElement('div', { className: 'bg-white p-3 rounded-xl border' },
+        React.createElement('p', { className: 'font-bold text-sm mb-1' }, 'Teacher history to delete (' + preview.foreignHistory.length + '):'),
+        preview.foreignHistory.length === 0 ? React.createElement('p', { className: 'text-green-600 text-sm' }, '\u2705 None') :
+        React.createElement('ul', { className: 'text-sm space-y-0.5 max-h-32 overflow-y-auto' }, preview.foreignHistory.map(h => React.createElement('li', { key: h.id, className: 'text-red-700' }, '\u2022 ' + h.name + ' (' + h.school + ')')))),
+      React.createElement('div', { className: 'bg-white p-3 rounded-xl border' },
+        React.createElement('p', { className: 'font-bold text-sm mb-1' }, 'Archive records to delete (' + preview.foreignArchives.length + '):'),
+        preview.foreignArchives.length === 0 ? React.createElement('p', { className: 'text-green-600 text-sm' }, '\u2705 None') :
+        React.createElement('ul', { className: 'text-sm space-y-0.5 max-h-32 overflow-y-auto' }, preview.foreignArchives.map(a => React.createElement('li', { key: a.id, className: 'text-red-700' }, '\u2022 ' + a.id + ' (' + a.school + ')')))),
+      React.createElement('div', { className: 'bg-white p-3 rounded-xl border' },
+        React.createElement('p', { className: 'font-bold text-sm mb-1' }, 'School list entries to delete (' + preview.foreignSchoolsList.length + '):'),
+        preview.foreignSchoolsList.length === 0 ? React.createElement('p', { className: 'text-green-600 text-sm' }, '\u2705 None') :
+        React.createElement('ul', { className: 'text-sm space-y-0.5' }, preview.foreignSchoolsList.map(s => React.createElement('li', { key: s.id, className: 'text-red-700' }, '\u2022 ' + s.name))))),
+    log.length > 0 && React.createElement('div', { className: 'mt-4 bg-gray-900 text-green-400 p-3 rounded-xl text-xs font-mono max-h-40 overflow-y-auto' },
+      log.map((l, i) => React.createElement('div', { key: i }, l))));
 }
 function AdminAssetManagement({
   accessibleSchools = [],

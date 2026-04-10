@@ -446,12 +446,10 @@ function cacheSchools(schools) {
   } catch (e) {}
 }
 (function () {
-  const cachedSchools = getCachedSchools();
-  if (cachedSchools.length > 0) {
-    SCHOOLS = cachedSchools;
-    ALL_SCHOOLS_COUNT = cachedSchools.length;
-    console.log('📊 [Schools] Loaded', cachedSchools.length, 'schools from cache');
-  }
+  SCHOOLS = [...APPROVED_SCHOOLS];
+  ALL_SCHOOLS_COUNT = APPROVED_SCHOOLS.length;
+  cacheSchools(APPROVED_SCHOOLS);
+  console.log('📊 [Schools] Initialized with approved schools:', APPROVED_SCHOOLS.join(', '));
 })();
 const MANAGER_ROLES = {
   SUPER_ADMIN: 'super_admin',
@@ -7981,9 +7979,10 @@ function App() {
     return uniqueSchools;
   }, []);
   useEffect(() => {
-    db.collection('app_settings').doc('global').get().then(doc => {
-      if (doc.exists && doc.data().maintenanceMode) setMaintenanceMode(true);
-    }).catch(() => {});
+    const unsub = db.collection('app_settings').doc('global').onSnapshot(doc => {
+      if (doc.exists) setMaintenanceMode(!!doc.data().maintenanceMode);
+    }, () => {});
+    return () => unsub();
   }, []);
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async user => {
@@ -8666,31 +8665,10 @@ function App() {
           adjMap[d.id] = d.data();
         });
         setLeaveAdjustments(adjMap);
-        if (schoolsSnap && schoolsSnap.docs && schoolsSnap.docs.length > 0) {
-          const schoolsData = schoolsSnap.docs.map(d => d.data().name).filter(Boolean);
-          if (schoolsData.length > 0) {
-            SCHOOLS = schoolsData;
-            ALL_SCHOOLS_COUNT = schoolsData.length;
-            cacheSchools(schoolsData);
-            console.log('📊 [Schools] Loaded', schoolsData.length, 'schools from Firebase schoolsList');
-          }
-        } else {
-          console.log('⚠️ [Schools] schoolsList empty or failed - using curriculum fallback');
-          const curriculumSchools = extractSchoolsFromCurriculum(currMap);
-          if (curriculumSchools.length > SCHOOLS.length) {
-            SCHOOLS = curriculumSchools;
-            ALL_SCHOOLS_COUNT = curriculumSchools.length;
-            cacheSchools(curriculumSchools);
-            console.log('📊 [Schools] Extracted', curriculumSchools.length, 'schools from curriculum');
-          }
-        }
-        const curriculumSchools = extractSchoolsFromCurriculum(currMap);
-        if (curriculumSchools.length > SCHOOLS.length) {
-          console.log('📊 [Schools] Found additional schools in curriculum:', curriculumSchools.length, 'vs', SCHOOLS.length);
-          SCHOOLS = curriculumSchools;
-          ALL_SCHOOLS_COUNT = curriculumSchools.length;
-          cacheSchools(curriculumSchools);
-        }
+        SCHOOLS = [...APPROVED_SCHOOLS];
+        ALL_SCHOOLS_COUNT = APPROVED_SCHOOLS.length;
+        cacheSchools(APPROVED_SCHOOLS);
+        console.log('📊 [Schools] Using approved schools list:', APPROVED_SCHOOLS.join(', '));
         console.log('✅ All data loaded successfully');
         if (window.updateShellStatus) window.updateShellStatus('✓ Ready!', true);
         if (window.SmartSyncManager) {
@@ -16190,24 +16168,24 @@ function TeacherManagement({
     });
     setShowModal(true);
   };
-  const openLeaveModal = teacher => {
-    const balance = calculateLeaveBalance(teacherAttendance || [], teacher.afid, leaveAdjustments || {});
-    const currentAdj = leaveAdjustments[teacher.afid] || {
-      entitled: 0,
-      maternity: 0,
-      paternity: 0
-    };
-    setSelectedTeacherLeave({
-      teacher,
-      balance
-    });
-    setLeaveForm({
-      entitled: currentAdj.entitled || 0,
-      maternity: currentAdj.maternity || 0,
-      paternity: currentAdj.paternity || 0
-    });
-    setIsEditingLeave(false);
+  const openLeaveModal = async teacher => {
     setShowLeaveModal(true);
+    setSelectedTeacherLeave({ teacher, balance: null });
+    setIsEditingLeave(false);
+    const currentAdj = (leaveAdjustments || {})[teacher.afid] || { entitled: 0, maternity: 0, paternity: 0 };
+    setLeaveForm({ entitled: currentAdj.entitled || 0, maternity: currentAdj.maternity || 0, paternity: currentAdj.paternity || 0 });
+    try {
+      const snap = await db.collection('teacherAttendance')
+        .where('teacherId', '==', teacher.afid)
+        .where('status', '==', 'On Leave')
+        .get();
+      const fullLeaves = snap.docs.map(d => d.data());
+      const balance = calculateLeaveBalance(fullLeaves, teacher.afid, leaveAdjustments || {});
+      setSelectedTeacherLeave({ teacher, balance });
+    } catch (e) {
+      const balance = calculateLeaveBalance(teacherAttendance || [], teacher.afid, leaveAdjustments || {});
+      setSelectedTeacherLeave({ teacher, balance });
+    }
   };
   const handleSaveLeaveAdjustment = async () => {
     if (!selectedTeacherLeave) return;
@@ -16763,7 +16741,7 @@ function TeacherManagement({
       });
     },
     className: "flex-1 bg-gray-300 py-3 rounded-xl font-semibold"
-  }, "Cancel"))) : React.createElement("div", {
+  }, "Cancel"))) : !selectedTeacherLeave.balance ? React.createElement("div", { className: "text-center py-8" }, React.createElement("div", { className: "animate-spin text-3xl mb-3" }, "⏳"), React.createElement("p", { className: "text-gray-500" }, "Loading leave history...")) : React.createElement("div", {
     className: "space-y-4"
   }, React.createElement("div", {
     className: "bg-blue-50 p-4 rounded-xl border-2 border-blue-200"
@@ -21014,7 +20992,17 @@ function TeacherAttendanceView({
   const [submitting, setSubmitting] = useState(false);
   const [localSubmittedAttendance, setLocalSubmittedAttendance] = useState([]);
   const [gpsVerified, setGpsVerified] = useState(false);
+  const [fullLeaveRecords, setFullLeaveRecords] = useState([]);
   const today = new Date();
+  useEffect(() => {
+    if (!currentUser?.afid) return;
+    db.collection('teacherAttendance')
+      .where('teacherId', '==', currentUser.afid)
+      .where('status', '==', 'On Leave')
+      .get()
+      .then(snap => setFullLeaveRecords(snap.docs.map(d => d.data())))
+      .catch(() => {});
+  }, [currentUser?.afid]);
   const maxDate = useMemo(() => {
     if (status === 'On Leave') {
       const d = new Date();
@@ -21038,8 +21026,12 @@ function TeacherAttendanceView({
     return allAttendance.some(a => a.teacherId === currentUser.afid && a.date === selectedDate);
   }, [allAttendance, currentUser.afid, selectedDate]);
   const leaveBalance = useMemo(() => {
-    return calculateLeaveBalance(allAttendance, currentUser.afid, leaveAdjustments || {});
-  }, [allAttendance, currentUser.afid, leaveAdjustments]);
+    const localLeaves = localSubmittedAttendance.filter(a => a.status === 'On Leave');
+    const localLeaveKeys = new Set(localLeaves.map(a => a.date));
+    const historicalLeaves = fullLeaveRecords.filter(a => !localLeaveKeys.has(a.date));
+    const allLeaves = [...historicalLeaves, ...localLeaves];
+    return calculateLeaveBalance(allLeaves, currentUser.afid, leaveAdjustments || {});
+  }, [fullLeaveRecords, localSubmittedAttendance, currentUser.afid, leaveAdjustments]);
   useEffect(() => {
     if (todayRecord) {
       setStatus(todayRecord.status);
