@@ -4895,11 +4895,13 @@ function SchoolCleanupPanel() {
     setPreview(null);
     setLog([]);
     try {
-      const [teachersSnap, schoolsListSnap, teacherHistorySnap, archivesSnap] = await Promise.all([
+      const [teachersSnap, schoolsListSnap, teacherHistorySnap, archivesSnap, studentsSnap, studentProfilesSnap] = await Promise.all([
         db.collection('teachers').get(),
         db.collection('schoolsList').get(),
         db.collection('teacherHistory').get(),
-        db.collection('archives').get()
+        db.collection('archives').get(),
+        db.collection('students').get(),
+        db.collection('studentProfiles').get()
       ]);
       const foreignTeachers = teachersSnap.docs.filter(d => {
         const school = d.data().school;
@@ -4917,7 +4919,15 @@ function SchoolCleanupPanel() {
         const school = d.data().school;
         return school && !APPROVED_SCHOOLS.includes(school);
       }).map(d => ({ id: d.id, school: d.data().school }));
-      setPreview({ foreignTeachers, foreignSchoolsList, foreignHistory, foreignArchives });
+      const foreignStudents = studentsSnap.docs.filter(d => {
+        const school = d.data().school;
+        return school && !APPROVED_SCHOOLS.includes(school);
+      }).map(d => ({ id: d.id, name: d.data().name || d.id, school: d.data().school }));
+      const foreignStudentProfiles = studentProfilesSnap.docs.filter(d => {
+        const school = d.data().school;
+        return school && !APPROVED_SCHOOLS.includes(school);
+      }).map(d => ({ id: d.id, school: d.data().school }));
+      setPreview({ foreignTeachers, foreignSchoolsList, foreignHistory, foreignArchives, foreignStudents, foreignStudentProfiles });
       setStatus('idle');
     } catch (e) {
       setStatus('idle');
@@ -4926,15 +4936,23 @@ function SchoolCleanupPanel() {
   };
   const handleCleanup = async () => {
     if (!preview) return;
-    const total = preview.foreignTeachers.length + preview.foreignSchoolsList.length + preview.foreignHistory.length + preview.foreignArchives.length;
+    const total = preview.foreignTeachers.length + preview.foreignSchoolsList.length + preview.foreignHistory.length + preview.foreignArchives.length + preview.foreignStudents.length + preview.foreignStudentProfiles.length;
     if (total === 0) { alert('Nothing to clean up!'); return; }
-    if (!confirm('\u26a0\ufe0f PERMANENT DELETE\n\nThis will delete data for schools NOT in: ' + APPROVED_SCHOOLS.join(', ') + '\n\n\u2022 ' + preview.foreignTeachers.length + ' teacher(s)\n\u2022 ' + preview.foreignSchoolsList.length + ' school list entries\n\u2022 ' + preview.foreignHistory.length + ' teacher history records\n\u2022 ' + preview.foreignArchives.length + ' archive records\n\nThis CANNOT be undone. Continue?')) return;
+    if (!confirm('\u26a0\ufe0f PERMANENT DELETE\n\nThis will delete data for schools NOT in: ' + APPROVED_SCHOOLS.join(', ') + '\n\n\u2022 ' + preview.foreignTeachers.length + ' teacher(s)\n\u2022 ' + preview.foreignStudents.length + ' student(s)\n\u2022 ' + preview.foreignStudentProfiles.length + ' student profile(s)\n\u2022 ' + preview.foreignSchoolsList.length + ' school list entries\n\u2022 ' + preview.foreignHistory.length + ' teacher history records\n\u2022 ' + preview.foreignArchives.length + ' archive records\n\nThis CANNOT be undone. Continue?')) return;
     setStatus('cleaning');
     setLog(['Starting cleanup...']);
     try {
       for (const t of preview.foreignTeachers) {
         await db.collection('teachers').doc(t.id).delete();
         addLog('Deleted teacher: ' + t.name + ' (' + t.school + ')');
+      }
+      for (const st of preview.foreignStudents) {
+        await db.collection('students').doc(st.id).delete();
+        addLog('Deleted student: ' + st.name + ' (' + st.school + ')');
+      }
+      for (const sp of preview.foreignStudentProfiles) {
+        await db.collection('studentProfiles').doc(sp.id).delete();
+        addLog('Deleted student profile: ' + sp.id + ' (' + sp.school + ')');
       }
       for (const s of preview.foreignSchoolsList) {
         await db.collection('schoolsList').doc(s.id).delete();
@@ -4959,11 +4977,11 @@ function SchoolCleanupPanel() {
   return React.createElement('div', { className: 'bg-red-50 p-6 rounded-2xl border-2 border-red-300' },
     React.createElement('h3', { className: 'text-xl font-bold mb-2 text-red-700' }, '\ud83c\udfe7 School Data Cleanup'),
     React.createElement('p', { className: 'text-sm text-red-600 mb-1' }, 'Approved schools: ' + APPROVED_SCHOOLS.join(', ')),
-    React.createElement('p', { className: 'text-xs text-gray-600 mb-4' }, 'Removes teachers, school list entries, teacher history, and archives for non-approved schools.'),
+    React.createElement('p', { className: 'text-xs text-gray-600 mb-4' }, 'Removes teachers, students, school list entries, teacher history, and archives for non-approved schools.'),
     React.createElement('div', { className: 'flex gap-3 flex-wrap' },
       React.createElement('button', { onClick: handlePreview, disabled: status === 'loading' || status === 'cleaning', className: 'px-4 py-2 bg-yellow-500 text-white rounded-lg font-semibold disabled:opacity-50' },
         status === 'loading' ? 'Scanning...' : '\ud83d\udd0d Preview What Will Be Deleted'),
-      preview && (preview.foreignTeachers.length + preview.foreignSchoolsList.length + preview.foreignHistory.length + preview.foreignArchives.length) > 0 &&
+      preview && (preview.foreignTeachers.length + preview.foreignSchoolsList.length + preview.foreignHistory.length + preview.foreignArchives.length + preview.foreignStudents.length + preview.foreignStudentProfiles.length) > 0 &&
       React.createElement('button', { onClick: handleCleanup, disabled: status === 'cleaning', className: 'px-4 py-2 bg-red-600 text-white rounded-lg font-semibold disabled:opacity-50' },
         status === 'cleaning' ? 'Deleting...' : '\ud83d\uddd1\ufe0f Delete All Foreign School Data')),
     preview && React.createElement('div', { className: 'mt-4 space-y-2' },
@@ -4971,6 +4989,16 @@ function SchoolCleanupPanel() {
         React.createElement('p', { className: 'font-bold text-sm mb-1' }, 'Teachers to delete (' + preview.foreignTeachers.length + '):'),
         preview.foreignTeachers.length === 0 ? React.createElement('p', { className: 'text-green-600 text-sm' }, '\u2705 None') :
         React.createElement('ul', { className: 'text-sm space-y-0.5 max-h-32 overflow-y-auto' }, preview.foreignTeachers.map(t => React.createElement('li', { key: t.id, className: 'text-red-700' }, '\u2022 ' + t.name + ' (' + t.school + ')')))),
+      React.createElement('div', { className: 'bg-white p-3 rounded-xl border' },
+        React.createElement('p', { className: 'font-bold text-sm mb-1' }, 'Students to delete (' + preview.foreignStudents.length + '):'),
+        preview.foreignStudents.length === 0 ? React.createElement('p', { className: 'text-green-600 text-sm' }, '\u2705 None') :
+        React.createElement('div', null,
+          React.createElement('ul', { className: 'text-sm space-y-0.5 max-h-32 overflow-y-auto' }, preview.foreignStudents.slice(0, 20).map(s => React.createElement('li', { key: s.id, className: 'text-red-700' }, '\u2022 ' + s.name + ' (' + s.school + ')'))),
+          preview.foreignStudents.length > 20 && React.createElement('p', { className: 'text-xs text-gray-500 mt-1' }, '...and ' + (preview.foreignStudents.length - 20) + ' more'))),
+      React.createElement('div', { className: 'bg-white p-3 rounded-xl border' },
+        React.createElement('p', { className: 'font-bold text-sm mb-1' }, 'Student profiles to delete (' + preview.foreignStudentProfiles.length + '):'),
+        preview.foreignStudentProfiles.length === 0 ? React.createElement('p', { className: 'text-green-600 text-sm' }, '\u2705 None') :
+        React.createElement('p', { className: 'text-red-700 text-sm' }, preview.foreignStudentProfiles.length + ' profile records will be deleted')),
       React.createElement('div', { className: 'bg-white p-3 rounded-xl border' },
         React.createElement('p', { className: 'font-bold text-sm mb-1' }, 'Teacher history to delete (' + preview.foreignHistory.length + '):'),
         preview.foreignHistory.length === 0 ? React.createElement('p', { className: 'text-green-600 text-sm' }, '\u2705 None') :
