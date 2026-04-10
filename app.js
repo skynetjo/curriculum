@@ -7814,6 +7814,8 @@ function App() {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceModeLoaded, setMaintenanceModeLoaded] = useState(false);
   const [showAdminLoginFromMaintenance, setShowAdminLoginFromMaintenance] = useState(false);
+  const maintenanceModeRef = React.useRef(false);
+  const maintenanceModeLoadedRef = React.useRef(false);
   const [managerProfile, setManagerProfile] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [loginForm, setLoginForm] = useState({
@@ -7981,9 +7983,15 @@ function App() {
   }, []);
   useEffect(() => {
     const unsub = db.collection('app_settings').doc('global').onSnapshot(doc => {
-      if (doc.exists) setMaintenanceMode(!!doc.data().maintenanceMode);
+      const mode = doc.exists ? !!doc.data().maintenanceMode : false;
+      setMaintenanceMode(mode);
+      maintenanceModeRef.current = mode;
       setMaintenanceModeLoaded(true);
-    }, () => { setMaintenanceModeLoaded(true); });
+      maintenanceModeLoadedRef.current = true;
+    }, () => {
+      setMaintenanceModeLoaded(true);
+      maintenanceModeLoadedRef.current = true;
+    });
     return () => unsub();
   }, []);
   useEffect(() => {
@@ -8037,6 +8045,32 @@ function App() {
           await auth.signOut();
           setLoading(false);
           return;
+        }
+        // Maintenance mode check: block all non-super-admin logins when maintenance is on
+        if (user.email !== 'admin@avantifellows.org') {
+          let inMaintenance = maintenanceModeRef.current;
+          if (!maintenanceModeLoadedRef.current) {
+            // Firestore snapshot hasn't fired yet — fetch directly to avoid race condition
+            try {
+              const settingsDoc = await db.collection('app_settings').doc('global').get();
+              inMaintenance = settingsDoc.exists && !!settingsDoc.data().maintenanceMode;
+              setMaintenanceMode(inMaintenance);
+              maintenanceModeRef.current = inMaintenance;
+              setMaintenanceModeLoaded(true);
+              maintenanceModeLoadedRef.current = true;
+            } catch (e) {
+              inMaintenance = false;
+            }
+          }
+          if (inMaintenance) {
+            console.log('\uD83D\uDD12 Maintenance mode active — blocking login for:', user.email);
+            await auth.signOut();
+            setShowAdminLoginFromMaintenance(false);
+            setLoading(false);
+            setAuthLoading(false);
+            setLoginProgress('');
+            return;
+          }
         }
         if (user.email === 'admin@avantifellows.org') {
           const twoFADoc = await db.collection('twoFactorAuth').doc('SUPER_ADMIN').get();
