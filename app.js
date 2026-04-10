@@ -411,7 +411,7 @@ document.addEventListener('click', function initSound() {
 }, {
   once: true
 });
-const APPROVED_SCHOOLS = ['CoE Barwani', 'CoE Cuttack', 'CoE Bundi', 'CoE Mahisagar', 'EMRS Bhopal', 'EMRS NEET', 'JNV Bharuch'];
+const APPROVED_SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Bundi', 'CoE Mahisagar', 'EMRS Bhopal', 'EMRS Bhopal_NEET', 'JNV Bharuch'];
 let SCHOOLS = [...APPROVED_SCHOOLS];
 let ALL_SCHOOLS_COUNT = 0;
 function extractSchoolsFromCurriculum(curriculum) {
@@ -16227,6 +16227,26 @@ function TeacherManagement({
       setSavingLeave(false);
     }
   };
+  const handleResetLeaveAdjustment = async () => {
+    if (!selectedTeacherLeave) return;
+    if (!confirm(`Reset all leave adjustments for ${selectedTeacherLeave.teacher.name} to zero?\n\nThis will remove any manual adjustments so the balance reflects only system-tracked leaves.`)) return;
+    setSavingLeave(true);
+    try {
+      const teacherId = selectedTeacherLeave.teacher.afid;
+      await db.collection('leaveAdjustments').doc(teacherId).set({ entitled: 0, maternity: 0, paternity: 0, updatedAt: new Date().toISOString(), updatedBy: 'admin' });
+      const newAdjs = { ...leaveAdjustments, [teacherId]: { entitled: 0, maternity: 0, paternity: 0 } };
+      setLeaveAdjustments(newAdjs);
+      setLeaveForm({ entitled: 0, maternity: 0, paternity: 0 });
+      const snap = await db.collection('teacherAttendance').where('teacherId', '==', teacherId).where('status', '==', 'On Leave').get();
+      const newBalance = calculateLeaveBalance(snap.docs.map(d => d.data()), teacherId, newAdjs);
+      setSelectedTeacherLeave({ ...selectedTeacherLeave, balance: newBalance });
+      alert('✅ Leave adjustments reset to zero!');
+    } catch (e) {
+      alert('Failed to reset: ' + e.message);
+    } finally {
+      setSavingLeave(false);
+    }
+  };
   const handleSave = async () => {
     if (!form.afid || !form.name || !form.email || !form.subject || !form.school) {
       alert('Please fill all required fields (AFID, Name, Email, Subject, School)');
@@ -16648,10 +16668,16 @@ function TeacherManagement({
     className: "flex justify-between items-center mb-4"
   }, React.createElement("h3", {
     className: "text-2xl font-bold"
-  }, "\uD83D\uDCCA Leave Balance - ", selectedTeacherLeave.teacher.name), !isEditingLeave && isSuperAdmin && React.createElement("button", {
-    onClick: () => setIsEditingLeave(true),
-    className: "px-4 py-2 bg-yellow-400 rounded-lg font-semibold text-sm"
-  }, "\u270F\uFE0F Edit")), isEditingLeave ? React.createElement("div", {
+  }, "\uD83D\uDCCA Leave Balance - ", selectedTeacherLeave.teacher.name), !isEditingLeave && isSuperAdmin && React.createElement("div", { className: "flex gap-2" },
+    React.createElement("button", {
+      onClick: () => setIsEditingLeave(true),
+      className: "px-4 py-2 bg-yellow-400 rounded-lg font-semibold text-sm"
+    }, "\u270F\uFE0F Edit"),
+    React.createElement("button", {
+      onClick: handleResetLeaveAdjustment,
+      disabled: savingLeave,
+      className: "px-4 py-2 bg-red-100 text-red-700 rounded-lg font-semibold text-sm hover:bg-red-200 disabled:opacity-50"
+    }, savingLeave ? '...' : '\uD83D\uDD04 Reset'))), isEditingLeave ? React.createElement("div", {
     className: "space-y-4"
   }, React.createElement("div", {
     className: "bg-yellow-50 p-4 rounded-xl border-2 border-yellow-300 mb-4"
