@@ -4732,7 +4732,6 @@ function AdminSettings() {
         className: 'px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50'
       }, saving ? '\ud83d\udcbe Saving...' : '\ud83d\udcbe Save Settings')),
     successMessage && React.createElement('div', { className: 'bg-green-50 border-2 border-green-300 p-4 rounded-xl text-green-800 font-semibold' }, successMessage),
-    React.createElement(LeaveManagementPanel, null),
     React.createElement(SchoolCleanupPanel, null),
     React.createElement('div', { className: 'bg-white p-6 rounded-2xl shadow-lg border-2 border-red-200' },
       React.createElement('h3', { className: 'text-xl font-bold mb-4 flex items-center gap-2 text-red-600' }, '\ud83d\udea7 Maintenance Mode'),
