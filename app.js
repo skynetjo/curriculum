@@ -7812,6 +7812,7 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceModeLoaded, setMaintenanceModeLoaded] = useState(false);
   const [showAdminLoginFromMaintenance, setShowAdminLoginFromMaintenance] = useState(false);
   const [managerProfile, setManagerProfile] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -7981,7 +7982,8 @@ function App() {
   useEffect(() => {
     const unsub = db.collection('app_settings').doc('global').onSnapshot(doc => {
       if (doc.exists) setMaintenanceMode(!!doc.data().maintenanceMode);
-    }, () => {});
+      setMaintenanceModeLoaded(true);
+    }, () => { setMaintenanceModeLoaded(true); });
     return () => unsub();
   }, []);
   useEffect(() => {
@@ -9253,7 +9255,10 @@ function App() {
       });
     }));
   }
-  if (loading) {
+  if (maintenanceModeLoaded && maintenanceMode && !isSuperAdmin && !showAdminLoginFromMaintenance) {
+    return React.createElement(MaintenanceScreen, { onAdminLogin: () => setShowAdminLoginFromMaintenance(true) });
+  }
+  if (loading || !maintenanceModeLoaded) {
     return React.createElement("div", {
       className: "min-h-screen avanti-gradient flex items-center justify-center"
     }, React.createElement("div", {
@@ -9300,9 +9305,6 @@ function App() {
       onVerified: complete2FAVerification,
       onCancel: cancel2FA
     }));
-  }
-  if (maintenanceMode && !isSuperAdmin && !showAdminLoginFromMaintenance) {
-    return React.createElement(MaintenanceScreen, { onAdminLogin: () => setShowAdminLoginFromMaintenance(true) });
   }
   if (!currentUser) {
     // ── Inject login page CSS animations ──────────────────────────────────
