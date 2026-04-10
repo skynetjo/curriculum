@@ -21532,6 +21532,8 @@ function AdminAttendanceAnalytics({
   const [rangeStudentData, setRangeStudentData] = React.useState(null);
   const [rangeTeacherData, setRangeTeacherData] = React.useState(null);
   const [loadingRange, setLoadingRange] = React.useState(false);
+  const [editAttModal, setEditAttModal] = React.useState(null);
+  const [editAttSaving, setEditAttSaving] = React.useState(false);
   const handleLoadRange = async () => {
     setLoadingRange(true);
     setRangeStudentData(null);
@@ -21830,6 +21832,20 @@ function AdminAttendanceAnalytics({
     } catch (err) { alert('Export failed: ' + err.message); }
     setExportingTeachers(false);
   };
+  const ATT_LEAVE_REASONS = ['Personal Leave', 'Sick Leave', 'Weekly Off', 'Public Holiday', 'Organization Holiday', 'School Holiday', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Comp Off'];
+  const handleEditAttSave = async () => {
+    if (!editAttModal) return;
+    setEditAttSaving(true);
+    const { record, status, reason } = editAttModal;
+    const docId = `${record.teacherId}_${record.date}`;
+    const updated = { ...record, status, reason, markedByAdmin: true, adminOverride: true, originalStatus: record.originalStatus || record.status, markedAt: new Date().toISOString() };
+    try {
+      await db.collection('teacherAttendance').doc(docId).set(updated);
+      setRangeTeacherData(prev => prev ? prev.map(r => (r.teacherId === record.teacherId && r.date === record.date) ? updated : r) : prev);
+      setEditAttModal(null);
+    } catch (e) { alert('Error saving: ' + e.message); }
+    setEditAttSaving(false);
+  };
   return React.createElement("div", {
     className: "space-y-6"
   }, React.createElement("div", {
@@ -22066,8 +22082,10 @@ function AdminAttendanceAnalytics({
     className: "p-3 text-left"
   }, "Reason"), React.createElement("th", {
     className: "p-3 text-left"
-  }, "Location"))), React.createElement("tbody", null, filteredTeacherAttendance.length === 0 ? React.createElement("tr", null, React.createElement("td", {
-    colSpan: "7",
+  }, "Location"), isSuperAdmin && React.createElement("th", {
+    className: "p-3 text-center"
+  }, "Action"))), React.createElement("tbody", null, filteredTeacherAttendance.length === 0 ? React.createElement("tr", null, React.createElement("td", {
+    colSpan: isSuperAdmin ? "8" : "7",
     className: "p-8 text-center text-gray-500"
   }, rangeTeacherData === null ? "\u26A0\uFE0F Select dates above and click Load Data to view records" : "No records found for selected filters.")) : filteredTeacherAttendance.slice(0, 50).map((a, idx) => React.createElement("tr", {
     key: idx,
@@ -22076,7 +22094,7 @@ function AdminAttendanceAnalytics({
     className: "p-3 text-sm"
   }, a.date), React.createElement("td", {
     className: "p-3 font-semibold"
-  }, a.teacherName), React.createElement("td", {
+  }, a.teacherName, a.adminOverride && React.createElement("span", { className: "ml-1 text-xs bg-yellow-100 text-yellow-700 px-1 rounded font-bold" }, "Admin")), React.createElement("td", {
     className: "p-3"
   }, a.school), React.createElement("td", {
     className: "p-3"
@@ -22090,7 +22108,47 @@ function AdminAttendanceAnalytics({
     className: "p-3 text-sm"
   }, a.reason), React.createElement("td", {
     className: "p-3 text-sm"
-  }, "\uD83D\uDCCD ", a.location))))))));
+  }, "\uD83D\uDCCD ", a.location), isSuperAdmin && React.createElement("td", {
+    className: "p-3 text-center"
+  }, React.createElement("button", {
+    onClick: () => setEditAttModal({ record: a, status: a.status, reason: a.reason || (a.status === 'Present' ? 'Present' : 'Personal Leave') }),
+    className: "px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-200"
+  }, "\u270F\uFE0F Edit")))))))),
+  editAttModal && React.createElement("div", {
+    className: "fixed inset-0 flex items-center justify-center z-50",
+    style: { background: "rgba(0,0,0,0.55)" },
+    onClick: e => { if (e.target === e.currentTarget) setEditAttModal(null); }
+  }, React.createElement("div", { className: "bg-white rounded-2xl p-6 shadow-2xl w-full max-w-md mx-4" },
+    React.createElement("h3", { className: "text-xl font-bold mb-1" }, "\u270F\uFE0F Edit Teacher Attendance"),
+    React.createElement("p", { className: "text-gray-500 text-sm mb-4" }, editAttModal.record.teacherName, " \u2014 ", editAttModal.record.date),
+    React.createElement("div", { className: "space-y-4" },
+      React.createElement("div", null,
+        React.createElement("label", { className: "block text-sm font-semibold text-gray-700 mb-2" }, "Status"),
+        React.createElement("div", { className: "flex gap-3" },
+          ["Present", "On Leave"].map(s => React.createElement("button", {
+            key: s,
+            onClick: () => setEditAttModal(prev => ({ ...prev, status: s, reason: s === "Present" ? "Present" : (prev.reason === "Present" ? "Personal Leave" : prev.reason) })),
+            className: `flex-1 py-2 rounded-lg font-semibold border-2 transition-colors ${editAttModal.status === s ? (s === "Present" ? "bg-green-500 text-white border-green-500" : "bg-orange-500 text-white border-orange-500") : "border-gray-300 text-gray-600 hover:border-gray-400"}`
+          }, s)))),
+      React.createElement("div", null,
+        React.createElement("label", { className: "block text-sm font-semibold text-gray-700 mb-2" }, "Reason"),
+        React.createElement("select", {
+          value: editAttModal.reason,
+          onChange: e => setEditAttModal(prev => ({ ...prev, reason: e.target.value })),
+          className: "w-full border border-gray-300 rounded-lg p-2 focus:border-blue-400 focus:outline-none"
+        }, (editAttModal.status === "Present" ? ["Present"] : ATT_LEAVE_REASONS).map(r => React.createElement("option", { key: r, value: r }, r)))),
+      React.createElement("div", { className: "text-xs bg-yellow-50 text-yellow-700 rounded-lg p-3 border border-yellow-200" },
+        "\u26A0\uFE0F This will overwrite the existing record and flag it as an admin override.")),
+    React.createElement("div", { className: "flex gap-3 mt-6" },
+      React.createElement("button", {
+        onClick: () => setEditAttModal(null),
+        className: "flex-1 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium"
+      }, "Cancel"),
+      React.createElement("button", {
+        onClick: handleEditAttSave,
+        disabled: editAttSaving,
+        className: "flex-1 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
+      }, editAttSaving ? "Saving..." : "Save")))));
 }
 function TimetableAdminSection({ currentUser, availableSchools }) {
   var schools = availableSchools && availableSchools.length > 0 ? availableSchools : (typeof SCHOOLS !== 'undefined' ? SCHOOLS : []);

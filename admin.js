@@ -156,13 +156,7 @@ function AdminView({
     icon: React.createElement("i", {
       className: "fa-solid fa-calendar-check"
     })
-  }, ...(isSuperAdmin ? [{
-    id: 'teacher-attendance-override',
-    label: 'Mark Teacher Attendance',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-user-clock"
-    })
-  }] : []), {
+  }, {
     id: 'assets',
     label: 'Asset Management',
     icon: React.createElement("i", {
@@ -523,9 +517,6 @@ function AdminView({
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
-  }), activeTab === 'teacher-attendance-override' && isSuperAdmin && React.createElement(AdminTeacherAttendanceOverride, {
-    accessibleSchools: availableSchools,
-    isSuperAdmin: isSuperAdmin
   }), activeTab === 'schoolinfo' && React.createElement(AdminSchoolInfo, {
     schoolInfo: filteredSchoolInfo,
     setSchoolInfo: setSchoolInfo,
@@ -4667,176 +4658,6 @@ function AdminChapterDetails({
   }, ch.testConducted)), React.createElement("td", {
     className: "p-3 text-sm"
   }, ch.notes)))))));
-}
-function AdminTeacherAttendanceOverride({ accessibleSchools, isSuperAdmin }) {
-  if (!isSuperAdmin) return null;
-  const REASONS_PRESENT = ['Present'];
-  const REASONS_LEAVE = ['Personal Leave', 'Sick Leave', 'Weekly Off', 'Public Holiday', 'Organization Holiday', 'School Holiday', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Comp Off'];
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [selectedSchool, setSelectedSchool] = useState('');
-  const [teachers, setTeachers] = useState([]);
-  const [attendanceMap, setAttendanceMap] = useState({});
-  const [loadingData, setLoadingData] = useState(false);
-  const [editModal, setEditModal] = useState(null);
-  const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    if (!selectedSchool) { setTeachers([]); setAttendanceMap({}); return; }
-    setLoadingData(true);
-    let teacherList = [];
-    db.collection('teachers').where('school', '==', selectedSchool).where('isArchived', '==', false).get()
-      .then(snap => {
-        teacherList = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
-        setTeachers(teacherList);
-        return db.collection('teacherAttendance').where('school', '==', selectedSchool).where('date', '==', selectedDate).get();
-      })
-      .then(snap => {
-        const map = {};
-        snap.docs.forEach(d => { map[d.data().teacherId] = { ...d.data(), docId: d.id }; });
-        setAttendanceMap(map);
-        setLoadingData(false);
-      })
-      .catch(() => setLoadingData(false));
-  }, [selectedSchool, selectedDate]);
-  const openEdit = teacher => {
-    const existing = attendanceMap[teacher.afid] || null;
-    const initStatus = existing ? existing.status : 'Present';
-    const initReason = existing ? existing.reason : 'Present';
-    setEditModal({ teacher, existing, status: initStatus, reason: initReason });
-  };
-  const saveAttendance = async () => {
-    if (!editModal) return;
-    setSaving(true);
-    const { teacher, existing, status, reason } = editModal;
-    const docId = `${teacher.afid}_${selectedDate}`;
-    const record = {
-      teacherId: teacher.afid,
-      teacherName: teacher.name,
-      school: teacher.school,
-      date: selectedDate,
-      status,
-      reason,
-      location: 'Marked by Admin',
-      punchInTime: existing ? existing.punchInTime : new Date().toISOString(),
-      markedAt: new Date().toISOString(),
-      markedByAdmin: true,
-      adminOverride: true,
-    };
-    if (existing && existing.status !== status) record.originalStatus = existing.status;
-    try {
-      await db.collection('teacherAttendance').doc(docId).set(record);
-      setAttendanceMap(prev => ({ ...prev, [teacher.afid]: { ...record, docId } }));
-      setEditModal(null);
-    } catch (e) { alert('Error saving: ' + e.message); }
-    setSaving(false);
-  };
-  const reasonsForStatus = status => status === 'Present' ? REASONS_PRESENT : REASONS_LEAVE;
-  return React.createElement('div', { className: 'space-y-6' },
-    React.createElement('div', null,
-      React.createElement('h2', { className: 'text-3xl font-bold' }, '\uD83D\uDCCB Mark Teacher Attendance'),
-      React.createElement('p', { className: 'text-gray-500 mt-1' }, 'Mark or edit teacher attendance for any date (Super Admin only)')),
-    React.createElement('div', { className: 'bg-white p-6 rounded-2xl shadow-lg border border-gray-200' },
-      React.createElement('div', { className: 'flex gap-4 flex-wrap' },
-        React.createElement('div', { style: { flex: '1', minWidth: '200px' } },
-          React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Date'),
-          React.createElement('input', {
-            type: 'date',
-            value: selectedDate,
-            onChange: e => setSelectedDate(e.target.value),
-            className: 'w-full border border-gray-300 rounded-lg p-2 focus:border-blue-400 focus:outline-none'
-          })),
-        React.createElement('div', { style: { flex: '1', minWidth: '200px' } },
-          React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'School'),
-          React.createElement('select', {
-            value: selectedSchool,
-            onChange: e => setSelectedSchool(e.target.value),
-            className: 'w-full border border-gray-300 rounded-lg p-2 focus:border-blue-400 focus:outline-none'
-          },
-            React.createElement('option', { value: '' }, '-- Select School --'),
-            APPROVED_SCHOOLS.map(s => React.createElement('option', { key: s, value: s }, s)))))),
-    selectedSchool && React.createElement('div', { className: 'bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden' },
-      loadingData
-        ? React.createElement('div', { className: 'text-center py-12 text-gray-500' }, '\u23F3 Loading teachers and attendance...')
-        : teachers.length === 0
-          ? React.createElement('div', { className: 'text-center py-12 text-gray-400' }, 'No active teachers found for this school.')
-          : React.createElement('div', null,
-              React.createElement('div', { className: 'px-6 py-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center' },
-                React.createElement('span', { className: 'font-semibold text-gray-700' }, selectedSchool + ' \u2014 ' + selectedDate),
-                React.createElement('span', { className: 'text-sm text-gray-500' }, teachers.length + ' teachers, ' + Object.keys(attendanceMap).length + ' marked')),
-              React.createElement('div', { className: 'overflow-x-auto' },
-                React.createElement('table', { className: 'w-full' },
-                  React.createElement('thead', null,
-                    React.createElement('tr', { className: 'bg-gray-50 border-b-2 border-gray-200' },
-                      React.createElement('th', { className: 'text-left p-3 text-sm font-semibold text-gray-600' }, 'Teacher'),
-                      React.createElement('th', { className: 'text-left p-3 text-sm font-semibold text-gray-600' }, 'AFID'),
-                      React.createElement('th', { className: 'text-left p-3 text-sm font-semibold text-gray-600' }, 'Status'),
-                      React.createElement('th', { className: 'text-left p-3 text-sm font-semibold text-gray-600' }, 'Reason'),
-                      React.createElement('th', { className: 'text-center p-3 text-sm font-semibold text-gray-600' }, 'Action'))),
-                  React.createElement('tbody', null,
-                    teachers.map(t => {
-                      const rec = attendanceMap[t.afid];
-                      return React.createElement('tr', { key: t.afid, className: 'border-b border-gray-100 hover:bg-gray-50' },
-                        React.createElement('td', { className: 'p-3' },
-                          React.createElement('div', { className: 'font-medium text-gray-800' }, t.name),
-                          rec && rec.markedByAdmin && React.createElement('span', { className: 'text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold ml-1' }, 'Admin Override')),
-                        React.createElement('td', { className: 'p-3 text-gray-500 text-sm font-mono' }, t.afid),
-                        React.createElement('td', { className: 'p-3' },
-                          rec
-                            ? React.createElement('span', { className: `px-2 py-1 rounded-full text-xs font-bold ${rec.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}` }, rec.status)
-                            : React.createElement('span', { className: 'px-2 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500' }, 'Not Marked')),
-                        React.createElement('td', { className: 'p-3 text-sm text-gray-600' }, rec ? rec.reason : '\u2014'),
-                        React.createElement('td', { className: 'p-3 text-center' },
-                          React.createElement('button', {
-                            onClick: () => openEdit(t),
-                            className: `px-3 py-1 rounded-lg text-sm font-semibold transition-colors ${rec ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`
-                          }, rec ? '\u270F\uFE0F Edit' : '+ Mark')));
-                    })))))),
-    editModal && React.createElement('div', {
-      className: 'fixed inset-0 flex items-center justify-center z-50',
-      style: { background: 'rgba(0,0,0,0.55)' },
-      onClick: e => { if (e.target === e.currentTarget) setEditModal(null); }
-    },
-      React.createElement('div', { className: 'bg-white rounded-2xl p-6 shadow-2xl w-full max-w-md mx-4' },
-        React.createElement('h3', { className: 'text-xl font-bold mb-1' },
-          (editModal.existing ? '\u270F\uFE0F Edit' : '\u2795 Mark') + ' Attendance'),
-        React.createElement('p', { className: 'text-gray-500 text-sm mb-4' }, editModal.teacher.name + ' \u2014 ' + selectedDate),
-        React.createElement('div', { className: 'space-y-4' },
-          React.createElement('div', null,
-            React.createElement('label', { className: 'block text-sm font-semibold text-gray-700 mb-2' }, 'Status'),
-            React.createElement('div', { className: 'flex gap-3' },
-              ['Present', 'On Leave'].map(s =>
-                React.createElement('button', {
-                  key: s,
-                  onClick: () => setEditModal(prev => ({
-                    ...prev,
-                    status: s,
-                    reason: reasonsForStatus(s)[0]
-                  })),
-                  className: `flex-1 py-2 rounded-lg font-semibold border-2 transition-colors ${editModal.status === s ? (s === 'Present' ? 'bg-green-500 text-white border-green-500' : 'bg-orange-500 text-white border-orange-500') : 'border-gray-300 text-gray-600 hover:border-gray-400'}`
-                }, s)))),
-          React.createElement('div', null,
-            React.createElement('label', { className: 'block text-sm font-semibold text-gray-700 mb-2' }, 'Reason'),
-            React.createElement('select', {
-              value: editModal.reason,
-              onChange: e => setEditModal(prev => ({ ...prev, reason: e.target.value })),
-              className: 'w-full border border-gray-300 rounded-lg p-2 focus:border-blue-400 focus:outline-none'
-            },
-              reasonsForStatus(editModal.status).map(r =>
-                React.createElement('option', { key: r, value: r }, r)))),
-          editModal.existing && React.createElement('div', { className: 'text-xs bg-blue-50 text-blue-700 rounded-lg p-3 border border-blue-200' },
-            'Current: ', React.createElement('strong', null, editModal.existing.status), ' \u2014 ', editModal.existing.reason,
-            editModal.existing.markedByAdmin ? ' (previously admin-marked)' : ' (teacher-submitted)'),
-          React.createElement('div', { className: 'text-xs bg-yellow-50 text-yellow-700 rounded-lg p-3 border border-yellow-200' },
-            '\u26A0\uFE0F This will be saved as an admin override and will overwrite any existing record.')),
-        React.createElement('div', { className: 'flex gap-3 mt-6' },
-          React.createElement('button', {
-            onClick: () => setEditModal(null),
-            className: 'flex-1 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium'
-          }, 'Cancel'),
-          React.createElement('button', {
-            onClick: saveAttendance,
-            disabled: saving,
-            className: 'flex-1 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50'
-          }, saving ? 'Saving...' : 'Save')))));
 }
 function AdminSettings() {
   const [settings, setSettings] = useState({
