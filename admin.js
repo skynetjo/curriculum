@@ -205,6 +205,12 @@ function AdminView({
       className: "fa-solid fa-message"
     })
   }, {
+    id: 'credilafeedback',
+    label: 'Credila Feedback',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-building-columns"
+    })
+  }, {
     id: 'timesheet',
     label: 'Timesheet',
     icon: React.createElement("i", {
@@ -552,6 +558,10 @@ function AdminView({
     currentUser: currentUser,
     availableSchools: availableSchools
   }), activeTab === 'studentfeedback' && React.createElement(StudentFeedbackView, {
+    accessibleSchools: availableSchools,
+    isSuperAdmin: isSuperAdmin,
+    isDirector: isDirector
+  }), activeTab === 'credilafeedback' && React.createElement(CredilaFeedbackAdminView, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
