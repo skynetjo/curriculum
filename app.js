@@ -2240,6 +2240,185 @@ function MonthlyFeedbackTrendGraph({
     className: "text-xs text-gray-600"
   }, "This Month"))));
 }
+function CredilaFeedbackForm({
+  studentId,
+  studentInfo,
+  onClose,
+  onSubmitSuccess
+}) {
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [responses, setResponses] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const questions = [{
+    id: 'q1',
+    text: 'How was your overall experience with the Credila mentoring session?',
+    type: 'opentext',
+    placeholder: 'Share your overall experience with the session...',
+    optional: false
+  }, {
+    id: 'q2',
+    text: 'What went well? What could have been better?',
+    type: 'opentext',
+    placeholder: 'Share what was good and what could be improved...',
+    optional: false
+  }, {
+    id: 'q3',
+    text: 'How would you rate the Credila mentoring session overall? (out of 5)',
+    type: 'rating',
+    optional: false
+  }, {
+    id: 'q4',
+    text: 'Any other comments or suggestions?',
+    type: 'opentext',
+    placeholder: 'Any additional thoughts, questions, or suggestions...',
+    optional: true
+  }];
+  const currentQ = questions[currentQuestion];
+  const canProceed = () => {
+    if (currentQ.optional) return true;
+    const r = responses[currentQ.id];
+    if (currentQ.type === 'opentext') return r && r.text && r.text.trim().length > 5;
+    if (currentQ.type === 'rating') return r && r.rating > 0;
+    return false;
+  };
+  const handleOpenTextChange = text => {
+    setResponses(prev => ({
+      ...prev,
+      [currentQ.id]: {
+        ...prev[currentQ.id],
+        text
+      }
+    }));
+  };
+  const handleRatingChange = rating => {
+    setResponses(prev => ({
+      ...prev,
+      [currentQ.id]: {
+        ...prev[currentQ.id],
+        rating
+      }
+    }));
+  };
+  const handleNext = () => {
+    if (currentQuestion < questions.length - 1) setCurrentQuestion(currentQuestion + 1);
+  };
+  const handlePrevious = () => {
+    if (currentQuestion > 0) setCurrentQuestion(currentQuestion - 1);
+  };
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const feedbackData = {
+        studentId,
+        studentName: studentInfo?.name || '',
+        school: studentInfo?.school || '',
+        grade: studentInfo?.grade || '',
+        overallExperience: responses.q1?.text || '',
+        wentWellAndBetter: responses.q2?.text || '',
+        rating: responses.q3?.rating || 0,
+        otherComments: responses.q4?.text || '',
+        responses,
+        submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        completedAt: new Date().toISOString()
+      };
+      await db.collection('credilaFeedback').doc(String(studentId)).set(feedbackData);
+      setSubmitted(true);
+      onSubmitSuccess();
+    } catch (error) {
+      console.error('Error submitting Credila feedback:', error);
+      alert('\u274C Failed to submit feedback. Please check your internet and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  if (submitted) {
+    return React.createElement("div", {
+      className: "feedback-modal",
+      onClick: onClose
+    }, React.createElement("div", {
+      className: "feedback-content",
+      onClick: e => e.stopPropagation()
+    }, React.createElement("div", {
+      className: "p-8 text-center"
+    }, React.createElement("div", {
+      className: "text-6xl mb-4"
+    }, "\uD83C\uDF89"), React.createElement("h2", {
+      className: "text-2xl font-bold text-green-600 mb-3"
+    }, "Thank You for Your Feedback!"), React.createElement("p", {
+      className: "text-gray-600 mb-6"
+    }, "Your response has been recorded. Credila will use this to improve future mentoring sessions."), React.createElement("button", {
+      onClick: onClose,
+      className: "px-6 py-3 avanti-gradient text-white rounded-xl font-semibold"
+    }, "Close"))));
+  }
+  return React.createElement("div", {
+    className: "feedback-modal",
+    onClick: onClose
+  }, React.createElement("div", {
+    className: "feedback-content",
+    onClick: e => e.stopPropagation()
+  }, React.createElement("div", {
+    className: "p-6"
+  }, React.createElement("div", {
+    className: "flex justify-between items-start mb-4"
+  }, React.createElement("div", null, React.createElement("h2", {
+    className: "text-2xl font-bold"
+  }, "\uD83C\uDFE6 Credila Mentoring Feedback"), React.createElement("p", {
+    className: "text-gray-600 text-sm mt-1"
+  }, "Share your experience with the Credila mentoring session")), React.createElement("button", {
+    onClick: onClose,
+    className: "text-2xl font-bold text-gray-500 hover:text-gray-700"
+  }, "\xD7")), React.createElement("div", {
+    className: "mb-6"
+  }, React.createElement("div", {
+    className: "flex justify-between items-center mb-2"
+  }, React.createElement("span", {
+    className: "text-sm font-semibold text-gray-600"
+  }, "Question ", currentQuestion + 1, " of ", questions.length), React.createElement("span", {
+    className: "text-sm text-gray-500"
+  }, Math.round((currentQuestion + 1) / questions.length * 100), "% Complete")), React.createElement("div", {
+    className: "w-full bg-gray-200 rounded-full h-2"
+  }, React.createElement("div", {
+    className: "avanti-gradient h-2 rounded-full transition-all duration-300",
+    style: {
+      width: `${(currentQuestion + 1) / questions.length * 100}%`
+    }
+  }))), React.createElement("div", {
+    className: "space-y-6"
+  }, React.createElement("h3", {
+    className: "text-lg font-semibold"
+  }, currentQ.text), currentQ.optional && React.createElement("p", {
+    className: "text-sm text-gray-400 -mt-4"
+  }, "(Optional)"), currentQ.type === 'opentext' && React.createElement("textarea", {
+    value: responses[currentQ.id]?.text || '',
+    onChange: e => handleOpenTextChange(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl min-h-[130px] focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200",
+    placeholder: currentQ.placeholder
+  }), currentQ.type === 'rating' && React.createElement("div", {
+    className: "flex flex-col items-center gap-4 py-4"
+  }, React.createElement(StarRating, {
+    value: responses[currentQ.id]?.rating || 0,
+    onChange: handleRatingChange
+  }), React.createElement("p", {
+    className: "text-center text-gray-500 text-sm"
+  }, responses[currentQ.id]?.rating ? `You selected ${responses[currentQ.id].rating} out of 5` : 'Click a star to rate'))), React.createElement("div", {
+    className: "flex justify-between gap-3 mt-6"
+  }, React.createElement("button", {
+    onClick: handlePrevious,
+    disabled: currentQuestion === 0,
+    className: "px-6 py-3 bg-gray-300 text-gray-700 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+  }, "\u2190 Previous"), currentQuestion < questions.length - 1 ? React.createElement("button", {
+    onClick: handleNext,
+    disabled: !canProceed(),
+    className: "px-6 py-3 avanti-gradient text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+  }, "Next \u2192") : React.createElement("button", {
+    onClick: handleSubmit,
+    disabled: !canProceed() || isSubmitting,
+    className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+  }, isSubmitting ? '\u23F3 Submitting...' : "\u2713 Submit Feedback")))));
+}
 function TeacherFeedbackForm({
   teacher,
   studentId,
@@ -5715,9 +5894,13 @@ function StudentDashboard({
   const [showTeacherProfile, setShowTeacherProfile] = useState(false);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [showFeedbackNotification, setShowFeedbackNotification] = useState(false);
+  const [credilaFeedbackDone, setCredilaFeedbackDone] = useState(false);
+  const [showCredilaFeedbackForm, setShowCredilaFeedbackForm] = useState(false);
   const mySchool = currentUser.school;
   const myGrade = currentUser.grade;
   const myId = currentUser.studentId || currentUser.id;
+  const CREDILA_ELIGIBLE_SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Bundi'];
+  const credilaFeedbackEligible = CREDILA_ELIGIBLE_SCHOOLS.includes(mySchool) && String(myGrade) === '12';
   useEffect(() => {
     const fetchData = async () => {
       const teacherCacheKey = `teachers_${mySchool}`;
@@ -5906,6 +6089,12 @@ function StudentDashboard({
     const timer = setTimeout(() => setShowFeedbackNotification(true), 3000);
     return () => clearTimeout(timer);
   }, [myId]);
+  useEffect(() => {
+    if (!credilaFeedbackEligible || !myId) return;
+    db.collection('credilaFeedback').doc(String(myId)).get().then(snap => {
+      if (snap.exists) setCredilaFeedbackDone(true);
+    }).catch(() => {});
+  }, [myId, credilaFeedbackEligible]);
   const getTeacherAverageRating = teacherDocId => {
     const teacherFeedbackList = teacherFeedbacks.filter(f => f.teacherId === teacherDocId);
     if (teacherFeedbackList.length === 0) return null;
@@ -5981,7 +6170,20 @@ function StudentDashboard({
     className: "space-y-6"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
-  }, "Welcome, ", currentUser.name, "! \uD83D\uDC4B"), React.createElement("div", {
+  }, "Welcome, ", currentUser.name, "! \uD83D\uDC4B"), credilaFeedbackEligible && !credilaFeedbackDone && React.createElement("div", {
+    className: "bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-400 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4"
+  }, React.createElement("div", {
+    className: "flex items-center gap-4"
+  }, React.createElement("div", {
+    className: "text-4xl"
+  }, "\uD83C\uDFE6"), React.createElement("div", null, React.createElement("h3", {
+    className: "text-lg font-bold text-blue-800"
+  }, "Credila Mentoring Session \u2014 Share Your Feedback"), React.createElement("p", {
+    className: "text-blue-600 text-sm mt-1"
+  }, "Help improve future sessions by sharing your experience. Takes only 2 minutes!"))), React.createElement("button", {
+    onClick: () => setShowCredilaFeedbackForm(true),
+    className: "px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors whitespace-nowrap"
+  }, "Give Feedback \u2192")), React.createElement("div", {
     className: "grid md:grid-cols-5 gap-4"
   }, React.createElement("div", {
     className: "stat-card bg-blue-500 text-white"
@@ -6142,6 +6344,14 @@ function StudentDashboard({
     onGiveFeedback: () => {
       setShowFeedbackNotification(false);
       setActiveTab('dashboard');
+    }
+  }), showCredilaFeedbackForm && credilaFeedbackEligible && React.createElement(CredilaFeedbackForm, {
+    studentId: myId,
+    studentInfo: currentUser,
+    onClose: () => setShowCredilaFeedbackForm(false),
+    onSubmitSuccess: () => {
+      setCredilaFeedbackDone(true);
+      setShowCredilaFeedbackForm(false);
     }
   }), React.createElement("footer", {
     className: "bg-gray-800 text-white text-center py-4 mt-auto"
