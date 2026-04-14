@@ -14470,6 +14470,12 @@ function AdminView({
       className: "fa-solid fa-message"
     })
   }, {
+    id: 'credilafeedback',
+    label: 'Credila Feedback',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-building-columns"
+    })
+  }, {
     id: 'timesheet',
     label: 'Timesheet',
     icon: React.createElement("i", {
@@ -14821,6 +14827,10 @@ function AdminView({
     isAdmin: true,
     accessibleSchools: availableSchools
   }), activeTab === 'studentfeedback' && React.createElement(StudentFeedbackView, {
+    accessibleSchools: availableSchools,
+    isSuperAdmin: isSuperAdmin,
+    isDirector: isDirector
+  }), activeTab === 'credilafeedback' && React.createElement(CredilaFeedbackAdminView, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
@@ -29500,6 +29510,149 @@ function TeacherExamStats({
       className: "p-3"
     }, row.exam.phoneUsed || '—'));
   }))))));
+}
+function CredilaFeedbackAdminView({
+  accessibleSchools = [],
+  isSuperAdmin = false,
+  isDirector = false
+}) {
+  const [feedbackList, setFeedbackList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterSchool, setFilterSchool] = useState('All');
+  const hasFullDataAccess = isSuperAdmin || isDirector;
+  const CREDILA_SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Bundi'];
+  const visibleSchools = hasFullDataAccess
+    ? CREDILA_SCHOOLS
+    : CREDILA_SCHOOLS.filter(s => accessibleSchools.includes(s));
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const snap = await db.collection('credilaFeedback').get();
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const filtered = hasFullDataAccess
+          ? all
+          : all.filter(f => accessibleSchools.includes(f.school));
+        filtered.sort((a, b) => {
+          const ta = a.completedAt || '';
+          const tb = b.completedAt || '';
+          return tb.localeCompare(ta);
+        });
+        setFeedbackList(filtered);
+      } catch (e) {
+        console.error('Error loading Credila feedback:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+  const displayed = filterSchool === 'All'
+    ? feedbackList
+    : feedbackList.filter(f => f.school === filterSchool);
+  const handleExport = () => {
+    if (displayed.length === 0) {
+      alert('No data to export!');
+      return;
+    }
+    const exportData = displayed.map(f => ({
+      'Student ID': f.studentId || '',
+      'Student Name': f.studentName || '',
+      'School': f.school || '',
+      'Grade': f.grade || '',
+      'Overall Experience': f.overallExperience || '',
+      'What Went Well / Could Be Better': f.wentWellAndBetter || '',
+      'Rating (out of 5)': f.rating || '',
+      'Other Comments': f.otherComments || '',
+      'Submitted At': f.completedAt ? new Date(f.completedAt).toLocaleString('en-IN') : ''
+    }));
+    exportToExcel(exportData, 'credila_mentoring_feedback');
+  };
+  return React.createElement("div", {
+    className: "space-y-6"
+  }, React.createElement("div", {
+    className: "flex justify-between items-center flex-wrap gap-4"
+  }, React.createElement("div", null, React.createElement("h2", {
+    className: "text-3xl font-bold"
+  }, "\uD83C\uDFE6 Credila Mentoring Feedback (", displayed.length, ")"), React.createElement("p", {
+    className: "text-sm text-gray-500 mt-1"
+  }, "Grade 12 students from CoE Barwani, CoE Cuttak & CoE Bundi")), React.createElement("button", {
+    onClick: handleExport,
+    className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700"
+  }, "\uD83D\uDCE5 Export to Excel")), React.createElement("div", {
+    className: "bg-white p-4 rounded-2xl shadow-lg"
+  }, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Filter by School"), React.createElement("select", {
+    value: filterSchool,
+    onChange: e => setFilterSchool(e.target.value),
+    className: "border-2 px-4 py-2 rounded-xl w-full md:w-64"
+  }, React.createElement("option", {
+    value: "All"
+  }, "All Schools (", feedbackList.length, ")"), visibleSchools.map(s => React.createElement("option", {
+    key: s,
+    value: s
+  }, s, " (", feedbackList.filter(f => f.school === s).length, ")")))), loading ? React.createElement("div", {
+    className: "text-center py-12 text-gray-500"
+  }, "Loading feedback...") : displayed.length === 0 ? React.createElement("div", {
+    className: "bg-white p-8 rounded-2xl shadow-lg text-center text-gray-500"
+  }, "No feedback submissions yet.") : React.createElement("div", {
+    className: "bg-white rounded-2xl shadow-lg overflow-hidden"
+  }, React.createElement("div", {
+    className: "overflow-x-auto"
+  }, React.createElement("table", {
+    className: "w-full text-sm"
+  }, React.createElement("thead", {
+    className: "avanti-gradient-light"
+  }, React.createElement("tr", null, React.createElement("th", {
+    className: "p-3 text-left font-bold"
+  }, "Student"), React.createElement("th", {
+    className: "p-3 text-left font-bold"
+  }, "School"), React.createElement("th", {
+    className: "p-3 text-left font-bold"
+  }, "Rating"), React.createElement("th", {
+    className: "p-3 text-left font-bold"
+  }, "Overall Experience"), React.createElement("th", {
+    className: "p-3 text-left font-bold"
+  }, "Went Well / Could Be Better"), React.createElement("th", {
+    className: "p-3 text-left font-bold"
+  }, "Other Comments"), React.createElement("th", {
+    className: "p-3 text-left font-bold"
+  }, "Submitted"))), React.createElement("tbody", null, displayed.map((f, idx) => React.createElement("tr", {
+    key: f.id,
+    className: `border-b ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-yellow-50`
+  }, React.createElement("td", {
+    className: "p-3"
+  }, React.createElement("div", {
+    className: "font-semibold"
+  }, f.studentName || f.studentId), React.createElement("div", {
+    className: "text-xs text-gray-500"
+  }, "ID: ", f.studentId, " \u2022 Grade ", f.grade)), React.createElement("td", {
+    className: "p-3 text-gray-700"
+  }, f.school), React.createElement("td", {
+    className: "p-3"
+  }, React.createElement("div", {
+    className: "flex items-center gap-1"
+  }, [1,2,3,4,5].map(s => React.createElement("span", {
+    key: s,
+    className: s <= (f.rating || 0) ? 'text-yellow-400' : 'text-gray-300'
+  }, "\u2605")), React.createElement("span", {
+    className: "font-bold ml-1"
+  }, f.rating, "/5"))), React.createElement("td", {
+    className: "p-3 max-w-xs"
+  }, React.createElement("p", {
+    className: "text-gray-700 line-clamp-3"
+  }, f.overallExperience || '\u2014')), React.createElement("td", {
+    className: "p-3 max-w-xs"
+  }, React.createElement("p", {
+    className: "text-gray-700 line-clamp-3"
+  }, f.wentWellAndBetter || '\u2014')), React.createElement("td", {
+    className: "p-3 max-w-xs"
+  }, React.createElement("p", {
+    className: "text-gray-700 line-clamp-3"
+  }, f.otherComments || '\u2014')), React.createElement("td", {
+    className: "p-3 text-xs text-gray-500 whitespace-nowrap"
+  }, f.completedAt ? new Date(f.completedAt).toLocaleDateString('en-IN') : '\u2014'))))))));
 }
 function StudentFeedbackView({
   accessibleSchools = [],
