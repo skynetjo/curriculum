@@ -105,8 +105,14 @@ window.ConnectionManager = {
       this._lastPingTime = pingTime;
       this._connectionQuality = pingTime < 1000 ? 'good' : pingTime < 3000 ? 'slow' : 'very-slow';
     } catch (e) {
-      this._connectionQuality = 'offline';
-      this._online = false;
+      // Fetch failed but navigator.onLine may still be true (e.g. firewall/CDN block)
+      // Only mark offline if the browser itself reports no connectivity
+      if (!navigator.onLine) {
+        this._connectionQuality = 'offline';
+        this._online = false;
+      } else {
+        this._connectionQuality = 'very-slow';
+      }
     }
     this._notifyListeners();
   },

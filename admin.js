@@ -156,13 +156,7 @@ function AdminView({
     icon: React.createElement("i", {
       className: "fa-solid fa-calendar-check"
     })
-  }, ...(isSuperAdmin ? [{
-    id: 'teacher-attendance-override',
-    label: 'Mark Teacher Attendance',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-user-clock"
-    })
-  }] : []), {
+  }, {
     id: 'assets',
     label: 'Asset Management',
     icon: React.createElement("i", {
@@ -529,9 +523,6 @@ function AdminView({
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
-  }), activeTab === 'teacher-attendance-override' && isSuperAdmin && React.createElement(AdminTeacherAttendanceOverride, {
-    accessibleSchools: availableSchools,
-    isSuperAdmin: isSuperAdmin
   }), activeTab === 'schoolinfo' && React.createElement(AdminSchoolInfo, {
     schoolInfo: filteredSchoolInfo,
     setSchoolInfo: setSchoolInfo,
