@@ -94,23 +94,24 @@ window.ConnectionManager = {
   },
   
   checkRealConnectivity: async function() {
-    if (!navigator.onLine) { this._connectionQuality = 'offline'; return; }
     var startTime = Date.now();
     try {
       await Promise.race([
         fetch('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js', { method: 'HEAD', mode: 'no-cors' }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
       ]);
+      // Fetch succeeded — user is definitively online regardless of navigator.onLine
       var pingTime = Date.now() - startTime;
       this._lastPingTime = pingTime;
+      this._online = true;
       this._connectionQuality = pingTime < 1000 ? 'good' : pingTime < 3000 ? 'slow' : 'very-slow';
     } catch (e) {
-      // Fetch failed but navigator.onLine may still be true (e.g. firewall/CDN block)
-      // Only mark offline if the browser itself reports no connectivity
+      // Fetch failed — only declare offline if browser also agrees
       if (!navigator.onLine) {
         this._connectionQuality = 'offline';
         this._online = false;
       } else {
+        // CDN may be blocked but browser says online — downgrade quality, don't go offline
         this._connectionQuality = 'very-slow';
       }
     }
