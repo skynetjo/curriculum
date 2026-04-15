@@ -10821,12 +10821,6 @@ function TeacherView({
       className: "fa-solid fa-calendar-check"
     })
   }, {
-    id: 'myattendance',
-    label: 'My Attendance',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-clock"
-    })
-  }, {
     id: 'teacherattview',
     label: 'Teacher Attendance',
     icon: React.createElement("i", {
@@ -10921,12 +10915,6 @@ function TeacherView({
     label: 'Attendance Dashboard',
     icon: React.createElement("i", {
       className: "fa-solid fa-calendar-check"
-    })
-  }, {
-    id: 'myattendance',
-    label: 'My Attendance',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-clock"
     })
   }, {
     id: 'assets',
@@ -11287,10 +11275,6 @@ function TeacherView({
     teachers: teachers,
     studentAttendance: studentAttendance,
     teacherAttendance: teacherAttendance
-  }), activeTab === 'myattendance' && React.createElement(TeacherAttendanceView, {
-    currentUser: currentUser,
-    teacherAttendance: teacherAttendance,
-    leaveAdjustments: leaveAdjustments
   }), activeTab === 'schoolinfo' && React.createElement(SchoolInfoView, {
     currentUser: currentUser,
     schoolInfo: schoolInfo,
