@@ -21752,6 +21752,13 @@ function AdminAttendanceAnalytics({
   const [rangeStudentData, setRangeStudentData] = React.useState(null);
   const [rangeTeacherData, setRangeTeacherData] = React.useState(null);
   const [loadingRange, setLoadingRange] = React.useState(false);
+  const [editSchool, setEditSchool] = React.useState('');
+  const [editDate, setEditDate] = React.useState(getTodayDate());
+  const [editTeachers, setEditTeachers] = React.useState([]);
+  const [editAttendanceMap, setEditAttendanceMap] = React.useState({});
+  const [editLoadingData, setEditLoadingData] = React.useState(false);
+  const [editModal, setEditModal] = React.useState(null);
+  const [editSaving, setEditSaving] = React.useState(false);
   const handleLoadRange = async () => {
     setLoadingRange(true);
     setRangeStudentData(null);
@@ -21776,6 +21783,50 @@ function AdminAttendanceAnalytics({
     setRangeStudentData(null);
     setRangeTeacherData(null);
   }, [startDate, endDate, filterSchools]);
+  React.useEffect(() => {
+    if (!editSchool) { setEditTeachers([]); setEditAttendanceMap({}); return; }
+    setEditLoadingData(true);
+    let teacherList = [];
+    db.collection('teachers').where('school', '==', editSchool).where('isArchived', '==', false).get()
+      .then(snap => {
+        teacherList = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
+        setEditTeachers(teacherList);
+        return db.collection('teacherAttendance').where('school', '==', editSchool).where('date', '==', editDate).get();
+      })
+      .then(snap => {
+        const map = {};
+        snap.docs.forEach(d => { map[d.data().teacherId] = { ...d.data(), docId: d.id }; });
+        setEditAttendanceMap(map);
+        setEditLoadingData(false);
+      })
+      .catch(() => setEditLoadingData(false));
+  }, [editSchool, editDate]);
+  const saveTeacherAttendanceEdit = async () => {
+    if (!editModal) return;
+    setEditSaving(true);
+    const { teacher, existing, status, reason } = editModal;
+    const docId = `${teacher.afid}_${editDate}`;
+    const record = {
+      teacherId: teacher.afid,
+      teacherName: teacher.name,
+      school: teacher.school,
+      date: editDate,
+      status,
+      reason,
+      location: 'Marked by Admin',
+      punchInTime: existing ? existing.punchInTime : new Date().toISOString(),
+      markedAt: new Date().toISOString(),
+      markedByAdmin: true,
+      adminOverride: true,
+    };
+    if (existing && existing.status !== status) record.originalStatus = existing.status;
+    try {
+      await db.collection('teacherAttendance').doc(docId).set(record);
+      setEditAttendanceMap(prev => ({ ...prev, [teacher.afid]: { ...record, docId } }));
+      setEditModal(null);
+    } catch (e) { alert('Error saving: ' + e.message); }
+    setEditSaving(false);
+  };
   const filteredStudentAttendance = useMemo(() => {
     const source = rangeStudentData !== null ? rangeStudentData : studentAttendance.filter(a => a.date >= startDate && a.date <= endDate);
     return source.filter(a => {
@@ -22310,7 +22361,134 @@ function AdminAttendanceAnalytics({
     className: "p-3 text-sm"
   }, a.reason), React.createElement("td", {
     className: "p-3 text-sm"
-  }, "\uD83D\uDCCD ", a.location))))))));
+  }, "\uD83D\uDCCD ", a.location)))))))
+  , React.createElement("div", {className: "bg-white p-6 rounded-2xl shadow-lg"},
+    React.createElement("h3", {className: "text-xl font-bold mb-4"}, "\u270F\uFE0F Edit Teacher Attendance"),
+    React.createElement("div", {className: "flex gap-4 flex-wrap mb-4"},
+      React.createElement("div", {style: {flex: '1', minWidth: '200px'}},
+        React.createElement("label", {className: "block text-sm font-bold mb-2"}, "School"),
+        React.createElement("select", {
+          value: editSchool,
+          onChange: e => setEditSchool(e.target.value),
+          className: "w-full border-2 px-4 py-2 rounded-xl"
+        },
+          React.createElement("option", {value: ""}, "-- Select School --"),
+          schoolOptions.map(s => React.createElement("option", {key: s, value: s}, s))
+        )
+      ),
+      React.createElement("div", {style: {flex: '1', minWidth: '200px'}},
+        React.createElement("label", {className: "block text-sm font-bold mb-2"}, "Date"),
+        React.createElement("input", {
+          type: "date",
+          value: editDate,
+          onChange: e => setEditDate(e.target.value),
+          className: "w-full border-2 px-4 py-2 rounded-xl"
+        })
+      )
+    ),
+    !editSchool
+      ? React.createElement("div", {className: "text-center py-8 text-gray-400"}, "Select a school and date to edit teacher attendance")
+      : editLoadingData
+        ? React.createElement("div", {className: "text-center py-8 text-gray-500"}, "\u23F3 Loading...")
+        : editTeachers.length === 0
+          ? React.createElement("div", {className: "text-center py-8 text-gray-400"}, "No active teachers found for this school.")
+          : React.createElement("div", {className: "overflow-x-auto"},
+              React.createElement("div", {className: "py-2 mb-2 flex justify-between items-center"},
+                React.createElement("span", {className: "font-semibold text-gray-700"}, editSchool + " \u2014 " + editDate),
+                React.createElement("span", {className: "text-sm text-gray-500"}, editTeachers.length + " teachers, " + Object.keys(editAttendanceMap).length + " marked")
+              ),
+              React.createElement("table", {className: "w-full"},
+                React.createElement("thead", {className: "avanti-gradient-light"},
+                  React.createElement("tr", null,
+                    React.createElement("th", {className: "p-3 text-left"}, "Teacher"),
+                    React.createElement("th", {className: "p-3 text-left"}, "Status"),
+                    React.createElement("th", {className: "p-3 text-left"}, "Reason"),
+                    React.createElement("th", {className: "p-3 text-left"}, "Punch-In Time"),
+                    React.createElement("th", {className: "p-3 text-center"}, "Action")
+                  )
+                ),
+                React.createElement("tbody", null,
+                  editTeachers.map(t => {
+                    const rec = editAttendanceMap[t.afid];
+                    return React.createElement("tr", {key: t.afid, className: "border-b hover:bg-gray-50"},
+                      React.createElement("td", {className: "p-3"},
+                        React.createElement("div", {className: "font-semibold"}, t.name),
+                        rec && rec.markedByAdmin && React.createElement("span", {className: "text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold ml-1"}, "Admin Override")
+                      ),
+                      React.createElement("td", {className: "p-3"},
+                        rec
+                          ? React.createElement("span", {className: `px-2 py-1 rounded-full text-xs font-bold ${rec.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}, rec.status)
+                          : React.createElement("span", {className: "px-2 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500"}, "Not Marked")
+                      ),
+                      React.createElement("td", {className: "p-3 text-sm text-gray-600"}, rec ? rec.reason : "\u2014"),
+                      React.createElement("td", {className: "p-3 text-sm font-mono text-blue-600"}, rec && rec.punchInTime ? "\u23F0 " + rec.punchInTime : "\u2014"),
+                      React.createElement("td", {className: "p-3 text-center"},
+                        React.createElement("button", {
+                          onClick: () => setEditModal({teacher: t, existing: rec || null, status: rec ? rec.status : 'Present', reason: rec ? rec.reason : 'Present'}),
+                          className: `px-3 py-1 rounded-lg text-sm font-semibold transition-colors ${rec ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`
+                        }, rec ? "\u270F\uFE0F Edit" : "+ Mark")
+                      )
+                    );
+                  })
+                )
+              )
+            ),
+    editModal && React.createElement("div", {
+      className: "fixed inset-0 flex items-center justify-center z-50",
+      style: {background: 'rgba(0,0,0,0.55)'},
+      onClick: e => { if (e.target === e.currentTarget) setEditModal(null); }
+    },
+      React.createElement("div", {className: "bg-white rounded-2xl p-6 shadow-2xl w-full max-w-md mx-4"},
+        React.createElement("h3", {className: "text-xl font-bold mb-1"}, (editModal.existing ? "\u270F\uFE0F Edit" : "\u2795 Mark") + " Attendance"),
+        React.createElement("p", {className: "text-gray-500 text-sm mb-4"}, editModal.teacher.name + " \u2014 " + editDate),
+        React.createElement("div", {className: "space-y-4"},
+          React.createElement("div", null,
+            React.createElement("label", {className: "block text-sm font-semibold text-gray-700 mb-2"}, "Status"),
+            React.createElement("div", {className: "flex gap-3"},
+              ['Present', 'On Leave'].map(s =>
+                React.createElement("button", {
+                  key: s,
+                  onClick: () => setEditModal(prev => ({...prev, status: s, reason: s === 'Present' ? 'Present' : 'Personal Leave'})),
+                  className: `flex-1 py-2 rounded-lg font-semibold border-2 transition-colors ${editModal.status === s ? (s === 'Present' ? 'bg-green-500 text-white border-green-500' : 'bg-orange-500 text-white border-orange-500') : 'border-gray-300 text-gray-600 hover:border-gray-400'}`
+                }, s)
+              )
+            )
+          ),
+          React.createElement("div", null,
+            React.createElement("label", {className: "block text-sm font-semibold text-gray-700 mb-2"}, "Reason"),
+            React.createElement("select", {
+              value: editModal.reason,
+              onChange: e => setEditModal(prev => ({...prev, reason: e.target.value})),
+              className: "w-full border border-gray-300 rounded-lg p-2 focus:border-blue-400 focus:outline-none"
+            },
+              (editModal.status === 'Present' ? ['Present'] : ['Personal Leave', 'Sick Leave', 'Weekly Off', 'Public Holiday', 'Organization Holiday', 'School Holiday', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Comp Off']).map(r =>
+                React.createElement("option", {key: r, value: r}, r)
+              )
+            )
+          ),
+          editModal.existing && React.createElement("div", {className: "text-xs bg-blue-50 text-blue-700 rounded-lg p-3 border border-blue-200"},
+            "Current: ", React.createElement("strong", null, editModal.existing.status), " \u2014 ", editModal.existing.reason,
+            editModal.existing.markedByAdmin ? " (previously admin-marked)" : " (teacher-submitted)"
+          ),
+          React.createElement("div", {className: "text-xs bg-yellow-50 text-yellow-700 rounded-lg p-3 border border-yellow-200"},
+            "\u26A0\uFE0F This will be saved as an admin override and will overwrite any existing record."
+          )
+        ),
+        React.createElement("div", {className: "flex gap-3 mt-6"},
+          React.createElement("button", {
+            onClick: () => setEditModal(null),
+            className: "flex-1 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium"
+          }, "Cancel"),
+          React.createElement("button", {
+            onClick: saveTeacherAttendanceEdit,
+            disabled: editSaving,
+            className: "flex-1 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
+          }, editSaving ? "Saving..." : "Save")
+        )
+      )
+    )
+  )
+  );
 }
 function TimetableAdminSection({ currentUser, availableSchools }) {
   var schools = availableSchools && availableSchools.length > 0 ? availableSchools : (typeof SCHOOLS !== 'undefined' ? SCHOOLS : []);
