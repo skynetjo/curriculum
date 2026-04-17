@@ -21787,9 +21787,9 @@ function AdminAttendanceAnalytics({
     if (!editSchool) { setEditTeachers([]); setEditAttendanceMap({}); return; }
     setEditLoadingData(true);
     let teacherList = [];
-    db.collection('teachers').where('school', '==', editSchool).where('isArchived', '==', false).get()
+    db.collection('teachers').where('school', '==', editSchool).get()
       .then(snap => {
-        teacherList = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
+        teacherList = snap.docs.map(d => ({ ...d.data(), docId: d.id })).filter(t => t.isArchived !== true);
         setEditTeachers(teacherList);
         return db.collection('teacherAttendance').where('school', '==', editSchool).where('date', '==', editDate).get();
       })
