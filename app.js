@@ -21320,6 +21320,9 @@ function TeacherAttendanceView({
       setReason(todayRecord.reason || 'Present');
       setLocation(todayRecord.location || '');
       setGpsVerified(true);
+    } else {
+      setGpsVerified(false);
+      setLocation('');
     }
   }, [todayRecord]);
   useEffect(() => {
@@ -21450,7 +21453,7 @@ function TeacherAttendanceView({
           reason: status === 'Present' ? 'Present' : reason,
           compOffWorkedDate: reason === 'Comp Off' ? compOffWorkedDate : null,
           location: location || 'Not provided',
-          punchInTime: date === getTodayDate() ? punchInTime : 'Leave applied',
+          punchInTime: status === 'Present' ? punchInTime : 'Leave applied',
           markedAt: new Date().toISOString(),
           isPartOfRange: datesToMark.length > 1,
           rangeStart: datesToMark.length > 1 ? selectedDate : null,
