@@ -4717,7 +4717,7 @@ function AdminTeacherAttendanceOverride({ accessibleSchools, isSuperAdmin }) {
       status,
       reason,
       location: 'Marked by Admin',
-      punchInTime: existing ? existing.punchInTime : new Date().toISOString(),
+      punchInTime: status === 'Present' ? (existing && existing.status === 'Present' && existing.punchInTime ? existing.punchInTime : new Date().toISOString()) : 'Leave applied',
       markedAt: new Date().toISOString(),
       markedByAdmin: true,
       adminOverride: true,
