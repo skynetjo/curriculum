@@ -21321,6 +21321,8 @@ function TeacherAttendanceView({
       setLocation(todayRecord.location || '');
       setGpsVerified(true);
     } else {
+      setStatus('Present');
+      setReason('Present');
       setGpsVerified(false);
       setLocation('');
     }
@@ -21556,7 +21558,7 @@ function TeacherAttendanceView({
     },
     className: `flex-1 py-3 rounded-xl font-semibold ${status === 'Present' ? 'bg-green-500 text-white' : 'bg-gray-200'}`
   }, "\u2713 Present"), React.createElement("button", {
-    onClick: () => setStatus('On Leave'),
+    onClick: () => { setStatus('On Leave'); setReason('Personal Leave'); },
     className: `flex-1 py-3 rounded-xl font-semibold ${status === 'On Leave' ? 'bg-orange-500 text-white' : 'bg-gray-200'}`
   }, "\uD83D\uDCC5 On Leave"))), status === 'On Leave' && React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-2"
@@ -21817,7 +21819,7 @@ function AdminAttendanceAnalytics({
       status,
       reason,
       location: 'Marked by Admin',
-      punchInTime: existing ? existing.punchInTime : new Date().toISOString(),
+      punchInTime: status === 'Present' ? (existing && existing.status === 'Present' && existing.punchInTime ? existing.punchInTime : new Date().toISOString()) : 'Leave applied',
       markedAt: new Date().toISOString(),
       markedByAdmin: true,
       adminOverride: true,
