@@ -4297,13 +4297,13 @@ function BarcodeScanner({
         if (!mounted || hasScannedRef.current) return;
         html5QrCodeRef.current = new Html5Qrcode("barcode-reader");
         const config = {
-          fps: 10,
+          fps: 15,
           qrbox: {
-            width: 250,
-            height: 100
+            width: 320,
+            height: 180
           },
           aspectRatio: 1.777778,
-          formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39]
+          formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39, Html5QrcodeSupportedFormats.CODE_93, Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.QR_CODE]
         };
         await html5QrCodeRef.current.start({
           facingMode: "environment"
@@ -4602,6 +4602,37 @@ async function lookupISBN(isbn) {
     };
   }
 }
+const CHROMEBOOK_MODELS_DB = {
+  '82XJ002LHA': { title: 'Lenovo IdeaPad Slim 3 Chromebook 14 (14M868)', model: 'IdeaPad Slim 3 Chrome 14M868', brand: 'Lenovo' },
+  '82XJ001LIN': { title: 'Lenovo IdeaPad Slim 3 Chromebook 14 (14M868)', model: 'IdeaPad Slim 3 Chrome 14M868', brand: 'Lenovo' },
+  '82W20001IN': { title: 'Lenovo 100e Chromebook Gen 3', model: '100e Chromebook Gen 3', brand: 'Lenovo' },
+  '82W2001QIN': { title: 'Lenovo 100e Chromebook Gen 3', model: '100e Chromebook Gen 3', brand: 'Lenovo' },
+  '82BA0001IN': { title: 'Lenovo IdeaPad Flex 3 Chromebook 11', model: 'IdeaPad Flex 3 Chromebook', brand: 'Lenovo' },
+  '6ZR36PA': { title: 'HP Chromebook 11 G8 EE', model: 'Chromebook 11 G8 EE', brand: 'HP' },
+  '3V2W3PA': { title: 'HP Chromebook 11A G8 EE', model: 'Chromebook 11A G8 EE', brand: 'HP' },
+  'NX.ATQSI.002': { title: 'Acer Chromebook 314', model: 'Chromebook 314', brand: 'Acer' },
+};
+async function lookupChromebook(barcode) {
+  const fetchWithTimeout = (url, ms = 8000) => Promise.race([fetch(url), new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+  if (CHROMEBOOK_MODELS_DB[barcode]) {
+    const cb = CHROMEBOOK_MODELS_DB[barcode];
+    return { found: true, suggestedAssetType: 'chromebook', title: cb.title, model: cb.model, brand: cb.brand, serialNumber: '', source: 'Local DB' };
+  }
+  if (/^\d{12,13}$/.test(barcode)) {
+    try {
+      const upc = barcode.replace(/^0+/, '');
+      const response = await fetchWithTimeout(`https://api.upcitemdb.com/prod/trial/lookup?upc=${upc}`);
+      const data = await response.json();
+      if (data.items && data.items.length > 0) {
+        const item = data.items[0];
+        return { found: true, suggestedAssetType: 'chromebook', title: item.title || item.description || '', model: item.model || '', brand: item.brand || '', serialNumber: '', source: 'UPC Database' };
+      }
+    } catch (e) {
+      console.log('[Chromebook] UPC lookup failed:', e.message);
+    }
+  }
+  return { found: false, suggestedAssetType: 'chromebook', title: '', model: '', serialNumber: barcode, source: 'manual' };
+}
 function convertISBN13to10(isbn13) {
   try {
     if (isbn13.length !== 13 || !isbn13.startsWith('978')) return null;
@@ -4635,14 +4666,20 @@ function AddAssetModal({
   const isManualAdd = barcode && barcode.startsWith('MANUAL-');
   const isAdditionalCopy = lookupResult?.isAdditionalCopy;
   useEffect(() => {
-    if (lookupResult && lookupResult.found) {
+    if (lookupResult && lookupResult.found && lookupResult.suggestedAssetType === 'chromebook') {
+      setAssetType('chromebook');
+      setTitle(lookupResult.title || '');
+      setModel(lookupResult.model || '');
+      if (lookupResult.serialNumber) setSerialNumber(lookupResult.serialNumber);
+    } else if (lookupResult && lookupResult.found) {
       setTitle(lookupResult.title || '');
       setAuthor(lookupResult.author || '');
       setPublisher(lookupResult.publisher || '');
       setAssetType('book');
-      if (lookupResult.copyNumber) {
-        setCopyNumber(lookupResult.copyNumber);
-      }
+      if (lookupResult.copyNumber) setCopyNumber(lookupResult.copyNumber);
+    } else if (lookupResult && lookupResult.suggestedAssetType === 'chromebook') {
+      setAssetType('chromebook');
+      if (lookupResult.serialNumber) setSerialNumber(lookupResult.serialNumber);
     }
   }, [lookupResult]);
   const handleSubmit = e => {
@@ -4691,24 +4728,24 @@ function AddAssetModal({
     className: "text-center py-8"
   }, React.createElement("div", {
     className: "animate-spin text-4xl mb-4"
-  }, "\uD83D\uDD04"), React.createElement("p", null, "Looking up book details...")) : React.createElement("form", {
+  }, "\uD83D\uDD04"), React.createElement("p", null, "Looking up details...")) : React.createElement("form", {
     onSubmit: handleSubmit,
     className: "space-y-4"
   }, !isManualAdd && React.createElement("div", {
-    className: `p-3 rounded-lg ${isAdditionalCopy ? 'bg-blue-50 border-2 border-blue-200' : 'bg-gray-100'}`
+    className: `p-3 rounded-lg ${isAdditionalCopy ? 'bg-blue-50 border-2 border-blue-200' : lookupResult?.found ? 'bg-green-50' : 'bg-gray-100'}`
   }, React.createElement("p", {
     className: "text-sm text-gray-600"
-  }, "ISBN/Barcode: ", React.createElement("strong", null, barcode)), isAdditionalCopy && React.createElement("p", {
+  }, lookupResult?.suggestedAssetType === 'chromebook' ? 'Scanned: ' : 'ISBN/Barcode: ', React.createElement("strong", null, barcode)), isAdditionalCopy && React.createElement("p", {
     className: "text-sm text-blue-600 mt-1 font-semibold"
   }, "\uD83D\uDCDA Adding Copy #", copyNumber, " of this book"), lookupResult?.found && !isAdditionalCopy && React.createElement("p", {
-    className: "text-sm text-green-600 mt-1"
-  }, "\u2713 Book details found!"), lookupResult && !lookupResult.found && !isAdditionalCopy && React.createElement("div", {
-    className: "text-sm text-orange-600 mt-1"
+    className: "text-sm text-green-600 mt-1 font-semibold"
+  }, lookupResult.suggestedAssetType === 'chromebook' ? `\u2705 ${lookupResult.source} \u2014 details filled automatically!` : '\u2705 Details found automatically!'), lookupResult && !lookupResult.found && !isAdditionalCopy && React.createElement("div", {
+    className: `text-sm mt-1 ${lookupResult.suggestedAssetType === 'chromebook' ? 'text-blue-600' : 'text-orange-600'}`
   }, React.createElement("p", {
     className: "font-semibold"
-  }, "\uD83D\uDCDA Book not found in database."), React.createElement("p", {
+  }, lookupResult.suggestedAssetType === 'chromebook' ? '\uD83D\uDCBB Serial pre-filled. Enter model name below.' : '\uD83D\uDCDA Book not found in database.'), React.createElement("p", {
     className: "text-xs mt-1"
-  }, "Please enter details manually. For multiple copies of same book, add one copy first then use the \"\uD83D\uDCCB Copy\" button."))), React.createElement("div", null, React.createElement("label", {
+  }, lookupResult.suggestedAssetType === 'chromebook' ? 'Tip: scan the long EAN number (e.g. 0197532701212) or model code (e.g. 82XJ002LHA) for auto-fill.' : 'Please enter details manually. For multiple copies of same book, add one copy first then use the \"\uD83D\uDCCB Copy\" button.'))), React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-2"
   }, "Asset Type *"), React.createElement("select", {
     value: assetType,
@@ -5050,12 +5087,11 @@ function AssetManagement({
         });
         setLookingUp(false);
       } else {
-        setBookLookupResult({
-          found: false,
-          isbn: barcode,
-          copyNumber: 1
-        });
+        setLookingUp(true);
         setShowAddModal(true);
+        const cbResult = await lookupChromebook(barcode);
+        setBookLookupResult({ ...cbResult, isbn: barcode, copyNumber: 1 });
+        setLookingUp(false);
       }
     } else if (scanMode === 'assign') {
       const baseBarcode = barcode.split('-copy-')[0];
