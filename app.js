@@ -4297,13 +4297,13 @@ function BarcodeScanner({
         if (!mounted || hasScannedRef.current) return;
         html5QrCodeRef.current = new Html5Qrcode("barcode-reader");
         const config = {
-          fps: 10,
+          fps: 15,
           qrbox: {
-            width: 250,
-            height: 100
+            width: 320,
+            height: 180
           },
           aspectRatio: 1.777778,
-          formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39]
+          formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E, Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39, Html5QrcodeSupportedFormats.CODE_93, Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.QR_CODE]
         };
         await html5QrCodeRef.current.start({
           facingMode: "environment"
@@ -4643,6 +4643,11 @@ function AddAssetModal({
       if (lookupResult.copyNumber) {
         setCopyNumber(lookupResult.copyNumber);
       }
+    } else if (lookupResult && lookupResult.suggestedAssetType === 'chromebook') {
+      setAssetType('chromebook');
+      if (lookupResult.serialNumber) {
+        setSerialNumber(lookupResult.serialNumber);
+      }
     }
   }, [lookupResult]);
   const handleSubmit = e => {
@@ -4703,12 +4708,12 @@ function AddAssetModal({
   }, "\uD83D\uDCDA Adding Copy #", copyNumber, " of this book"), lookupResult?.found && !isAdditionalCopy && React.createElement("p", {
     className: "text-sm text-green-600 mt-1"
   }, "\u2713 Book details found!"), lookupResult && !lookupResult.found && !isAdditionalCopy && React.createElement("div", {
-    className: "text-sm text-orange-600 mt-1"
+    className: `text-sm mt-1 ${lookupResult.suggestedAssetType === 'chromebook' ? 'text-blue-600' : 'text-orange-600'}`
   }, React.createElement("p", {
     className: "font-semibold"
-  }, "\uD83D\uDCDA Book not found in database."), React.createElement("p", {
+  }, lookupResult.suggestedAssetType === 'chromebook' ? '\uD83D\uDCBB Chromebook barcode detected \u2014 serial number pre-filled.' : '\uD83D\uDCDA Book not found in database.'), React.createElement("p", {
     className: "text-xs mt-1"
-  }, "Please enter details manually. For multiple copies of same book, add one copy first then use the \"\uD83D\uDCCB Copy\" button."))), React.createElement("div", null, React.createElement("label", {
+  }, lookupResult.suggestedAssetType === 'chromebook' ? 'Enter the model name (e.g. Lenovo IdeaPad Slim 3) and confirm.' : 'Please enter details manually. For multiple copies of same book, add one copy first then use the \"\uD83D\uDCCB Copy\" button.'))), React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-2"
   }, "Asset Type *"), React.createElement("select", {
     value: assetType,
@@ -5053,7 +5058,9 @@ function AssetManagement({
         setBookLookupResult({
           found: false,
           isbn: barcode,
-          copyNumber: 1
+          copyNumber: 1,
+          suggestedAssetType: 'chromebook',
+          serialNumber: barcode
         });
         setShowAddModal(true);
       }
