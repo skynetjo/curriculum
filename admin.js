@@ -103,6 +103,12 @@ function AdminView({
       className: "fa-solid fa-users"
     })
   }, {
+    id: 'apcs',
+    label: 'APCs',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-clipboard-user"
+    })
+  }, {
     id: 'teacherhistory',
     label: 'Teacher History',
     icon: React.createElement("i", {
@@ -470,7 +476,7 @@ function AdminView({
     setLeaveAdjustments: setLeaveAdjustments,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
-  }), activeTab === 'teacherhistory' && React.createElement(TeacherHistoryView, {
+  }), activeTab === 'apcs' && React.createElement(APCManagement, null), activeTab === 'teacherhistory' && React.createElement(TeacherHistoryView, {
     teachers: filteredTeachers
   }), activeTab === 'students' && React.createElement(StudentManagement, {
     students: filteredStudents,
