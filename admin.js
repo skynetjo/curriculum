@@ -5280,6 +5280,19 @@ function AdminAssetManagement({
       };
     });
   }, [assets, accessibleSchools, isSuperAdmin]);
+  const handleDeleteAsset = async asset => {
+    const isAssigned = asset.status === 'assigned';
+    const confirmMsg = isAssigned ? `\u26A0\uFE0F WARNING: This asset is currently assigned to ${asset.currentAssignee?.studentName}.\n\nAre you sure you want to permanently delete "${asset.title}" (Copy #${asset.copyNumber || 1})?\n\nThis action cannot be undone.` : `Are you sure you want to permanently delete "${asset.title}" (Copy #${asset.copyNumber || 1})?\n\nThis action cannot be undone.`;
+    if (!confirm(confirmMsg)) return;
+    try {
+      await db.collection('assets').doc(asset.docId).delete();
+      setAssets(prev => prev.filter(a => a.docId !== asset.docId));
+      alert('Asset deleted successfully.');
+    } catch (error) {
+      console.error('Error deleting asset:', error);
+      alert('Failed to delete asset: ' + error.message);
+    }
+  };
   if (loading) return React.createElement("div", {
     className: "text-center py-8"
   }, "Loading assets...");
@@ -5412,8 +5425,10 @@ function AdminAssetManagement({
     className: "p-3 text-left"
   }, "Assigned To"), React.createElement("th", {
     className: "p-3 text-left"
-  }, "Copy #"))), React.createElement("tbody", null, filteredAssets.length === 0 ? React.createElement("tr", null, React.createElement("td", {
-    colSpan: "6",
+  }, "Copy #"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Actions"))), React.createElement("tbody", null, filteredAssets.length === 0 ? React.createElement("tr", null, React.createElement("td", {
+    colSpan: "7",
     className: "p-8 text-center text-gray-500"
   }, "No assets found")) : filteredAssets.slice(0, 100).map(asset => React.createElement("tr", {
     key: asset.docId,
@@ -5436,7 +5451,13 @@ function AdminAssetManagement({
     className: "p-3 text-sm"
   }, asset.currentAssignee?.studentName || '-'), React.createElement("td", {
     className: "p-3 text-sm"
-  }, asset.copyNumber || 1))))), filteredAssets.length > 100 && React.createElement("p", {
+  }, asset.copyNumber || 1), React.createElement("td", {
+    className: "p-3"
+  }, React.createElement("button", {
+    onClick: () => handleDeleteAsset(asset),
+    className: "px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-colors",
+    title: "Delete this asset"
+  }, "🗑️ Delete")))))), filteredAssets.length > 100 && React.createElement("p", {
     className: "text-center text-gray-500 mt-4"
   }, "Showing first 100 of ", filteredAssets.length, " assets")), activeSubTab === 'history' && React.createElement("div", {
     className: "bg-white p-6 rounded-xl shadow-lg"
