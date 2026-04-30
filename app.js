@@ -22612,6 +22612,8 @@ function TimetablePage({ currentUser, mySchool }) {
   var DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   var PERIODS = FULL_SCHEDULE.filter(function(s){return s.type==='period';}).map(function(s){return s.key;});
   var PLABELS  = FULL_SCHEDULE.filter(function(s){return s.type==='period';}).map(function(s){return s.label;});
+  // Only show up to numPeriods period columns (include breaks between visible periods)
+  var visibleSchedule=(function(){var r=[];var c=0;for(var i=0;i<FULL_SCHEDULE.length;i++){var e=FULL_SCHEDULE[i];if(e.type==='period'){if(c<numPeriods){r.push(e);c++;}}else{if(c<numPeriods)r.push(e);}}return r;})();
   function addPeriod(){
     var n=numPeriods+1;
     setNumPeriods(n);
@@ -22659,6 +22661,7 @@ function TimetablePage({ currentUser, mySchool }) {
         if(d1.periodLabels){setPeriodLabels(d1.periodLabels);metaLoaded=true;}
         if(d1.colTypes){setColTypes(d1.colTypes);metaLoaded=true;}
         if(d1.periodTimes){setPeriodTimes(d1.periodTimes);metaLoaded=true;}
+        if(d1.numPeriods){setNumPeriods(d1.numPeriods);}else if(d1.periodTimes){setNumPeriods(d1.periodTimes.length);}
         if(d1.breakTimes){setBreakTimes(d1.breakTimes);}
         if(d1.weeklyOffDays){setWeeklyOffDays(d1.weeklyOffDays);}
       }
@@ -22669,6 +22672,7 @@ function TimetablePage({ currentUser, mySchool }) {
           if(d2.periodLabels)setPeriodLabels(d2.periodLabels);
           if(d2.colTypes)setColTypes(d2.colTypes);
           if(d2.periodTimes)setPeriodTimes(d2.periodTimes);
+          if(d2.numPeriods){setNumPeriods(d2.numPeriods);}else if(d2.periodTimes){setNumPeriods(d2.periodTimes.length);}
           if(d2.breakTimes)setBreakTimes(d2.breakTimes);
         }
       }
@@ -22738,7 +22742,7 @@ function TimetablePage({ currentUser, mySchool }) {
     if(isAutoSave)setSaveMsg('Auto-saving...');
     try{
       var db=getFirestore(); var now=new Date().toISOString();
-      var meta={periodLabels:periodLabels,colTypes:colTypes,periodTimes:periodTimes,breakTimes:breakTimes,weeklyOffDays:weeklyOffDays};
+      var meta={periodLabels:periodLabels,colTypes:colTypes,periodTimes:periodTimes,breakTimes:breakTimes,weeklyOffDays:weeklyOffDays,numPeriods:numPeriods};
       var base=Object.assign({school:mySchool,updatedAt:now,updatedBy:(currentUser&&(currentUser.afid||currentUser.email))||'',updatedByName:(currentUser&&currentUser.name)||''},meta);
       await Promise.all([
         db.collection('timetables').doc(mySchool+'_class11').set(Object.assign({},base,{grade:'11',slots:timetable11})),
@@ -22856,7 +22860,7 @@ function TimetablePage({ currentUser, mySchool }) {
       React.createElement('div',{className:'flex gap-2'},
         ['11','12'].map(function(cls){ return React.createElement('button',{key:cls,onClick:function(){setActiveClass(cls);},className:'px-5 py-2 rounded-xl font-bold text-sm '+(activeClass===cls?'avanti-gradient text-white shadow-md':'bg-white border-2 border-gray-200 text-gray-600 hover:border-purple-300')},(cls==='11'?'📗':'📘')+' Class '+cls); })
       ),
-      React.createElement('div',{className:'text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full'},totalFilled+' / '+(DAYS.length*PERIODS.length)+' periods filled'),
+      React.createElement('div',{className:'text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full'},totalFilled+' / '+(DAYS.length*numPeriods)+' periods filled'),
       editable&&React.createElement('div',{className:'flex items-center gap-1 bg-white border border-gray-200 rounded-full px-2 py-0.5'},
         React.createElement('span',{className:'text-xs text-gray-500 mr-1'},'Periods:'),
         React.createElement('button',{onClick:removePeriod,disabled:numPeriods<=1,className:'w-5 h-5 flex items-center justify-center rounded-full text-gray-500 hover:bg-red-100 hover:text-red-600 disabled:opacity-30 font-bold text-sm leading-none'},'-'),
@@ -22880,7 +22884,7 @@ function TimetablePage({ currentUser, mySchool }) {
         // ── Header Row 1: Column Labels as editable rounded pill badges
         React.createElement('div',{className:'flex'},
           React.createElement('div',{className:'bg-slate-900',style:{width:'72px',minHeight:'46px',borderRight:'1px solid #475569',flexShrink:0}}),
-          FULL_SCHEDULE.map(function(col){
+          visibleSchedule.map(function(col){
             var displayLabel=periodLabels[col.key]||col.label;
             return React.createElement('div',{key:'h1_'+col.key,className:'bg-slate-900 flex items-center justify-center text-center',style:{width:'160px',minHeight:'46px',borderLeft:'1px solid #475569',padding:'8px 10px',flexShrink:0}},
               editable&&editingLabel===col.key
@@ -22895,7 +22899,7 @@ function TimetablePage({ currentUser, mySchool }) {
         // ── Header Row 2: Times
         React.createElement('div',{className:'flex'},
           React.createElement('div',{className:'bg-slate-900',style:{width:'72px',minHeight:'30px',borderRight:'1px solid #475569',flexShrink:0}}),
-          FULL_SCHEDULE.map(function(col){
+          visibleSchedule.map(function(col){
             var pidx=PERIODS.indexOf(col.key);
             var dispTime=col.type==='break'?(breakTimes[col.key]||col.time):(pidx>=0&&periodTimes[pidx]?periodTimes[pidx]:col.time);
             return React.createElement('div',{key:'h2_'+col.key,className:'bg-slate-900 flex items-center justify-center text-xs text-white',style:{width:'160px',minHeight:'30px',borderLeft:'1px solid #475569',padding:'2px 8px',flexShrink:0}},
@@ -22912,7 +22916,7 @@ function TimetablePage({ currentUser, mySchool }) {
         // ── Header Row 3: Type selector dropdowns (functional)
         React.createElement('div',{className:'flex'},
           React.createElement('div',{className:'bg-slate-900',style:{width:'72px',minHeight:'36px',borderRight:'1px solid #475569',borderBottom:'2px solid #1e293b',flexShrink:0}}),
-          FULL_SCHEDULE.map(function(col){
+          visibleSchedule.map(function(col){
             var defaultType=col.type==='break'?(col.key==='BRK_ASSEMBLY'?'Assembly':col.key==='BRK_BREAKFAST'?'Breakfast':col.key==='BRK_LUNCH'?'Lunch':col.key==='BRK_SNACK'?'Snack':'Dinner'):'Class';
             var currentType=colTypes[col.key]||defaultType;
             return React.createElement('div',{key:'h3_'+col.key,className:'bg-slate-900 flex items-center justify-center',style:{width:'160px',minHeight:'36px',borderLeft:'1px solid #475569',borderBottom:'2px solid #1e293b',padding:'4px 10px',flexShrink:0}},
@@ -22962,7 +22966,7 @@ function TimetablePage({ currentUser, mySchool }) {
               day.substring(0,3).toUpperCase()
             ),
             // Schedule slot cells
-            FULL_SCHEDULE.map(function(col){
+            visibleSchedule.map(function(col){
               var defaultType=col.type==='break'?(col.key==='BRK_ASSEMBLY'?'Assembly':col.key==='BRK_BREAKFAST'?'Breakfast':col.key==='BRK_LUNCH'?'Lunch':col.key==='BRK_SNACK'?'Snack':'Dinner'):'Class';
               var currentType=colTypes[col.key]||defaultType;
               var isSelfStudy=currentType==='Self Study';
