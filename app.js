@@ -11339,14 +11339,10 @@ function TeacherView({
   }), activeTab === 'timetable' && React.createElement(TimetablePage, {
     currentUser: currentUser,
     mySchool: currentUser?.school
-  }), activeTab === 'assets' && (isAPC ? React.createElement(AdminAssetManagement, {
-    accessibleSchools: [currentUser.school],
-    isSuperAdmin: false,
-    isDirector: false
-  }) : React.createElement(AssetManagement, {
+  }), activeTab === 'assets' && React.createElement(AssetManagement, {
     currentUser: currentUser,
     students: students
-  })), activeTab === 'socialwall' && React.createElement(SocialWall, {
+  }), activeTab === 'socialwall' && React.createElement(SocialWall, {
     teachers: teachers,
     currentUser: currentUser
   }), activeTab === 'roadmap' && React.createElement(RoadmapPage, {
