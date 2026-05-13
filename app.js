@@ -123,6 +123,25 @@ const firebaseWithTimeout = async (promise, timeoutMs = 15000, fallback = null) 
 };
 const auth = firebase.auth();
 const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology'];
+const APC_NAME_OVERRIDES = ['sharda'];
+const getStaffRoleText = staff => String(staff?.role || staff?.userType || staff?.type || staff?.position || '').toLowerCase();
+const isApcStaff = staff => {
+  const roleText = getStaffRoleText(staff);
+  const name = String(staff?.name || '').toLowerCase();
+  return roleText === 'apc' || roleText.includes('academic program coordinator') || APC_NAME_OVERRIDES.some(apcName => name.includes(apcName));
+};
+const getStaffDisplayRole = staff => isApcStaff(staff) ? 'APC' : staff?.subject || 'Teacher';
+const getStaffStableId = staff => staff?.afid || staff?.docId || staff?.id || staff?.email || staff?.name || '';
+const dedupeStaffMembers = staffList => {
+  const seen = new Set();
+  return staffList.filter(staff => {
+    const key = String(staff?.afid || staff?.email || staff?.docId || staff?.id || staff?.name || '').toLowerCase();
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 const PresenceSystem = {
   userId: null,
   userName: null,
@@ -1964,6 +1983,7 @@ function TeacherProfileModal({
   onGiveFeedback,
   averageRating
 }) {
+  const displayRole = getStaffDisplayRole(teacher);
   return React.createElement("div", {
     className: "modal-overlay",
     onClick: onClose
@@ -1986,7 +2006,7 @@ function TeacherProfileModal({
     className: "text-xl font-bold"
   }, teacher.name), React.createElement("p", {
     className: "text-gray-600"
-  }, teacher.subject))), React.createElement("button", {
+  }, displayRole))), React.createElement("button", {
     onClick: onClose,
     className: "text-2xl font-bold text-gray-500 hover:text-gray-700"
   }, "\xD7")), React.createElement("div", {
@@ -2432,7 +2452,7 @@ function TeacherFeedbackForm({
     teacherDocId: teacher.docId,
     teacherAfid: teacher.afid,
     teacherName: teacher.name,
-    subject: teacher.subject,
+    subject: getStaffDisplayRole(teacher),
     school: teacher.school,
     grade: studentInfo?.grade || '',
     studentId: studentId,
@@ -2781,7 +2801,7 @@ function TeacherFeedbackForm({
       });
       const averageRating = ratingCount > 0 ? totalRating / ratingCount : 0;
       const today = new Date().toISOString().split('T')[0];
-      const teacherId = teacher.afid || teacher.id || 'unknown';
+      const teacherId = teacher.afid || teacher.id || teacher.docId || teacher.email || teacher.name || 'unknown';
       const uniqueDocId = `${studentId}_${teacherId}_${today}`;
       const feedbackData = {
         ...feedback,
@@ -2823,7 +2843,7 @@ function TeacherFeedbackForm({
     className: "text-2xl font-bold"
   }, "Feedback for ", teacher.name), React.createElement("p", {
     className: "text-gray-600"
-  }, teacher.subject)), React.createElement("button", {
+  }, getStaffDisplayRole(teacher))), React.createElement("button", {
     onClick: onClose,
     className: "text-2xl font-bold text-gray-500 hover:text-gray-700"
   }, "\xD7")), React.createElement("div", {
@@ -5988,11 +6008,26 @@ function StudentDashboard({
       
       // ✅ FIX: Fetch teachers FIRST with priority (most visible on dashboard)
       try {
-        const snap = await queryWithTimeout(
-          db.collection('teachers').where('school', '==', mySchool).get(),
-          6000
-        );
-        const teachersData = snap.docs.map(d => ({ ...d.data(), docId: d.id }));
+        const [teachersResult, apcsResult] = await Promise.allSettled([
+          queryWithTimeout(db.collection('teachers').where('school', '==', mySchool).get(), 6000),
+          queryWithTimeout(db.collection('apcs').where('school', '==', mySchool).get(), 6000)
+        ]);
+        if (teachersResult.status !== 'fulfilled' && apcsResult.status !== 'fulfilled') {
+          throw new Error('Unable to load staff');
+        }
+        const teacherDocs = teachersResult.status === 'fulfilled' ? teachersResult.value.docs.map(d => ({
+          ...d.data(),
+          docId: d.id
+        })) : [];
+        const apcDocs = apcsResult.status === 'fulfilled' ? apcsResult.value.docs.map(d => ({
+          ...d.data(),
+          docId: d.id,
+          id: d.id,
+          role: 'apc',
+          userType: 'apc',
+          subject: d.data().subject || 'APC'
+        })) : [];
+        const teachersData = dedupeStaffMembers([...teacherDocs, ...apcDocs]);
         setTeachers(teachersData);
         try {
           localStorage.setItem(teacherCacheKey, JSON.stringify({
@@ -6131,8 +6166,12 @@ function StudentDashboard({
       if (snap.exists) setCredilaFeedbackDone(true);
     }).catch(() => {});
   }, [myId, credilaFeedbackEligible]);
-  const getTeacherAverageRating = teacherDocId => {
-    const teacherFeedbackList = teacherFeedbacks.filter(f => f.teacherId === teacherDocId);
+  const getTeacherAverageRating = teacher => {
+    const staffIds = (typeof teacher === 'object' ? [teacher?.afid, teacher?.docId, teacher?.id, teacher?.email, teacher?.name] : [teacher]).filter(Boolean).map(id => String(id).toLowerCase());
+    const teacherFeedbackList = teacherFeedbacks.filter(f => {
+      const feedbackIds = [f.teacherId, f.teacherAfid, f.teacherDocId, f.teacherName].filter(Boolean).map(id => String(id).toLowerCase());
+      return feedbackIds.some(id => staffIds.includes(id));
+    });
     if (teacherFeedbackList.length === 0) return null;
     const sum = teacherFeedbackList.reduce((acc, f) => acc + (f.averageRating || 0), 0);
     return sum / teacherFeedbackList.length;
@@ -6155,6 +6194,9 @@ function StudentDashboard({
     };
     fetchFeedbackData();
   };
+  const activeTeachers = teachers.filter(t => !t.isArchived && !isApcStaff(t));
+  const archivedTeachers = teachers.filter(t => t.isArchived && !isApcStaff(t));
+  const apcStaff = teachers.filter(t => !t.isArchived && isApcStaff(t));
   const profileCompletion = calculateCompletion();
   if (loading) {
     return React.createElement("div", {
@@ -6255,14 +6297,14 @@ function StudentDashboard({
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "text-2xl font-bold mb-4"
-  }, "\uD83D\uDC68\u200D\uD83C\uDFEB My Teachers"), teachers.length === 0 ? React.createElement("p", {
+  }, "\uD83D\uDC68\u200D\uD83C\uDFEB My Teachers"), activeTeachers.length === 0 && archivedTeachers.length === 0 && apcStaff.length === 0 ? React.createElement("p", {
     className: "text-gray-500 text-center py-4"
   }, "No teachers found") : React.createElement("div", {
     className: "grid md:grid-cols-2 gap-4"
-  }, SUBJECTS.map(subject => {
-    const teacher = teachers.find(t => t.subject === subject && !t.isArchived);
-    const archivedTeacher = teachers.find(t => t.subject === subject && t.isArchived);
-    const averageRating = teacher ? getTeacherAverageRating(teacher.docId) : null;
+  }, [...SUBJECTS.map(subject => {
+    const teacher = activeTeachers.find(t => t.subject === subject);
+    const archivedTeacher = archivedTeachers.find(t => t.subject === subject);
+    const averageRating = teacher ? getTeacherAverageRating(teacher) : null;
     const isVacant = !teacher;
     const wasArchived = !teacher && archivedTeacher;
     return React.createElement("div", {
@@ -6288,7 +6330,28 @@ function StudentDashboard({
     }, "Click to view profile \u2192"), isVacant && React.createElement("div", {
       className: "text-sm text-orange-500 mt-2"
     }, "New teacher to be assigned"));
-  }))), React.createElement("div", {
+  }), ...apcStaff.map((apc, index) => {
+    const averageRating = getTeacherAverageRating(apc);
+    return React.createElement("div", {
+      key: getStaffStableId(apc) || `apc-${index}`,
+      className: "teacher-card border-2 rounded-xl p-4 bg-teal-50 border-teal-200",
+      onClick: () => handleTeacherClick(apc)
+    }, React.createElement("div", {
+      className: "font-bold text-lg"
+    }, apc.name), React.createElement("div", {
+      className: "flex items-center justify-between"
+    }, React.createElement("div", {
+      className: "text-teal-700 font-semibold"
+    }, "APC"), averageRating && React.createElement("div", {
+      className: "flex items-center gap-2"
+    }, React.createElement("span", {
+      className: "text-yellow-500 font-bold"
+    }, "\u2605"), React.createElement("span", {
+      className: "font-semibold"
+    }, averageRating.toFixed(1)))), React.createElement("div", {
+      className: "text-sm text-blue-600 mt-2"
+    }, "Click to view profile \u2192"));
+  })])), React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "text-2xl font-bold mb-4"
@@ -6368,7 +6431,7 @@ function StudentDashboard({
     teacher: selectedTeacher,
     onClose: () => setShowTeacherProfile(false),
     onGiveFeedback: handleGiveFeedback,
-    averageRating: getTeacherAverageRating(selectedTeacher.docId)
+    averageRating: getTeacherAverageRating(selectedTeacher)
   }), showFeedbackForm && selectedTeacher && React.createElement(TeacherFeedbackForm, {
     teacher: selectedTeacher,
     studentId: myId,
