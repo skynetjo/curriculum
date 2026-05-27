@@ -2439,6 +2439,203 @@ function CredilaFeedbackForm({
     className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
   }, isSubmitting ? '\u23F3 Submitting...' : "\u2713 Submit Feedback")))));
 }
+function EnglishFeedbackModal({
+  studentId,
+  studentInfo,
+  onClose,
+  onSubmitSuccess
+}) {
+  const [responses, setResponses] = React.useState({});
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [submitted, setSubmitted] = React.useState(false);
+  const setScale = (qid, val) => setResponses(prev => ({ ...prev, [qid]: val }));
+  const setRadio = (qid, val) => setResponses(prev => ({ ...prev, [qid]: val }));
+  const setText = (qid, val) => setResponses(prev => ({ ...prev, [qid]: val }));
+  const handleSubmit = async () => {
+    const required = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q10'];
+    const missing = required.filter(q => !responses[q]);
+    if (missing.length > 0) {
+      alert('Please answer all required questions before submitting.\n\u0915\u0943\u092A\u092F\u093E \u0938\u092C\u092E\u093F\u091F \u0915\u0930\u0928\u0947 \u0938\u0947 \u092A\u0939\u0932\u0947 \u0938\u092D\u0940 \u0906\u0935\u0936\u094D\u092F\u0915 \u092A\u094D\u0930\u0936\u094D\u0928\u094B\u0902 \u0915\u093E \u0909\u0924\u094D\u0924\u0930 \u0926\u0947\u0902\u0964');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const feedbackData = {
+        studentId,
+        studentName: studentInfo?.name || '',
+        school: studentInfo?.school || '',
+        grade: studentInfo?.grade || '',
+        q1_satisfaction: responses.q1 || null,
+        q2_pace: responses.q2 || '',
+        q3_confidence: responses.q3 || '',
+        q4_instructor: responses.q4 || null,
+        q5_pcmHelp: responses.q5 || '',
+        q6_usefulActivity: responses.q6 || '',
+        q7_daysPerWeek: responses.q7 || '',
+        q8_like: responses.q8 || '',
+        q9_improve: responses.q9 || '',
+        q10_continue: responses.q10 || '',
+        responses,
+        submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        completedAt: new Date().toISOString()
+      };
+      await db.collection('englishFeedback').doc(String(studentId)).set(feedbackData);
+      setSubmitted(true);
+      onSubmitSuccess();
+    } catch (error) {
+      console.error('Error submitting English Speaking feedback:', error);
+      alert('\u274C Failed to submit feedback. Please check your internet and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  const ScaleRow = ({ qid, labelLeft, labelRight }) => React.createElement('div', { className: 'mt-3' },
+    React.createElement('div', { className: 'flex gap-2' },
+      [1,2,3,4,5].map(n => React.createElement('button', {
+        key: n,
+        onClick: () => setScale(qid, n),
+        className: 'flex-1 py-2.5 border-2 rounded-xl font-bold text-sm transition-all ' + (responses[qid] >= n ? 'bg-green-50 border-green-600 text-green-700' : 'border-gray-200 text-gray-400 hover:border-gray-400')
+      }, n))
+    ),
+    React.createElement('div', { className: 'flex justify-between text-xs text-gray-400 mt-1.5 px-0.5' },
+      React.createElement('span', null, labelLeft),
+      React.createElement('span', null, labelRight)
+    )
+  );
+  const RadioGroup = ({ qid, options }) => React.createElement('div', { className: 'mt-3 flex flex-col gap-2' },
+    options.map(opt => {
+      const sel = responses[qid] === opt.en;
+      return React.createElement('label', {
+        key: opt.en,
+        onClick: () => setRadio(qid, opt.en),
+        className: 'flex items-start gap-3 p-3 border-2 rounded-xl cursor-pointer transition-all ' + (sel ? 'border-green-600 bg-green-50' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50')
+      },
+        React.createElement('div', {
+          className: 'w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center ' + (sel ? 'border-green-600' : 'border-gray-400')
+        }, sel && React.createElement('div', { className: 'w-2 h-2 rounded-full bg-green-600' })),
+        React.createElement('div', null,
+          React.createElement('div', { className: 'text-sm font-medium text-gray-900' }, opt.en),
+          React.createElement('div', { className: 'text-xs text-gray-500 mt-0.5' }, opt.hi)
+        )
+      );
+    })
+  );
+  const QBlock = ({ num, enQ, hiQ, children }) => React.createElement('div', { className: 'py-4 border-b border-gray-100 last:border-b-0' },
+    React.createElement('div', { className: 'flex items-start gap-3' },
+      React.createElement('span', { className: 'flex-shrink-0 w-6 h-6 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold mt-0.5' }, num),
+      React.createElement('div', { className: 'flex-1' },
+        React.createElement('div', { className: 'text-sm font-semibold text-gray-900' }, enQ),
+        React.createElement('div', { className: 'text-xs text-gray-500 mt-1' }, hiQ),
+        children
+      )
+    )
+  );
+  if (submitted) {
+    return React.createElement('div', { className: 'feedback-modal', onClick: onClose },
+      React.createElement('div', { className: 'feedback-content', onClick: e => e.stopPropagation() },
+        React.createElement('div', { className: 'p-8 text-center' },
+          React.createElement('div', { className: 'text-6xl mb-4' }, '\uD83C\uDF89'),
+          React.createElement('h2', { className: 'text-2xl font-bold text-green-600 mb-3' }, 'Thank You! / \u0927\u0928\u094D\u092F\u0935\u093E\u0926!'),
+          React.createElement('p', { className: 'text-gray-600 mb-1' }, 'Your feedback has been recorded.'),
+          React.createElement('p', { className: 'text-gray-500 text-sm mb-6' }, '\u0906\u092A\u0915\u0940 \u092A\u094D\u0930\u0924\u093F\u0915\u094D\u0930\u093F\u092F\u093E \u0926\u0930\u094D\u091C \u0915\u0930 \u0932\u0940 \u0917\u0908 \u0939\u0948\u0964'),
+          React.createElement('button', {
+            onClick: onClose,
+            className: 'px-6 py-3 avanti-gradient text-white rounded-xl font-semibold'
+          }, 'Close / \u092C\u0902\u0926 \u0915\u0930\u0947\u0902')
+        )
+      )
+    );
+  }
+  return React.createElement('div', { className: 'feedback-modal', onClick: onClose },
+    React.createElement('div', { className: 'feedback-content', onClick: e => e.stopPropagation() },
+      React.createElement('div', { className: 'p-5' },
+        React.createElement('div', { className: 'flex justify-between items-start mb-3 pb-3 border-b border-gray-100' },
+          React.createElement('div', null,
+            React.createElement('span', { className: 'inline-block text-xs font-semibold bg-green-100 text-green-700 px-3 py-1 rounded-full mb-2' }, 'EMRS Bhopal \u2014 Avanti Fellows'),
+            React.createElement('h2', { className: 'text-xl font-bold text-gray-900' }, 'English Speaking Classes \u2014 Feedback'),
+            React.createElement('p', { className: 'text-gray-500 text-sm mt-0.5' }, 'English Speaking \u0915\u0915\u094D\u0937\u093E\u090F\u0902 \u2014 \u091B\u093E\u0924\u094D\u0930 \u092A\u094D\u0930\u0924\u093F\u0915\u094D\u0930\u093F\u092F\u093E')
+          ),
+          React.createElement('button', { onClick: onClose, className: 'text-2xl text-gray-400 hover:text-gray-600 ml-4 flex-shrink-0 leading-none' }, '\xd7')
+        ),
+        React.createElement('p', { className: 'text-xs text-gray-400 mb-4' },
+          '\u26A0\uFE0F Required questions are marked. / \u0906\u0935\u0936\u094D\u092F\u0915 \u092A\u094D\u0930\u0936\u094D\u0928 \u091A\u093F\u0939\u094D\u0928\u093F\u0924 \u0939\u0948\u0902\u0964'
+        ),
+        React.createElement(QBlock, { num: 1, enQ: 'Overall, how satisfied are you with the English speaking classes so far? \u2731', hiQ: '\u0915\u0941\u0932 \u092E\u093F\u0932\u093E\u0915\u0930, \u0905\u092C \u0924\u0915 English Speaking \u0915\u0915\u094D\u0937\u093E\u0913\u0902 \u0938\u0947 \u0906\u092A \u0915\u093F\u0924\u0928\u0947 \u0938\u0902\u0924\u0941\u0937\u094D\u091F \u0939\u0948\u0902?' },
+          React.createElement(ScaleRow, { qid: 'q1', labelLeft: 'Very unsatisfied / \u092C\u093F\u0932\u094D\u0915\u0941\u0932 \u0938\u0902\u0924\u0941\u0937\u094D\u091F \u0928\u0939\u0940\u0902', labelRight: 'Very satisfied / \u092C\u0939\u0941\u0924 \u0938\u0902\u0924\u0941\u0937\u094D\u091F' })
+        ),
+        React.createElement(QBlock, { num: 2, enQ: 'How is the pace of the class for you? \u2731', hiQ: '\u0915\u0915\u094D\u0937\u093E \u0915\u0940 \u0917\u0924\u093F \u0906\u092A\u0915\u0947 \u0932\u093F\u090F \u0915\u0948\u0938\u0940 \u0939\u0948?' },
+          React.createElement(RadioGroup, { qid: 'q2', options: [
+            { en: 'Too fast \u2014 hard to keep up', hi: '\u092C\u0939\u0941\u0924 \u0924\u0947\u091C\u093C \u2014 \u0938\u092E\u091D\u0928\u093E \u092E\u0941\u0936\u094D\u0915\u093F\u0932 \u0939\u0948' },
+            { en: 'Just right \u2014 comfortable pace', hi: '\u092C\u093F\u0932\u094D\u0915\u0941\u0932 \u0938\u0939\u0940 \u2014 \u0906\u0930\u093E\u092E\u0926\u093E\u092F\u0915 \u0917\u0924\u093F' },
+            { en: 'Too slow \u2014 I can handle more', hi: '\u092C\u0939\u0941\u0924 \u0927\u0940\u092E\u0940 \u2014 \u092E\u0948\u0902 \u0914\u0930 \u0938\u0940\u0916 \u0938\u0915\u0924\u093E/\u0938\u0915\u0924\u0940 \u0939\u0942\u0902' }
+          ]})
+        ),
+        React.createElement(QBlock, { num: 3, enQ: 'Do you feel more confident speaking English after these classes? \u2731', hiQ: '\u0915\u094D\u092F\u093E \u0907\u0928 \u0915\u0915\u094D\u0937\u093E\u0913\u0902 \u0915\u0947 \u092C\u093E\u0926 \u0906\u092A English \u092C\u094B\u0932\u0928\u0947 \u092E\u0947\u0902 \u0905\u0927\u093F\u0915 \u0906\u0924\u094D\u092E\u0935\u093F\u0936\u094D\u0935\u093E\u0938 \u092E\u0939\u0938\u0942\u0938 \u0915\u0930\u0924\u0947/\u0915\u0930\u0924\u0940 \u0939\u0948\u0902?' },
+          React.createElement(RadioGroup, { qid: 'q3', options: [
+            { en: 'Yes, a lot \u2014 I can feel the improvement', hi: '\u0939\u093E\u0901, \u092C\u0939\u0941\u0924 \u2014 \u092E\u0941\u091D\u0947 \u0938\u0941\u0927\u093E\u0930 \u092E\u0939\u0938\u0942\u0938 \u0939\u094B \u0930\u0939\u093E \u0939\u0948' },
+            { en: 'A little \u2014 some improvement but still nervous', hi: '\u0925\u094B\u0921\u093C\u093E \u2014 \u0915\u0941\u091B \u0938\u0941\u0927\u093E\u0930 \u0939\u0948, \u0932\u0947\u0915\u093F\u0928 \u0905\u092D\u0940 \u092D\u0940 \u091D\u093F\u091D\u0915 \u0939\u0948' },
+            { en: 'Not yet \u2014 I still find it difficult', hi: '\u0905\u092D\u0940 \u0928\u0939\u0940\u0902 \u2014 \u092E\u0941\u091D\u0947 \u0905\u092D\u0940 \u092D\u0940 \u0915\u0920\u093F\u0928\u093E\u0908 \u0939\u0948' }
+          ]})
+        ),
+        React.createElement(QBlock, { num: 4, enQ: 'How helpful is the instructor in making you comfortable to speak? \u2731', hiQ: '\u0915\u094D\u092F\u093E \u092A\u094D\u0930\u0936\u093F\u0915\u094D\u0937\u0915 \u0906\u092A\u0915\u094B English \u092C\u094B\u0932\u0928\u0947 \u092E\u0947\u0902 \u0938\u0939\u091C \u092E\u0939\u0938\u0942\u0938 \u0915\u0930\u093E\u0924\u0947 \u0939\u0948\u0902?' },
+          React.createElement(ScaleRow, { qid: 'q4', labelLeft: 'Not at all / \u092C\u093F\u0932\u094D\u0915\u0941\u0932 \u0928\u0939\u0940\u0902', labelRight: 'Very much / \u092C\u0939\u0941\u0924 \u0905\u0927\u093F\u0915' })
+        ),
+        React.createElement(QBlock, { num: 5, enQ: 'Do you think this class is helping you understand English in your PCM subjects? \u2731', hiQ: '\u0915\u094D\u092F\u093E \u092F\u0939 \u0915\u0915\u094D\u0937\u093E \u0906\u092A\u0915\u094B PCM \u0935\u093F\u0937\u092F\u094B\u0902 \u092E\u0947\u0902 English \u0938\u092E\u091D\u0928\u0947 \u092E\u0947\u0902 \u092E\u0926\u0926 \u0915\u0930 \u0930\u0939\u0940 \u0939\u0948?' },
+          React.createElement(RadioGroup, { qid: 'q5', options: [
+            { en: 'Yes, definitely helping', hi: '\u0939\u093E\u0901, \u0928\u093F\u0936\u094D\u091A\u093F\u0924 \u0930\u0942\u092A \u0938\u0947 \u092E\u0926\u0926 \u0939\u094B \u0930\u0939\u0940 \u0939\u0948' },
+            { en: 'Somewhat \u2014 still getting there', hi: '\u0915\u0941\u091B \u0939\u0926 \u0924\u0915 \u2014 \u0927\u0940\u0930\u0947-\u0927\u0940\u0930\u0947 \u092C\u0947\u0939\u0924\u0930 \u0939\u094B \u0930\u0939\u093E \u0939\u0948' },
+            { en: 'Not yet \u2014 not felt the connection', hi: '\u0905\u092D\u0940 \u0928\u0939\u0940\u0902 \u2014 PCM \u0938\u0947 \u0938\u0902\u092C\u0902\u0927 \u0928\u0939\u0940\u0902 \u0926\u093F\u0916\u093E' }
+          ]})
+        ),
+        React.createElement(QBlock, { num: 6, enQ: 'Which activity in the class do you find most useful? \u2731', hiQ: '\u0915\u0915\u094D\u0937\u093E \u092E\u0947\u0902 \u0915\u094C\u0928 \u0938\u0940 \u0917\u0924\u093F\u0935\u093F\u0927\u093F \u0906\u092A\u0915\u094B \u0938\u092C\u0938\u0947 \u0909\u092A\u092F\u094B\u0917\u0940 \u0932\u0917\u0924\u0940 \u0939\u0948?' },
+          React.createElement(RadioGroup, { qid: 'q6', options: [
+            { en: 'Speaking/pronunciation practice', hi: '\u092C\u094B\u0932\u0928\u0947/\u0909\u091A\u094D\u091A\u093E\u0930\u0923 \u0915\u093E \u0905\u092D\u094D\u092F\u093E\u0938' },
+            { en: 'Reading and comprehension', hi: '\u092A\u095D\u0928\u093E \u0914\u0930 \u0938\u092E\u091D\u0928\u093E' },
+            { en: 'Grammar and vocabulary building', hi: '\u0935\u094D\u092F\u093E\u0915\u0930\u0923 \u0914\u0930 \u0936\u092C\u094D\u0926 \u092D\u0902\u0921\u093E\u0930 \u092C\u095D\u093E\u0928\u093E' },
+            { en: 'Group discussion / conversations', hi: '\u0938\u092E\u0942\u0939 \u091A\u0930\u094D\u091A\u093E / \u092C\u093E\u0924\u091A\u0940\u0924' }
+          ]})
+        ),
+        React.createElement(QBlock, { num: 7, enQ: 'How many days per week would you prefer these classes? \u2731', hiQ: '\u0906\u092A \u092A\u094D\u0930\u0924\u093F \u0938\u092A\u094D\u0924\u093E\u0939 \u0915\u093F\u0924\u0928\u0947 \u0926\u093F\u0928 \u092F\u0939 \u0915\u0915\u094D\u0937\u093E\u090F\u0902 \u091A\u093E\u0939\u0924\u0947/\u091A\u093E\u0939\u0924\u0940 \u0939\u0948\u0902?' },
+          React.createElement(RadioGroup, { qid: 'q7', options: [
+            { en: '2 days a week is enough', hi: '\u0938\u092A\u094D\u0924\u093E\u0939 \u092E\u0947\u0902 2 \u0926\u093F\u0928 \u092A\u0930\u094D\u092F\u093E\u092A\u094D\u0924 \u0939\u0948' },
+            { en: '3 days a week would be better', hi: '\u0938\u092A\u094D\u0924\u093E\u0939 \u092E\u0947\u0902 3 \u0926\u093F\u0928 \u092C\u0947\u0939\u0924\u0930 \u0939\u094B\u0917\u093E' },
+            { en: 'Daily classes (5 days)', hi: '\u092A\u094D\u0930\u0924\u093F\u0926\u093F\u0928 (5 \u0926\u093F\u0928)' }
+          ]})
+        ),
+        React.createElement(QBlock, { num: 8, enQ: 'What do you like the most about these classes? (optional)', hiQ: '\u0907\u0928 \u0915\u0915\u094D\u0937\u093E\u0913\u0902 \u092E\u0947\u0902 \u0906\u092A\u0915\u094B \u0938\u092C\u0938\u0947 \u0905\u091A\u094D\u091B\u093E \u0915\u094D\u092F\u093E \u0932\u0917\u0924\u093E \u0939\u0948? (\u0935\u0948\u0915\u0932\u094D\u092A\u093F\u0915)' },
+          React.createElement('textarea', {
+            className: 'w-full mt-2 p-3 border-2 border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:border-green-500',
+            rows: 3,
+            placeholder: 'Write here... / \u092F\u0939\u093E\u0901 \u0932\u093F\u0916\u0947\u0902...',
+            value: responses.q8 || '',
+            onChange: e => setText('q8', e.target.value)
+          })
+        ),
+        React.createElement(QBlock, { num: 9, enQ: 'What is one thing you would like to change or improve in these classes? (optional)', hiQ: '\u090F\u0915 \u091A\u0940\u091C\u093C \u091C\u094B \u0906\u092A \u092C\u0926\u0932\u0928\u093E \u092F\u093E \u0938\u0941\u0927\u093E\u0930\u0928\u093E \u091A\u093E\u0939\u0924\u0947/\u091A\u093E\u0939\u0924\u0940 \u0939\u0948\u0902? (\u0935\u0948\u0915\u0932\u094D\u092A\u093F\u0915)' },
+          React.createElement('textarea', {
+            className: 'w-full mt-2 p-3 border-2 border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:border-green-500',
+            rows: 3,
+            placeholder: 'Write here... / \u092F\u0939\u093E\u0901 \u0932\u093F\u0916\u0947\u0902...',
+            value: responses.q9 || '',
+            onChange: e => setText('q9', e.target.value)
+          })
+        ),
+        React.createElement(QBlock, { num: 10, enQ: 'Would you like these classes to continue after the current program ends? \u2731', hiQ: '\u0915\u094D\u092F\u093E \u0906\u092A \u091A\u093E\u0939\u0924\u0947/\u091A\u093E\u0939\u0924\u0940 \u0939\u0948\u0902 \u0915\u093F \u092F\u0939 \u0915\u093E\u0930\u094D\u092F\u0915\u094D\u0930\u092E \u0938\u092E\u093E\u092A\u094D\u0924 \u0939\u094B\u0928\u0947 \u0915\u0947 \u092C\u093E\u0926 \u092D\u0940 \u092F\u0947 \u0915\u0915\u094D\u0937\u093E\u090F\u0902 \u091C\u093E\u0930\u0940 \u0930\u0939\u0947\u0902?' },
+          React.createElement(RadioGroup, { qid: 'q10', options: [
+            { en: 'Yes, definitely continue', hi: '\u0939\u093E\u0901, \u091C\u093C\u0930\u0942\u0930 \u091C\u093E\u0930\u0940 \u0930\u0916\u0947\u0902' },
+            { en: 'Continue, but with some changes', hi: '\u091C\u093E\u0930\u0940 \u0930\u0916\u0947\u0902, \u0932\u0947\u0915\u093F\u0928 \u0915\u0941\u091B \u092C\u0926\u0932\u093E\u0935 \u0915\u0947 \u0938\u093E\u0925' },
+            { en: 'Not sure', hi: '\u0928\u093F\u0936\u094D\u091A\u093F\u0924 \u0928\u0939\u0940\u0902 \u0939\u0942\u0902' }
+          ]})
+        ),
+        React.createElement('button', {
+          onClick: handleSubmit,
+          disabled: isSubmitting,
+          className: 'mt-5 w-full py-3.5 avanti-gradient text-white rounded-xl font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed'
+        }, isSubmitting ? '\u23F3 Submitting... / \u091C\u092E\u093E \u0939\u094B \u0930\u0939\u093E \u0939\u0948...' : 'Submit Feedback / \u092A\u094D\u0930\u0924\u093F\u0915\u094D\u0930\u093F\u092F\u093E \u091C\u092E\u093E \u0915\u0930\u0947\u0902')
+      )
+    )
+  );
+}
 function TeacherFeedbackForm({
   teacher,
   studentId,
@@ -5952,11 +6149,15 @@ function StudentDashboard({
   const [showFeedbackNotification, setShowFeedbackNotification] = useState(false);
   const [credilaFeedbackDone, setCredilaFeedbackDone] = useState(false);
   const [showCredilaFeedbackForm, setShowCredilaFeedbackForm] = useState(false);
+  const [englishFeedbackDone, setEnglishFeedbackDone] = useState(false);
+  const [showEnglishFeedbackForm, setShowEnglishFeedbackForm] = useState(false);
   const mySchool = currentUser.school;
   const myGrade = currentUser.grade;
   const myId = currentUser.studentId || currentUser.id;
   const CREDILA_ELIGIBLE_SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Bundi'];
   const credilaFeedbackEligible = CREDILA_ELIGIBLE_SCHOOLS.includes(mySchool) && String(myGrade) === '12';
+  const EMRS_BHOPAL_SCHOOLS = ['EMRS Bhopal', 'EMRS Bhopal_NEET'];
+  const englishFeedbackEligible = EMRS_BHOPAL_SCHOOLS.includes(mySchool);
   useEffect(() => {
     const fetchData = async () => {
       const teacherCacheKey = `teachers_${mySchool}`;
@@ -6166,6 +6367,18 @@ function StudentDashboard({
       if (snap.exists) setCredilaFeedbackDone(true);
     }).catch(() => {});
   }, [myId, credilaFeedbackEligible]);
+  useEffect(() => {
+    if (!englishFeedbackEligible || !myId) return;
+    let timer;
+    db.collection('englishFeedback').doc(String(myId)).get().then(snap => {
+      if (snap.exists) {
+        setEnglishFeedbackDone(true);
+      } else {
+        timer = setTimeout(() => setShowEnglishFeedbackForm(true), 1500);
+      }
+    }).catch(() => {});
+    return () => { if (timer) clearTimeout(timer); };
+  }, [myId, englishFeedbackEligible]);
   const getTeacherAverageRating = teacher => {
     const staffIds = (typeof teacher === 'object' ? [teacher?.afid, teacher?.docId, teacher?.id, teacher?.email, teacher?.name] : [teacher]).filter(Boolean).map(id => String(id).toLowerCase());
     const teacherFeedbackList = teacherFeedbacks.filter(f => {
@@ -6451,6 +6664,14 @@ function StudentDashboard({
     onSubmitSuccess: () => {
       setCredilaFeedbackDone(true);
       setShowCredilaFeedbackForm(false);
+    }
+  }), showEnglishFeedbackForm && englishFeedbackEligible && React.createElement(EnglishFeedbackModal, {
+    studentId: myId,
+    studentInfo: currentUser,
+    onClose: () => setShowEnglishFeedbackForm(false),
+    onSubmitSuccess: () => {
+      setEnglishFeedbackDone(true);
+      setShowEnglishFeedbackForm(false);
     }
   }), React.createElement("footer", {
     className: "bg-gray-800 text-white text-center py-4 mt-auto"
@@ -14575,6 +14796,12 @@ function AdminView({
       className: "fa-solid fa-building-columns"
     })
   }, {
+    id: 'englishfeedback',
+    label: 'English Feedback',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-language"
+    })
+  }, {
     id: 'timesheet',
     label: 'Timesheet',
     icon: React.createElement("i", {
@@ -14930,6 +15157,10 @@ function AdminView({
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
   }), activeTab === 'credilafeedback' && React.createElement(CredilaFeedbackAdminView, {
+    accessibleSchools: availableSchools,
+    isSuperAdmin: isSuperAdmin,
+    isDirector: isDirector
+  }), activeTab === 'englishfeedback' && React.createElement(EnglishFeedbackAdminView, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
@@ -29939,6 +30170,217 @@ function CredilaFeedbackAdminView({
   }, f.otherComments || '\u2014')), React.createElement("td", {
     className: "p-3 text-xs text-gray-500 whitespace-nowrap"
   }, f.completedAt ? new Date(f.completedAt).toLocaleDateString('en-IN') : '\u2014'))))))));
+}
+function EnglishFeedbackAdminView({
+  accessibleSchools = [],
+  isSuperAdmin = false,
+  isDirector = false
+}) {
+  const [feedbackList, setFeedbackList] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [view, setView] = React.useState('summary');
+  const hasFullDataAccess = isSuperAdmin || isDirector;
+  const EMRS_BHOPAL_SCHOOLS = ['EMRS Bhopal', 'EMRS Bhopal_NEET'];
+  const canAccess = hasFullDataAccess || EMRS_BHOPAL_SCHOOLS.some(s => (accessibleSchools || []).includes(s));
+  React.useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const snap = await db.collection('englishFeedback').get();
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const filtered = hasFullDataAccess ? all : all.filter(f => (accessibleSchools || []).includes(f.school));
+        filtered.sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+        setFeedbackList(filtered);
+      } catch (e) {
+        console.error('Error loading English feedback:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+  const avg = key => {
+    const vals = feedbackList.map(f => f[key]).filter(v => typeof v === 'number' && v > 0);
+    if (!vals.length) return '\u2014';
+    return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1);
+  };
+  const countBy = (key, val) => feedbackList.filter(f => f[key] === val).length;
+  const handleExport = () => {
+    if (!feedbackList.length) { alert('No data to export!'); return; }
+    const exportData = feedbackList.map(f => ({
+      'Student ID': f.studentId || '',
+      'Student Name': f.studentName || '',
+      'School': f.school || '',
+      'Grade': f.grade || '',
+      'Q1 Overall Satisfaction (1-5)': f.q1_satisfaction || '',
+      'Q2 Pace': f.q2_pace || '',
+      'Q3 Confidence': f.q3_confidence || '',
+      'Q4 Instructor Helpfulness (1-5)': f.q4_instructor || '',
+      'Q5 PCM Help': f.q5_pcmHelp || '',
+      'Q6 Most Useful Activity': f.q6_usefulActivity || '',
+      'Q7 Preferred Days/Week': f.q7_daysPerWeek || '',
+      'Q8 What They Like': f.q8_like || '',
+      'Q9 What To Improve': f.q9_improve || '',
+      'Q10 Continue Classes': f.q10_continue || '',
+      'Submitted At': f.completedAt ? new Date(f.completedAt).toLocaleString('en-IN') : ''
+    }));
+    exportToExcel(exportData, 'emrs_bhopal_english_feedback');
+  };
+  if (!canAccess) {
+    return React.createElement('div', { className: 'text-center py-12 text-gray-500' },
+      'You do not have access to English Feedback data.'
+    );
+  }
+  const DistCard = ({ title, options, field }) => React.createElement('div', { className: 'bg-white p-5 rounded-2xl shadow-lg' },
+    React.createElement('h3', { className: 'font-bold text-gray-800 mb-3 text-sm' }, title),
+    options.map(opt => {
+      const count = countBy(field, opt);
+      const pct = feedbackList.length ? Math.round(count / feedbackList.length * 100) : 0;
+      return React.createElement('div', { key: opt, className: 'mb-2' },
+        React.createElement('div', { className: 'flex justify-between text-xs mb-0.5' },
+          React.createElement('span', { className: 'text-gray-700 truncate pr-2' }, opt),
+          React.createElement('span', { className: 'font-bold text-green-700 flex-shrink-0' }, count, ' (', pct, '%)')
+        ),
+        React.createElement('div', { className: 'h-1.5 bg-gray-100 rounded-full overflow-hidden' },
+          React.createElement('div', { className: 'h-full bg-green-500 rounded-full', style: { width: pct + '%' } })
+        )
+      );
+    })
+  );
+  const summaryView = React.createElement('div', { className: 'space-y-6' },
+    React.createElement('div', { className: 'grid grid-cols-2 md:grid-cols-4 gap-4' },
+      React.createElement('div', { className: 'bg-white p-5 rounded-2xl shadow-lg text-center' },
+        React.createElement('div', { className: 'text-3xl font-bold text-green-600' }, feedbackList.length),
+        React.createElement('div', { className: 'text-sm text-gray-500 mt-1' }, 'Total Responses')
+      ),
+      React.createElement('div', { className: 'bg-white p-5 rounded-2xl shadow-lg text-center' },
+        React.createElement('div', { className: 'text-3xl font-bold text-blue-600' }, avg('q1_satisfaction')),
+        React.createElement('div', { className: 'text-sm text-gray-500 mt-1' }, 'Avg Satisfaction'),
+        React.createElement('div', { className: 'text-xs text-gray-400' }, 'Q1 \u2014 out of 5')
+      ),
+      React.createElement('div', { className: 'bg-white p-5 rounded-2xl shadow-lg text-center' },
+        React.createElement('div', { className: 'text-3xl font-bold text-purple-600' }, avg('q4_instructor')),
+        React.createElement('div', { className: 'text-sm text-gray-500 mt-1' }, 'Avg Instructor Rating'),
+        React.createElement('div', { className: 'text-xs text-gray-400' }, 'Q4 \u2014 out of 5')
+      ),
+      React.createElement('div', { className: 'bg-white p-5 rounded-2xl shadow-lg text-center' },
+        React.createElement('div', { className: 'text-3xl font-bold text-orange-600' },
+          feedbackList.length ? Math.round(countBy('q3_confidence', 'Yes, a lot \u2014 I can feel the improvement') / feedbackList.length * 100) + '%' : '\u2014'
+        ),
+        React.createElement('div', { className: 'text-sm text-gray-500 mt-1' }, 'Feeling Confident'),
+        React.createElement('div', { className: 'text-xs text-gray-400' }, 'Q3 \u2014 "Yes, a lot"')
+      )
+    ),
+    React.createElement('div', { className: 'grid md:grid-cols-2 gap-5' },
+      React.createElement(DistCard, {
+        title: 'Q2: Class Pace',
+        field: 'q2_pace',
+        options: ['Too fast \u2014 hard to keep up', 'Just right \u2014 comfortable pace', 'Too slow \u2014 I can handle more']
+      }),
+      React.createElement(DistCard, {
+        title: 'Q3: Confidence in Speaking',
+        field: 'q3_confidence',
+        options: ['Yes, a lot \u2014 I can feel the improvement', 'A little \u2014 some improvement but still nervous', 'Not yet \u2014 I still find it difficult']
+      }),
+      React.createElement(DistCard, {
+        title: 'Q5: Helping with PCM Subjects',
+        field: 'q5_pcmHelp',
+        options: ['Yes, definitely helping', 'Somewhat \u2014 still getting there', 'Not yet \u2014 not felt the connection']
+      }),
+      React.createElement(DistCard, {
+        title: 'Q6: Most Useful Activity',
+        field: 'q6_usefulActivity',
+        options: ['Speaking/pronunciation practice', 'Reading and comprehension', 'Grammar and vocabulary building', 'Group discussion / conversations']
+      }),
+      React.createElement(DistCard, {
+        title: 'Q7: Preferred Days per Week',
+        field: 'q7_daysPerWeek',
+        options: ['2 days a week is enough', '3 days a week would be better', 'Daily classes (5 days)']
+      }),
+      React.createElement(DistCard, {
+        title: 'Q10: Continue After Program',
+        field: 'q10_continue',
+        options: ['Yes, definitely continue', 'Continue, but with some changes', 'Not sure']
+      })
+    )
+  );
+  const responsesView = React.createElement('div', { className: 'bg-white rounded-2xl shadow-lg overflow-hidden' },
+    React.createElement('div', { className: 'overflow-x-auto' },
+      React.createElement('table', { className: 'w-full text-sm' },
+        React.createElement('thead', { className: 'avanti-gradient-light' },
+          React.createElement('tr', null,
+            React.createElement('th', { className: 'p-3 text-left font-bold whitespace-nowrap' }, 'Student'),
+            React.createElement('th', { className: 'p-3 text-left font-bold' }, 'Q1'),
+            React.createElement('th', { className: 'p-3 text-left font-bold' }, 'Q2 Pace'),
+            React.createElement('th', { className: 'p-3 text-left font-bold' }, 'Q3 Confidence'),
+            React.createElement('th', { className: 'p-3 text-left font-bold' }, 'Q4'),
+            React.createElement('th', { className: 'p-3 text-left font-bold' }, 'Q5 PCM'),
+            React.createElement('th', { className: 'p-3 text-left font-bold' }, 'Q6 Activity'),
+            React.createElement('th', { className: 'p-3 text-left font-bold' }, 'Q7 Days'),
+            React.createElement('th', { className: 'p-3 text-left font-bold' }, 'Q8 Likes'),
+            React.createElement('th', { className: 'p-3 text-left font-bold' }, 'Q9 Improve'),
+            React.createElement('th', { className: 'p-3 text-left font-bold' }, 'Q10 Continue'),
+            React.createElement('th', { className: 'p-3 text-left font-bold whitespace-nowrap' }, 'Submitted')
+          )
+        ),
+        React.createElement('tbody', null,
+          feedbackList.map((f, idx) => React.createElement('tr', {
+            key: f.id,
+            className: 'border-b ' + (idx % 2 === 0 ? 'bg-white' : 'bg-gray-50') + ' hover:bg-yellow-50'
+          },
+            React.createElement('td', { className: 'p-3 whitespace-nowrap' },
+              React.createElement('div', { className: 'font-semibold' }, f.studentName || f.studentId),
+              React.createElement('div', { className: 'text-xs text-gray-500' }, 'ID: ', f.studentId, ' \u2022 Grade ', f.grade)
+            ),
+            React.createElement('td', { className: 'p-3 text-center font-bold text-green-700' }, f.q1_satisfaction ? f.q1_satisfaction + '/5' : '\u2014'),
+            React.createElement('td', { className: 'p-3 text-gray-700 text-xs max-w-[120px]' }, f.q2_pace || '\u2014'),
+            React.createElement('td', { className: 'p-3 text-gray-700 text-xs max-w-[120px]' }, f.q3_confidence || '\u2014'),
+            React.createElement('td', { className: 'p-3 text-center font-bold text-purple-700' }, f.q4_instructor ? f.q4_instructor + '/5' : '\u2014'),
+            React.createElement('td', { className: 'p-3 text-gray-700 text-xs max-w-[120px]' }, f.q5_pcmHelp || '\u2014'),
+            React.createElement('td', { className: 'p-3 text-gray-700 text-xs max-w-[120px]' }, f.q6_usefulActivity || '\u2014'),
+            React.createElement('td', { className: 'p-3 text-gray-700 text-xs' }, f.q7_daysPerWeek || '\u2014'),
+            React.createElement('td', { className: 'p-3 text-xs text-gray-700 max-w-[160px]' },
+              React.createElement('div', { className: 'line-clamp-2' }, f.q8_like || '\u2014')
+            ),
+            React.createElement('td', { className: 'p-3 text-xs text-gray-700 max-w-[160px]' },
+              React.createElement('div', { className: 'line-clamp-2' }, f.q9_improve || '\u2014')
+            ),
+            React.createElement('td', { className: 'p-3 text-gray-700 text-xs max-w-[120px]' }, f.q10_continue || '\u2014'),
+            React.createElement('td', { className: 'p-3 text-xs text-gray-500 whitespace-nowrap' },
+              f.completedAt ? new Date(f.completedAt).toLocaleDateString('en-IN') : '\u2014'
+            )
+          ))
+        )
+      )
+    )
+  );
+  return React.createElement('div', { className: 'space-y-6' },
+    React.createElement('div', { className: 'flex justify-between items-center flex-wrap gap-4' },
+      React.createElement('div', null,
+        React.createElement('h2', { className: 'text-3xl font-bold' }, '\ud83d\udde3\ufe0f English Speaking Classes \u2014 Student Feedback (', feedbackList.length, ')'),
+        React.createElement('p', { className: 'text-sm text-gray-500 mt-1' }, 'EMRS Bhopal students \u2014 Avanti Fellows English Speaking class feedback')
+      ),
+      React.createElement('button', {
+        onClick: handleExport,
+        className: 'px-6 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700'
+      }, '\ud83d\udce5 Export to Excel')
+    ),
+    React.createElement('div', { className: 'flex gap-3' },
+      React.createElement('button', {
+        onClick: () => setView('summary'),
+        className: 'px-5 py-2.5 rounded-xl font-semibold text-sm ' + (view === 'summary' ? 'avanti-gradient text-white' : 'bg-white text-gray-700')
+      }, '\ud83d\udcca Summary'),
+      React.createElement('button', {
+        onClick: () => setView('responses'),
+        className: 'px-5 py-2.5 rounded-xl font-semibold text-sm ' + (view === 'responses' ? 'avanti-gradient text-white' : 'bg-white text-gray-700')
+      }, '\ud83d\udccb Individual Responses')
+    ),
+    loading
+      ? React.createElement('div', { className: 'text-center py-12 text-gray-500' }, 'Loading feedback...')
+      : feedbackList.length === 0
+        ? React.createElement('div', { className: 'bg-white p-8 rounded-2xl shadow-lg text-center text-gray-500' }, 'No feedback submissions yet from EMRS Bhopal students.')
+        : view === 'summary' ? summaryView : responsesView
+  );
 }
 function StudentFeedbackView({
   accessibleSchools = [],
