@@ -205,6 +205,12 @@ function AdminView({
       className: "fa-solid fa-building-columns"
     })
   }, {
+    id: 'englishfeedback',
+    label: 'English Feedback',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-language"
+    })
+  }, {
     id: 'timesheet',
     label: 'Timesheet',
     icon: React.createElement("i", {
@@ -553,6 +559,10 @@ function AdminView({
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
   }), activeTab === 'credilafeedback' && React.createElement(CredilaFeedbackAdminView, {
+    accessibleSchools: availableSchools,
+    isSuperAdmin: isSuperAdmin,
+    isDirector: isDirector
+  }), activeTab === 'englishfeedback' && React.createElement(EnglishFeedbackAdminView, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
