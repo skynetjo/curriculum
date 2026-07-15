@@ -75,12 +75,6 @@ function AdminView({
       className: "fa-solid fa-user-tie"
     })
   }, {
-    id: 'academicyear',
-    label: 'Academic Year',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-calendar"
-    })
-  }, {
     id: '2fa-management',
     label: '2FA Management',
     icon: React.createElement("i", {
@@ -370,14 +364,6 @@ function AdminView({
     managers: managers,
     currentUser: currentUser,
     isSuperAdmin: isSuperAdmin
-  }), activeTab === 'academicyear' && isSuperAdmin && React.createElement(AcademicYearManagement, {
-    teachers: teachers,
-    students: students,
-    curriculum: curriculum,
-    chapterProgress: chapterProgress,
-    studentAttendance: studentAttendance,
-    teacherAttendance: teacherAttendance,
-    academicYearSettings: academicYearSettings
   }), activeTab === '2fa-management' && isSuperAdmin && React.createElement(Admin2FAManagement, {
     teachers: filteredTeachers,
     managers: managers
