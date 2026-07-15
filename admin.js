@@ -1,7 +1,7 @@
 // ✅ CURRICULUM TRACKER v5.6.8 - CHUNK 2: Admin + Attendance Features
 // Loaded in parallel with app.js, executes after app.js
 // Contains: AdminView, TeacherManagement, StudentManagement,
-//           StudentAttendanceView, TeacherAttendanceView
+//           StudentAttendanceView
 
 function AdminView({
   currentUser,
@@ -425,275 +425,6 @@ function AdminView({
   }))), React.createElement("footer", {
     className: "bg-gray-800 text-white text-center py-4"
   }, React.createElement("p", null, "Made by Anand with \u2764\uFE0F")));
-}
-function TeacherOverview({
-  currentUser,
-  curriculum,
-  chapterProgress,
-  teachers,
-  teacherAttendance,
-  studentAttendance,
-  onNavigateToProfile,
-  precomputedRankings
-}) {
-  const mySchool = currentUser.school;
-  const mySubject = currentUser.subject;
-  const schoolRankings = useMemo(() => {
-    const rankings = SCHOOLS.map(school => {
-      let total = 0,
-        completed = 0;
-      SUBJECTS.forEach(subject => {
-        ['11', '12'].forEach(grade => {
-          const docId = `${school}_${subject}_${grade}`;
-          const chapters = curriculum[docId]?.chapters || [];
-          chapters.forEach(ch => {
-            total++;
-            const progressId = `${school}_${ch.id}`;
-            const prog = chapterProgress[progressId] || {};
-            if (prog.completed === 'Yes') completed++;
-          });
-        });
-      });
-      return {
-        school,
-        total,
-        completed,
-        percentage: total ? Math.round(completed / total * 100) : 0
-      };
-    });
-    rankings.sort((a, b) => b.percentage - a.percentage);
-    return rankings;
-  }, [curriculum, chapterProgress]);
-  const subjectRankings = useMemo(() => {
-    const rankings = SUBJECTS.map(subject => {
-      let total = 0,
-        completed = 0;
-      ['11', '12'].forEach(grade => {
-        const docId = `${mySchool}_${subject}_${grade}`;
-        const chapters = curriculum[docId]?.chapters || [];
-        chapters.forEach(ch => {
-          total++;
-          const progressId = `${mySchool}_${ch.id}`;
-          const prog = chapterProgress[progressId] || {};
-          if (prog.completed === 'Yes') {
-            completed++;
-          }
-        });
-      });
-      return {
-        subject,
-        total,
-        completed,
-        percentage: total ? Math.round(completed / total * 100) : 0
-      };
-    }).filter(rank => rank.total > 0);
-    rankings.sort((a, b) => b.percentage - a.percentage);
-    return rankings;
-  }, [curriculum, chapterProgress, mySchool]);
-  const mySchoolRank = schoolRankings.findIndex(r => r.school === mySchool) + 1;
-  const laggingSubject = subjectRankings[subjectRankings.length - 1];
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
-  const [lastSyncTime, setLastSyncTime] = React.useState(null);
-  React.useEffect(() => {
-    const updateSyncTime = () => {
-      if (window.SmartSyncManager) {
-        const status = window.SmartSyncManager.getStatus();
-        const times = status.lastSyncTimes;
-        const latestSync = Math.max(...Object.values(times).filter(t => t > 0), 0);
-        if (latestSync > 0) {
-          setLastSyncTime(new Date(latestSync));
-        }
-      }
-    };
-    updateSyncTime();
-    const interval = setInterval(updateSyncTime, 30000);
-    return () => clearInterval(interval);
-  }, []);
-  const handleManualRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      if (window._forceFullRefresh) {
-        await window._forceFullRefresh();
-      }
-      setLastSyncTime(new Date());
-    } catch (e) {
-      console.error('Refresh failed:', e);
-    }
-    setTimeout(() => setIsRefreshing(false), 1000);
-  };
-  const formatLastSync = date => {
-    if (!date) return 'Never';
-    const mins = Math.floor((Date.now() - date.getTime()) / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    return `${Math.floor(mins / 60)}h ago`;
-  };
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center flex-wrap gap-2"
-  }, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "Dashboard Overview"), React.createElement("div", {
-    className: "flex items-center gap-2"
-  }, React.createElement("span", {
-    className: "text-xs text-gray-500 hidden sm:inline"
-  }, lastSyncTime ? `Synced ${formatLastSync(lastSyncTime)}` : ''), React.createElement("button", {
-    onClick: handleManualRefresh,
-    disabled: isRefreshing,
-    className: `px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${isRefreshing ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:shadow-lg active:scale-95'}`,
-    title: "Refresh all data"
-  }, React.createElement("i", {
-    className: `fa-solid fa-sync ${isRefreshing ? 'animate-spin' : ''}`
-  }), React.createElement("span", {
-    className: "hidden sm:inline"
-  }, isRefreshing ? 'Syncing...' : 'Refresh')))), React.createElement(ProfileCompletionCard, {
-    currentUser: currentUser,
-    onNavigateToProfile: onNavigateToProfile
-  }), React.createElement("div", {
-    className: "grid md:grid-cols-4 gap-4"
-  }, React.createElement("div", {
-    className: "stat-card avanti-gradient text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Your School Rank"), React.createElement("div", {
-    className: "text-5xl font-bold"
-  }, "#", mySchoolRank), React.createElement("div", {
-    className: "text-sm mt-2"
-  }, "Out of ", schoolRankings.length || SCHOOLS.length, " schools")), React.createElement("div", {
-    className: "stat-card bg-gradient-to-br from-green-500 to-emerald-600 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Best Performing School"), React.createElement("div", {
-    className: "text-2xl font-bold mt-2"
-  }, schoolRankings[0]?.school), React.createElement("div", {
-    className: "text-sm mt-2"
-  }, schoolRankings[0]?.percentage, "% completed")), React.createElement("div", {
-    className: "stat-card bg-gradient-to-br from-orange-500 to-red-600 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Lagging Subject (Your School)"), React.createElement("div", {
-    className: "text-2xl font-bold mt-2"
-  }, laggingSubject?.subject), React.createElement("div", {
-    className: "text-sm mt-2"
-  }, laggingSubject?.percentage, "% completed"))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, "\uD83C\uDFC6 School Rankings"), React.createElement("div", {
-    className: "space-y-3"
-  }, schoolRankings.map((rank, index) => React.createElement("div", {
-    key: rank.school,
-    className: `ranking-card ${index === 0 ? 'ranking-1' : index === 1 ? 'ranking-2' : index === 2 ? 'ranking-3' : ''} ${rank.school === mySchool ? 'bg-yellow-50' : ''}`
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("div", {
-    className: "flex items-center gap-4"
-  }, React.createElement("div", {
-    className: "text-2xl font-bold text-gray-400"
-  }, "#", index + 1), React.createElement("div", null, React.createElement("div", {
-    className: "font-bold text-lg"
-  }, rank.school, " ", rank.school === mySchool && '⭐'), React.createElement("div", {
-    className: "text-sm text-gray-600"
-  }, rank.completed, " / ", rank.total, " chapters completed"))), React.createElement("div", {
-    className: "text-3xl font-bold",
-    style: {
-      color: 'var(--avanti-red)'
-    }
-  }, rank.percentage, "%")))))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, "\uD83D\uDCDA Subject Performance in ", mySchool), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, subjectRankings.map(rank => React.createElement("div", {
-    key: rank.subject,
-    className: "border-2 rounded-xl p-4"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-2"
-  }, React.createElement("div", {
-    className: "font-bold text-lg"
-  }, rank.subject), React.createElement("div", {
-    className: "text-2xl font-bold",
-    style: {
-      color: 'var(--avanti-red)'
-    }
-  }, rank.percentage, "%")), React.createElement("div", {
-    className: "h-2 bg-gray-200 rounded-full"
-  }, React.createElement("div", {
-    className: "h-2 avanti-gradient rounded-full",
-    style: {
-      width: `${rank.percentage}%`
-    }
-  })), React.createElement("div", {
-    className: "text-sm text-gray-600 mt-2"
-  }, rank.completed, " / ", rank.total, " chapters"))))), React.createElement("div", {
-    className: "stat-card bg-gradient-to-br from-purple-500 to-pink-600 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "My Attendance (This Month)"), React.createElement("div", {
-    className: "text-2xl font-bold mt-2"
-  }, teacherAttendance.filter(a => a.teacherId === currentUser.afid && getMonthYear(a.date) === getMonthYear(getTodayDate())).length, " days"), React.createElement("div", {
-    className: "text-sm mt-2"
-  }, "Marked this month"), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, "\uD83D\uDCCA Quick Attendance Overview"), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, React.createElement("div", {
-    className: "border-2 rounded-xl p-4"
-  }, React.createElement("h4", {
-    className: "font-bold mb-2"
-  }, "Today's Student Attendance"), React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "Present: ", React.createElement("strong", {
-    className: "text-green-600"
-  }, studentAttendance.filter(a => a.date === getTodayDate() && a.school === currentUser.school && a.status === 'Present').length)), React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "Absent: ", React.createElement("strong", {
-    className: "text-red-600"
-  }, studentAttendance.filter(a => a.date === getTodayDate() && a.school === currentUser.school && a.status === 'Absent').length))), React.createElement("div", {
-    className: "border-2 rounded-xl p-4"
-  }, React.createElement("h4", {
-    className: "font-bold mb-2"
-  }, "My Attendance Status"), teacherAttendance.find(a => a.teacherId === currentUser.afid && a.date === getTodayDate()) ? React.createElement("div", {
-    className: "text-sm"
-  }, React.createElement("p", {
-    className: "text-green-600 font-bold"
-  }, "\u2713 Marked for today"), React.createElement("p", {
-    className: "text-gray-600"
-  }, "Status: ", teacherAttendance.find(a => a.teacherId === currentUser.afid && a.date === getTodayDate()).status)) : React.createElement("p", {
-    className: "text-orange-600 font-bold"
-  }, "\u26A0\uFE0F Not marked yet")))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, "\u23F0 Today's Punch-In Times - ", mySchool), React.createElement("div", {
-    className: "space-y-2 max-h-96 overflow-y-auto"
-  }, teachers.filter(t => t.school === mySchool && !t.isArchived).map(teacher => {
-    const todayAttendance = teacherAttendance.find(a => a.teacherId === teacher.afid && a.date === getTodayDate());
-    return React.createElement("div", {
-      key: teacher.afid,
-      className: `p-4 rounded-xl border-2 ${teacher.afid === currentUser.afid ? 'bg-yellow-50 border-yellow-400' : 'bg-gray-50 border-gray-200'}`
-    }, React.createElement("div", {
-      className: "flex justify-between items-center"
-    }, React.createElement("div", {
-      className: "flex-1"
-    }, React.createElement("div", {
-      className: "font-bold text-lg"
-    }, teacher.name, " ", teacher.afid === currentUser.afid && '(You)'), React.createElement("div", {
-      className: "text-sm text-gray-600"
-    }, teacher.subject)), React.createElement("div", {
-      className: "text-right"
-    }, todayAttendance ? React.createElement(React.Fragment, null, React.createElement("div", {
-      className: `text-2xl font-bold ${todayAttendance.status === 'Present' ? 'text-green-600' : 'text-orange-600'}`
-    }, "\u23F0 ", todayAttendance.punchInTime || '--:--'), React.createElement("div", {
-      className: `text-xs font-semibold ${todayAttendance.status === 'Present' ? 'text-green-600' : 'text-orange-600'}`
-    }, todayAttendance.status)) : React.createElement("div", {
-      className: "text-gray-400 font-semibold"
-    }, "Not Marked"))));
-  })))));
 }
 function ClassView({
   grade,
@@ -3459,14 +3190,12 @@ function TeacherAttendanceDashboard({
   teacherAttendance
 }) {
   const [filterGrade, setFilterGrade] = useState('All');
-  const [filterSubject, setFilterSubject] = useState('All');
   const today = getTodayDate();
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const mySchool = currentUser.school;
   const chart1Ref = useRef(null);
   const chart2Ref = useRef(null);
-  const chart3Ref = useRef(null);
   const chartInstances = useRef({});
   const filteredStudentAttendance = useMemo(() => {
     return studentAttendance.filter(a => {
@@ -3476,17 +3205,6 @@ function TeacherAttendanceDashboard({
       return true;
     });
   }, [studentAttendance, mySchool, filterGrade, startDate, endDate]);
-  const filteredTeacherAttendance = useMemo(() => {
-    return teacherAttendance.filter(a => {
-      if (a.school !== mySchool) return false;
-      if (filterSubject !== 'All') {
-        const teacher = teachers.find(t => t.afid === a.teacherId);
-        if (!teacher || teacher.subject !== filterSubject) return false;
-      }
-      if (a.date < startDate || a.date > endDate) return false;
-      return true;
-    });
-  }, [teacherAttendance, mySchool, teachers, filterSubject, startDate, endDate]);
   const dailyStats = useMemo(() => {
     const stats = {};
     filteredStudentAttendance.forEach(a => {
@@ -3526,14 +3244,6 @@ function TeacherAttendanceDashboard({
     });
     return stats;
   }, [filteredStudentAttendance]);
-  const teacherStats = useMemo(() => {
-    const present = filteredTeacherAttendance.filter(a => a.status === 'Present').length;
-    const onLeave = filteredTeacherAttendance.filter(a => a.status === 'On Leave').length;
-    return {
-      present,
-      onLeave
-    };
-  }, [filteredTeacherAttendance]);
   useEffect(() => {
     Object.values(chartInstances.current).forEach(chart => {
       if (chart) chart.destroy();
@@ -3626,44 +3336,12 @@ function TeacherAttendanceDashboard({
         }
       });
     }
-    if (chart3Ref.current) {
-      const ctx = chart3Ref.current.getContext('2d');
-      chartInstances.current.chart3 = new Chart(ctx, {
-        type: 'pie',
-        data: {
-          labels: ['Present', 'On Leave'],
-          datasets: [{
-            data: [teacherStats.present, teacherStats.onLeave],
-            backgroundColor: ['#5B8A8A', '#D4A574'],
-            borderWidth: 2,
-            borderColor: '#fff'
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            title: {
-              display: true,
-              text: 'Teacher Attendance',
-              font: {
-                size: 16,
-                weight: 'bold'
-              }
-            },
-            legend: {
-              position: 'bottom'
-            }
-          }
-        }
-      });
-    }
     return () => {
       Object.values(chartInstances.current).forEach(chart => {
         if (chart) chart.destroy();
       });
     };
-  }, [dailyStats, gradeStats, teacherStats]);
+  }, [dailyStats, gradeStats]);
   const handleExportStudents = () => {
     const exportData = filteredStudentAttendance.map(a => ({
       Date: a.date,
@@ -3675,28 +3353,17 @@ function TeacherAttendanceDashboard({
     }));
     exportToExcel(exportData, `student_attendance_${mySchool}_${startDate}_to_${endDate}`);
   };
-  const handleExportTeachers = () => {
-    const exportData = filteredTeacherAttendance.map(a => ({
-      Date: a.date,
-      'Teacher Name': a.teacherName,
-      'Punch-In Time': a.punchInTime || 'Not recorded',
-      Status: a.status,
-      Reason: a.reason,
-      Location: a.location
-    }));
-    exportToExcel(exportData, `teacher_attendance_${mySchool}_${startDate}_to_${endDate}`);
-  };
   return React.createElement("div", {
     className: "space-y-6"
   }, React.createElement("div", {
     className: "flex justify-between items-center"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
-  }, "\uD83D\uDCCA Attendance Dashboard - ", mySchool)), React.createElement("div", {
+  }, "📊 Attendance Dashboard - ", mySchool)), React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "text-xl font-bold mb-4"
-  }, "\uD83D\uDD0D Filters"), React.createElement("div", {
+  }, "🔍 Filters"), React.createElement("div", {
     className: "grid md:grid-cols-4 gap-4"
   }, React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-2"
@@ -3712,18 +3379,6 @@ function TeacherAttendanceDashboard({
   }, "Class 11"), React.createElement("option", {
     value: "12"
   }, "Class 12"))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Teacher Subject"), React.createElement("select", {
-    value: filterSubject,
-    onChange: e => setFilterSubject(e.target.value),
-    disabled: !isEditing,
-    className: "w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
-  }, React.createElement("option", {
-    value: "All"
-  }, "All Subjects"), SUBJECTS.map(s => React.createElement("option", {
-    key: s,
-    value: s
-  }, s)))), React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-2"
   }, "Start Date"), React.createElement("input", {
     type: "date",
@@ -3744,10 +3399,7 @@ function TeacherAttendanceDashboard({
   }, React.createElement("button", {
     onClick: handleExportStudents,
     className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold"
-  }, "\uD83D\uDCE5 Export Student Attendance"), React.createElement("button", {
-    onClick: handleExportTeachers,
-    className: "px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold"
-  }, "\uD83D\uDCE5 Export Teacher Attendance"))), React.createElement("div", {
+  }, "📥 Export Student Attendance"))), React.createElement("div", {
     className: "grid grid-cols-2 md:grid-cols-4 gap-4"
   }, React.createElement("div", {
     className: "stat-card bg-green-500 text-white"
@@ -3761,19 +3413,7 @@ function TeacherAttendanceDashboard({
     className: "text-sm opacity-90"
   }, "Students Absent"), React.createElement("div", {
     className: "text-4xl font-bold"
-  }, filteredStudentAttendance.filter(a => a.status === 'Absent').length)), React.createElement("div", {
-    className: "stat-card bg-blue-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Teachers Present"), React.createElement("div", {
-    className: "text-4xl font-bold"
-  }, teacherStats.present)), React.createElement("div", {
-    className: "stat-card bg-orange-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Teachers on Leave"), React.createElement("div", {
-    className: "text-4xl font-bold"
-  }, teacherStats.onLeave))), React.createElement("div", {
+  }, filteredStudentAttendance.filter(a => a.status === 'Absent').length))), React.createElement("div", {
     className: "grid md:grid-cols-2 gap-6"
   }, React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg",
@@ -3790,19 +3430,10 @@ function TeacherAttendanceDashboard({
   }, React.createElement("canvas", {
     ref: chart2Ref
   }))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg",
-    style: {
-      height: '350px'
-    }
-  }, React.createElement("canvas", {
-    ref: chart3Ref
-  })), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-6"
-  }, React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "text-xl font-bold mb-4"
-  }, "\uD83D\uDCCB Recent Student Attendance"), React.createElement("div", {
+  }, "📋 Recent Student Attendance"), React.createElement("div", {
     className: "overflow-x-auto max-h-96"
   }, React.createElement("table", {
     className: "w-full"
@@ -3829,45 +3460,9 @@ function TeacherAttendanceDashboard({
     className: "p-3"
   }, React.createElement("span", {
     className: `px-2 py-1 rounded-full text-xs font-bold ${a.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`
-  }, a.status)))))))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4"
-  }, "\uD83D\uDC65 Teacher Attendance Records"), React.createElement("div", {
-    className: "overflow-x-auto max-h-96"
-  }, React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "avanti-gradient-light sticky top-0"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Date"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Teacher"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Punch-In"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Status"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Reason"))), React.createElement("tbody", null, filteredTeacherAttendance.slice(0, 50).map((a, idx) => React.createElement("tr", {
-    key: idx,
-    className: "border-b hover:bg-gray-50"
-  }, React.createElement("td", {
-    className: "p-3 text-sm"
-  }, a.date), React.createElement("td", {
-    className: "p-3 font-semibold"
-  }, a.teacherName), React.createElement("td", {
-    className: "p-3"
-  }, React.createElement("span", {
-    className: "font-mono font-bold text-blue-600"
-  }, "\u23F0 ", a.punchInTime || '--:--')), React.createElement("td", {
-    className: "p-3"
-  }, React.createElement("span", {
-    className: `px-2 py-1 rounded-full text-xs font-bold ${a.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`
-  }, a.status)), React.createElement("td", {
-    className: "p-3 text-sm"
-  }, a.reason)))))))));
+  }, a.status)))))))));
 }
+
 function RemarksModal({
   student,
   onSave,
@@ -4442,419 +4037,4 @@ function StudentAttendanceView({
       setSelectedStudent(null);
     }
   }));
-}
-function TeacherAttendanceView({
-  currentUser,
-  teacherAttendance,
-  leaveAdjustments
-}) {
-  const [selectedDate, setSelectedDate] = useState(getTodayDate());
-  const [endDate, setEndDate] = useState(getTodayDate());
-  const [isDateRange, setIsDateRange] = useState(false);
-  const [status, setStatus] = useState('Present');
-  const [reason, setReason] = useState('Present');
-  const [compOffWorkedDate, setCompOffWorkedDate] = useState('');
-  const [location, setLocation] = useState('');
-  const [fetchingLocation, setFetchingLocation] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [localSubmittedAttendance, setLocalSubmittedAttendance] = useState([]);
-  const [gpsVerified, setGpsVerified] = useState(false);
-  const today = new Date();
-  const maxDate = useMemo(() => {
-    if (status === 'On Leave') {
-      const d = new Date();
-      d.setDate(d.getDate() + 10);
-      return d.toISOString().split('T')[0];
-    }
-    return getTodayDate();
-  }, [status]);
-  const minDate = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 2);
-    return d.toISOString().split('T')[0];
-  }, []);
-  const allAttendance = useMemo(() => {
-    const merged = [...teacherAttendance];
-    localSubmittedAttendance.forEach(local => {
-      if (!merged.some(a => a.teacherId === local.teacherId && a.date === local.date)) {
-        merged.push(local);
-      }
-    });
-    return merged;
-  }, [teacherAttendance, localSubmittedAttendance]);
-  const todayRecord = allAttendance.find(a => a.teacherId === currentUser.afid && a.date === selectedDate);
-  const hasExistingAttendance = useMemo(() => {
-    return allAttendance.some(a => a.teacherId === currentUser.afid && a.date === selectedDate);
-  }, [allAttendance, currentUser.afid, selectedDate]);
-  const leaveBalance = useMemo(() => {
-    return calculateLeaveBalance(allAttendance, currentUser.afid, leaveAdjustments || {});
-  }, [allAttendance, currentUser.afid, leaveAdjustments]);
-  useEffect(() => {
-    if (todayRecord) {
-      setStatus(todayRecord.status);
-      setReason(todayRecord.reason || 'Present');
-      setLocation(todayRecord.location || '');
-      setGpsVerified(true);
-    } else {
-      setGpsVerified(false);
-      setLocation('');
-    }
-  }, [todayRecord]);
-  useEffect(() => {
-    if (status === 'Present') {
-      setIsDateRange(false);
-      setEndDate(selectedDate);
-      setCompOffWorkedDate('');
-    }
-  }, [status, selectedDate]);
-  useEffect(() => {
-    if (status === 'On Leave') {
-      setGpsVerified(true);
-      setLocation('Leave - GPS not required');
-    } else {
-      setGpsVerified(false);
-      setLocation('');
-    }
-  }, [status]);
-  useEffect(() => {
-    if (reason !== 'Comp Off') {
-      setCompOffWorkedDate('');
-    }
-  }, [reason]);
-  const getLocation = () => {
-    setFetchingLocation(true);
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(position => {
-        const lat = position.coords.latitude.toFixed(6);
-        const lng = position.coords.longitude.toFixed(6);
-        const accuracy = Math.round(position.coords.accuracy);
-        const loc = `${lat}, ${lng} (±${accuracy}m)`;
-        setLocation(loc);
-        setGpsVerified(true);
-        setFetchingLocation(false);
-      }, error => {
-        let errorMsg = 'Unable to fetch location. ';
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMsg += 'Please enable location permission in your browser/phone settings.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMsg += 'Location information unavailable. Please try again.';
-            break;
-          case error.TIMEOUT:
-            errorMsg += 'Location request timed out. Please try again.';
-            break;
-          default:
-            errorMsg += 'Please try again.';
-        }
-        alert(errorMsg);
-        setFetchingLocation(false);
-      }, {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
-      });
-    } else {
-      alert('Geolocation not supported by your browser');
-      setFetchingLocation(false);
-    }
-  };
-  const getDateRange = (start, end) => {
-    const dates = [];
-    let currentDate = new Date(start);
-    const endDateObj = new Date(end);
-    while (currentDate <= endDateObj) {
-      dates.push(currentDate.toISOString().split('T')[0]);
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    return dates;
-  };
-  const daysToMark = useMemo(() => {
-    if (!isDateRange || status === 'Present') return 1;
-    return getDateRange(selectedDate, endDate).length;
-  }, [isDateRange, selectedDate, endDate, status]);
-  const handleSubmit = async () => {
-    if (status !== 'Present' && !reason) {
-      alert('Please select a reason');
-      return;
-    }
-    if (reason === 'Comp Off' && !compOffWorkedDate) {
-      alert('Please select the date when you worked for Comp Off');
-      return;
-    }
-    if (status === 'Present' && !gpsVerified) {
-      alert('📍 GPS verification required!\n\nPlease click "Get GPS Location" button to verify your location before marking attendance.');
-      return;
-    }
-    if (isDateRange && endDate < selectedDate) {
-      alert('End date must be after or equal to start date');
-      return;
-    }
-    if (status === 'On Leave') {
-      if (ENTITLED_LEAVE_TYPES.includes(reason) && daysToMark > leaveBalance.entitled.remaining) {
-        const proceed = confirm(`Warning: You only have ${leaveBalance.entitled.remaining} entitled leave days remaining, but you're marking ${daysToMark} days.\n\nDo you want to continue?`);
-        if (!proceed) return;
-      }
-      if (MATERNITY_LEAVE_TYPES.includes(reason) && daysToMark > leaveBalance.maternity.remaining) {
-        const proceed = confirm(`Warning: You only have ${leaveBalance.maternity.remaining} maternity leave days remaining, but you're marking ${daysToMark} days.\n\nDo you want to continue?`);
-        if (!proceed) return;
-      }
-      if (PATERNITY_LEAVE_TYPES.includes(reason) && daysToMark > leaveBalance.paternity.remaining) {
-        const proceed = confirm(`Warning: You only have ${leaveBalance.paternity.remaining} paternity leave days remaining, but you're marking ${daysToMark} days.\n\nDo you want to continue?`);
-        if (!proceed) return;
-      }
-    }
-    setSubmitting(true);
-    try {
-      const now = new Date();
-      const punchInTime = now.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      });
-      const datesToMark = isDateRange && status === 'On Leave' ? getDateRange(selectedDate, endDate) : [selectedDate];
-      const batch = db.batch();
-      const newLocalRecords = [];
-      datesToMark.forEach(date => {
-        const docId = `${currentUser.afid}_${date}`;
-        const docRef = db.collection('teacherAttendance').doc(docId);
-        const recordData = {
-          teacherId: currentUser.afid,
-          teacherName: currentUser.name,
-          school: currentUser.school,
-          date: date,
-          status,
-          reason: status === 'Present' ? 'Present' : reason,
-          compOffWorkedDate: reason === 'Comp Off' ? compOffWorkedDate : null,
-          location: location || 'Not provided',
-          punchInTime: status === 'Present' ? punchInTime : 'Leave applied',
-          markedAt: new Date().toISOString(),
-          isPartOfRange: datesToMark.length > 1,
-          rangeStart: datesToMark.length > 1 ? selectedDate : null,
-          rangeEnd: datesToMark.length > 1 ? endDate : null,
-          gpsVerified: gpsVerified
-        };
-        batch.set(docRef, recordData);
-        newLocalRecords.push(recordData);
-      });
-      await batch.commit();
-      setLocalSubmittedAttendance(prev => [...prev, ...newLocalRecords]);
-      if (datesToMark.length > 1) {
-        alert(`✅ Leave marked for ${datesToMark.length} days!\nFrom: ${selectedDate}\nTo: ${endDate}\n\nYour leave balance has been updated.`);
-      } else {
-        alert(`✅ Attendance marked!\nPunch-in time: ${punchInTime}\nLocation: ${location}`);
-      }
-      setIsDateRange(false);
-      setEndDate(selectedDate);
-    } catch (e) {
-      alert('Failed: ' + e.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "My Attendance"), React.createElement("div", {
-    className: "grid md:grid-cols-3 gap-4"
-  }, React.createElement("div", {
-    className: "bg-white p-4 rounded-xl shadow-lg border-l-4 border-blue-500"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("div", null, React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "Entitled Leave"), React.createElement("p", {
-    className: "text-2xl font-bold text-blue-600"
-  }, leaveBalance.entitled.remaining, "/", leaveBalance.entitled.total)), React.createElement("div", {
-    className: "text-right"
-  }, React.createElement("span", {
-    className: "text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full"
-  }, "Used: ", leaveBalance.entitled.used))), React.createElement("div", {
-    className: "mt-2 bg-gray-200 rounded-full h-2"
-  }, React.createElement("div", {
-    className: "bg-blue-500 h-2 rounded-full transition-all",
-    style: {
-      width: `${leaveBalance.entitled.remaining / leaveBalance.entitled.total * 100}%`
-    }
-  }))), React.createElement("div", {
-    className: "bg-white p-4 rounded-xl shadow-lg border-l-4 border-pink-500"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("div", null, React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "Maternity Leave"), React.createElement("p", {
-    className: "text-2xl font-bold text-pink-600"
-  }, leaveBalance.maternity.remaining, "/", leaveBalance.maternity.total)), React.createElement("div", {
-    className: "text-right"
-  }, React.createElement("span", {
-    className: "text-xs bg-pink-100 text-pink-700 px-2 py-1 rounded-full"
-  }, "Used: ", leaveBalance.maternity.used))), React.createElement("div", {
-    className: "mt-2 bg-gray-200 rounded-full h-2"
-  }, React.createElement("div", {
-    className: "bg-pink-500 h-2 rounded-full transition-all",
-    style: {
-      width: `${leaveBalance.maternity.remaining / leaveBalance.maternity.total * 100}%`
-    }
-  }))), React.createElement("div", {
-    className: "bg-white p-4 rounded-xl shadow-lg border-l-4 border-purple-500"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("div", null, React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "Paternity Leave"), React.createElement("p", {
-    className: "text-2xl font-bold text-purple-600"
-  }, leaveBalance.paternity.remaining, "/", leaveBalance.paternity.total)), React.createElement("div", {
-    className: "text-right"
-  }, React.createElement("span", {
-    className: "text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full"
-  }, "Used: ", leaveBalance.paternity.used))), React.createElement("div", {
-    className: "mt-2 bg-gray-200 rounded-full h-2"
-  }, React.createElement("div", {
-    className: "bg-purple-500 h-2 rounded-full transition-all",
-    style: {
-      width: `${leaveBalance.paternity.remaining / leaveBalance.paternity.total * 100}%`
-    }
-  })))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg max-w-2xl mx-auto"
-  }, React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Status *"), React.createElement("div", {
-    className: "flex gap-3"
-  }, React.createElement("button", {
-    onClick: () => {
-      setStatus('Present');
-      setReason('Present');
-    },
-    className: `flex-1 py-3 rounded-xl font-semibold ${status === 'Present' ? 'bg-green-500 text-white' : 'bg-gray-200'}`
-  }, "\u2713 Present"), React.createElement("button", {
-    onClick: () => setStatus('On Leave'),
-    className: `flex-1 py-3 rounded-xl font-semibold ${status === 'On Leave' ? 'bg-orange-500 text-white' : 'bg-gray-200'}`
-  }, "\uD83D\uDCC5 On Leave"))), status === 'On Leave' && React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Reason *"), React.createElement("select", {
-    value: reason,
-    onChange: e => setReason(e.target.value),
-    className: "w-full border-2 px-4 py-3 rounded-xl"
-  }, LEAVE_REASONS.filter(r => r !== 'Present').map(r => React.createElement("option", {
-    key: r,
-    value: r
-  }, r)))), reason === 'Comp Off' && React.createElement("div", {
-    className: "mt-4 p-4 bg-purple-50 rounded-xl border-2 border-purple-200"
-  }, React.createElement("label", {
-    className: "block text-sm font-bold mb-2 text-purple-800"
-  }, "\uD83D\uDCC5 When did you work? ", React.createElement("span", {
-    className: "text-red-500"
-  }, "*")), React.createElement("p", {
-    className: "text-xs text-purple-600 mb-3"
-  }, "Select the date when you worked extra (within last 2 weeks only)"), React.createElement("input", {
-    type: "date",
-    value: compOffWorkedDate,
-    max: getTodayDate(),
-    min: (() => { const d = new Date(); d.setDate(d.getDate() - 14); return d.toISOString().split('T')[0]; })(),
-    onChange: e => setCompOffWorkedDate(e.target.value),
-    className: "w-full border-2 px-4 py-3 rounded-xl border-purple-300 focus:border-purple-500 focus:outline-none"
-  }), compOffWorkedDate && React.createElement("p", {
-    className: "text-sm text-purple-700 mt-2"
-  }, "\u2713 Worked on: ", compOffWorkedDate)), React.createElement("div", {
-    className: "bg-blue-50 p-4 rounded-xl border-2 border-blue-200"
-  }, React.createElement("label", {
-    className: "flex items-center gap-3 cursor-pointer"
-  }, React.createElement("input", {
-    type: "checkbox",
-    checked: isDateRange,
-    onChange: e => {
-      setIsDateRange(e.target.checked);
-      if (!e.target.checked) {
-        setEndDate(selectedDate);
-      }
-    },
-    className: "w-5 h-5 rounded"
-  }), React.createElement("span", {
-    className: "font-semibold text-blue-800"
-  }, "Apply leave for multiple days")), React.createElement("p", {
-    className: "text-sm text-blue-600 mt-1 ml-8"
-  }, "Enable this if you're taking 2 or more days of leave"))), React.createElement("div", {
-    className: `grid ${isDateRange && status === 'On Leave' ? 'md:grid-cols-2' : 'grid-cols-1'} gap-4`
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, isDateRange && status === 'On Leave' ? 'Start Date' : 'Date'), React.createElement("input", {
-    type: "date",
-    value: selectedDate,
-    min: minDate,
-    max: maxDate,
-    onChange: e => {
-      setSelectedDate(e.target.value);
-      if (!isDateRange || e.target.value > endDate) {
-        setEndDate(e.target.value);
-      }
-    },
-    className: "w-full border-2 px-4 py-3 rounded-xl"
-  }), React.createElement("p", {
-    className: "text-xs text-gray-500 mt-1"
-  }, status === 'On Leave' ? "\uD83D\uDCC5 Leave: up to 10 days ahead & 2 days back" : "\uD83D\uDCC5 Attendance: today and previous 2 days only")), isDateRange && status === 'On Leave' && React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "End Date"), React.createElement("input", {
-    type: "date",
-    value: endDate,
-    min: selectedDate,
-    max: maxDate,
-    onChange: e => setEndDate(e.target.value),
-    className: "w-full border-2 px-4 py-3 rounded-xl"
-  }))), isDateRange && status === 'On Leave' && daysToMark > 0 && React.createElement("div", {
-    className: "bg-yellow-50 p-4 rounded-xl border-2 border-yellow-300"
-  }, React.createElement("p", {
-    className: "font-semibold text-yellow-800"
-  }, "\uD83D\uDCC5 ", daysToMark, " day", daysToMark > 1 ? 's' : '', " will be marked as ", reason), React.createElement("p", {
-    className: "text-sm text-yellow-700 mt-1"
-  }, "From ", selectedDate, " to ", endDate)), status === 'Present' && React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "\uD83D\uDCCD GPS Location ", React.createElement("span", {
-    className: "text-red-500"
-  }, "*"), gpsVerified && React.createElement("span", {
-    className: "text-green-600 text-xs ml-2"
-  }, "\u2713 Verified")), React.createElement("div", {
-    className: "bg-blue-50 p-3 rounded-xl border-2 border-blue-200 mb-3"
-  }, React.createElement("p", {
-    className: "text-sm text-blue-800 font-semibold"
-  }, "\uD83D\uDCCD GPS verification is mandatory"), React.createElement("p", {
-    className: "text-xs text-blue-600 mt-1"
-  }, "You must fetch your GPS location to mark attendance. Manual entry is not allowed.")), React.createElement("div", {
-    className: "flex gap-2"
-  }, React.createElement("input", {
-    type: "text",
-    value: location,
-    readOnly: true,
-    className: "flex-1 border-2 px-4 py-3 rounded-xl bg-gray-100 cursor-not-allowed",
-    placeholder: "Click 'Get GPS Location' button \u2192"
-  }), React.createElement("button", {
-    onClick: getLocation,
-    disabled: fetchingLocation || gpsVerified,
-    className: `px-6 py-3 rounded-xl font-semibold disabled:opacity-50 transition-all ${gpsVerified ? 'bg-green-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`
-  }, fetchingLocation ? '📍 Fetching...' : gpsVerified ? '✓ GPS Verified' : '📍 Get GPS Location')), location && gpsVerified && React.createElement("div", {
-    className: "mt-2 p-2 bg-green-50 rounded-lg border border-green-200"
-  }, React.createElement("p", {
-    className: "text-sm text-green-700"
-  }, "\u2713 Location captured: ", location)), !gpsVerified && React.createElement("p", {
-    className: "text-xs text-red-500 mt-2"
-  }, "\u26A0\uFE0F Please click \"Get GPS Location\" to verify your location before submitting")), hasExistingAttendance && React.createElement("div", {
-    className: "bg-amber-50 p-4 rounded-xl border-2 border-amber-300"
-  }, React.createElement("p", {
-    className: "font-semibold text-amber-800"
-  }, "\uD83D\uDD12 Attendance already marked for ", selectedDate), React.createElement("p", {
-    className: "text-sm text-amber-700 mt-1"
-  }, "Once attendance is submitted, it cannot be modified. Please contact your admin if you need to make changes.")), React.createElement("button", {
-    onClick: handleSubmit,
-    disabled: submitting || hasExistingAttendance || status === 'Present' && !gpsVerified,
-    className: `w-full py-4 rounded-xl font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all ${hasExistingAttendance ? 'bg-gray-400 text-white' : status === 'Present' && !gpsVerified ? 'bg-red-400 text-white' : 'avanti-gradient text-white'}`
-  }, submitting ? 'Submitting...' : hasExistingAttendance ? '🔒 Already Marked (No Changes Allowed)' : status === 'Present' && !gpsVerified ? '📍 GPS Verification Required' : isDateRange && status === 'On Leave' ? `Submit Leave (${daysToMark} days)` : 'Submit Attendance'), todayRecord && React.createElement("div", {
-    className: "mt-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl"
-  }, React.createElement("h4", {
-    className: "font-bold text-green-800 mb-2"
-  }, "\u2713 Already Marked for ", selectedDate), React.createElement("p", null, React.createElement("strong", null, "Status:"), " ", todayRecord.status), React.createElement("p", null, React.createElement("strong", null, "Reason:"), " ", todayRecord.reason), todayRecord.compOffWorkedDate && React.createElement("p", null, React.createElement("strong", null, "Comp Off Worked Date:"), " ", todayRecord.compOffWorkedDate), React.createElement("p", null, React.createElement("strong", null, "Punch-in Time:"), " \u23F0 ", todayRecord.punchInTime || 'Not recorded'), React.createElement("p", null, React.createElement("strong", null, "Location:"), " ", todayRecord.location), todayRecord.gpsVerified && React.createElement("p", {
-    className: "text-xs text-green-600 mt-1"
-  }, "\u2713 GPS Verified")))));
 }

@@ -1626,855 +1626,6 @@ function InstallPrompt() {
     className: "fa-solid fa-xmark"
   })));
 }
-function StudentProfileForm({
-  currentUser,
-  onProfileUpdated
-}) {
-  const myId = currentUser.studentId || currentUser.id;
-  const [profile, setProfile] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    dob: '',
-    grade: currentUser.grade || '',
-    category: '',
-    stream: '',
-    school: currentUser.school || '',
-    fatherName: '',
-    motherName: '',
-    fatherOccupation: '',
-    fatherOccupationOther: '',
-    motherOccupation: '',
-    motherOccupationOther: '',
-    fatherEducation: '',
-    fatherEducationOther: '',
-    motherEducation: '',
-    motherEducationOther: '',
-    familyIncome: '',
-    address: '',
-    state: '',
-    stateOther: '',
-    district: '',
-    districtOther: '',
-    pincode: '',
-    whatsappNumber: '',
-    percentage10th: '',
-    percentage11th: ''
-  });
-  const [loading, setLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  useEffect(() => {
-    const fetchProfile = async () => {
-      const cacheKey = `studentProfile_${myId}`;
-      
-      // ✅ FIX: Load from cache first
-      try {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed.data) {
-            setProfile(prev => ({
-              ...prev,
-              grade: currentUser.grade || '',
-              school: currentUser.school || '',
-              ...parsed.data
-            }));
-            setLoading(false);
-          }
-        }
-      } catch (e) {}
-      
-      // ✅ FIX: Fetch with timeout
-      try {
-        const fetchPromise = db.collection('studentProfiles').doc(myId).get();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('timeout')), 8000)
-        );
-        
-        const docSnap = await Promise.race([fetchPromise, timeoutPromise]);
-        if (docSnap.exists) {
-          const profileData = docSnap.data();
-          const fullProfile = {
-            ...profile,
-            grade: currentUser.grade || '',
-            school: currentUser.school || '',
-            ...profileData
-          };
-          setProfile(fullProfile);
-          // Update cache
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify({
-              data: profileData, timestamp: Date.now()
-            }));
-          } catch (e) {}
-          if (onProfileUpdated) {
-            onProfileUpdated(fullProfile);
-          }
-        }
-        setLoading(false);
-      } catch (e) {
-        setLoading(false); // ✅ FIX: Always stop loading
-      }
-    };
-    fetchProfile();
-  }, [myId]);
-  const calculateCompletion = () => {
-    const requiredFields = ['firstName', 'lastName', 'email', 'phone', 'dob', 'grade', 'category', 'stream', 'school', 'fatherName', 'motherName', 'fatherOccupation', 'motherOccupation', 'fatherEducation', 'motherEducation', 'familyIncome', 'address', 'state', 'district', 'pincode', 'whatsappNumber', 'percentage10th'];
-    const filled = requiredFields.filter(field => profile[field] && String(profile[field]).trim() !== '').length;
-    return Math.round(filled / requiredFields.length * 100);
-  };
-  const handleSave = async () => {
-    try {
-      const savedProfile = {
-        ...profile,
-        studentId: myId,
-        updatedAt: new Date().toISOString()
-      };
-      await db.collection('studentProfiles').doc(myId).set(savedProfile);
-      if (onProfileUpdated) {
-        onProfileUpdated(savedProfile);
-      }
-      alert('✅ Profile saved successfully!');
-      return true;
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      alert('❌ Error saving profile: ' + error.message);
-      return false;
-    }
-  };
-  const handleToggleEdit = async () => {
-    if (isEditing) {
-      const saved = await handleSave();
-      if (saved) {
-        setIsEditing(false);
-      }
-    } else {
-      setIsEditing(true);
-    }
-  };
-  const completion = calculateCompletion();
-  const inputCls = (extra = '') => `w-full border-2 px-4 py-3 rounded-xl ${extra} ${!isEditing ? 'bg-gray-100 cursor-not-allowed' : ''}`;
-  const disabled = !isEditing;
-  if (loading) {
-    return React.createElement("div", {
-      className: "text-center py-8"
-    }, "Loading profile...");
-  }
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("div", {
-    className: "bg-gradient-to-r from-blue-500 to-purple-600 text-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("div", {
-    className: "flex justify-between items-start flex-wrap gap-4"
-  }, React.createElement("div", null, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "\uD83D\uDC64 My Profile"), React.createElement("div", {
-    className: "flex flex-wrap gap-2 mt-3"
-  }, React.createElement("span", {
-    className: "px-3 py-1 bg-white/30 text-white rounded-lg text-sm font-mono"
-  }, "Student ID: ", myId), React.createElement("span", {
-    className: "px-3 py-1 bg-white/30 text-white rounded-lg text-sm"
-  }, currentUser.school), React.createElement("span", {
-    className: "px-3 py-1 bg-white/30 text-white rounded-lg text-sm"
-  }, "Class ", currentUser.grade))), React.createElement("div", {
-    className: "flex items-center gap-4"
-  }, React.createElement("div", {
-    className: "text-right"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Profile Completion"), React.createElement("div", {
-    className: "text-3xl font-bold",
-    style: {
-      color: completion >= 80 ? '#86EFAC' : completion >= 50 ? '#FCD34D' : '#FCA5A5'
-    }
-  }, completion, "%")), React.createElement("button", {
-    onClick: handleToggleEdit,
-    className: "px-4 py-2 bg-white text-blue-600 rounded-xl font-semibold hover:bg-blue-50"
-  }, isEditing ? 'Save' : 'Edit')))), completion < 100 && React.createElement("div", {
-    className: "bg-orange-50 border-2 border-orange-300 p-4 rounded-xl"
-  }, React.createElement("p", {
-    className: "text-orange-800 font-semibold"
-  }, "\u26A0\uFE0F Click Edit, complete your profile and then press Save.")), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg space-y-6"
-  }, React.createElement("div", {
-    className: "border-4 border-blue-500 rounded-2xl p-6 bg-blue-50"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4 text-blue-800"
-  }, "\uD83D\uDCCB Personal Information"), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "First Name *"), React.createElement("input", {
-    type: "text",
-    value: profile.firstName,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      firstName: e.target.value
-    }),
-    className: inputCls()
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Last Name *"), React.createElement("input", {
-    type: "text",
-    value: profile.lastName,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      lastName: e.target.value
-    }),
-    className: inputCls()
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Email ID *"), React.createElement("input", {
-    type: "email",
-    value: profile.email,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      email: e.target.value
-    }),
-    className: inputCls()
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Phone Number *"), React.createElement("input", {
-    type: "tel",
-    value: profile.phone,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      phone: e.target.value
-    }),
-    className: inputCls()
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Date of Birth *"), React.createElement("input", {
-    type: "date",
-    value: profile.dob,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      dob: e.target.value
-    }),
-    className: inputCls()
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Class *"), React.createElement("select", {
-    value: profile.grade,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      grade: e.target.value
-    }),
-    className: inputCls()
-  }, React.createElement("option", {
-    value: ""
-  }, "Select"), React.createElement("option", {
-    value: "11"
-  }, "11th"), React.createElement("option", {
-    value: "12"
-  }, "12th"))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Category *"), React.createElement("select", {
-    value: profile.category,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      category: e.target.value
-    }),
-    className: inputCls()
-  }, React.createElement("option", {
-    value: ""
-  }, "Select"), CATEGORIES.map(c => React.createElement("option", {
-    key: c,
-    value: c
-  }, c)))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Stream *"), React.createElement("select", {
-    value: profile.stream,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      stream: e.target.value
-    }),
-    className: inputCls()
-  }, React.createElement("option", {
-    value: ""
-  }, "Select"), STREAMS.map(s => React.createElement("option", {
-    key: s,
-    value: s
-  }, s)))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "School *"), React.createElement("select", {
-    value: profile.school,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      school: e.target.value
-    }),
-    className: inputCls()
-  }, React.createElement("option", {
-    value: ""
-  }, "Select"), SCHOOLS.map(s => React.createElement("option", {
-    key: s,
-    value: s
-  }, s)))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "10th Overall Percentage *"), React.createElement("input", {
-    type: "number",
-    step: "0.01",
-    value: profile.percentage10th,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      percentage10th: e.target.value
-    }),
-    className: inputCls(),
-    placeholder: "e.g. 85.5"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "11th Overall Percentage (Optional)"), React.createElement("input", {
-    type: "number",
-    step: "0.01",
-    value: profile.percentage11th,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      percentage11th: e.target.value
-    }),
-    className: inputCls(),
-    placeholder: "e.g. 80.0"
-  })))), React.createElement("div", {
-    className: "border-4 border-purple-500 rounded-2xl p-6 bg-purple-50"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4 text-purple-800"
-  }, "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67\u200D\uD83D\uDC66 Parent Information"), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Father's Name *"), React.createElement("input", {
-    type: "text",
-    value: profile.fatherName,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      fatherName: e.target.value
-    }),
-    className: inputCls()
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Mother's Name *"), React.createElement("input", {
-    type: "text",
-    value: profile.motherName,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      motherName: e.target.value
-    }),
-    className: inputCls()
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Father's Occupation *"), React.createElement("select", {
-    value: profile.fatherOccupation,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      fatherOccupation: e.target.value,
-      fatherOccupationOther: ''
-    }),
-    className: inputCls()
-  }, React.createElement("option", {
-    value: ""
-  }, "Select Occupation"), OCCUPATIONS.map(o => React.createElement("option", {
-    key: o,
-    value: o
-  }, o))), profile.fatherOccupation === 'Others' && React.createElement("input", {
-    type: "text",
-    placeholder: "Please specify occupation",
-    value: profile.fatherOccupationOther,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      fatherOccupationOther: e.target.value
-    }),
-    className: inputCls('mt-2')
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Mother's Occupation *"), React.createElement("select", {
-    value: profile.motherOccupation,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      motherOccupation: e.target.value,
-      motherOccupationOther: ''
-    }),
-    className: inputCls()
-  }, React.createElement("option", {
-    value: ""
-  }, "Select Occupation"), OCCUPATIONS.map(o => React.createElement("option", {
-    key: o,
-    value: o
-  }, o))), profile.motherOccupation === 'Others' && React.createElement("input", {
-    type: "text",
-    placeholder: "Please specify occupation",
-    value: profile.motherOccupationOther,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      motherOccupationOther: e.target.value
-    }),
-    className: inputCls('mt-2')
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Father's Education *"), React.createElement("select", {
-    value: profile.fatherEducation,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      fatherEducation: e.target.value,
-      fatherEducationOther: ''
-    }),
-    className: inputCls()
-  }, React.createElement("option", {
-    value: ""
-  }, "Select Education"), EDUCATION_LEVELS.map(e => React.createElement("option", {
-    key: e,
-    value: e
-  }, e))), profile.fatherEducation === 'Others' && React.createElement("input", {
-    type: "text",
-    placeholder: "Please specify education",
-    value: profile.fatherEducationOther,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      fatherEducationOther: e.target.value
-    }),
-    className: inputCls('mt-2')
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Mother's Education *"), React.createElement("select", {
-    value: profile.motherEducation,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      motherEducation: e.target.value,
-      motherEducationOther: ''
-    }),
-    className: inputCls()
-  }, React.createElement("option", {
-    value: ""
-  }, "Select Education"), EDUCATION_LEVELS.map(e => React.createElement("option", {
-    key: e,
-    value: e
-  }, e))), profile.motherEducation === 'Others' && React.createElement("input", {
-    type: "text",
-    placeholder: "Please specify education",
-    value: profile.motherEducationOther,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      motherEducationOther: e.target.value
-    }),
-    className: inputCls('mt-2')
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Family Income *"), React.createElement("select", {
-    value: profile.familyIncome,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      familyIncome: e.target.value
-    }),
-    className: inputCls()
-  }, React.createElement("option", {
-    value: ""
-  }, "Select Income Range"), INCOME_RANGES.map(i => React.createElement("option", {
-    key: i,
-    value: i
-  }, i)))))), React.createElement("div", {
-    className: "border-4 border-green-500 rounded-2xl p-6 bg-green-50"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4 text-green-800"
-  }, "\uD83D\uDCEE Contact Details"), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, React.createElement("div", {
-    className: "md:col-span-2"
-  }, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Address *"), React.createElement("input", {
-    type: "text",
-    value: profile.address,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      address: e.target.value
-    }),
-    className: inputCls()
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "State *"), React.createElement("select", {
-    value: profile.state,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      state: e.target.value,
-      district: '',
-      districtOther: ''
-    }),
-    className: inputCls()
-  }, React.createElement("option", {
-    value: ""
-  }, "Select State"), INDIAN_STATES.map(s => React.createElement("option", {
-    key: s,
-    value: s
-  }, s)), React.createElement("option", {
-    value: "Others"
-  }, "Others")), profile.state === 'Others' && React.createElement("input", {
-    type: "text",
-    placeholder: "Please specify state",
-    value: profile.stateOther,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      stateOther: e.target.value
-    }),
-    className: inputCls('mt-2')
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "District *"), React.createElement("select", {
-    value: profile.district,
-    disabled: disabled || !profile.state || profile.state === 'Others',
-    onChange: e => setProfile({
-      ...profile,
-      district: e.target.value,
-      districtOther: ''
-    }),
-    className: inputCls()
-  }, React.createElement("option", {
-    value: ""
-  }, "Select District"), profile.state && profile.state !== 'Others' && STATE_DISTRICTS[profile.state] && STATE_DISTRICTS[profile.state].map(d => React.createElement("option", {
-    key: d,
-    value: d
-  }, d)), React.createElement("option", {
-    value: "Others"
-  }, "Others")), profile.district === 'Others' && React.createElement("input", {
-    type: "text",
-    placeholder: "Please specify district",
-    value: profile.districtOther,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      districtOther: e.target.value
-    }),
-    className: inputCls('mt-2')
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Pincode *"), React.createElement("input", {
-    type: "text",
-    value: profile.pincode,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      pincode: e.target.value
-    }),
-    className: inputCls()
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "WhatsApp Number *"), React.createElement("input", {
-    type: "text",
-    value: profile.whatsappNumber,
-    disabled: disabled,
-    onChange: e => setProfile({
-      ...profile,
-      whatsappNumber: e.target.value
-    }),
-    className: inputCls()
-  }))))), React.createElement("div", {
-    className: "border-4 border-indigo-500 rounded-2xl p-6 bg-indigo-50"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-4"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold text-indigo-800"
-  }, "\uD83C\uDF93 Academic Information"), React.createElement("button", {
-    onClick: handleToggleEdit,
-    className: "px-4 py-2 rounded-xl font-semibold text-sm bg-indigo-600 text-white"
-  }, isEditing ? 'Save' : 'Edit')), React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "You can update your marks / percentages here whenever results are updated."), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4 mt-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "10th Percentage *"), React.createElement("input", {
-    type: "number",
-    step: "0.01",
-    className: inputCls(),
-    disabled: !isEditing,
-    value: profile.percentage10th,
-    onChange: e => setProfile({
-      ...profile,
-      percentage10th: e.target.value
-    })
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "11th Percentage (Optional)"), React.createElement("input", {
-    type: "number",
-    step: "0.01",
-    className: inputCls(),
-    disabled: !isEditing,
-    value: profile.percentage11th,
-    onChange: e => setProfile({
-      ...profile,
-      percentage11th: e.target.value
-    })
-  })))));
-}
-function StudentExamRegistration({
-  currentUser
-}) {
-  const myId = currentUser.studentId || currentUser.id;
-  const myGrade = currentUser.grade;
-  const [exams, setExams] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedExams, setExpandedExams] = useState(new Set());
-  const [editingExams, setEditingExams] = useState(new Set());
-  useEffect(() => {
-    const fetchExams = async () => {
-      try {
-        const docSnap = await db.collection('studentExamRegistrations').doc(myId).get();
-        if (docSnap.exists) {
-          setExams(docSnap.data().exams || []);
-        }
-        setLoading(false);
-      } catch (e) {
-        console.error('Error fetching exam registrations:', e);
-        setLoading(false);
-      }
-    };
-    fetchExams();
-  }, [myId]);
-  const handleAddExam = () => {
-    const newExams = [...exams, {
-      examName: '',
-      registrationStatus: 'No',
-      registrationNumber: '',
-      password: '',
-      emailUsed: '',
-      phoneUsed: '',
-      reasonNotCompleted: '',
-      needSupport: 'No',
-      supportType: ''
-    }];
-    setExams(newExams);
-    const newIndex = newExams.length - 1;
-    setExpandedExams(new Set([...expandedExams, newIndex]));
-    setEditingExams(new Set([...editingExams, newIndex]));
-  };
-  const handleRemoveExam = index => {
-    const updated = [...exams];
-    updated.splice(index, 1);
-    setExams(updated);
-    const newExpanded = new Set(expandedExams);
-    const newEditing = new Set(editingExams);
-    newExpanded.delete(index);
-    newEditing.delete(index);
-    setExpandedExams(newExpanded);
-    setEditingExams(newEditing);
-  };
-  const handleExamChange = (index, field, value) => {
-    const updated = [...exams];
-    updated[index][field] = value;
-    setExams(updated);
-  };
-  const toggleExpand = index => {
-    const newExpanded = new Set(expandedExams);
-    if (newExpanded.has(index)) {
-      newExpanded.delete(index);
-    } else {
-      newExpanded.add(index);
-    }
-    setExpandedExams(newExpanded);
-  };
-  const toggleEdit = index => {
-    const newEditing = new Set(editingExams);
-    const newExpanded = new Set(expandedExams);
-    if (newEditing.has(index)) {
-      newEditing.delete(index);
-    } else {
-      newEditing.add(index);
-      newExpanded.add(index);
-    }
-    setEditingExams(newEditing);
-    setExpandedExams(newExpanded);
-  };
-  const handleSave = async () => {
-    try {
-      await db.collection('studentExamRegistrations').doc(myId).set({
-        studentId: myId,
-        studentName: currentUser.name,
-        school: currentUser.school,
-        grade: myGrade,
-        exams,
-        updatedAt: new Date().toISOString()
-      });
-      alert('✅ Exam registrations saved successfully!');
-      setExpandedExams(new Set());
-      setEditingExams(new Set());
-    } catch (e) {
-      alert('Failed to save: ' + e.message);
-    }
-  };
-  const examList = myGrade === '12' ? EXAMS_12TH : EXAMS_11TH;
-  if (loading) {
-    return React.createElement("div", {
-      className: "text-center py-8"
-    }, "Loading exam registrations...");
-  }
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "\uD83D\uDCDD Exam Registration"), React.createElement("button", {
-    onClick: handleAddExam,
-    className: "px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold"
-  }, "+ Add Exam")), myGrade === '11' && React.createElement("div", {
-    className: "bg-blue-50 border-2 border-blue-300 p-4 rounded-xl"
-  }, React.createElement("p", {
-    className: "font-semibold text-blue-800"
-  }, "\uD83D\uDCCC Class 11: Please list the competitive exams you're interested in appearing for in the future.")), exams.length === 0 ? React.createElement("div", {
-    className: "bg-white p-8 rounded-2xl text-center"
-  }, React.createElement("p", {
-    className: "text-gray-600"
-  }, "No exam registrations added yet. Click \"+ Add Exam\" to start.")) : exams.map((exam, index) => {
-    const isExpanded = expandedExams.has(index);
-    const isEditing = editingExams.has(index);
-    return React.createElement("div", {
-      key: index,
-      className: "bg-white p-6 rounded-2xl shadow-lg"
-    }, React.createElement("div", {
-      className: "flex justify-between items-center mb-4"
-    }, React.createElement("div", {
-      className: "flex items-center gap-3"
-    }, React.createElement("button", {
-      onClick: () => toggleExpand(index),
-      className: "text-2xl"
-    }, isExpanded ? '▼' : '▶'), React.createElement("h3", {
-      className: "text-xl font-bold"
-    }, exam.examName || `Exam ${index + 1}`), exam.registrationStatus === 'Yes' && React.createElement("span", {
-      className: "px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-bold"
-    }, "\u2713 Completed")), React.createElement("div", {
-      className: "flex gap-2"
-    }, React.createElement("button", {
-      onClick: () => toggleEdit(index),
-      className: "px-4 py-2 bg-blue-500 text-white rounded-lg"
-    }, isEditing ? '💾 Save' : '✏️ Edit'), React.createElement("button", {
-      onClick: () => handleRemoveExam(index),
-      className: "px-4 py-2 bg-red-500 text-white rounded-lg"
-    }, "Remove"))), isExpanded && React.createElement("div", {
-      className: "grid md:grid-cols-2 gap-4"
-    }, React.createElement("div", {
-      className: "md:col-span-2"
-    }, React.createElement("label", {
-      className: "block text-sm font-bold mb-2"
-    }, "Exam Name *"), React.createElement("select", {
-      value: exam.examName,
-      onChange: e => handleExamChange(index, 'examName', e.target.value),
-      disabled: !isEditing,
-      className: "w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
-    }, React.createElement("option", {
-      value: ""
-    }, "Select Exam"), examList.map(e => React.createElement("option", {
-      key: e,
-      value: e
-    }, e)))), myGrade === '12' && React.createElement(React.Fragment, null, React.createElement("div", {
-      className: "md:col-span-2"
-    }, React.createElement("label", {
-      className: "block text-sm font-bold mb-2"
-    }, "Registration Completed? *"), React.createElement("select", {
-      value: exam.registrationStatus,
-      onChange: e => handleExamChange(index, 'registrationStatus', e.target.value),
-      disabled: !isEditing,
-      className: "w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
-    }, React.createElement("option", {
-      value: "No"
-    }, "No"), React.createElement("option", {
-      value: "Partially"
-    }, "Partially Completed"), React.createElement("option", {
-      value: "Yes"
-    }, "Yes - Fully Completed"))), exam.registrationStatus === 'Yes' && React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("label", {
-      className: "block text-sm font-bold mb-2"
-    }, "Registration Number *"), React.createElement("input", {
-      type: "text",
-      value: exam.registrationNumber,
-      onChange: e => handleExamChange(index, 'registrationNumber', e.target.value),
-      disabled: !isEditing,
-      className: "w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
-    })), React.createElement("div", null, React.createElement("label", {
-      className: "block text-sm font-bold mb-2"
-    }, "Password *"), React.createElement("input", {
-      type: "text",
-      value: exam.password,
-      onChange: e => handleExamChange(index, 'password', e.target.value),
-      disabled: !isEditing,
-      className: "w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
-    })), React.createElement("div", null, React.createElement("label", {
-      className: "block text-sm font-bold mb-2"
-    }, "Email Used for Registration *"), React.createElement("input", {
-      type: "email",
-      value: exam.emailUsed,
-      onChange: e => handleExamChange(index, 'emailUsed', e.target.value),
-      disabled: !isEditing,
-      className: "w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
-    })), React.createElement("div", null, React.createElement("label", {
-      className: "block text-sm font-bold mb-2"
-    }, "Phone Number Used *"), React.createElement("input", {
-      type: "tel",
-      value: exam.phoneUsed,
-      onChange: e => handleExamChange(index, 'phoneUsed', e.target.value),
-      disabled: !isEditing,
-      className: "w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
-    }))), exam.registrationStatus === 'No' && React.createElement("div", {
-      className: "md:col-span-2"
-    }, React.createElement("label", {
-      className: "block text-sm font-bold mb-2"
-    }, "Why is the registration not completed? *"), React.createElement("textarea", {
-      value: exam.reasonNotCompleted,
-      onChange: e => handleExamChange(index, 'reasonNotCompleted', e.target.value),
-      disabled: !isEditing,
-      className: "w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed",
-      rows: "3"
-    })), React.createElement("div", {
-      className: "md:col-span-2"
-    }, React.createElement("label", {
-      className: "block text-sm font-bold mb-2"
-    }, "Do you need help/support to complete this application? *"), React.createElement("select", {
-      value: exam.needSupport,
-      onChange: e => handleExamChange(index, 'needSupport', e.target.value),
-      disabled: !isEditing,
-      className: "w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
-    }, React.createElement("option", {
-      value: "No"
-    }, "No"), React.createElement("option", {
-      value: "Yes"
-    }, "Yes"))), exam.needSupport === 'Yes' && React.createElement("div", {
-      className: "md:col-span-2"
-    }, React.createElement("label", {
-      className: "block text-sm font-bold mb-2"
-    }, "What kind of help do you need? *"), React.createElement("textarea", {
-      value: exam.supportType,
-      onChange: e => handleExamChange(index, 'supportType', e.target.value),
-      disabled: !isEditing,
-      className: "w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed",
-      rows: "3",
-      placeholder: "Please describe the support you need..."
-    })))));
-  }), React.createElement("button", {
-    onClick: handleSave,
-    className: "w-full avanti-gradient text-white py-4 rounded-xl font-bold text-xl"
-  }, "\uD83D\uDCBE Save Exam Registrations"));
-}
 function BarcodeScanner({
   onScanSuccess,
   onClose
@@ -3832,719 +2983,6 @@ function AssetManagement({
       setSelectedAsset(null);
     }
   }));
-}
-function StudentAssets({
-  currentUser
-}) {
-  const [myAssets, setMyAssets] = useState([]);
-  const [assetHistory, setAssetHistory] = useState([]);
-  const [myRequests, setMyRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [availableBooks, setAvailableBooks] = useState([]);
-  const myId = currentUser.studentId || currentUser.id;
-  const mySchool = currentUser.school;
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const currentSnap = await db.collection('assetAssignments').where('studentId', '==', String(myId)).where('status', 'in', ['active', 'overdue']).get();
-        setMyAssets(currentSnap.docs.map(d => ({
-          ...d.data(),
-          docId: d.id
-        })));
-        const historySnap = await db.collection('assetAssignments').where('studentId', '==', String(myId)).where('status', '==', 'returned').get();
-        setAssetHistory(historySnap.docs.map(d => ({
-          ...d.data(),
-          docId: d.id
-        })));
-        const requestsSnap = await db.collection('bookRequests').where('studentId', '==', String(myId)).get();
-        setMyRequests(requestsSnap.docs.map(d => ({
-          ...d.data(),
-          docId: d.id
-        })));
-        const booksSnap = await db.collection('assets').where('school', '==', mySchool).where('status', '==', 'available').where('assetType', '==', 'book').get();
-        setAvailableBooks(booksSnap.docs.map(d => ({
-          ...d.data(),
-          docId: d.id
-        })));
-        setLoading(false);
-      } catch (error) {
-        console.error('Error:', error);
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [myId, mySchool]);
-  const handleRequestBook = async requestData => {
-    try {
-      const request = {
-        ...requestData,
-        studentId: String(myId),
-        studentName: currentUser.name,
-        school: mySchool,
-        requestDate: new Date().toISOString(),
-        status: 'pending',
-        processedBy: null,
-        processedDate: null,
-        remarks: '',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      };
-      const docRef = await db.collection('bookRequests').add(request);
-      setMyRequests([...myRequests, {
-        ...request,
-        docId: docRef.id
-      }]);
-      setShowRequestModal(false);
-      alert('Request submitted!');
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Error submitting request.');
-    }
-  };
-  if (loading) return React.createElement("div", {
-    className: "text-center py-8"
-  }, "Loading...");
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("h2", {
-    className: "text-2xl font-bold"
-  }, "\uD83D\uDCDA My Assets"), React.createElement("button", {
-    onClick: () => setShowRequestModal(true),
-    className: "px-4 py-2 avanti-gradient text-white rounded-xl font-semibold"
-  }, "\uD83D\uDCDD Request Book")), React.createElement("div", {
-    className: "bg-white p-6 rounded-xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "font-bold text-xl mb-4"
-  }, "\uD83D\uDCE6 Currently With Me"), myAssets.length === 0 ? React.createElement("p", {
-    className: "text-gray-500 text-center py-4"
-  }, "No assets assigned to you.") : React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, myAssets.map(asset => {
-    return React.createElement("div", {
-      key: asset.docId,
-      className: `asset-card ${asset.assetType}`
-    }, React.createElement("div", {
-      className: "flex justify-between items-start mb-2"
-    }, React.createElement("span", {
-      className: `asset-badge ${asset.assetType === 'book' ? 'badge-available' : 'badge-assigned'}`
-    }, asset.assetType === 'book' ? '📚 Book' : '💻 Chromebook')), React.createElement("h4", {
-      className: "font-bold text-lg"
-    }, asset.assetTitle), React.createElement("p", {
-      className: "text-sm text-gray-600"
-    }, "Assigned: ", new Date(asset.assignedDate).toLocaleDateString()));
-  }))), React.createElement("div", {
-    className: "bg-white p-6 rounded-xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "font-bold text-xl mb-4"
-  }, "\uD83D\uDCDD My Requests"), myRequests.length === 0 ? React.createElement("p", {
-    className: "text-gray-500 text-center py-4"
-  }, "No requests yet.") : React.createElement("div", {
-    className: "space-y-3"
-  }, myRequests.sort((a, b) => new Date(b.requestDate) - new Date(a.requestDate)).map(request => React.createElement("div", {
-    key: request.docId,
-    className: `request-card ${request.status}`
-  }, React.createElement("div", {
-    className: "flex justify-between items-start"
-  }, React.createElement("div", null, React.createElement("h4", {
-    className: "font-bold"
-  }, request.requestType === 'existing' ? request.assetTitle : request.requestedTitle), React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "Requested: ", new Date(request.requestDate).toLocaleDateString())), React.createElement("span", {
-    className: `asset-badge ${request.status === 'pending' ? 'badge-assigned' : request.status === 'approved' ? 'badge-available' : 'badge-overdue'}`
-  }, request.status.toUpperCase())), request.remarks && React.createElement("p", {
-    className: "text-sm mt-2 italic text-gray-600"
-  }, "\"", request.remarks, "\""))))), React.createElement("div", {
-    className: "bg-white p-6 rounded-xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "font-bold text-xl mb-4"
-  }, "\uD83D\uDCDC Previously Borrowed"), assetHistory.length === 0 ? React.createElement("p", {
-    className: "text-gray-500 text-center py-4"
-  }, "No history yet.") : React.createElement("div", {
-    className: "overflow-x-auto"
-  }, React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "avanti-gradient-light"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Asset"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Type"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Borrowed"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Returned"))), React.createElement("tbody", null, assetHistory.sort((a, b) => new Date(b.returnedDate) - new Date(a.returnedDate)).map(item => React.createElement("tr", {
-    key: item.docId,
-    className: "border-b"
-  }, React.createElement("td", {
-    className: "p-3 font-semibold"
-  }, item.assetTitle), React.createElement("td", {
-    className: "p-3"
-  }, item.assetType), React.createElement("td", {
-    className: "p-3 text-sm"
-  }, new Date(item.assignedDate).toLocaleDateString()), React.createElement("td", {
-    className: "p-3 text-sm"
-  }, new Date(item.returnedDate).toLocaleDateString()))))))), showRequestModal && React.createElement(BookRequestModal, {
-    availableBooks: availableBooks,
-    onSubmit: handleRequestBook,
-    onClose: () => setShowRequestModal(false)
-  }));
-}
-function BookRequestModal({
-  availableBooks,
-  onSubmit,
-  onClose
-}) {
-  const [requestType, setRequestType] = useState('existing');
-  const [selectedBook, setSelectedBook] = useState('');
-  const [newBookTitle, setNewBookTitle] = useState('');
-  const [newBookAuthor, setNewBookAuthor] = useState('');
-  const [reason, setReason] = useState('');
-  const handleSubmit = e => {
-    e.preventDefault();
-    if (requestType === 'existing') {
-      if (!selectedBook) {
-        alert('Please select a book');
-        return;
-      }
-      const book = availableBooks.find(b => b.docId === selectedBook);
-      onSubmit({
-        requestType: 'existing',
-        assetId: selectedBook,
-        assetTitle: book?.title || '',
-        reason
-      });
-    } else {
-      if (!newBookTitle.trim()) {
-        alert('Please enter book title');
-        return;
-      }
-      onSubmit({
-        requestType: 'new',
-        requestedTitle: newBookTitle.trim(),
-        requestedAuthor: newBookAuthor.trim(),
-        reason
-      });
-    }
-  };
-  return React.createElement("div", {
-    className: "modal-overlay",
-    onClick: onClose
-  }, React.createElement("div", {
-    className: "modal-content",
-    onClick: e => e.stopPropagation()
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-4"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold"
-  }, "\uD83D\uDCDD Request a Book"), React.createElement("button", {
-    onClick: onClose,
-    className: "text-2xl text-gray-500"
-  }, "\u2715")), React.createElement("form", {
-    onSubmit: handleSubmit,
-    className: "space-y-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Request Type"), React.createElement("div", {
-    className: "flex gap-4"
-  }, React.createElement("label", {
-    className: "flex items-center gap-2 cursor-pointer"
-  }, React.createElement("input", {
-    type: "radio",
-    value: "existing",
-    checked: requestType === 'existing',
-    onChange: e => setRequestType(e.target.value),
-    className: "w-4 h-4"
-  }), React.createElement("span", null, "From Library")), React.createElement("label", {
-    className: "flex items-center gap-2 cursor-pointer"
-  }, React.createElement("input", {
-    type: "radio",
-    value: "new",
-    checked: requestType === 'new',
-    onChange: e => setRequestType(e.target.value),
-    className: "w-4 h-4"
-  }), React.createElement("span", null, "Request New Book")))), requestType === 'existing' ? React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Select Book *"), availableBooks.length === 0 ? React.createElement("p", {
-    className: "text-gray-500 italic"
-  }, "No books available.") : React.createElement("select", {
-    value: selectedBook,
-    onChange: e => setSelectedBook(e.target.value),
-    className: "w-full border-2 px-4 py-3 rounded-xl",
-    size: 5
-  }, React.createElement("option", {
-    value: ""
-  }, "-- Select --"), availableBooks.map(book => React.createElement("option", {
-    key: book.docId,
-    value: book.docId
-  }, book.title, " ", book.author ? `by ${book.author}` : '')))) : React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Book Title *"), React.createElement("input", {
-    type: "text",
-    value: newBookTitle,
-    onChange: e => setNewBookTitle(e.target.value),
-    placeholder: "Enter book title",
-    className: "w-full border-2 px-4 py-3 rounded-xl",
-    required: true
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Author (Optional)"), React.createElement("input", {
-    type: "text",
-    value: newBookAuthor,
-    onChange: e => setNewBookAuthor(e.target.value),
-    placeholder: "Enter author",
-    className: "w-full border-2 px-4 py-3 rounded-xl"
-  }))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Reason (Optional)"), React.createElement("textarea", {
-    value: reason,
-    onChange: e => setReason(e.target.value),
-    placeholder: "Why do you need this book?",
-    className: "w-full border-2 px-4 py-3 rounded-xl",
-    rows: 3
-  })), React.createElement("div", {
-    className: "flex gap-3 pt-4"
-  }, React.createElement("button", {
-    type: "button",
-    onClick: onClose,
-    className: "flex-1 px-4 py-3 bg-gray-200 rounded-xl font-semibold"
-  }, "Cancel"), React.createElement("button", {
-    type: "submit",
-    className: "flex-1 px-4 py-3 avanti-gradient text-white rounded-xl font-semibold"
-  }, "Submit")))));
-}
-function StudentDashboard({
-  currentUser,
-  handleLogout
-}) {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [loading, setLoading] = useState(true);
-  const [profileLoaded, setProfileLoaded] = useState(false);
-  const [curriculum, setCurriculum] = useState({});
-  const [chapterProgress, setChapterProgress] = useState({});
-  const [studentAttendance, setStudentAttendance] = useState([]);
-  const [teachers, setTeachers] = useState([]);
-  const [studentProfile, setStudentProfile] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    dob: '',
-    grade: '',
-    category: '',
-    stream: '',
-    school: '',
-    fatherName: '',
-    motherName: '',
-    fatherOccupation: '',
-    motherOccupation: '',
-    fatherEducation: '',
-    motherEducation: '',
-    familyIncome: '',
-    address: '',
-    state: '',
-    district: '',
-    pincode: '',
-    whatsappNumber: '',
-    percentage10th: ''
-  });
-  const [examRegistrations, setExamRegistrations] = useState(null);
-  const [selectedTeacher, setSelectedTeacher] = useState(null);
-  const [showTeacherProfile, setShowTeacherProfile] = useState(false);
-  const mySchool = currentUser.school;
-  const myGrade = currentUser.grade;
-  const myId = currentUser.studentId || currentUser.id;
-  useEffect(() => {
-    const fetchData = async () => {
-      const teacherCacheKey = `teachers_${mySchool}`;
-      let hasLoadedFromCache = false;
-      
-      // ✅ FIX: Load ALL cached data FIRST (instant display)
-      try {
-        const cachedTeachers = localStorage.getItem(teacherCacheKey);
-        if (cachedTeachers) {
-          const parsed = JSON.parse(cachedTeachers);
-          if (parsed.data && Array.isArray(parsed.data) && parsed.data.length > 0) {
-            setTeachers(parsed.data);
-            hasLoadedFromCache = true;
-          }
-        }
-      } catch (e) {}
-      
-      try {
-        const cachedCurr = localStorage.getItem(`curriculum_${mySchool}_${myGrade}`);
-        if (cachedCurr) {
-          const parsed = JSON.parse(cachedCurr);
-          if (parsed.data) {
-            setCurriculum(parsed.data);
-            hasLoadedFromCache = true;
-          }
-        }
-      } catch (e) {}
-      
-      try {
-        const cachedAtt = localStorage.getItem(`attendance_${myId}`);
-        if (cachedAtt) {
-          const parsed = JSON.parse(cachedAtt);
-          if (parsed.data) {
-            setStudentAttendance(parsed.data);
-          }
-        }
-      } catch (e) {}
-      
-      // ✅ FIX: Show UI immediately after loading cache
-      setLoading(false);
-      
-      // ✅ FIX: Helper with shorter timeout for student queries
-      const queryWithTimeout = (promise, ms = 8000) => {
-        return Promise.race([
-          promise,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
-        ]);
-      };
-      
-      // ✅ FIX: Fetch teachers FIRST with priority (most visible on dashboard)
-      try {
-        const [teachersResult, apcsResult] = await Promise.allSettled([
-          queryWithTimeout(db.collection('teachers').where('school', '==', mySchool).get(), 6000),
-          queryWithTimeout(db.collection('apcs').where('school', '==', mySchool).get(), 6000)
-        ]);
-        if (teachersResult.status !== 'fulfilled' && apcsResult.status !== 'fulfilled') {
-          throw new Error('Unable to load staff');
-        }
-        const teacherDocs = teachersResult.status === 'fulfilled' ? teachersResult.value.docs.map(d => ({
-          ...d.data(),
-          docId: d.id
-        })) : [];
-        const apcDocs = apcsResult.status === 'fulfilled' ? apcsResult.value.docs.map(d => ({
-          ...d.data(),
-          docId: d.id,
-          id: d.id,
-          role: 'apc',
-          userType: 'apc',
-          subject: d.data().subject || 'APC'
-        })) : [];
-        const teachersData = dedupeStaffMembers([...teacherDocs, ...apcDocs]);
-        setTeachers(teachersData);
-        try {
-          localStorage.setItem(teacherCacheKey, JSON.stringify({
-            data: teachersData,
-            timestamp: Date.now(),
-            school: mySchool
-          }));
-        } catch (e) {}
-      } catch (e) {
-        // Keep cached data if query fails
-      }
-      
-      // ✅ FIX: Load other data in background (non-blocking)
-      Promise.all([
-        queryWithTimeout(db.collection('curriculum').get(), 10000).then(snap => {
-          const currMap = {};
-          snap.docs.forEach(doc => { currMap[doc.id] = doc.data(); });
-          setCurriculum(currMap);
-          try {
-            localStorage.setItem(`curriculum_${mySchool}_${myGrade}`, JSON.stringify({
-              data: currMap, timestamp: Date.now()
-            }));
-          } catch (e) {}
-        }).catch(() => {}),
-        
-        queryWithTimeout(db.collection('chapterProgress').get(), 10000).then(snap => {
-          const progressMap = {};
-          snap.docs.forEach(d => { progressMap[d.id] = d.data(); });
-          setChapterProgress(progressMap);
-        }).catch(() => {}),
-        
-        queryWithTimeout(
-          db.collection('studentAttendance').where('studentId', '==', String(myId)).get(),
-          10000
-        ).then(snap => {
-          const attendanceData = snap.docs.map(d => ({
-            ...d.data(), docId: d.id
-          })).sort((a, b) => b.date.localeCompare(a.date));
-          setStudentAttendance(attendanceData);
-          try {
-            localStorage.setItem(`attendance_${myId}`, JSON.stringify({
-              data: attendanceData, timestamp: Date.now()
-            }));
-          } catch (e) {}
-        }).catch(() => {}),
-        
-        queryWithTimeout(
-          db.collection('studentExamRegistrations').doc(myId).get(),
-          8000
-        ).then(snap => {
-          if (snap.exists) setExamRegistrations(snap.data());
-        }).catch(() => {})
-      ]);
-    };
-    
-    fetchData();
-  }, [mySchool, myGrade, myId]);
-  const calculateCompletion = () => {
-    const requiredFields = ['firstName', 'lastName', 'email', 'phone', 'dob', 'grade', 'category', 'stream', 'school', 'fatherName', 'motherName', 'fatherOccupation', 'motherOccupation', 'fatherEducation', 'motherEducation', 'familyIncome', 'address', 'state', 'district', 'pincode', 'whatsappNumber', 'percentage10th'];
-    const filled = requiredFields.filter(field => studentProfile[field] && String(studentProfile[field]).trim() !== '').length;
-    return Math.round(filled / requiredFields.length * 100);
-  };
-  useEffect(() => {
-    if (!myId) return;
-    const loadProfile = async () => {
-      const cacheKey = `studentProfile_${myId}`;
-      
-      // ✅ FIX: Load from cache FIRST (instant)
-      try {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed.data) {
-            setStudentProfile(prev => ({ ...prev, ...parsed.data }));
-            setProfileLoaded(true);
-          }
-        }
-      } catch (e) {}
-      
-      // ✅ FIX: Fetch with timeout to prevent hanging
-      try {
-        const fetchPromise = db.collection('studentProfiles').doc(myId).get();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('timeout')), 8000)
-        );
-        
-        const docSnap = await Promise.race([fetchPromise, timeoutPromise]);
-        if (docSnap.exists) {
-          const profileData = docSnap.data();
-          setStudentProfile(prev => ({ ...prev, ...profileData }));
-          setProfileLoaded(true);
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify({
-              data: profileData,
-              timestamp: Date.now()
-            }));
-          } catch (e) {}
-        } else {
-          setProfileLoaded(true);
-        }
-      } catch (err) {
-        // ✅ FIX: Always mark as loaded even on error/timeout
-        setProfileLoaded(true);
-      }
-    };
-    loadProfile();
-  }, [myId]);
-  const handleTeacherClick = teacher => {
-    setSelectedTeacher(teacher);
-    setShowTeacherProfile(true);
-  };
-  const activeTeachers = teachers.filter(t => !t.isArchived && !isApcStaff(t));
-  const archivedTeachers = teachers.filter(t => t.isArchived && !isApcStaff(t));
-  const apcStaff = teachers.filter(t => !t.isArchived && isApcStaff(t));
-  const profileCompletion = calculateCompletion();
-  if (loading) {
-    return React.createElement("div", {
-      className: "text-center py-8"
-    }, "Loading profile...");
-  }
-  return React.createElement("div", {
-    className: "min-h-screen bg-gray-50 flex flex-col"
-  }, React.createElement("nav", {
-    className: "avanti-gradient shadow-lg sticky top-0 z-50"
-  }, React.createElement("div", {
-    className: "max-w-7xl mx-auto px-4 py-4"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("div", {
-    className: "flex items-center gap-3"
-  }, React.createElement("img", {
-    src: AVANTI_LOGO,
-    alt: "Avanti",
-    className: "w-12 h-12"
-  }), React.createElement("div", null, React.createElement("h1", {
-    className: "text-2xl font-bold text-white"
-  }, "Student Dashboard"), React.createElement("p", {
-    className: "text-sm text-white opacity-90"
-  }, mySchool))), React.createElement("div", {
-    className: "flex items-center gap-4"
-  }, React.createElement("div", {
-    className: "text-right hidden sm:block"
-  }, React.createElement("p", {
-    className: "text-white font-semibold"
-  }, currentUser.name), React.createElement("p", {
-    className: "text-sm text-white opacity-90"
-  }, "Class ", myGrade, " \u2022 ID: ", myId)), React.createElement("button", {
-    onClick: handleLogout,
-    className: "px-4 py-2 bg-white text-gray-800 rounded-xl font-semibold"
-  }, "Logout"))))), profileLoaded && profileCompletion < 100 && React.createElement("div", {
-    className: "bg-red-500 text-white text-center py-3 px-4"
-  }, React.createElement("p", {
-    className: "font-bold"
-  }, "\u26A0\uFE0F Your profile is ", profileCompletion, "% complete. Please complete your profile!")), React.createElement("div", {
-    className: "flex-1 max-w-7xl mx-auto px-4 py-6 w-full"
-  }, React.createElement("div", {
-    className: "flex gap-3 mb-6 overflow-x-auto pb-2"
-  }, ['dashboard', 'profile', 'attendance', 'assets', 'exams'].map(tab => React.createElement("button", {
-    key: tab,
-    onClick: () => setActiveTab(tab),
-    className: `px-6 py-3 rounded-xl font-semibold whitespace-nowrap ${activeTab === tab ? 'avanti-gradient text-white' : 'bg-white'}`
-  }, tab === 'dashboard' && '📊 Dashboard', tab === 'profile' && '👤 My Profile', tab === 'attendance' && '✅ Attendance', tab === 'assets' && '📦 My Assets', tab === 'exams' && '📝 Exam Registration'))), activeTab === 'dashboard' && React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "Welcome, ", currentUser.name, "! \uD83D\uDC4B"), React.createElement("div", {
-    className: "grid md:grid-cols-5 gap-4"
-  }, React.createElement("div", {
-    className: "stat-card bg-blue-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "My School"), React.createElement("div", {
-    className: "text-xl font-bold"
-  }, mySchool)), React.createElement("div", {
-    className: "stat-card bg-green-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "My Class"), React.createElement("div", {
-    className: "text-2xl font-bold"
-  }, "Class ", myGrade)), React.createElement("div", {
-    className: "stat-card bg-purple-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Profile Complete"), React.createElement("div", {
-    className: "text-2xl font-bold"
-  }, profileCompletion, "%")), React.createElement("div", {
-    className: "stat-card bg-green-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Days Present"), React.createElement("div", {
-    className: "text-2xl font-bold"
-  }, studentAttendance.filter(a => a.status === 'Present').length)), React.createElement("div", {
-    className: "stat-card bg-red-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Days Absent"), React.createElement("div", {
-    className: "text-2xl font-bold"
-  }, studentAttendance.filter(a => a.status === 'Absent').length))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, "\uD83D\uDC68\u200D\uD83C\uDFEB My Teachers"), activeTeachers.length === 0 && archivedTeachers.length === 0 && apcStaff.length === 0 ? React.createElement("p", {
-    className: "text-gray-500 text-center py-4"
-  }, "No teachers found") : React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, [...SUBJECTS.map(subject => {
-    const teacher = activeTeachers.find(t => t.subject === subject);
-    const archivedTeacher = archivedTeachers.find(t => t.subject === subject);
-    const isVacant = !teacher;
-    const wasArchived = !teacher && archivedTeacher;
-    return React.createElement("div", {
-      key: subject,
-      className: `teacher-card border-2 rounded-xl p-4 ${isVacant ? 'bg-yellow-50 border-yellow-300' : ''}`,
-      onClick: () => teacher && !teacher.isArchived && handleTeacherClick(teacher)
-    }, React.createElement("div", {
-      className: "font-bold text-lg"
-    }, subject), React.createElement("div", {
-      className: "flex items-center justify-between"
-    }, React.createElement("div", {
-      className: isVacant ? 'text-orange-600 font-medium' : 'text-gray-600'
-    }, teacher ? teacher.name : React.createElement("span", null, "\uD83D\uDD38 Vacant", wasArchived && React.createElement("span", {
-      className: "text-xs text-gray-500 ml-1"
-    }, "(Previously: ", archivedTeacher.name, ")")))), teacher && !teacher.isArchived && React.createElement("div", {
-      className: "text-sm text-blue-600 mt-2"
-    }, "Click to view profile \u2192"), isVacant && React.createElement("div", {
-      className: "text-sm text-orange-500 mt-2"
-    }, "New teacher to be assigned"));
-  }), ...apcStaff.map((apc, index) => {
-    return React.createElement("div", {
-      key: getStaffStableId(apc) || `apc-${index}`,
-      className: "teacher-card border-2 rounded-xl p-4 bg-teal-50 border-teal-200",
-      onClick: () => handleTeacherClick(apc)
-    }, React.createElement("div", {
-      className: "font-bold text-lg"
-    }, apc.name), React.createElement("div", {
-      className: "flex items-center justify-between"
-    }, React.createElement("div", {
-      className: "text-teal-700 font-semibold"
-    }, "APC")), React.createElement("div", {
-      className: "text-sm text-blue-600 mt-2"
-    }, "Click to view profile \u2192"));
-  })])), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, "\uD83D\uDCDA Pending Chapters"), SUBJECTS.map(subject => {
-    const docId = `${mySchool}_${subject}_${myGrade}`;
-    const chapters = curriculum[docId]?.chapters || [];
-    const pendingChapters = chapters.filter(ch => {
-      const progressId = `${mySchool}_${ch.id}`;
-      const prog = chapterProgress[progressId] || {};
-      return prog.completed !== 'Yes';
-    });
-    if (pendingChapters.length === 0) return null;
-    return React.createElement("div", {
-      key: subject,
-      className: "mb-4"
-    }, React.createElement("h4", {
-      className: "font-bold text-lg mb-2"
-    }, subject, " (", pendingChapters.length, " pending)"), React.createElement("ul", {
-      className: "list-disc list-inside space-y-1"
-    }, pendingChapters.slice(0, 5).map(ch => React.createElement("li", {
-      key: ch.id,
-      className: "text-gray-700"
-    }, ch.name)), pendingChapters.length > 5 && React.createElement("li", {
-      className: "text-gray-500 italic"
-    }, "...and ", pendingChapters.length - 5, " more")));
-  }))), activeTab === 'profile' && React.createElement(StudentProfileForm, {
-    currentUser: currentUser,
-    onProfileUpdated: updatedProfile => {
-      setStudentProfile(prev => ({
-        ...prev,
-        ...updatedProfile
-      }));
-      setProfileLoaded(true);
-    }
-  }), activeTab === 'attendance' && React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "\u2705 My Attendance Record"), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("div", {
-    className: "overflow-x-auto"
-  }, React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "avanti-gradient-light"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Date"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Status"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Remarks"))), React.createElement("tbody", null, studentAttendance.length === 0 ? React.createElement("tr", null, React.createElement("td", {
-    colSpan: "3",
-    className: "p-8 text-center text-gray-500"
-  }, "No attendance records")) : studentAttendance.map((record, idx) => React.createElement("tr", {
-    key: idx,
-    className: "border-b hover:bg-gray-50"
-  }, React.createElement("td", {
-    className: "p-3"
-  }, record.date), React.createElement("td", {
-    className: "p-3"
-  }, React.createElement("span", {
-    className: `px-3 py-1 rounded-full text-sm font-bold ${record.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`
-  }, record.status)), React.createElement("td", {
-    className: "p-3 text-sm"
-  }, record.remarks || '—')))))))), activeTab === 'exams' && React.createElement(StudentExamRegistration, {
-    currentUser: currentUser
-  }), activeTab === 'assets' && React.createElement(StudentAssets, {
-    currentUser: currentUser
-  })), showTeacherProfile && selectedTeacher && React.createElement(TeacherProfileModal, {
-    teacher: selectedTeacher,
-    onClose: () => setShowTeacherProfile(false)
-  }), React.createElement("footer", {
-    className: "bg-gray-800 text-white text-center py-4 mt-auto"
-  }, React.createElement("p", null, "Made by Anand with \u2764\uFE0F")));
 }
 function generate2FASecret(email) {
   const secret = new OTPAuth.Secret({
@@ -6216,12 +4654,10 @@ function App() {
   const maintenanceModeRef = React.useRef(false);
   const maintenanceModeLoadedRef = React.useRef(false);
   const [managerProfile, setManagerProfile] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('directory');
   const [loginForm, setLoginForm] = useState({
     email: '',
-    password: '',
-    studentId: '',
-    loginType: 'teacher'
+    password: ''
   });
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
@@ -6397,50 +4833,8 @@ function App() {
     const unsubscribe = auth.onAuthStateChanged(async user => {
       if (user) {
         if (user.isAnonymous) {
-          let studentSession = typeof window.safeStorage !== 'undefined' ? window.safeStorage.getItem('studentSession') : function () {
-            try {
-              return localStorage.getItem('studentSession');
-            } catch (e) {
-              return null;
-            }
-          }();
-          if (!studentSession && window.persistentStorage) {
-            try {
-              studentSession = await window.persistentStorage.getItem('studentSession');
-              if (studentSession) {
-                console.log('✅ Restored student session from IndexedDB');
-                try {
-                  localStorage.setItem('studentSession', studentSession);
-                } catch (e) {}
-              }
-            } catch (e) {}
-          }
-          if (studentSession) {
-            try {
-              const studentData = JSON.parse(studentSession);
-              console.log('✅ Student detected via anonymous auth:', studentData.name);
-              setCurrentUser(studentData);
-              setIsAdmin(false);
-              setActiveTab('dashboard');
-              setLoading(false);
-              setAuthLoading(false);
-              setLoginProgress('');
-              return;
-            } catch (e) {
-              console.error('Failed to parse student session:', e);
-              if (typeof window.safeStorage !== 'undefined') {
-                window.safeStorage.removeItem('studentSession');
-              } else {
-                try {
-                  localStorage.removeItem('studentSession');
-                } catch (e) {}
-              }
-              if (window.persistentStorage) {
-                window.persistentStorage.removeItem('studentSession').catch(() => {});
-              }
-            }
-          }
-          console.log('Anonymous user without student session - signing out');
+          // Student login has been removed; anonymous auth is no longer used by this app.
+          console.log('Anonymous auth session found - signing out (student login removed)');
           await auth.signOut();
           setLoading(false);
           return;
@@ -6638,7 +5032,7 @@ function App() {
                   } catch (e) {}
                   setCurrentUser(teacherData);
                   setIsAdmin(false);
-                  setActiveTab('overview');
+                  setActiveTab('directory');
                   if (userType === 'teacher' && teacherData.dob) {
                     const d = new Date(teacherData.dob);
                     const now = new Date();
@@ -6699,38 +5093,8 @@ function App() {
           }
         }
       } else {
-        const studentSession = typeof window.safeStorage !== 'undefined' ? window.safeStorage.getItem('studentSession') : function () {
-          try {
-            return localStorage.getItem('studentSession');
-          } catch (e) {
-            return null;
-          }
-        }();
-        if (studentSession) {
-          try {
-            const studentData = JSON.parse(studentSession);
-            console.log('✅ Restored student session:', studentData);
-            if (!auth.currentUser) {
-              await auth.signInAnonymously();
-              console.log('✅ Anonymous auth restored for student');
-            }
-            setCurrentUser(studentData);
-            setIsAdmin(false);
-            setActiveTab('dashboard');
-          } catch (e) {
-            console.error('Failed to restore student session:', e);
-            if (typeof window.safeStorage !== 'undefined') {
-              window.safeStorage.removeItem('studentSession');
-            } else {
-              try {
-                localStorage.removeItem('studentSession');
-              } catch (e) {}
-            }
-          }
-        } else {
-          setCurrentUser(null);
-          setIsAdmin(false);
-        }
+        setCurrentUser(null);
+        setIsAdmin(false);
       }
       setLoading(false);
     });
@@ -6759,10 +5123,7 @@ function App() {
     }
   }, [loading]);
   useEffect(() => {
-    // ✅ FIX: Skip admin/teacher data fetching for students
-    // Students have their own data fetching in StudentDashboard component
-    // SmartSync fetches ALL attendance which students don't have permission for
-    if (!currentUser || currentUser.userType === 'student') return;
+    if (!currentUser) return;
     const loadCachedData = () => {
       try {
         const cached = localStorage.getItem('cachedAppData');
@@ -7306,90 +5667,16 @@ function App() {
     try {
       const email = (loginForm.email || '').trim().toLowerCase();
       const password = loginForm.password;
-      const studentId = (loginForm.studentId || '').trim();
-      const loginType = loginForm.loginType || 'teacher';
-      if (loginType === 'student') {
-        if (!studentId || !password) {
-          alert('Please enter Student ID and password');
-          setAuthLoading(false);
-          setLoginProgress('');
-          return;
-        }
-        if (password !== 'pass123') {
-          alert('Invalid password. Default password is: pass123');
-          setAuthLoading(false);
-          setLoginProgress('');
-          return;
-        }
-        try {
-          setLoginProgress('Authenticating...');
-          const authPromise = auth.signInAnonymously();
-          const authResult = await Promise.race([authPromise, new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout. Please check your internet.')), 8000))]);
-          console.log('✅ Anonymous auth successful');
-          setLoginProgress('Finding student...');
-          const snap = await db.collection('students').where('id', '==', studentId).limit(1).get();
-          if (snap.empty) {
-            alert('Student ID not found. Please contact your teacher.');
-            await auth.signOut();
-            setAuthLoading(false);
-            setLoginProgress('');
-            return;
-          }
-          const doc = snap.docs[0];
-          const foundStudent = {
-            ...doc.data(),
-            docId: doc.id
-          };
-          console.log('✅ Found student:', foundStudent);
-          if (foundStudent) {
-            setLoginProgress('Loading dashboard...');
-            const studentUser = {
-              ...foundStudent,
-              userType: 'student',
-              studentId: studentId,
-              loginTime: Date.now()
-            };
-            const sessionStr = JSON.stringify(studentUser);
-            if (typeof window.safeStorage !== 'undefined') {
-              window.safeStorage.setItem('studentSession', sessionStr);
-            } else {
-              try {
-                localStorage.setItem('studentSession', sessionStr);
-              } catch (e) {}
-            }
-            if (window.persistentStorage) {
-              window.persistentStorage.setItem('studentSession', sessionStr).catch(() => {});
-            }
-            setCurrentUser(studentUser);
-            setIsAdmin(false);
-            setActiveTab('dashboard');
-            setAuthLoading(false);
-            setLoginProgress('');
-          } else {
-            alert('Student ID not found. Please contact your teacher.');
-            setAuthLoading(false);
-            setLoginProgress('');
-            return;
-          }
-        } catch (e) {
-          console.error('Student login error:', e);
-          alert('Login failed: ' + (e.message || 'Please check your internet connection'));
-          setAuthLoading(false);
-          setLoginProgress('');
-          return;
-        }
-      } else {
-        if (!email || !password) {
-          alert('Please enter email and password');
-          setAuthLoading(false);
-          setLoginProgress('');
-          return;
-        }
-        setLoginProgress('Authenticating...');
-        const authPromise = auth.signInWithEmailAndPassword(email, password);
-        await Promise.race([authPromise, new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout. Please check your internet.')), 8000))]);
-        setLoginProgress('Loading profile...');
+      if (!email || !password) {
+        alert('Please enter email and password');
+        setAuthLoading(false);
+        setLoginProgress('');
+        return;
       }
+      setLoginProgress('Authenticating...');
+      const authPromise = auth.signInWithEmailAndPassword(email, password);
+      await Promise.race([authPromise, new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout. Please check your internet.')), 8000))]);
+      setLoginProgress('Loading profile...');
     } catch (e) {
       console.error('login error', e);
       const errorMsg = e.code === 'auth/wrong-password' ? 'Incorrect password' : e.code === 'auth/user-not-found' ? 'User not found' : e.code === 'auth/too-many-requests' ? 'Too many attempts. Try again later.' : e.message || 'Login failed. Please try again.';
@@ -7432,12 +5719,10 @@ function App() {
       }
       setCurrentUser(null);
       setIsAdmin(false);
-      setActiveTab('overview');
+      setActiveTab('directory');
       setLoginForm({
-        loginType: 'teacher',
         email: '',
-        password: '',
-        studentId: ''
+        password: ''
       });
       console.log('✅ Logout successful');
     } catch (e) {
@@ -7445,7 +5730,7 @@ function App() {
       try {
         setCurrentUser(null);
         setIsAdmin(false);
-        setActiveTab('overview');
+        setActiveTab('directory');
       } catch (resetError) {
         console.error('Reset error:', resetError);
         window.location.reload();
@@ -7505,7 +5790,7 @@ function App() {
     } else if (user.userType === 'teacher') {
       setCurrentUser(user);
       setIsAdmin(false);
-      setActiveTab('overview');
+      setActiveTab('directory');
       if (user.dob) {
         const d = new Date(user.dob);
         const now = new Date();
@@ -7534,7 +5819,7 @@ function App() {
     } else if (user.userType === 'apc') {
       setCurrentUser(user);
       setIsAdmin(false);
-      setActiveTab('overview');
+      setActiveTab('directory');
       console.log('✅ APC login completed:', user.name);
     }
     setPending2FAUser(null);
@@ -7763,8 +6048,6 @@ function App() {
       {left:'92%', animationDuration:'11s', animationDelay:'-1s', fontSize:'18px'},
     ];
 
-    const isStudent = loginForm.loginType === 'student';
-
     return React.createElement('div', {
       style:{minHeight:'100vh', display:'flex', fontFamily:'Nunito, system-ui, sans-serif', position:'relative', overflow:'hidden', background:'#12122a'}
     },
@@ -7837,8 +6120,8 @@ function App() {
             React.createElement('div', {style:{fontSize:'13px',color:'#888',marginTop:'4px'}}, 'Sign in to your Avanti account')
           ),
 
-          // ── Teacher fields (default) ─────────────────────────────────────
-          !isStudent && React.createElement(React.Fragment, null,
+          // ── Teacher fields ─────────────────────────────────────
+          React.createElement(React.Fragment, null,
             // Email
             React.createElement('div', {style:{marginBottom:'18px'}},
               React.createElement('label', {style:{display:'block',fontSize:'12px',fontWeight:'700',color:'#555',letterSpacing:'.5px',textTransform:'uppercase',marginBottom:'6px'}}, 'Email Address'),
@@ -7872,42 +6155,6 @@ function App() {
             )
           ),
 
-          // ── Student fields ───────────────────────────────────────────────
-          isStudent && React.createElement(React.Fragment, null,
-            React.createElement('div', {style:{marginBottom:'18px'}},
-              React.createElement('label', {style:{display:'block',fontSize:'12px',fontWeight:'700',color:'#555',letterSpacing:'.5px',textTransform:'uppercase',marginBottom:'6px'}}, 'Student ID'),
-              React.createElement('div', {style:{position:'relative'}},
-                React.createElement('span', {style:{position:'absolute',left:'14px',top:'50%',transform:'translateY(-50%)',fontSize:'16px',opacity:.5}}, '\uD83C\uDF93'),
-                React.createElement('input', {
-                  type:'text',
-                  className:'lp-input',
-                  style:{width:'100%',padding:'14px 14px 14px 42px',border:'2px solid #eee',borderRadius:'14px',fontSize:'15px',fontFamily:'inherit',color:'#1a1a2e',background:'#fafafa',transition:'all .2s',outline:'none',boxSizing:'border-box'},
-                  value: loginForm.studentId || '',
-                  onChange: e => setLoginForm({...loginForm, studentId:e.target.value}),
-                  placeholder:'Enter your Student ID'
-                })
-              )
-            ),
-            React.createElement('div', {style:{marginBottom:'8px'}},
-              React.createElement('label', {style:{display:'block',fontSize:'12px',fontWeight:'700',color:'#555',letterSpacing:'.5px',textTransform:'uppercase',marginBottom:'6px'}}, 'Password'),
-              React.createElement('div', {style:{position:'relative'}},
-                React.createElement('span', {style:{position:'absolute',left:'14px',top:'50%',transform:'translateY(-50%)',fontSize:'16px',opacity:.5}}, '\uD83D\uDD12'),
-                React.createElement('input', {
-                  type:'password',
-                  className:'lp-input',
-                  style:{width:'100%',padding:'14px 14px 14px 42px',border:'2px solid #eee',borderRadius:'14px',fontSize:'15px',fontFamily:'inherit',color:'#1a1a2e',background:'#fafafa',transition:'all .2s',outline:'none',boxSizing:'border-box'},
-                  value: loginForm.password,
-                  onChange: e => setLoginForm({...loginForm, password:e.target.value}),
-                  placeholder:'Password (pass123)',
-                  onKeyPress: e => e.key === 'Enter' && handleLogin()
-                })
-              )
-            ),
-            React.createElement('p', {style:{fontSize:'12px',color:'#aaa',textAlign:'center',marginBottom:'4px'}},
-              'Default password: ', React.createElement('strong', {style:{color:'#777'}}, 'pass123')
-            )
-          ),
-
           // Sign In button
           React.createElement('button', {
             className:'lp-signin',
@@ -7923,24 +6170,6 @@ function App() {
               : 'Sign In \u2192'
           ),
 
-          // Divider + toggle
-          React.createElement('div', {style:{textAlign:'center',margin:'20px 0',color:'#ccc',fontSize:'13px',position:'relative'}},
-            React.createElement('span', {style:{background:'rgba(255,255,255,.97)',padding:'0 12px',position:'relative',zIndex:1}}, 'or'),
-            React.createElement('div', {style:{position:'absolute',top:'50%',left:0,right:0,height:'1px',background:'#eee',zIndex:0}})
-          ),
-
-          isStudent
-            ? React.createElement('button', {
-                className:'lp-student',
-                onClick: () => setLoginForm({...loginForm, loginType:'teacher', password:''}),
-                style:{width:'100%',padding:'13px',background:'white',border:'2px solid #eee',borderRadius:'14px',fontSize:'14px',fontWeight:'700',fontFamily:'inherit',color:'#555',cursor:'pointer',transition:'border-color .2s, background .2s'}
-              }, '\uD83D\uDC68\u200D\uD83C\uDFEB Back to Teacher Login')
-            : React.createElement('button', {
-                className:'lp-student',
-                onClick: () => setLoginForm({...loginForm, loginType:'student', password:''}),
-                style:{width:'100%',padding:'13px',background:'white',border:'2px solid #eee',borderRadius:'14px',fontSize:'14px',fontWeight:'700',fontFamily:'inherit',color:'#555',cursor:'pointer',transition:'border-color .2s, background .2s'}
-              }, '\uD83C\uDF92 Student Login'),
-
           // Footer
           React.createElement('div', {style:{textAlign:'center',marginTop:'24px',fontSize:'12px',color:'#bbb'}},
             'Avanti Fellows \u00B7 JNV Program \u00B7 v5.7.0'
@@ -7950,12 +6179,6 @@ function App() {
     );
   }
 
-  if (currentUser && currentUser.userType === 'student') {
-    return React.createElement(StudentDashboard, {
-      currentUser: currentUser,
-      handleLogout: handleLogout
-    });
-  }
   return React.createElement(React.Fragment, null, currentUser && React.createElement(DataFreshnessIndicator, null), isAdmin ? React.createElement(AdminView, {
     currentUser: currentUser,
     handleLogout: handleLogout,
@@ -8703,12 +6926,6 @@ function TeacherView({
 }) {
   const isAPC = currentUser.userType === 'apc' || currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC;
   const teacherTabs = isAPC ? [{
-    id: 'overview',
-    label: 'Dashboard',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-chart-line"
-    })
-  }, {
     id: 'directory',
     label: 'Directory',
     icon: React.createElement("i", {
@@ -8731,12 +6948,6 @@ function TeacherView({
     label: 'Attendance Dashboard',
     icon: React.createElement("i", {
       className: "fa-solid fa-calendar-check"
-    })
-  }, {
-    id: 'myattendance',
-    label: 'My Attendance',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-clock"
     })
   }, {
     id: 'teacherattview',
@@ -8757,12 +6968,6 @@ function TeacherView({
       className: "fa-solid fa-calendar"
     })
   }] : [{
-    id: 'overview',
-    label: 'Dashboard',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-chart-line"
-    })
-  }, {
     id: 'directory',
     label: 'Directory',
     icon: React.createElement("i", {
@@ -8785,12 +6990,6 @@ function TeacherView({
     label: 'Attendance Dashboard',
     icon: React.createElement("i", {
       className: "fa-solid fa-calendar-check"
-    })
-  }, {
-    id: 'myattendance',
-    label: 'My Attendance',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-clock"
     })
   }, {
     id: 'assets',
@@ -9061,17 +7260,6 @@ function TeacherView({
   }, React.createElement(ProfileCompletionBanner, {
     currentUser: currentUser,
     onNavigateToProfile: () => setActiveTab('myprofile')
-  }), activeTab === 'overview' && React.createElement(TeacherOverview, {
-    currentUser: currentUser,
-    teachers: teachers,
-    students: students,
-    curriculum: curriculum,
-    chapterProgress: chapterProgress,
-    studentAttendance: studentAttendance,
-    teacherAttendance: teacherAttendance,
-    schoolInfo: schoolInfo,
-    onNavigateToProfile: () => setActiveTab('myprofile'),
-    precomputedRankings: precomputedRankings
   }), activeTab === 'teacherattview' && React.createElement(APCTeacherAttendanceView, {
     currentUser: currentUser,
     teachers: teachers,
@@ -9093,10 +7281,6 @@ function TeacherView({
     teachers: teachers,
     studentAttendance: studentAttendance,
     teacherAttendance: teacherAttendance
-  }), activeTab === 'myattendance' && React.createElement(TeacherAttendanceView, {
-    currentUser: currentUser,
-    teacherAttendance: teacherAttendance,
-    leaveAdjustments: leaveAdjustments
   }), activeTab === 'timetable' && React.createElement(TimetablePage, {
     currentUser: currentUser,
     mySchool: currentUser?.school
@@ -11035,294 +9219,6 @@ function AcademicYearManagement({
     onClick: () => setShowConfirmModal(false),
     className: "flex-1 bg-gray-200 py-3 rounded-xl font-bold"
   }, "Cancel"))))));
-}
-function TeacherOverview({
-  currentUser,
-  curriculum,
-  chapterProgress,
-  teachers,
-  teacherAttendance,
-  studentAttendance,
-  onNavigateToProfile,
-  precomputedRankings
-}) {
-  const mySchool = currentUser.school;
-  const mySubject = currentUser.subject;
-  // ✅ FIX: Detect if chapterProgress data is genuinely loaded
-  // If chapterProgress has 0 entries but curriculum has chapters, data is still loading
-  const chapterProgressEntries = Object.keys(chapterProgress || {}).length;
-  const curriculumEntries = Object.keys(curriculum || {}).length;
-  const isDataLoaded = chapterProgressEntries > 0 || curriculumEntries === 0;
-
-  const schoolRankings = useMemo(() => {
-    const rankings = SCHOOLS.map(school => {
-      let total = 0,
-        completed = 0;
-      SUBJECTS.forEach(subject => {
-        ['11', '12'].forEach(grade => {
-          const docId = `${school}_${subject}_${grade}`;
-          const chapters = curriculum[docId]?.chapters || [];
-          chapters.forEach(ch => {
-            total++;
-            const progressId = `${school}_${ch.id}`;
-            const prog = chapterProgress[progressId] || {};
-            if (prog.completed === 'Yes') completed++;
-          });
-        });
-      });
-      return {
-        school,
-        total,
-        completed,
-        percentage: total ? Math.round(completed / total * 100) : 0
-      };
-    });
-    rankings.sort((a, b) => b.percentage - a.percentage);
-    return rankings;
-  }, [curriculum, chapterProgress]);
-  const subjectRankings = useMemo(() => {
-    const rankings = SUBJECTS.map(subject => {
-      let total = 0,
-        completed = 0;
-      ['11', '12'].forEach(grade => {
-        const docId = `${mySchool}_${subject}_${grade}`;
-        const chapters = curriculum[docId]?.chapters || [];
-        chapters.forEach(ch => {
-          total++;
-          const progressId = `${mySchool}_${ch.id}`;
-          const prog = chapterProgress[progressId] || {};
-          if (prog.completed === 'Yes') {
-            completed++;
-          }
-        });
-      });
-      return {
-        subject,
-        total,
-        completed,
-        percentage: total ? Math.round(completed / total * 100) : 0
-      };
-    }).filter(rank => rank.total > 0);
-    rankings.sort((a, b) => b.percentage - a.percentage);
-    return rankings;
-  }, [curriculum, chapterProgress, mySchool]);
-  // ✅ FIX: Show "–" when data isn't loaded (prevents showing #0 incorrectly)
-  const rawRank = schoolRankings.findIndex(r => r.school === mySchool) + 1;
-  const mySchoolRank = isDataLoaded ? rawRank : '–';
-  const laggingSubject = isDataLoaded ? subjectRankings[subjectRankings.length - 1] : null;
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
-  const [lastSyncTime, setLastSyncTime] = React.useState(null);
-  React.useEffect(() => {
-    const updateSyncTime = () => {
-      if (window.SmartSyncManager) {
-        const status = window.SmartSyncManager.getStatus();
-        const times = status.lastSyncTimes;
-        const latestSync = Math.max(...Object.values(times).filter(t => t > 0), 0);
-        if (latestSync > 0) {
-          setLastSyncTime(new Date(latestSync));
-        }
-      }
-    };
-    updateSyncTime();
-    const interval = setInterval(updateSyncTime, 30000);
-    return () => clearInterval(interval);
-  }, []);
-  const handleManualRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      if (window._forceFullRefresh) {
-        await window._forceFullRefresh();
-      }
-      setLastSyncTime(new Date());
-    } catch (e) {
-      console.error('Refresh failed:', e);
-    }
-    setTimeout(() => setIsRefreshing(false), 1000);
-  };
-  const formatLastSync = date => {
-    if (!date) return 'Never';
-    const mins = Math.floor((Date.now() - date.getTime()) / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    return `${Math.floor(mins / 60)}h ago`;
-  };
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center flex-wrap gap-2"
-  }, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "Dashboard Overview"), React.createElement("div", {
-    className: "flex items-center gap-2"
-  }, React.createElement("span", {
-    className: "text-xs text-gray-500 hidden sm:inline"
-  }, lastSyncTime ? `Synced ${formatLastSync(lastSyncTime)}` : ''), React.createElement("button", {
-    onClick: handleManualRefresh,
-    disabled: isRefreshing,
-    className: `px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${isRefreshing ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:shadow-lg active:scale-95'}`,
-    title: "Refresh all data"
-  }, React.createElement("i", {
-    className: `fa-solid fa-sync ${isRefreshing ? 'animate-spin' : ''}`
-  }), React.createElement("span", {
-    className: "hidden sm:inline"
-  }, isRefreshing ? 'Syncing...' : 'Refresh')))), React.createElement(ProfileCompletionCard, {
-    currentUser: currentUser,
-    onNavigateToProfile: onNavigateToProfile
-  }), React.createElement("div", {
-    className: "grid md:grid-cols-4 gap-4"
-  }, React.createElement("div", {
-    className: "stat-card avanti-gradient text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Your School Rank"), React.createElement("div", {
-    className: "text-5xl font-bold"
-  }, isDataLoaded ? "#" + mySchoolRank : "–"), React.createElement("div", {
-    className: "text-sm mt-2"
-  }, "Out of ", schoolRankings.length || SCHOOLS.length, " schools")), React.createElement("div", {
-    className: "stat-card text-white",
-    style: {background: "linear-gradient(135deg, #22c55e 0%, #059669 100%)"}
-  }, React.createElement("div", {
-    className: "text-sm",
-    style: {opacity: 0.85}
-  }, "\uD83C\uDFC6 Best Performing"), React.createElement("div", {
-    className: "font-bold mt-2",
-    style: {fontSize: "18px", color: "white"}
-  }, schoolRankings[0]?.school || "Loading..."), React.createElement("div", {
-    className: "text-sm mt-1",
-    style: {opacity: 0.9}
-  }, (schoolRankings[0]?.percentage || 0), "% completed")), React.createElement("div", {
-    className: "stat-card text-white",
-    style: {background: "linear-gradient(135deg, #f97316 0%, #dc2626 100%)"}
-  }, React.createElement("div", {
-    className: "text-sm",
-    style: {opacity: 0.85}
-  }, "\u26A0\uFE0F Lagging Subject"), React.createElement("div", {
-    className: "font-bold mt-2",
-    style: {fontSize: "18px", color: "white"}
-  }, laggingSubject?.subject || "All caught up!"), React.createElement("div", {
-    className: "text-sm mt-1",
-    style: {opacity: 0.9}
-  }, (laggingSubject?.percentage || 0), "% completed"))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, "\uD83C\uDFC6 School Rankings"), !isDataLoaded ? React.createElement("div", {
-    className: "text-center py-8 text-gray-400"
-  }, React.createElement("div", {className: "text-3xl mb-2"}, "\u23F3"),
-    React.createElement("p", null, "Loading rankings...")) : React.createElement("div", {
-    className: "space-y-3"
-  }, schoolRankings.map((rank, index) => React.createElement("div", {
-    key: rank.school,
-    className: `ranking-card ${index === 0 ? 'ranking-1' : index === 1 ? 'ranking-2' : index === 2 ? 'ranking-3' : ''} ${rank.school === mySchool ? 'bg-yellow-50' : ''}`
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("div", {
-    className: "flex items-center gap-4"
-  }, React.createElement("div", {
-    className: "text-2xl font-bold text-gray-400"
-  }, "#", index + 1), React.createElement("div", null, React.createElement("div", {
-    className: "font-bold text-lg"
-  }, rank.school, " ", rank.school === mySchool && '⭐'), React.createElement("div", {
-    className: "text-sm text-gray-600"
-  }, rank.completed, " / ", rank.total, " chapters completed"))), React.createElement("div", {
-    className: "text-3xl font-bold",
-    style: {
-      color: 'var(--avanti-red)'
-    }
-  }, rank.percentage, "%")))))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, "\uD83D\uDCDA Subject Performance in ", mySchool), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, subjectRankings.map(rank => React.createElement("div", {
-    key: rank.subject,
-    className: "border-2 rounded-xl p-4"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-2"
-  }, React.createElement("div", {
-    className: "font-bold text-lg"
-  }, rank.subject), React.createElement("div", {
-    className: "text-2xl font-bold",
-    style: {
-      color: 'var(--avanti-red)'
-    }
-  }, rank.percentage, "%")), React.createElement("div", {
-    className: "h-2 bg-gray-200 rounded-full"
-  }, React.createElement("div", {
-    className: "h-2 avanti-gradient rounded-full",
-    style: {
-      width: `${rank.percentage}%`
-    }
-  })), React.createElement("div", {
-    className: "text-sm text-gray-600 mt-2"
-  }, rank.completed, " / ", rank.total, " chapters"))))), React.createElement("div", {
-    className: "stat-card bg-gradient-to-br from-purple-500 to-pink-600 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "My Attendance (This Month)"), React.createElement("div", {
-    className: "text-2xl font-bold mt-2"
-  }, teacherAttendance.filter(a => a.teacherId === currentUser.afid && getMonthYear(a.date) === getMonthYear(getTodayDate())).length, " days"), React.createElement("div", {
-    className: "text-sm mt-2"
-  }, "Marked this month"), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, "\uD83D\uDCCA Quick Attendance Overview"), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, React.createElement("div", {
-    className: "border-2 rounded-xl p-4"
-  }, React.createElement("h4", {
-    className: "font-bold mb-2"
-  }, "Today's Student Attendance"), React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "Present: ", React.createElement("strong", {
-    className: "text-green-600"
-  }, studentAttendance.filter(a => a.date === getTodayDate() && a.school === currentUser.school && a.status === 'Present').length)), React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "Absent: ", React.createElement("strong", {
-    className: "text-red-600"
-  }, studentAttendance.filter(a => a.date === getTodayDate() && a.school === currentUser.school && a.status === 'Absent').length))), React.createElement("div", {
-    className: "border-2 rounded-xl p-4"
-  }, React.createElement("h4", {
-    className: "font-bold mb-2"
-  }, "My Attendance Status"), teacherAttendance.find(a => a.teacherId === currentUser.afid && a.date === getTodayDate()) ? React.createElement("div", {
-    className: "text-sm"
-  }, React.createElement("p", {
-    className: "text-green-600 font-bold"
-  }, "\u2713 Marked for today"), React.createElement("p", {
-    className: "text-gray-600"
-  }, "Status: ", teacherAttendance.find(a => a.teacherId === currentUser.afid && a.date === getTodayDate()).status)) : React.createElement("p", {
-    className: "text-orange-600 font-bold"
-  }, "\u26A0\uFE0F Not marked yet")))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, "\u23F0 Today's Punch-In Times - ", mySchool), React.createElement("div", {
-    className: "space-y-2 max-h-96 overflow-y-auto"
-  }, teachers.filter(t => t.school === mySchool && !t.isArchived).map(teacher => {
-    const todayAttendance = teacherAttendance.find(a => a.teacherId === teacher.afid && a.date === getTodayDate());
-    return React.createElement("div", {
-      key: teacher.afid,
-      className: `p-4 rounded-xl border-2 ${teacher.afid === currentUser.afid ? 'bg-yellow-50 border-yellow-400' : 'bg-gray-50 border-gray-200'}`
-    }, React.createElement("div", {
-      className: "flex justify-between items-center"
-    }, React.createElement("div", {
-      className: "flex-1"
-    }, React.createElement("div", {
-      className: "font-bold text-lg"
-    }, teacher.name, " ", teacher.afid === currentUser.afid && '(You)'), React.createElement("div", {
-      className: "text-sm text-gray-600"
-    }, teacher.subject)), React.createElement("div", {
-      className: "text-right"
-    }, todayAttendance ? React.createElement(React.Fragment, null, React.createElement("div", {
-      className: `text-2xl font-bold ${todayAttendance.status === 'Present' ? 'text-green-600' : 'text-orange-600'}`
-    }, "\u23F0 ", todayAttendance.punchInTime || '--:--'), React.createElement("div", {
-      className: `text-xs font-semibold ${todayAttendance.status === 'Present' ? 'text-green-600' : 'text-orange-600'}`
-    }, todayAttendance.status)) : React.createElement("div", {
-      className: "text-gray-400 font-semibold"
-    }, "Not Marked"))));
-  })))));
 }
 function ClassView({
   grade,
@@ -13787,14 +11683,12 @@ function TeacherAttendanceDashboard({
   teacherAttendance
 }) {
   const [filterGrade, setFilterGrade] = useState('All');
-  const [filterSubject, setFilterSubject] = useState('All');
   const today = getTodayDate();
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const mySchool = currentUser.school;
   const chart1Ref = useRef(null);
   const chart2Ref = useRef(null);
-  const chart3Ref = useRef(null);
   const chartInstances = useRef({});
   const filteredStudentAttendance = useMemo(() => {
     return studentAttendance.filter(a => {
@@ -13804,17 +11698,6 @@ function TeacherAttendanceDashboard({
       return true;
     });
   }, [studentAttendance, mySchool, filterGrade, startDate, endDate]);
-  const filteredTeacherAttendance = useMemo(() => {
-    return teacherAttendance.filter(a => {
-      if (a.school !== mySchool) return false;
-      if (filterSubject !== 'All') {
-        const teacher = teachers.find(t => t.afid === a.teacherId);
-        if (!teacher || teacher.subject !== filterSubject) return false;
-      }
-      if (a.date < startDate || a.date > endDate) return false;
-      return true;
-    });
-  }, [teacherAttendance, mySchool, teachers, filterSubject, startDate, endDate]);
   const dailyStats = useMemo(() => {
     const stats = {};
     filteredStudentAttendance.forEach(a => {
@@ -13854,14 +11737,6 @@ function TeacherAttendanceDashboard({
     });
     return stats;
   }, [filteredStudentAttendance]);
-  const teacherStats = useMemo(() => {
-    const present = filteredTeacherAttendance.filter(a => a.status === 'Present').length;
-    const onLeave = filteredTeacherAttendance.filter(a => a.status === 'On Leave').length;
-    return {
-      present,
-      onLeave
-    };
-  }, [filteredTeacherAttendance]);
   useEffect(() => {
     Object.values(chartInstances.current).forEach(chart => {
       if (chart) chart.destroy();
@@ -13954,46 +11829,13 @@ function TeacherAttendanceDashboard({
         }
       });
     }
-    if (chart3Ref.current) {
-      const ctx = chart3Ref.current.getContext('2d');
-      chartInstances.current.chart3 = new Chart(ctx, {
-        type: 'pie',
-        data: {
-          labels: ['Present', 'On Leave'],
-          datasets: [{
-            data: [teacherStats.present, teacherStats.onLeave],
-            backgroundColor: ['#5B8A8A', '#D4A574'],
-            borderWidth: 2,
-            borderColor: '#fff'
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            title: {
-              display: true,
-              text: 'Teacher Attendance',
-              font: {
-                size: 16,
-                weight: 'bold'
-              }
-            },
-            legend: {
-              position: 'bottom'
-            }
-          }
-        }
-      });
-    }
     return () => {
       Object.values(chartInstances.current).forEach(chart => {
         if (chart) chart.destroy();
       });
     };
-  }, [dailyStats, gradeStats, teacherStats]);
+  }, [dailyStats, gradeStats]);
   const [exportingStudents, setExportingStudents] = React.useState(false);
-  const [exportingTeachers, setExportingTeachers] = React.useState(false);
   const handleExportStudents = async () => {
     setExportingStudents(true);
     try {
@@ -14006,29 +11848,17 @@ function TeacherAttendanceDashboard({
     } catch (err) { alert('Export failed: ' + err.message); }
     setExportingStudents(false);
   };
-  const handleExportTeachers = async () => {
-    setExportingTeachers(true);
-    try {
-      const snap = await db.collection('teacherAttendance').where('school', '==', mySchool).where('date', '>=', startDate).where('date', '<=', endDate).get();
-      let records = snap.docs.map(d => d.data());
-      if (filterSubject !== 'All') { const tm = {}; teachers.forEach(t => { tm[t.afid] = t; }); records = records.filter(a => { const t = tm[a.teacherId]; return t && t.subject === filterSubject; }); }
-      records.sort((a, b) => a.date.localeCompare(b.date));
-      if (!records.length) { alert('No teacher records found for this period.'); setExportingTeachers(false); return; }
-      exportToExcel(records.map(a => ({ Date: a.date, 'Teacher Name': a.teacherName, 'Punch-In Time': a.punchInTime || 'Not recorded', Status: a.status, Reason: a.reason || '', Location: a.location || '' })), `teacher_attendance_${mySchool}_${startDate}_to_${endDate}`);
-    } catch (err) { alert('Export failed: ' + err.message); }
-    setExportingTeachers(false);
-  };
   return React.createElement("div", {
     className: "space-y-6"
   }, React.createElement("div", {
     className: "flex justify-between items-center"
   }, React.createElement("h2", {
     className: "text-3xl font-bold"
-  }, "\uD83D\uDCCA Attendance Dashboard - ", mySchool)), React.createElement("div", {
+  }, "📊 Attendance Dashboard - ", mySchool)), React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "text-xl font-bold mb-4"
-  }, "\uD83D\uDD0D Filters"), React.createElement("div", {
+  }, "🔍 Filters"), React.createElement("div", {
     className: "grid md:grid-cols-4 gap-4"
   }, React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-2"
@@ -14044,18 +11874,6 @@ function TeacherAttendanceDashboard({
   }, "Class 11"), React.createElement("option", {
     value: "12"
   }, "Class 12"))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Teacher Subject"), React.createElement("select", {
-    value: filterSubject,
-    onChange: e => setFilterSubject(e.target.value),
-    disabled: !isEditing,
-    className: "w-full border-2 px-4 py-3 rounded-xl disabled:bg-gray-100 disabled:cursor-not-allowed"
-  }, React.createElement("option", {
-    value: "All"
-  }, "All Subjects"), SUBJECTS.map(s => React.createElement("option", {
-    key: s,
-    value: s
-  }, s)))), React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-2"
   }, "Start Date"), React.createElement("input", {
     type: "date",
@@ -14076,10 +11894,7 @@ function TeacherAttendanceDashboard({
   }, React.createElement("button", {
     onClick: handleExportStudents,
     className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold"
-  }, "\uD83D\uDCE5 Export Student Attendance"), React.createElement("button", {
-    onClick: handleExportTeachers,
-    className: "px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold"
-  }, "\uD83D\uDCE5 Export Teacher Attendance"))), React.createElement("div", {
+  }, "📥 Export Student Attendance"))), React.createElement("div", {
     className: "grid grid-cols-2 md:grid-cols-4 gap-4"
   }, React.createElement("div", {
     className: "stat-card bg-green-500 text-white"
@@ -14093,19 +11908,7 @@ function TeacherAttendanceDashboard({
     className: "text-sm opacity-90"
   }, "Students Absent"), React.createElement("div", {
     className: "text-4xl font-bold"
-  }, filteredStudentAttendance.filter(a => a.status === 'Absent').length)), React.createElement("div", {
-    className: "stat-card bg-blue-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Teachers Present"), React.createElement("div", {
-    className: "text-4xl font-bold"
-  }, teacherStats.present)), React.createElement("div", {
-    className: "stat-card bg-orange-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Teachers on Leave"), React.createElement("div", {
-    className: "text-4xl font-bold"
-  }, teacherStats.onLeave))), React.createElement("div", {
+  }, filteredStudentAttendance.filter(a => a.status === 'Absent').length))), React.createElement("div", {
     className: "grid md:grid-cols-2 gap-6"
   }, React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg",
@@ -14122,19 +11925,10 @@ function TeacherAttendanceDashboard({
   }, React.createElement("canvas", {
     ref: chart2Ref
   }))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg",
-    style: {
-      height: '350px'
-    }
-  }, React.createElement("canvas", {
-    ref: chart3Ref
-  })), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-6"
-  }, React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "text-xl font-bold mb-4"
-  }, "\uD83D\uDCCB Recent Student Attendance"), React.createElement("div", {
+  }, "📋 Recent Student Attendance"), React.createElement("div", {
     className: "overflow-x-auto max-h-96"
   }, React.createElement("table", {
     className: "w-full"
@@ -14161,45 +11955,9 @@ function TeacherAttendanceDashboard({
     className: "p-3"
   }, React.createElement("span", {
     className: `px-2 py-1 rounded-full text-xs font-bold ${a.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`
-  }, a.status)))))))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4"
-  }, "\uD83D\uDC65 Teacher Attendance Records"), React.createElement("div", {
-    className: "overflow-x-auto max-h-96"
-  }, React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "avanti-gradient-light sticky top-0"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Date"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Teacher"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Punch-In"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Status"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Reason"))), React.createElement("tbody", null, filteredTeacherAttendance.slice(0, 50).map((a, idx) => React.createElement("tr", {
-    key: idx,
-    className: "border-b hover:bg-gray-50"
-  }, React.createElement("td", {
-    className: "p-3 text-sm"
-  }, a.date), React.createElement("td", {
-    className: "p-3 font-semibold"
-  }, a.teacherName), React.createElement("td", {
-    className: "p-3"
-  }, React.createElement("span", {
-    className: "font-mono font-bold text-blue-600"
-  }, "\u23F0 ", a.punchInTime || '--:--')), React.createElement("td", {
-    className: "p-3"
-  }, React.createElement("span", {
-    className: `px-2 py-1 rounded-full text-xs font-bold ${a.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`
-  }, a.status)), React.createElement("td", {
-    className: "p-3 text-sm"
-  }, a.reason)))))))));
+  }, a.status)))))))));
 }
+
 function RemarksModal({
   student,
   onSave,
@@ -14790,433 +12548,6 @@ function StudentAttendanceView({
       setSelectedStudent(null);
     }
   }));
-}
-function TeacherAttendanceView({
-  currentUser,
-  teacherAttendance,
-  leaveAdjustments
-}) {
-  const [selectedDate, setSelectedDate] = useState(getTodayDate());
-  const [endDate, setEndDate] = useState(getTodayDate());
-  const [isDateRange, setIsDateRange] = useState(false);
-  const [status, setStatus] = useState('Present');
-  const [reason, setReason] = useState('Present');
-  const [compOffWorkedDate, setCompOffWorkedDate] = useState('');
-  const [location, setLocation] = useState('');
-  const [fetchingLocation, setFetchingLocation] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [localSubmittedAttendance, setLocalSubmittedAttendance] = useState([]);
-  const [gpsVerified, setGpsVerified] = useState(false);
-  const [fullLeaveRecords, setFullLeaveRecords] = useState([]);
-  const today = new Date();
-  useEffect(() => {
-    if (!currentUser?.afid) return;
-    db.collection('teacherAttendance')
-      .where('teacherId', '==', currentUser.afid)
-      .where('status', '==', 'On Leave')
-      .get()
-      .then(snap => setFullLeaveRecords(snap.docs.map(d => d.data())))
-      .catch(() => {});
-  }, [currentUser?.afid]);
-  const maxDate = useMemo(() => {
-    if (status === 'On Leave') {
-      const d = new Date();
-      d.setDate(d.getDate() + 10);
-      return d.toISOString().split('T')[0];
-    }
-    return getTodayDate();
-  }, [status]);
-  const minDate = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 2);
-    return d.toISOString().split('T')[0];
-  }, []);
-  const allAttendance = useMemo(() => {
-    const localKeys = new Set(localSubmittedAttendance.map(a => `${a.teacherId}_${a.date}`));
-    const filtered = teacherAttendance.filter(a => !localKeys.has(`${a.teacherId}_${a.date}`));
-    return [...filtered, ...localSubmittedAttendance];
-  }, [teacherAttendance, localSubmittedAttendance]);
-  const todayRecord = allAttendance.find(a => a.teacherId === currentUser.afid && a.date === selectedDate);
-  const hasExistingAttendance = useMemo(() => {
-    return allAttendance.some(a => a.teacherId === currentUser.afid && a.date === selectedDate);
-  }, [allAttendance, currentUser.afid, selectedDate]);
-  const leaveBalance = useMemo(() => {
-    const localLeaves = localSubmittedAttendance.filter(a => a.status === 'On Leave');
-    const localLeaveKeys = new Set(localLeaves.map(a => a.date));
-    const historicalLeaves = fullLeaveRecords.filter(a => !localLeaveKeys.has(a.date));
-    const allLeaves = [...historicalLeaves, ...localLeaves];
-    return calculateLeaveBalance(allLeaves, currentUser.afid, leaveAdjustments || {});
-  }, [fullLeaveRecords, localSubmittedAttendance, currentUser.afid, leaveAdjustments]);
-  useEffect(() => {
-    if (todayRecord) {
-      setStatus(todayRecord.status);
-      setReason(todayRecord.reason || 'Present');
-      setLocation(todayRecord.location || '');
-      setGpsVerified(true);
-    } else {
-      setStatus('Present');
-      setReason('Present');
-      setGpsVerified(false);
-      setLocation('');
-    }
-  }, [todayRecord]);
-  useEffect(() => {
-    if (status === 'Present') {
-      setIsDateRange(false);
-      setEndDate(selectedDate);
-      setCompOffWorkedDate('');
-    }
-  }, [status, selectedDate]);
-  useEffect(() => {
-    if (status === 'On Leave') {
-      setGpsVerified(true);
-      setLocation('Leave - GPS not required');
-    } else {
-      setGpsVerified(false);
-      setLocation('');
-    }
-  }, [status]);
-  useEffect(() => {
-    if (reason !== 'Comp Off') {
-      setCompOffWorkedDate('');
-    }
-  }, [reason]);
-  const getLocation = () => {
-    setFetchingLocation(true);
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(position => {
-        const lat = position.coords.latitude.toFixed(6);
-        const lng = position.coords.longitude.toFixed(6);
-        const accuracy = Math.round(position.coords.accuracy);
-        const loc = `${lat}, ${lng} (±${accuracy}m)`;
-        setLocation(loc);
-        setGpsVerified(true);
-        setFetchingLocation(false);
-      }, error => {
-        let errorMsg = 'Unable to fetch location. ';
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMsg += 'Please enable location permission in your browser/phone settings.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMsg += 'Location information unavailable. Please try again.';
-            break;
-          case error.TIMEOUT:
-            errorMsg += 'Location request timed out. Please try again.';
-            break;
-          default:
-            errorMsg += 'Please try again.';
-        }
-        alert(errorMsg);
-        setFetchingLocation(false);
-      }, {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0
-      });
-    } else {
-      alert('Geolocation not supported by your browser');
-      setFetchingLocation(false);
-    }
-  };
-  const getDateRange = (start, end) => {
-    const dates = [];
-    let currentDate = new Date(start);
-    const endDateObj = new Date(end);
-    while (currentDate <= endDateObj) {
-      dates.push(currentDate.toISOString().split('T')[0]);
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    return dates;
-  };
-  const daysToMark = useMemo(() => {
-    if (!isDateRange || status === 'Present') return 1;
-    return getDateRange(selectedDate, endDate).length;
-  }, [isDateRange, selectedDate, endDate, status]);
-  const handleSubmit = async () => {
-    if (status !== 'Present' && !reason) {
-      alert('Please select a reason');
-      return;
-    }
-    if (reason === 'Comp Off' && !compOffWorkedDate) {
-      alert('Please select the date when you worked for Comp Off');
-      return;
-    }
-    if (status === 'Present' && !gpsVerified) {
-      alert('📍 GPS verification required!\n\nPlease click "Get GPS Location" button to verify your location before marking attendance.');
-      return;
-    }
-    if (isDateRange && endDate < selectedDate) {
-      alert('End date must be after or equal to start date');
-      return;
-    }
-    if (status === 'On Leave') {
-      if (ENTITLED_LEAVE_TYPES.includes(reason) && daysToMark > leaveBalance.entitled.remaining) {
-        const proceed = confirm(`Warning: You only have ${leaveBalance.entitled.remaining} entitled leave days remaining, but you're marking ${daysToMark} days.\n\nDo you want to continue?`);
-        if (!proceed) return;
-      }
-      if (MATERNITY_LEAVE_TYPES.includes(reason) && daysToMark > leaveBalance.maternity.remaining) {
-        const proceed = confirm(`Warning: You only have ${leaveBalance.maternity.remaining} maternity leave days remaining, but you're marking ${daysToMark} days.\n\nDo you want to continue?`);
-        if (!proceed) return;
-      }
-      if (PATERNITY_LEAVE_TYPES.includes(reason) && daysToMark > leaveBalance.paternity.remaining) {
-        const proceed = confirm(`Warning: You only have ${leaveBalance.paternity.remaining} paternity leave days remaining, but you're marking ${daysToMark} days.\n\nDo you want to continue?`);
-        if (!proceed) return;
-      }
-    }
-    setSubmitting(true);
-    try {
-      const now = new Date();
-      const punchInTime = now.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      });
-      const datesToMark = isDateRange && status === 'On Leave' ? getDateRange(selectedDate, endDate) : [selectedDate];
-      const batch = db.batch();
-      const newLocalRecords = [];
-      datesToMark.forEach(date => {
-        const docId = `${currentUser.afid}_${date}`;
-        const docRef = db.collection('teacherAttendance').doc(docId);
-        const recordData = {
-          teacherId: currentUser.afid,
-          teacherName: currentUser.name,
-          school: currentUser.school,
-          date: date,
-          status,
-          reason: status === 'Present' ? 'Present' : reason,
-          compOffWorkedDate: reason === 'Comp Off' ? compOffWorkedDate : null,
-          location: location || 'Not provided',
-          punchInTime: status === 'Present' ? punchInTime : 'Leave applied',
-          markedAt: new Date().toISOString(),
-          isPartOfRange: datesToMark.length > 1,
-          rangeStart: datesToMark.length > 1 ? selectedDate : null,
-          rangeEnd: datesToMark.length > 1 ? endDate : null,
-          gpsVerified: gpsVerified
-        };
-        batch.set(docRef, recordData);
-        newLocalRecords.push(recordData);
-      });
-      await batch.commit();
-      setLocalSubmittedAttendance(prev => [...prev, ...newLocalRecords]);
-      if (datesToMark.length > 1) {
-        alert(`✅ Leave marked for ${datesToMark.length} days!\nFrom: ${selectedDate}\nTo: ${endDate}\n\nYour leave balance has been updated.`);
-      } else {
-        alert(`✅ Attendance marked!\nPunch-in time: ${punchInTime}\nLocation: ${location}`);
-      }
-      setIsDateRange(false);
-      setEndDate(selectedDate);
-    } catch (e) {
-      alert('Failed: ' + e.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "My Attendance"), React.createElement("div", {
-    className: "grid md:grid-cols-3 gap-4"
-  }, React.createElement("div", {
-    className: "bg-white p-4 rounded-xl shadow-lg border-l-4 border-blue-500"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("div", null, React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "Entitled Leave"), React.createElement("p", {
-    className: "text-2xl font-bold text-blue-600"
-  }, leaveBalance.entitled.remaining, "/", leaveBalance.entitled.total)), React.createElement("div", {
-    className: "text-right"
-  }, React.createElement("span", {
-    className: "text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full"
-  }, "Used: ", leaveBalance.entitled.used))), React.createElement("div", {
-    className: "mt-2 bg-gray-200 rounded-full h-2"
-  }, React.createElement("div", {
-    className: "bg-blue-500 h-2 rounded-full transition-all",
-    style: {
-      width: `${leaveBalance.entitled.remaining / leaveBalance.entitled.total * 100}%`
-    }
-  }))), React.createElement("div", {
-    className: "bg-white p-4 rounded-xl shadow-lg border-l-4 border-pink-500"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("div", null, React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "Maternity Leave"), React.createElement("p", {
-    className: "text-2xl font-bold text-pink-600"
-  }, leaveBalance.maternity.remaining, "/", leaveBalance.maternity.total)), React.createElement("div", {
-    className: "text-right"
-  }, React.createElement("span", {
-    className: "text-xs bg-pink-100 text-pink-700 px-2 py-1 rounded-full"
-  }, "Used: ", leaveBalance.maternity.used))), React.createElement("div", {
-    className: "mt-2 bg-gray-200 rounded-full h-2"
-  }, React.createElement("div", {
-    className: "bg-pink-500 h-2 rounded-full transition-all",
-    style: {
-      width: `${leaveBalance.maternity.remaining / leaveBalance.maternity.total * 100}%`
-    }
-  }))), React.createElement("div", {
-    className: "bg-white p-4 rounded-xl shadow-lg border-l-4 border-purple-500"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center"
-  }, React.createElement("div", null, React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, "Paternity Leave"), React.createElement("p", {
-    className: "text-2xl font-bold text-purple-600"
-  }, leaveBalance.paternity.remaining, "/", leaveBalance.paternity.total)), React.createElement("div", {
-    className: "text-right"
-  }, React.createElement("span", {
-    className: "text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full"
-  }, "Used: ", leaveBalance.paternity.used))), React.createElement("div", {
-    className: "mt-2 bg-gray-200 rounded-full h-2"
-  }, React.createElement("div", {
-    className: "bg-purple-500 h-2 rounded-full transition-all",
-    style: {
-      width: `${leaveBalance.paternity.remaining / leaveBalance.paternity.total * 100}%`
-    }
-  })))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg max-w-2xl mx-auto"
-  }, React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Status *"), React.createElement("div", {
-    className: "flex gap-3"
-  }, React.createElement("button", {
-    onClick: () => {
-      setStatus('Present');
-      setReason('Present');
-    },
-    className: `flex-1 py-3 rounded-xl font-semibold ${status === 'Present' ? 'bg-green-500 text-white' : 'bg-gray-200'}`
-  }, "\u2713 Present"), React.createElement("button", {
-    onClick: () => { setStatus('On Leave'); setReason('Personal Leave'); },
-    className: `flex-1 py-3 rounded-xl font-semibold ${status === 'On Leave' ? 'bg-orange-500 text-white' : 'bg-gray-200'}`
-  }, "\uD83D\uDCC5 On Leave"))), status === 'On Leave' && React.createElement(React.Fragment, null, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "Reason *"), React.createElement("select", {
-    value: reason,
-    onChange: e => setReason(e.target.value),
-    className: "w-full border-2 px-4 py-3 rounded-xl"
-  }, LEAVE_REASONS.filter(r => r !== 'Present').map(r => React.createElement("option", {
-    key: r,
-    value: r
-  }, r)))), reason === 'Comp Off' && React.createElement("div", {
-    className: "mt-4 p-4 bg-purple-50 rounded-xl border-2 border-purple-200"
-  }, React.createElement("label", {
-    className: "block text-sm font-bold mb-2 text-purple-800"
-  }, "\uD83D\uDCC5 When did you work? ", React.createElement("span", {
-    className: "text-red-500"
-  }, "*")), React.createElement("p", {
-    className: "text-xs text-purple-600 mb-3"
-  }, "Select the date when you worked extra (within last 2 weeks only)"), React.createElement("input", {
-    type: "date",
-    value: compOffWorkedDate,
-    max: getTodayDate(),
-    min: (() => { const d = new Date(); d.setDate(d.getDate() - 14); return d.toISOString().split('T')[0]; })(),
-    onChange: e => setCompOffWorkedDate(e.target.value),
-    className: "w-full border-2 px-4 py-3 rounded-xl border-purple-300 focus:border-purple-500 focus:outline-none"
-  }), compOffWorkedDate && React.createElement("p", {
-    className: "text-sm text-purple-700 mt-2"
-  }, "\u2713 Worked on: ", compOffWorkedDate)), React.createElement("div", {
-    className: "bg-blue-50 p-4 rounded-xl border-2 border-blue-200"
-  }, React.createElement("label", {
-    className: "flex items-center gap-3 cursor-pointer"
-  }, React.createElement("input", {
-    type: "checkbox",
-    checked: isDateRange,
-    onChange: e => {
-      setIsDateRange(e.target.checked);
-      if (!e.target.checked) {
-        setEndDate(selectedDate);
-      }
-    },
-    className: "w-5 h-5 rounded"
-  }), React.createElement("span", {
-    className: "font-semibold text-blue-800"
-  }, "Apply leave for multiple days")), React.createElement("p", {
-    className: "text-sm text-blue-600 mt-1 ml-8"
-  }, "Enable this if you're taking 2 or more days of leave"))), React.createElement("div", {
-    className: `grid ${isDateRange && status === 'On Leave' ? 'md:grid-cols-2' : 'grid-cols-1'} gap-4`
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, isDateRange && status === 'On Leave' ? 'Start Date' : 'Date'), React.createElement("input", {
-    type: "date",
-    value: selectedDate,
-    min: minDate,
-    max: maxDate,
-    onChange: e => {
-      setSelectedDate(e.target.value);
-      if (!isDateRange || e.target.value > endDate) {
-        setEndDate(e.target.value);
-      }
-    },
-    className: "w-full border-2 px-4 py-3 rounded-xl"
-  }), React.createElement("p", {
-    className: "text-xs text-gray-500 mt-1"
-  }, status === 'On Leave' ? "\uD83D\uDCC5 Leave: up to 10 days ahead & 2 days back" : "\uD83D\uDCC5 Attendance: today and previous 2 days only")), isDateRange && status === 'On Leave' && React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "End Date"), React.createElement("input", {
-    type: "date",
-    value: endDate,
-    min: selectedDate,
-    max: maxDate,
-    onChange: e => setEndDate(e.target.value),
-    className: "w-full border-2 px-4 py-3 rounded-xl"
-  }))), isDateRange && status === 'On Leave' && daysToMark > 0 && React.createElement("div", {
-    className: "bg-yellow-50 p-4 rounded-xl border-2 border-yellow-300"
-  }, React.createElement("p", {
-    className: "font-semibold text-yellow-800"
-  }, "\uD83D\uDCC5 ", daysToMark, " day", daysToMark > 1 ? 's' : '', " will be marked as ", reason), React.createElement("p", {
-    className: "text-sm text-yellow-700 mt-1"
-  }, "From ", selectedDate, " to ", endDate)), status === 'Present' && React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-2"
-  }, "\uD83D\uDCCD GPS Location ", React.createElement("span", {
-    className: "text-red-500"
-  }, "*"), gpsVerified && React.createElement("span", {
-    className: "text-green-600 text-xs ml-2"
-  }, "\u2713 Verified")), React.createElement("div", {
-    className: "bg-blue-50 p-3 rounded-xl border-2 border-blue-200 mb-3"
-  }, React.createElement("p", {
-    className: "text-sm text-blue-800 font-semibold"
-  }, "\uD83D\uDCCD GPS verification is mandatory"), React.createElement("p", {
-    className: "text-xs text-blue-600 mt-1"
-  }, "You must fetch your GPS location to mark attendance. Manual entry is not allowed.")), React.createElement("div", {
-    className: "flex gap-2"
-  }, React.createElement("input", {
-    type: "text",
-    value: location,
-    readOnly: true,
-    className: "flex-1 border-2 px-4 py-3 rounded-xl bg-gray-100 cursor-not-allowed",
-    placeholder: "Click 'Get GPS Location' button \u2192"
-  }), React.createElement("button", {
-    onClick: getLocation,
-    disabled: fetchingLocation || gpsVerified,
-    className: `px-6 py-3 rounded-xl font-semibold disabled:opacity-50 transition-all ${gpsVerified ? 'bg-green-600 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`
-  }, fetchingLocation ? '📍 Fetching...' : gpsVerified ? '✓ GPS Verified' : '📍 Get GPS Location')), location && gpsVerified && React.createElement("div", {
-    className: "mt-2 p-2 bg-green-50 rounded-lg border border-green-200"
-  }, React.createElement("p", {
-    className: "text-sm text-green-700"
-  }, "\u2713 Location captured: ", location)), !gpsVerified && React.createElement("p", {
-    className: "text-xs text-red-500 mt-2"
-  }, "\u26A0\uFE0F Please click \"Get GPS Location\" to verify your location before submitting")), hasExistingAttendance && React.createElement("div", {
-    className: "bg-amber-50 p-4 rounded-xl border-2 border-amber-300"
-  }, React.createElement("p", {
-    className: "font-semibold text-amber-800"
-  }, "\uD83D\uDD12 Attendance already marked for ", selectedDate), React.createElement("p", {
-    className: "text-sm text-amber-700 mt-1"
-  }, "Once attendance is submitted, it cannot be modified. Please contact your admin if you need to make changes.")), React.createElement("button", {
-    onClick: handleSubmit,
-    disabled: submitting || hasExistingAttendance || status === 'Present' && !gpsVerified,
-    className: `w-full py-4 rounded-xl font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all ${hasExistingAttendance ? 'bg-gray-400 text-white' : status === 'Present' && !gpsVerified ? 'bg-red-400 text-white' : 'avanti-gradient text-white'}`
-  }, submitting ? 'Submitting...' : hasExistingAttendance ? '🔒 Already Marked (No Changes Allowed)' : status === 'Present' && !gpsVerified ? '📍 GPS Verification Required' : isDateRange && status === 'On Leave' ? `Submit Leave (${daysToMark} days)` : 'Submit Attendance'), todayRecord && React.createElement("div", {
-    className: "mt-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl"
-  }, React.createElement("h4", {
-    className: "font-bold text-green-800 mb-2"
-  }, "\u2713 Already Marked for ", selectedDate), React.createElement("p", null, React.createElement("strong", null, "Status:"), " ", todayRecord.status), React.createElement("p", null, React.createElement("strong", null, "Reason:"), " ", todayRecord.reason), todayRecord.compOffWorkedDate && React.createElement("p", null, React.createElement("strong", null, "Comp Off Worked Date:"), " ", todayRecord.compOffWorkedDate), React.createElement("p", null, React.createElement("strong", null, "Punch-in Time:"), " \u23F0 ", todayRecord.punchInTime || 'Not recorded'), React.createElement("p", null, React.createElement("strong", null, "Location:"), " ", todayRecord.location), todayRecord.gpsVerified && React.createElement("p", {
-    className: "text-xs text-green-600 mt-1"
-  }, "\u2713 GPS Verified")))));
 }
 function AdminAttendanceAnalytics({
   students,
