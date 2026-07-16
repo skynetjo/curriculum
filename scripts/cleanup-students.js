@@ -163,7 +163,7 @@ async function main() {
   fs.mkdirSync(backupDir, { recursive: true });
 
   const backupFile = (name, docs) => {
-    const data = docs.map(d => ({ id: d.id, ...d.data() }));
+    const data = docs.map(d => ({ documentPath: d.ref.path, data: d.data() }));
     fs.writeFileSync(path.join(backupDir, `${name}.json`), JSON.stringify(data, null, 2));
     console.log(`  Backed up ${data.length} doc(s) to ${name}.json`);
   };
