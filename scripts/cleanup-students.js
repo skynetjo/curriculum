@@ -33,6 +33,7 @@
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
+const { getFirestore } = require('firebase-admin/firestore');
 
 const KEEP_SCHOOLS = ['CoE Barwani', 'CoE Cuttak', 'CoE Mahisagar', 'JNV Bharuch', 'EMRS Bhopal'];
 const KEEP_GRADE = '11';
@@ -46,8 +47,8 @@ function shouldKeep(student) {
 }
 
 async function main() {
-  admin.initializeApp({ credential: admin.credential.applicationDefault() });
-  const db = admin.firestore();
+  admin.initializeApp({ credential: admin.applicationDefault() });
+  const db = getFirestore();
 
   console.log('Fetching students collection...');
   const studentsSnap = await db.collection('students').get();
