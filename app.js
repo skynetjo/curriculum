@@ -12700,6 +12700,7 @@ function TimetablePage({ currentUser, mySchool }) {
   function getAllSubjects(){
     var seen={}; var s=[];
     teachers.forEach(function(t){ if(t.subject&&!seen[t.subject]){seen[t.subject]=true;s.push(t.subject);} });
+    SUBJECTS.forEach(function(sub){ if(!seen[sub]){seen[sub]=true;s.push(sub);} });
     CBSE_SUBJECTS.forEach(function(cs){ if(!seen[cs]){seen[cs]=true;s.push(cs);} });
     return s.sort();
   }
