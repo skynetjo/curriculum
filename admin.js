@@ -2480,7 +2480,8 @@ function StudentManagement({
   students,
   isSuperAdmin = true,
   isDirector = false,
-  accessibleSchools = SCHOOLS
+  accessibleSchools = SCHOOLS,
+  canEdit = isSuperAdmin
 }) {
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -2852,13 +2853,14 @@ function StudentManagement({
     }));
     exportToExcel(exportData, 'students_list');
   };
+  const colCount = 5 + (isSuperAdmin ? 1 : 0) + (canEdit ? 1 : 0);
   return React.createElement("div", {
     className: "space-y-6"
   }, React.createElement("div", {
     className: "flex justify-between items-center flex-wrap gap-4"
   }, React.createElement("div", null, React.createElement("h2", {
     className: "text-3xl font-bold"
-  }, "Student Management"), !isSuperAdmin && React.createElement("p", {
+  }, "Student Management"), !canEdit && React.createElement("p", {
     className: "text-sm text-gray-500 mt-1"
   }, "\uD83D\uDC41\uFE0F View Only Mode - Contact Super Admin for modifications")), React.createElement("div", {
     className: "flex gap-3 flex-wrap"
@@ -3013,10 +3015,10 @@ function StudentManagement({
     className: "p-3 text-left"
   }, "Name"), React.createElement("th", {
     className: "p-3 text-left"
-  }, "Gender"), isSuperAdmin && React.createElement("th", {
+  }, "Gender"), canEdit && React.createElement("th", {
     className: "p-3 text-left"
   }, "Actions"))), React.createElement("tbody", null, filteredStudents.length === 0 ? React.createElement("tr", null, React.createElement("td", {
-    colSpan: isSuperAdmin ? "7" : "5",
+    colSpan: colCount,
     className: "p-8 text-center text-gray-500"
   }, "No students found")) : filteredStudents.map(s => React.createElement("tr", {
     key: s.docId,
@@ -3040,7 +3042,7 @@ function StudentManagement({
     className: "p-3 font-semibold"
   }, s.name), React.createElement("td", {
     className: "p-3"
-  }, s.gender), isSuperAdmin && React.createElement("td", {
+  }, s.gender), canEdit && React.createElement("td", {
     className: "p-3"
   }, React.createElement("div", {
     className: "flex gap-2"
@@ -3050,7 +3052,7 @@ function StudentManagement({
   }, "Edit"), React.createElement("button", {
     onClick: () => handleDelete(s),
     className: "px-3 py-1 bg-red-500 text-white rounded-lg font-semibold"
-  }, "Delete")))))))), isSuperAdmin && showModal && React.createElement("div", {
+  }, "Delete")))))))), canEdit && showModal && React.createElement("div", {
     className: "modal-overlay",
     onClick: () => {
       setShowModal(false);

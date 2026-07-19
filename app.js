@@ -6482,6 +6482,12 @@ function TeacherView({
       className: "fa-solid fa-boxes-stacked"
     })
   }, {
+    id: 'students',
+    label: 'Students',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-user-graduate"
+    })
+  }, {
     id: 'timetable',
     label: 'Timetable',
     icon: React.createElement("i", {
@@ -6516,6 +6522,12 @@ function TeacherView({
     label: 'Asset Management',
     icon: React.createElement("i", {
       className: "fa-solid fa-boxes-stacked"
+    })
+  }, {
+    id: 'students',
+    label: 'Students',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-user-graduate"
     })
   }, {
     id: 'timetable',
@@ -6807,6 +6819,12 @@ function TeacherView({
   }), activeTab === 'assets' && React.createElement(AssetManagement, {
     currentUser: currentUser,
     students: students
+  }), activeTab === 'students' && React.createElement(StudentManagement, {
+    students: students,
+    isSuperAdmin: false,
+    isDirector: false,
+    accessibleSchools: [currentUser?.school],
+    canEdit: true
   }), activeTab === 'socialwall' && React.createElement(SocialWall, {
     teachers: teachers,
     currentUser: currentUser
