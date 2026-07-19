@@ -122,12 +122,6 @@ function AdminView({
     icon: React.createElement("i", {
       className: "fa-solid fa-calendar"
     })
-  }, {
-    id: 'studentprofiles',
-    label: 'Student Profiles',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-id-card"
-    })
   }];
   const handleTabClick = tabId => {
     setActiveTab(tabId);
@@ -401,10 +395,6 @@ function AdminView({
     isDirector: isDirector
   }), activeTab === 'birthdays' && React.createElement(AdminBirthdays, {
     teachers: filteredTeachers
-  }), activeTab === 'studentprofiles' && React.createElement(AdminStudentProfiles, {
-    accessibleSchools: availableSchools,
-    isSuperAdmin: isSuperAdmin,
-    isDirector: isDirector
   }), activeTab === 'timetable' && React.createElement(TimetableAdminSection, {
     currentUser: currentUser,
     availableSchools: availableSchools
