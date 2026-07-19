@@ -476,6 +476,7 @@ const MANAGER_ROLES = {
   ASSOC_DIRECTOR: 'assoc_director',
   TRAINING: 'training',
   APH: 'aph',
+  SENIOR_PM: 'senior_pm',
   PM: 'pm',
   APM: 'apm',
   APC: 'apc'
@@ -486,6 +487,7 @@ const ROLE_LABELS = {
   'assoc_director': 'Associate Director',
   'training': 'Training Department',
   'aph': 'Program Head',
+  'senior_pm': 'Senior Program Manager',
   'pm': 'Program Manager',
   'apm': 'Associate Program Manager',
   'apc': 'Academic Program Coordinator'
@@ -512,6 +514,11 @@ const ROLE_COLORS = {
     border: 'border-cyan-200'
   },
   'aph': {
+    bg: 'bg-blue-100',
+    text: 'text-blue-700',
+    border: 'border-blue-200'
+  },
+  'senior_pm': {
     bg: 'bg-blue-100',
     text: 'text-blue-700',
     border: 'border-blue-200'
@@ -4343,7 +4350,7 @@ function ProfileCompletionBanner({
 }) {
   const [isDismissed, setIsDismissed] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
-  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin', 'Director', 'Associate Director', 'Training Department', 'director', 'assoc_director', 'training'];
+  const managerRoles = ['Super Admin', 'Program Head', 'Senior Program Manager', 'senior_pm', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin', 'Director', 'Associate Director', 'Training Department', 'director', 'assoc_director', 'training'];
   const isManager = currentUser?.role && managerRoles.some(role => currentUser.role.toLowerCase().includes(role.toLowerCase()) || role.toLowerCase().includes(currentUser.role.toLowerCase()));
   const requiredFields = [{
     key: 'name',
@@ -4512,7 +4519,7 @@ function ProfileCompletionCard({
   currentUser,
   onNavigateToProfile
 }) {
-  const managerRoles = ['Super Admin', 'Program Head', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin', 'Director', 'Associate Director', 'Training Department', 'director', 'assoc_director', 'training'];
+  const managerRoles = ['Super Admin', 'Program Head', 'Senior Program Manager', 'senior_pm', 'Program Manager', 'Associate Program Manager', 'PM', 'PH', 'APM', 'Admin', 'Director', 'Associate Director', 'Training Department', 'director', 'assoc_director', 'training'];
   const isManager = currentUser?.role && managerRoles.some(role => currentUser.role.toLowerCase().includes(role.toLowerCase()) || role.toLowerCase().includes(currentUser.role.toLowerCase()));
   if (isManager) return null;
   const requiredFields = ['name', 'email', 'phone', 'whatsapp', 'dob', 'dateOfBirth', 'school', 'subject', 'profilePhoto', 'joiningDate', 'qualification', 'address', 'emergencyContact', 'bloodGroup'];
@@ -5136,7 +5143,7 @@ function App() {
       try {
         const hasCachedData = loadCachedData();
         const userSchool = currentUser?.school;
-        const userIsAdmin = currentUser && (currentUser.email === 'admin@avantifellows.org' || currentUser.role === 'super_admin' || currentUser.role === 'program_head' || currentUser.role === 'program_manager' || currentUser.role === 'associate_program_manager' || currentUser.role === 'aph' || currentUser.role === 'pm' || currentUser.role === 'apm' || currentUser.role === 'director' || currentUser.role === 'assoc_director' || currentUser.role === 'training');
+        const userIsAdmin = currentUser && (currentUser.email === 'admin@avantifellows.org' || currentUser.role === 'super_admin' || currentUser.role === 'program_head' || currentUser.role === 'program_manager' || currentUser.role === 'associate_program_manager' || currentUser.role === 'aph' || currentUser.role === 'senior_pm' || currentUser.role === 'pm' || currentUser.role === 'apm' || currentUser.role === 'director' || currentUser.role === 'assoc_director' || currentUser.role === 'training');
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         console.log('📊 Fetching critical data...');
         if (window.updateShellStatus) window.updateShellStatus('Loading teachers...');
@@ -7284,17 +7291,32 @@ function TeacherView({
   }, React.createElement("p", null, "Made by Anand with \u2764\uFE0F")));
 }
 function ManagerManagement({
-  managers,
+  managers: initialManagers,
   currentUser,
   isSuperAdmin
 }) {
+  const [managers, setManagers] = useState(initialManagers || []);
+  useEffect(() => {
+    setManagers(initialManagers || []);
+  }, [initialManagers]);
+  const refreshManagers = async () => {
+    try {
+      const snap = await db.collection('managers').get();
+      setManagers(snap.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      })));
+    } catch (e) {
+      console.error('Failed to refresh managers:', e);
+    }
+  };
   const [showModal, setShowModal] = useState(false);
   const [editingManager, setEditingManager] = useState(null);
   const [form, setForm] = useState({
     name: '',
     email: '',
     afCode: '',
-    role: MANAGER_ROLES.APH,
+    role: MANAGER_ROLES.SENIOR_PM,
     reportsTo: '',
     directSchools: [],
     phone: '',
@@ -7325,18 +7347,12 @@ function ManagerManagement({
   const getManagersByRole = role => managers.filter(m => m.role === role && m.status === 'active');
   const getReportsToOptions = role => {
     switch (role) {
-      case MANAGER_ROLES.DIRECTOR:
-        return [];
-      case MANAGER_ROLES.ASSOC_DIRECTOR:
-        return [];
-      case MANAGER_ROLES.TRAINING:
-        return [];
-      case MANAGER_ROLES.APH:
+      case MANAGER_ROLES.SENIOR_PM:
         return [];
       case MANAGER_ROLES.PM:
-        return getManagersByRole(MANAGER_ROLES.APH);
+        return getManagersByRole(MANAGER_ROLES.SENIOR_PM);
       case MANAGER_ROLES.APM:
-        return getManagersByRole(MANAGER_ROLES.PM);
+        return getManagersByRole(MANAGER_ROLES.SENIOR_PM);
       default:
         return [];
     }
@@ -7375,7 +7391,7 @@ function ManagerManagement({
       name: '',
       email: '',
       afCode: '',
-      role: MANAGER_ROLES.APH,
+      role: MANAGER_ROLES.SENIOR_PM,
       reportsTo: '',
       directSchools: [],
       phone: '',
@@ -7393,7 +7409,7 @@ function ManagerManagement({
       name: manager.name || '',
       email: manager.email || '',
       afCode: manager.afCode || '',
-      role: manager.role || MANAGER_ROLES.APH,
+      role: manager.role || MANAGER_ROLES.SENIOR_PM,
       reportsTo: manager.reportsTo || '',
       directSchools: manager.directSchools || [],
       phone: manager.phone || '',
@@ -7549,22 +7565,21 @@ function ManagerManagement({
       return;
     }
     if ((form.role === MANAGER_ROLES.PM || form.role === MANAGER_ROLES.APM) && !form.reportsTo) {
-      const parentLabel = form.role === MANAGER_ROLES.PM ? 'Program Head' : 'Program Manager';
+      const parentLabel = 'Senior Program Manager';
       const hasOptions = getReportsToOptions(form.role).length > 0;
       const proceed = confirm(hasOptions ? `You haven't selected who this person reports to.\n\nThey'll be added as "Unassigned" and will show up under "Unassigned Managers" until you assign a ${parentLabel} to them.\n\nContinue?` : `There's no active ${parentLabel} to assign right now.\n\n${form.name || 'This person'} will be added as "Unassigned" and can be linked to a manager later from the "Unassigned Managers" section.\n\nContinue?`);
       if (!proceed) return;
     }
-    const isDirectorRole = form.role === 'director' || form.role === 'assoc_director' || form.role === 'training';
     try {
       const managerData = {
         name: form.name,
         email: form.email.toLowerCase(),
         afCode: form.afCode || null,
         role: form.role,
-        reportsTo: form.role === MANAGER_ROLES.APH || isDirectorRole ? null : form.reportsTo || null,
-        directSchools: isDirectorRole ? [] : form.directSchools,
-        viewAllSchools: isDirectorRole,
-        canApprove: !isDirectorRole,
+        reportsTo: form.role === MANAGER_ROLES.SENIOR_PM ? null : form.reportsTo || null,
+        directSchools: form.directSchools,
+        viewAllSchools: false,
+        canApprove: true,
         phone: form.phone,
         whatsapp: form.whatsapp || null,
         status: form.status,
@@ -7582,7 +7597,7 @@ function ManagerManagement({
         alert(`✅ ${ROLE_LABELS[form.role]} added successfully!\n\n` + `📧 Email: ${form.email}\n\n` + `⚠️ IMPORTANT: Create Firebase Auth user:\n` + `1. Firebase Console → Authentication → Users\n` + `2. Click "Add user"\n` + `3. Enter: ${form.email}\n` + `4. Set password and share with them`);
       }
       setShowModal(false);
-      window.location.reload();
+      await refreshManagers();
     } catch (e) {
       alert('Failed: ' + e.message);
     }
@@ -7595,7 +7610,7 @@ function ManagerManagement({
         deactivatedAt: new Date().toISOString()
       });
       alert('✅ Deactivated');
-      window.location.reload();
+      await refreshManagers();
     } catch (e) {
       alert('Failed: ' + e.message);
     }
@@ -7607,7 +7622,7 @@ function ManagerManagement({
         reactivatedAt: new Date().toISOString()
       });
       alert('✅ Reactivated');
-      window.location.reload();
+      await refreshManagers();
     } catch (e) {
       alert('Failed: ' + e.message);
     }
@@ -7622,7 +7637,7 @@ function ManagerManagement({
     try {
       await db.collection('managers').doc(manager.id).delete();
       alert('✅ Deleted permanently');
-      window.location.reload();
+      await refreshManagers();
     } catch (e) {
       alert('Failed: ' + e.message);
     }
@@ -7692,7 +7707,7 @@ function ManagerManagement({
       className: "flex items-center gap-2 flex-wrap"
     }, React.createElement("span", {
       className: "text-2xl"
-    }, manager.role === MANAGER_ROLES.APH ? '👔' : manager.role === MANAGER_ROLES.PM ? '👨‍💼' : '👤'), React.createElement("span", {
+    }, manager.role === MANAGER_ROLES.SENIOR_PM || manager.role === MANAGER_ROLES.APH ? '👔' : manager.role === MANAGER_ROLES.PM ? '👨‍💼' : '👤'), React.createElement("span", {
       className: "text-xl font-bold"
     }, manager.name), React.createElement("span", {
       className: `px-3 py-1 ${colors.bg} ${colors.text} text-xs rounded-full font-bold border ${colors.border}`
@@ -7731,7 +7746,7 @@ function ManagerManagement({
       className: "px-3 py-1 bg-red-700 text-white rounded-lg font-semibold text-sm"
     }, "Delete")))), reportees.map(reportee => renderManagerCard(reportee, level + 1)));
   };
-  const topLevelManagers = managers.filter(m => m.role === MANAGER_ROLES.APH && m.status === 'active');
+  const topLevelManagers = managers.filter(m => m.role === MANAGER_ROLES.SENIOR_PM && m.status === 'active');
   const unassignedManagers = managers.filter(m => (m.role === MANAGER_ROLES.PM || m.role === MANAGER_ROLES.APM) && !m.reportsTo && m.status === 'active');
   return React.createElement("div", {
     className: "space-y-6"
@@ -7752,22 +7767,24 @@ function ManagerManagement({
   }, React.createElement("h3", {
     className: "font-bold mb-3"
   }, "\uD83D\uDCCB Role Hierarchy"), React.createElement("div", {
-    className: "flex flex-wrap gap-3"
+    className: "flex flex-wrap items-center gap-3"
   }, React.createElement("span", {
     className: "px-3 py-2 bg-purple-100 text-purple-700 rounded-lg text-sm font-semibold border border-purple-200"
   }, "\uD83D\uDC51 Super Admin"), React.createElement("span", {
     className: "text-gray-400"
   }, "\u2192"), React.createElement("span", {
     className: "px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold border border-blue-200"
-  }, "\uD83D\uDC54 PH (Program Head)"), React.createElement("span", {
+  }, "\uD83D\uDC54 Senior Program Manager"), React.createElement("span", {
     className: "text-gray-400"
-  }, "\u2192"), React.createElement("span", {
+  }, "\u2192"), React.createElement("div", {
+    className: "flex flex-wrap items-center gap-2"
+  }, React.createElement("span", {
     className: "px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-semibold border border-green-200"
-  }, "\uD83D\uDC68\u200D\uD83D\uDCBC PM (Program Manager)"), React.createElement("span", {
-    className: "text-gray-400"
-  }, "\u2192"), React.createElement("span", {
+  }, "\uD83D\uDC68\u200D\uD83D\uDCBC Program Manager"), React.createElement("span", {
+    className: "text-gray-400 text-xs"
+  }, "&"), React.createElement("span", {
     className: "px-3 py-2 bg-orange-100 text-orange-700 rounded-lg text-sm font-semibold border border-orange-200"
-  }, "\uD83D\uDC64 APM (Associate Program Manager)"))), React.createElement("div", {
+  }, "\uD83D\uDC64 Associate Program Manager")))), React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "text-xl font-bold mb-4"
@@ -7790,14 +7807,8 @@ function ManagerManagement({
   }, React.createElement("option", {
     value: "All"
   }, "All Roles"), React.createElement("option", {
-    value: MANAGER_ROLES.DIRECTOR
-  }, "Director"), React.createElement("option", {
-    value: MANAGER_ROLES.ASSOC_DIRECTOR
-  }, "Associate Director"), React.createElement("option", {
-    value: MANAGER_ROLES.TRAINING
-  }, "Training Department"), React.createElement("option", {
-    value: MANAGER_ROLES.APH
-  }, "Program Head (PH)"), React.createElement("option", {
+    value: MANAGER_ROLES.SENIOR_PM
+  }, "Senior Program Manager"), React.createElement("option", {
     value: MANAGER_ROLES.PM
   }, "Program Manager (PM)"), React.createElement("option", {
     value: MANAGER_ROLES.APM
@@ -7807,7 +7818,7 @@ function ManagerManagement({
     className: "text-xl font-bold mb-4"
   }, "\uD83D\uDCCA Organization Hierarchy"), React.createElement("p", {
     className: "text-sm text-gray-600 mb-4"
-  }, "Director \u2192 Associate Director \u2192 Program Head \u2192 Program Manager \u2192 Associate Program Manager"), React.createElement("div", {
+  }, "Senior Program Manager \u2192 Program Manager & Associate Program Manager"), React.createElement("div", {
     className: "space-y-4"
   }, React.createElement("div", {
     className: "border-2 border-purple-200 rounded-xl p-4 bg-purple-50"
@@ -7823,58 +7834,7 @@ function ManagerManagement({
     className: "text-sm text-gray-600 mt-1"
   }, "\uD83D\uDCE7 admin@avantifellows.org"), React.createElement("div", {
     className: "text-sm text-green-600 font-semibold mt-2"
-  }, "\uD83D\uDCCA Full Access: All Schools")), managers.filter(m => m.role === 'director' && m.status === 'active').map(director => React.createElement("div", {
-    key: director.id,
-    className: "border-2 border-indigo-200 rounded-xl p-4 bg-indigo-50 ml-4"
-  }, React.createElement("div", {
-    className: "flex items-center gap-2"
-  }, React.createElement("span", {
-    className: "text-2xl"
-  }, "\uD83C\uDFAF"), React.createElement("span", {
-    className: "text-xl font-bold"
-  }, director.name), React.createElement("span", {
-    className: "px-3 py-1 bg-indigo-600 text-white text-xs rounded-full font-bold"
-  }, "DIRECTOR"), React.createElement("span", {
-    className: "px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded-full"
-  }, "View Only")), React.createElement("div", {
-    className: "text-sm text-gray-600 mt-1"
-  }, "\uD83D\uDCE7 ", director.email), React.createElement("div", {
-    className: "text-sm text-green-600 font-semibold mt-2"
-  }, "\uD83D\uDCCA View Access: All Schools"))), managers.filter(m => m.role === 'assoc_director' && m.status === 'active').map(assocDir => React.createElement("div", {
-    key: assocDir.id,
-    className: "border-2 border-violet-200 rounded-xl p-4 bg-violet-50 ml-4"
-  }, React.createElement("div", {
-    className: "flex items-center gap-2"
-  }, React.createElement("span", {
-    className: "text-2xl"
-  }, "\uD83C\uDF96\uFE0F"), React.createElement("span", {
-    className: "text-xl font-bold"
-  }, assocDir.name), React.createElement("span", {
-    className: "px-3 py-1 bg-violet-600 text-white text-xs rounded-full font-bold"
-  }, "ASSOCIATE DIRECTOR"), React.createElement("span", {
-    className: "px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded-full"
-  }, "View Only")), React.createElement("div", {
-    className: "text-sm text-gray-600 mt-1"
-  }, "\uD83D\uDCE7 ", assocDir.email), React.createElement("div", {
-    className: "text-sm text-green-600 font-semibold mt-2"
-  }, "\uD83D\uDCCA View Access: All Schools"))), managers.filter(m => m.role === 'training' && m.status === 'active').map(trainer => React.createElement("div", {
-    key: trainer.id,
-    className: "border-2 border-cyan-200 rounded-xl p-4 bg-cyan-50 ml-4"
-  }, React.createElement("div", {
-    className: "flex items-center gap-2"
-  }, React.createElement("span", {
-    className: "text-2xl"
-  }, "\uD83D\uDCDA"), React.createElement("span", {
-    className: "text-xl font-bold"
-  }, trainer.name), React.createElement("span", {
-    className: "px-3 py-1 bg-cyan-600 text-white text-xs rounded-full font-bold"
-  }, "TRAINING DEPARTMENT"), React.createElement("span", {
-    className: "px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded-full"
-  }, "View Only")), React.createElement("div", {
-    className: "text-sm text-gray-600 mt-1"
-  }, "\uD83D\uDCE7 ", trainer.email), React.createElement("div", {
-    className: "text-sm text-green-600 font-semibold mt-2"
-  }, "\uD83D\uDCCA View Access: All Schools"))), topLevelManagers.map(manager => renderManagerCard(manager)), unassignedManagers.length > 0 && React.createElement("div", {
+  }, "\uD83D\uDCCA Full Access: All Schools")), topLevelManagers.map(manager => renderManagerCard(manager)), unassignedManagers.length > 0 && React.createElement("div", {
     className: "border-2 border-red-200 rounded-xl p-4 bg-red-50"
   }, React.createElement("div", {
     className: "text-lg font-bold text-red-700 mb-2"
@@ -8095,22 +8055,14 @@ function ManagerManagement({
     }),
     className: "w-full border-2 px-3 py-2 rounded-lg"
   }, React.createElement("option", {
-    value: MANAGER_ROLES.DIRECTOR
-  }, "Director (View Only)"), React.createElement("option", {
-    value: MANAGER_ROLES.ASSOC_DIRECTOR
-  }, "Associate Director (View Only)"), React.createElement("option", {
-    value: MANAGER_ROLES.TRAINING
-  }, "Training Department (View Only)"), React.createElement("option", {
-    value: MANAGER_ROLES.APH
-  }, "Program Head (PH)"), React.createElement("option", {
+    value: MANAGER_ROLES.SENIOR_PM
+  }, "Senior Program Manager"), React.createElement("option", {
     value: MANAGER_ROLES.PM
   }, "Program Manager (PM)"), React.createElement("option", {
     value: MANAGER_ROLES.APM
-  }, "Associate Program Manager (APM)")), (form.role === 'director' || form.role === 'assoc_director' || form.role === 'training') && React.createElement("p", {
-    className: "text-xs text-blue-600 mt-1"
-  }, "\u26A0\uFE0F This role has view-only access to all data. They cannot approve timesheets."))), (form.role === MANAGER_ROLES.PM || form.role === MANAGER_ROLES.APM) && React.createElement("div", null, React.createElement("label", {
+  }, "Associate Program Manager (APM)")))), (form.role === MANAGER_ROLES.PM || form.role === MANAGER_ROLES.APM) && React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-1"
-  }, "Reports To (", form.role === MANAGER_ROLES.PM ? 'PH' : 'PM', ")"), React.createElement("select", {
+  }, "Reports To (Senior PM)"), React.createElement("select", {
     value: form.reportsTo,
     onChange: e => setForm({
       ...form,
@@ -8119,20 +8071,14 @@ function ManagerManagement({
     className: "w-full border-2 px-3 py-2 rounded-lg"
   }, React.createElement("option", {
     value: ""
-  }, "Select ", form.role === MANAGER_ROLES.PM ? 'Program Head' : 'Program Manager'), getReportsToOptions(form.role).map(m => React.createElement("option", {
+  }, "Select Senior Program Manager"), getReportsToOptions(form.role).map(m => React.createElement("option", {
     key: m.id,
     value: m.id
   }, m.name, " (", ROLE_LABELS[m.role], ")"))), getReportsToOptions(form.role).length === 0 ? React.createElement("p", {
     className: "text-xs text-orange-600 mt-1 font-semibold"
-  }, "⚠️ No active ", form.role === MANAGER_ROLES.PM ? 'Program Head' : 'Program Manager', " available. You can still add this person as \"Unassigned\" and link a manager later.") : React.createElement("p", {
+  }, "⚠️ No active Senior Program Manager available. You can still add this person as \"Unassigned\" and link a manager later.") : React.createElement("p", {
     className: "text-xs text-gray-600 mt-1"
-  }, form.role === MANAGER_ROLES.PM ? 'The PH will see all schools assigned to this PM and their APMs' : 'The PM will see all schools assigned to this APM')), form.role === 'director' || form.role === 'assoc_director' || form.role === 'training' ? React.createElement("div", {
-    className: "bg-blue-50 border-2 border-blue-200 rounded-lg p-4"
-  }, React.createElement("p", {
-    className: "text-blue-700 font-semibold"
-  }, "\uD83D\uDCCA All Schools Access"), React.createElement("p", {
-    className: "text-sm text-blue-600 mt-1"
-  }, "This role has view-only access to all schools. No need to assign specific schools.")) : React.createElement("div", null, React.createElement("label", {
+  }, "The Senior Program Manager will see all schools assigned to this ", form.role === MANAGER_ROLES.PM ? 'PM' : 'APM')), React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-2"
   }, "Assign Schools *"), React.createElement("div", {
     className: "border-2 rounded-lg p-3 max-h-48 overflow-y-auto"
@@ -12811,7 +12757,7 @@ function TimetablePage({ currentUser, mySchool }) {
     var utype = (currentUser.userType||'').toLowerCase();
     var role  = (currentUser.role||'').toLowerCase();
     if (utype==='teacher'||utype==='apc'||utype==='manager'||utype==='superadmin') return true;
-    return ['super_admin','manager','admin','apc','pm','apm','program_manager','associate_program_manager','program_head','aph','director','assoc_director'].indexOf(role)!==-1;
+    return ['super_admin','manager','admin','apc','pm','apm','program_manager','associate_program_manager','program_head','aph','senior_pm','director','assoc_director'].indexOf(role)!==-1;
   }
   function getTId(t){ return t.afid||t.docId; }
   function getSubjects(){ var seen={}; var s=[]; teachers.forEach(function(t){ if(t.subject&&!seen[t.subject]){seen[t.subject]=true;s.push(t.subject);} }); return s.sort(); }
@@ -13523,8 +13469,8 @@ function OrgChartDirectory({
       members.push({
         ...m,
         memberType: m.role,
-        displayRole: m.role === 'aph' ? 'Program Head (APH)' : m.role === 'pm' ? 'Program Manager (PM)' : m.role === 'apm' ? 'Associate Program Manager (APM)' : m.role,
-        sortOrder: m.role === 'aph' ? 1 : m.role === 'pm' ? 2 : m.role === 'apm' ? 3 : 4
+        displayRole: m.role === 'senior_pm' ? 'Senior Program Manager' : m.role === 'aph' ? 'Program Head (APH)' : m.role === 'pm' ? 'Program Manager (PM)' : m.role === 'apm' ? 'Associate Program Manager (APM)' : m.role,
+        sortOrder: m.role === 'senior_pm' ? 1 : m.role === 'aph' ? 1 : m.role === 'pm' ? 2 : m.role === 'apm' ? 3 : 4
       });
     });
     apcs.forEach(a => {
@@ -13596,6 +13542,12 @@ function OrgChartDirectory({
   }, [allMembers, searchQuery, filterRole, filterSchool, filterSubject, filterManager, managers]);
   const getRoleColor = role => ({
     'aph': {
+      bg: 'bg-purple-100',
+      text: 'text-purple-700',
+      border: 'border-purple-500',
+      gradient: 'from-purple-500 to-purple-600'
+    },
+    'senior_pm': {
       bg: 'bg-purple-100',
       text: 'text-purple-700',
       border: 'border-purple-500',
@@ -13705,6 +13657,8 @@ function OrgChartDirectory({
   }, React.createElement("option", {
     value: "all"
   }, "All Roles"), React.createElement("option", {
+    value: "senior_pm"
+  }, "Senior Program Manager"), React.createElement("option", {
     value: "aph"
   }, "Program Head (APH)"), React.createElement("option", {
     value: "pm"
@@ -13839,7 +13793,7 @@ function OrgChartDirectory({
   }, React.createElement("div", {
     className: "p-6 text-white rounded-t-3xl relative",
     style: {
-      background: `linear-gradient(135deg, ${selectedMember.memberType === 'aph' ? '#8b5cf6, #7c3aed' : selectedMember.memberType === 'pm' ? '#3b82f6, #2563eb' : selectedMember.memberType === 'apm' ? '#10b981, #059669' : selectedMember.memberType === 'apc' ? '#f59e0b, #d97706' : getSubjectColor(selectedMember.subject) + ', ' + getSubjectColor(selectedMember.subject) + 'cc'})`
+      background: `linear-gradient(135deg, ${selectedMember.memberType === 'aph' || selectedMember.memberType === 'senior_pm' ? '#8b5cf6, #7c3aed' : selectedMember.memberType === 'pm' ? '#3b82f6, #2563eb' : selectedMember.memberType === 'apm' ? '#10b981, #059669' : selectedMember.memberType === 'apc' ? '#f59e0b, #d97706' : getSubjectColor(selectedMember.subject) + ', ' + getSubjectColor(selectedMember.subject) + 'cc'})`
     }
   }, React.createElement("button", {
     onClick: () => setSelectedMember(null),
@@ -14032,7 +13986,7 @@ function SocialWall({
   const [editPostContent, setEditPostContent] = useState('');
   const [editingComment, setEditingComment] = useState(null);
   const [editCommentContent, setEditCommentContent] = useState('');
-  const isAdminOrModerator = currentUser?.role === 'super_admin' || currentUser?.role === 'aph' || currentUser?.role === 'pm' || currentUser?.isSuperAdmin === true;
+  const isAdminOrModerator = currentUser?.role === 'super_admin' || currentUser?.role === 'aph' || currentUser?.role === 'senior_pm' || currentUser?.role === 'pm' || currentUser?.isSuperAdmin === true;
   const compressImage = (file, maxWidth = 1200, quality = 0.7) => {
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
