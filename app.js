@@ -465,10 +465,10 @@ function cacheSchools(schools) {
   } catch (e) {}
 }
 (function () {
-  SCHOOLS = [...APPROVED_SCHOOLS];
-  ALL_SCHOOLS_COUNT = APPROVED_SCHOOLS.length;
-  cacheSchools(APPROVED_SCHOOLS);
-  console.log('📊 [Schools] Initialized with approved schools:', APPROVED_SCHOOLS.join(', '));
+  const cached = getCachedSchools();
+  SCHOOLS = cached.length > 0 ? cached : [...APPROVED_SCHOOLS];
+  ALL_SCHOOLS_COUNT = SCHOOLS.length;
+  console.log('📊 [Schools] Initialized with', cached.length > 0 ? 'cached' : 'approved', 'schools:', SCHOOLS.join(', '));
 })();
 const MANAGER_ROLES = {
   SUPER_ADMIN: 'super_admin',
@@ -5457,10 +5457,11 @@ function App() {
           adjMap[d.id] = d.data();
         });
         setLeaveAdjustments(adjMap);
-        SCHOOLS = [...APPROVED_SCHOOLS];
-        ALL_SCHOOLS_COUNT = APPROVED_SCHOOLS.length;
-        cacheSchools(APPROVED_SCHOOLS);
-        console.log('📊 [Schools] Using approved schools list:', APPROVED_SCHOOLS.join(', '));
+        const schoolsListData = (schoolsSnap.docs || []).map(d => d.data().name).filter(Boolean);
+        SCHOOLS = schoolsListData.length > 0 ? schoolsListData : [...APPROVED_SCHOOLS];
+        ALL_SCHOOLS_COUNT = SCHOOLS.length;
+        cacheSchools(SCHOOLS);
+        console.log('📊 [Schools] Using schools list:', SCHOOLS.join(', '));
         console.log('✅ All data loaded successfully');
         if (window.updateShellStatus) window.updateShellStatus('✓ Ready!', true);
         if (window.SmartSyncManager) {
@@ -7657,9 +7658,13 @@ function ManagerManagement({
         createdAt: new Date().toISOString(),
         createdBy: currentUser.email
       });
-      setAllSchools([...allSchools, newSchoolName.trim()]);
+      const updatedSchools = [...allSchools, newSchoolName.trim()];
+      setAllSchools(updatedSchools);
+      SCHOOLS = updatedSchools;
+      ALL_SCHOOLS_COUNT = SCHOOLS.length;
+      cacheSchools(SCHOOLS);
       setNewSchoolName('');
-      alert('✅ School added!');
+      alert('✅ School added! Reload other open tabs/pages to see it everywhere (timetable, student profiles, attendance, assets).');
     } catch (e) {
       alert('Failed: ' + e.message);
     }
@@ -7671,7 +7676,11 @@ function ManagerManagement({
       if (!schoolsSnap.empty) {
         await schoolsSnap.docs[0].ref.delete();
       }
-      setAllSchools(allSchools.filter(s => s !== schoolName));
+      const updatedSchools = allSchools.filter(s => s !== schoolName);
+      setAllSchools(updatedSchools);
+      SCHOOLS = updatedSchools;
+      ALL_SCHOOLS_COUNT = SCHOOLS.length;
+      cacheSchools(SCHOOLS);
       alert('✅ School removed');
     } catch (e) {
       alert('Failed: ' + e.message);
@@ -13481,7 +13490,7 @@ function OrgChartDirectory({
         sortOrder: 5
       });
     });
-    allTeachers.filter(t => !t.isArchived && t.name?.toLowerCase() !== 'vacant').forEach(t => {
+    allTeachers.filter(t => !t.isArchived && t.name?.trim() && t.name.toLowerCase() !== 'vacant').forEach(t => {
       members.push({
         ...t,
         memberType: 'teacher',
