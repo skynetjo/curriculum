@@ -38,6 +38,7 @@
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
+const { getAuth } = require('firebase-admin/auth');
 
 const CONFIRM = process.argv.includes('--confirm');
 
@@ -58,7 +59,7 @@ async function listAllUsers(auth) {
 
 async function main() {
   admin.initializeApp({ credential: admin.applicationDefault() });
-  const auth = admin.auth();
+  const auth = getAuth();
 
   console.log('Fetching all Firebase Auth users...');
   const allUsers = await listAllUsers(auth);
