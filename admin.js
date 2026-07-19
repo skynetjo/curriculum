@@ -2045,23 +2045,22 @@ function AdminAssetManagement({
   useEffect(() => {
     const fetchData = async () => {
       try {
-        let allAssets = [];
-        let allAssignments = [];
         const schoolsToFetch = hasFullDataAccess ? SCHOOLS : accessibleSchools;
-        for (const school of schoolsToFetch) {
-          const assetsSnap = await db.collection('assets').where('school', '==', school).get();
-          allAssets = [...allAssets, ...assetsSnap.docs.map(d => ({
-            ...d.data(),
-            docId: d.id
-          }))];
-          const assignmentsSnap = await db.collection('assetAssignments').where('school', '==', school).get();
-          allAssignments = [...allAssignments, ...assignmentsSnap.docs.map(d => ({
-            ...d.data(),
-            docId: d.id
-          }))];
-        }
-        setAssets(allAssets);
-        setAssignments(allAssignments);
+        const perSchool = await Promise.all(schoolsToFetch.map(async school => {
+          const [assetsSnap, assignmentsSnap] = await Promise.all([db.collection('assets').where('school', '==', school).get(), db.collection('assetAssignments').where('school', '==', school).get()]);
+          return {
+            assets: assetsSnap.docs.map(d => ({
+              ...d.data(),
+              docId: d.id
+            })),
+            assignments: assignmentsSnap.docs.map(d => ({
+              ...d.data(),
+              docId: d.id
+            }))
+          };
+        }));
+        setAssets(perSchool.flatMap(r => r.assets));
+        setAssignments(perSchool.flatMap(r => r.assignments));
         setLoading(false);
       } catch (error) {
         console.error('Error fetching assets:', error);
