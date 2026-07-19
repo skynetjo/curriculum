@@ -7549,8 +7549,10 @@ function ManagerManagement({
       return;
     }
     if ((form.role === MANAGER_ROLES.PM || form.role === MANAGER_ROLES.APM) && !form.reportsTo) {
-      alert('Please select who this person reports to');
-      return;
+      const parentLabel = form.role === MANAGER_ROLES.PM ? 'Program Head' : 'Program Manager';
+      const hasOptions = getReportsToOptions(form.role).length > 0;
+      const proceed = confirm(hasOptions ? `You haven't selected who this person reports to.\n\nThey'll be added as "Unassigned" and will show up under "Unassigned Managers" until you assign a ${parentLabel} to them.\n\nContinue?` : `There's no active ${parentLabel} to assign right now.\n\n${form.name || 'This person'} will be added as "Unassigned" and can be linked to a manager later from the "Unassigned Managers" section.\n\nContinue?`);
+      if (!proceed) return;
     }
     const isDirectorRole = form.role === 'director' || form.role === 'assoc_director' || form.role === 'training';
     try {
@@ -7559,7 +7561,7 @@ function ManagerManagement({
         email: form.email.toLowerCase(),
         afCode: form.afCode || null,
         role: form.role,
-        reportsTo: form.role === MANAGER_ROLES.APH || isDirectorRole ? null : form.reportsTo,
+        reportsTo: form.role === MANAGER_ROLES.APH || isDirectorRole ? null : form.reportsTo || null,
         directSchools: isDirectorRole ? [] : form.directSchools,
         viewAllSchools: isDirectorRole,
         canApprove: !isDirectorRole,
@@ -7605,6 +7607,21 @@ function ManagerManagement({
         reactivatedAt: new Date().toISOString()
       });
       alert('✅ Reactivated');
+      window.location.reload();
+    } catch (e) {
+      alert('Failed: ' + e.message);
+    }
+  };
+  const handleDeleteManager = async manager => {
+    const directReports = getDirectReportees(manager.id);
+    if (directReports.length > 0) {
+      alert(`⚠️ Cannot delete ${manager.name}.\n\nThey still have ${directReports.length} direct report(s):\n` + directReports.map(r => `• ${r.name}`).join('\n') + `\n\nReassign or delete those first (edit each one's "Reports To"), then try again.`);
+      return;
+    }
+    if (!confirm(`⚠️ PERMANENT DELETE\n\nAre you sure you want to permanently delete ${manager.name}?\n\nThis action cannot be undone. They will lose access immediately.`)) return;
+    try {
+      await db.collection('managers').doc(manager.id).delete();
+      alert('✅ Deleted permanently');
       window.location.reload();
     } catch (e) {
       alert('Failed: ' + e.message);
@@ -7709,7 +7726,10 @@ function ManagerManagement({
     }, "Deactivate") : React.createElement("button", {
       onClick: () => handleReactivate(manager),
       className: "px-3 py-1 bg-green-500 text-white rounded-lg font-semibold text-sm"
-    }, "Reactivate")))), reportees.map(reportee => renderManagerCard(reportee, level + 1)));
+    }, "Reactivate"), React.createElement("button", {
+      onClick: () => handleDeleteManager(manager),
+      className: "px-3 py-1 bg-red-700 text-white rounded-lg font-semibold text-sm"
+    }, "Delete")))), reportees.map(reportee => renderManagerCard(reportee, level + 1)));
   };
   const topLevelManagers = managers.filter(m => m.role === MANAGER_ROLES.APH && m.status === 'active');
   const unassignedManagers = managers.filter(m => (m.role === MANAGER_ROLES.PM || m.role === MANAGER_ROLES.APM) && !m.reportsTo && m.status === 'active');
@@ -7931,10 +7951,21 @@ function ManagerManagement({
     className: `px-3 py-1 rounded-full text-xs font-bold ${manager.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`
   }, manager.status === 'active' ? 'Active' : 'Inactive')), isSuperAdmin && React.createElement("td", {
     className: "p-3"
+  }, React.createElement("div", {
+    className: "flex gap-2 flex-wrap"
   }, React.createElement("button", {
     onClick: () => openEditModal(manager),
     className: "px-3 py-1 bg-yellow-400 rounded-lg font-semibold text-sm"
-  }, "Edit"))))))), showModal && React.createElement("div", {
+  }, "Edit"), manager.status === 'active' ? React.createElement("button", {
+    onClick: () => handleDeactivate(manager),
+    className: "px-3 py-1 bg-red-500 text-white rounded-lg font-semibold text-sm"
+  }, "Deactivate") : React.createElement("button", {
+    onClick: () => handleReactivate(manager),
+    className: "px-3 py-1 bg-green-500 text-white rounded-lg font-semibold text-sm"
+  }, "Reactivate"), React.createElement("button", {
+    onClick: () => handleDeleteManager(manager),
+    className: "px-3 py-1 bg-red-700 text-white rounded-lg font-semibold text-sm"
+  }, "Delete")))))))), showModal && React.createElement("div", {
     className: "modal-overlay",
     onClick: () => setShowModal(false)
   }, React.createElement("div", {
@@ -8079,7 +8110,7 @@ function ManagerManagement({
     className: "text-xs text-blue-600 mt-1"
   }, "\u26A0\uFE0F This role has view-only access to all data. They cannot approve timesheets."))), (form.role === MANAGER_ROLES.PM || form.role === MANAGER_ROLES.APM) && React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-1"
-  }, "Reports To (", form.role === MANAGER_ROLES.PM ? 'PH' : 'PM', ") *"), React.createElement("select", {
+  }, "Reports To (", form.role === MANAGER_ROLES.PM ? 'PH' : 'PM', ")"), React.createElement("select", {
     value: form.reportsTo,
     onChange: e => setForm({
       ...form,
@@ -8091,7 +8122,9 @@ function ManagerManagement({
   }, "Select ", form.role === MANAGER_ROLES.PM ? 'Program Head' : 'Program Manager'), getReportsToOptions(form.role).map(m => React.createElement("option", {
     key: m.id,
     value: m.id
-  }, m.name, " (", ROLE_LABELS[m.role], ")"))), React.createElement("p", {
+  }, m.name, " (", ROLE_LABELS[m.role], ")"))), getReportsToOptions(form.role).length === 0 ? React.createElement("p", {
+    className: "text-xs text-orange-600 mt-1 font-semibold"
+  }, "⚠️ No active ", form.role === MANAGER_ROLES.PM ? 'Program Head' : 'Program Manager', " available. You can still add this person as \"Unassigned\" and link a manager later.") : React.createElement("p", {
     className: "text-xs text-gray-600 mt-1"
   }, form.role === MANAGER_ROLES.PM ? 'The PH will see all schools assigned to this PM and their APMs' : 'The PM will see all schools assigned to this APM')), form.role === 'director' || form.role === 'assoc_director' || form.role === 'training' ? React.createElement("div", {
     className: "bg-blue-50 border-2 border-blue-200 rounded-lg p-4"
