@@ -8607,9 +8607,14 @@ function TeacherManagement({
     }
   };
   const handlePermanentDelete = async teacher => {
-    if (!confirm(`⚠️ PERMANENT DELETE\n\nAre you sure you want to permanently delete ${teacher.name}?\n\nThis action cannot be undone.\nNote: Historical data (feedback, observations) will remain but show "Deleted Teacher".`)) return;
+    const docRef = teacher.afid || teacher.docId;
+    if (!docRef) {
+      alert('Cannot delete: no document reference found for this record.');
+      return;
+    }
+    if (!confirm(`⚠️ PERMANENT DELETE\n\nAre you sure you want to permanently delete ${teacher.name || 'this incomplete record'}?\n\nThis action cannot be undone.\nNote: Historical data (feedback, observations) will remain but show "Deleted Teacher".`)) return;
     try {
-      await db.collection('teachers').doc(teacher.afid).delete();
+      await db.collection('teachers').doc(docRef).delete();
       alert('Teacher permanently deleted.');
     } catch (e) {
       alert('Failed to delete: ' + e.message);
@@ -8879,7 +8884,11 @@ function TeacherManagement({
       className: "text-xs text-gray-400"
     }, "Click to view/edit"))), React.createElement("td", {
       className: "p-3"
-    }, isSuperAdmin ? React.createElement("div", {
+    }, isSuperAdmin ? isIncomplete ? React.createElement("button", {
+      onClick: () => handlePermanentDelete(t),
+      className: "px-3 py-1 bg-red-600 text-white rounded-lg",
+      title: "This record is missing required fields — editing/archiving is unsafe, so only delete is offered"
+    }, "Delete") : React.createElement("div", {
       className: "flex gap-2"
     }, React.createElement("button", {
       onClick: () => openEditModal(t),
