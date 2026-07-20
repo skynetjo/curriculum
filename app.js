@@ -8832,26 +8832,32 @@ function TeacherManagement({
     className: "p-3 text-left"
   }, "Actions"))), React.createElement("tbody", null, activeTeachers.map(t => {
     const balance = getLeaveBalanceDisplay(t.afid);
+    const isIncomplete = !t.afid || !t.name || !t.email || !t.subject || !t.school;
     return React.createElement("tr", {
-      key: t.id,
-      className: "border-b hover:bg-gray-50"
+      key: t.docId || t.afid,
+      className: `border-b hover:bg-gray-50 ${isIncomplete ? 'bg-amber-50' : ''}`
     }, React.createElement("td", {
       className: "p-3 font-mono"
-    }, t.afid), React.createElement("td", {
+    }, t.afid || React.createElement("span", {
+      className: "text-amber-600 italic text-xs",
+      title: t.docId ? `Missing AFID — doc id: ${t.docId}` : 'Missing AFID'
+    }, "⚠ no AFID")), React.createElement("td", {
       className: "p-3 font-mono text-blue-600"
     }, t.afCode || '—'), React.createElement("td", {
       className: "p-3"
-    }, t.name), React.createElement("td", {
+    }, t.name || React.createElement("span", {
+      className: "text-amber-600 italic text-xs"
+    }, "⚠ no name")), React.createElement("td", {
       className: "p-3"
     }, React.createElement("span", {
       className: `px-2 py-1 rounded-full text-xs font-semibold ${t.role === 'apc' ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}`
     }, t.role === 'apc' ? '📋 APC' : '👨‍🏫 Teacher')), React.createElement("td", {
       className: "p-3 text-sm"
-    }, t.email), React.createElement("td", {
+    }, t.email || '—'), React.createElement("td", {
       className: "p-3"
-    }, t.subject), React.createElement("td", {
+    }, t.subject || '—'), React.createElement("td", {
       className: "p-3"
-    }, t.school), React.createElement("td", {
+    }, t.school || '—'), React.createElement("td", {
       className: "p-3"
     }, React.createElement("button", {
       onClick: () => openLeaveModal(t),
@@ -8908,17 +8914,17 @@ function TeacherManagement({
   }, "Archived Date"), React.createElement("th", {
     className: "p-3 text-left"
   }, "Actions"))), React.createElement("tbody", null, archivedTeachers.map(t => React.createElement("tr", {
-    key: t.id,
+    key: t.docId || t.afid,
     className: "border-b bg-red-50/50 hover:bg-red-100/50"
   }, React.createElement("td", {
     className: "p-3 font-mono text-red-700"
-  }, t.afid), React.createElement("td", {
+  }, t.afid || '—'), React.createElement("td", {
     className: "p-3 text-red-700 font-medium"
-  }, t.name), React.createElement("td", {
+  }, t.name || '—'), React.createElement("td", {
     className: "p-3 text-red-600"
-  }, t.subject), React.createElement("td", {
+  }, t.subject || '—'), React.createElement("td", {
     className: "p-3 text-red-600"
-  }, t.school), React.createElement("td", {
+  }, t.school || '—'), React.createElement("td", {
     className: "p-3"
   }, React.createElement("span", {
     className: `px-2 py-1 rounded-full text-xs font-bold ${t.archiveReason === 'Resigned' ? 'bg-yellow-100 text-yellow-800' : t.archiveReason === 'Removed' ? 'bg-red-100 text-red-800' : t.archiveReason === 'Transferred' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`
