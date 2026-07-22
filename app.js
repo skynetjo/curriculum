@@ -11824,9 +11824,6 @@ function SocialWall({
   const [celebrationReactions, setCelebrationReactions] = useState({});
   const [wishMessage, setWishMessage] = useState('');
   const [showWishInput, setShowWishInput] = useState(null);
-  const [topPerformers, setTopPerformers] = useState([]);
-  const [previousMonthWinners, setPreviousMonthWinners] = useState([]);
-  const [recognitionLoading, setRecognitionLoading] = useState(false);
   const [postImage, setPostImage] = useState(null);
   const [postImagePreview, setPostImagePreview] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -12129,26 +12126,43 @@ function SocialWall({
     const fetchData = async () => {
       try {
         setLoading(true);
-        // ✅ FIX: Use the teachers prop already loaded in App - avoid 3 redundant Firebase reads
-        // Also fetch managers/apcs for birthday data, but use Promise.allSettled so 
-        // partial failures don't block posts from loading
-        const [managersResult, apcsResult] = await Promise.allSettled([
+        // ✅ PERF: Fetch posts in parallel with managers/apcs instead of waiting on
+        // the birthday/anniversary data first - the feed (default tab) can paint as
+        // soon as posts resolve. Promise.allSettled so partial failures don't block
+        // the rest from loading.
+        const [managersResult, apcsResult, postsResult] = await Promise.allSettled([
           db.collection('managers').get(),
-          db.collection('apcs').get()
+          db.collection('apcs').get(),
+          db.collection('socialPosts').orderBy('createdAt', 'desc').limit(50).get()
+            .catch(() => db.collection('socialPosts').limit(50).get())
         ]);
-        const managers = managersResult.status === 'fulfilled' 
+        const managers = managersResult.status === 'fulfilled'
           ? managersResult.value.docs.map(doc => ({id: doc.id, ...doc.data(), role: 'Manager'}))
           : [];
         const apcs = apcsResult.status === 'fulfilled'
           ? apcsResult.value.docs.map(doc => ({id: doc.id, ...doc.data(), role: 'APC'}))
           : [];
+        if (postsResult.status === 'fulfilled') {
+          const postsData = postsResult.value.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          // Sort client-side as fallback in case the orderBy index wasn't used
+          postsData.sort((a, b) => {
+            const aTime = a.createdAt?.toDate?.()?.getTime() || new Date(a.createdAt || 0).getTime();
+            const bTime = b.createdAt?.toDate?.()?.getTime() || new Date(b.createdAt || 0).getTime();
+            return bTime - aTime;
+          });
+          setPosts(postsData);
+        } else {
+          console.error('[SocialWall] Error loading posts:', postsResult.reason);
+          setPosts([]);
+        }
+        setLoading(false);
         // Use prop teachers (already loaded) instead of re-fetching
         const allTeachers = (teachers || []).map(t => ({...t, role: 'Teacher'}));
         const combined = [...managers, ...apcs, ...allTeachers].filter(m => m.name && m.name.toLowerCase() !== 'vacant' && !m.isArchived);
         setAllMembers(combined);
-        console.log('[SocialWall] Total members loaded:', combined.length);
-        console.log('[SocialWall] Members with DOB:', combined.filter(m => m.dateOfBirth || m.dob).length);
-        console.log('[SocialWall] Members with joiningDate:', combined.filter(m => m.joiningDate).length);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayMonth = today.getMonth();
@@ -12169,7 +12183,6 @@ function SocialWall({
           return dob.getMonth() === todayMonth && dob.getDate() === todayDate;
         });
         setBirthdays(todayBirthdays);
-        console.log('[SocialWall] Today birthdays:', todayBirthdays.length);
         const thisWeekBdays = combined.filter(m => {
           const dobField = m.dateOfBirth || m.dob;
           if (!dobField) return false;
@@ -12177,7 +12190,6 @@ function SocialWall({
           return days >= 0 && days <= 7;
         }).sort((a, b) => getDaysUntilBday(a.dateOfBirth || a.dob) - getDaysUntilBday(b.dateOfBirth || b.dob));
         setWeekBirthdays(thisWeekBdays);
-        console.log('[SocialWall] This week birthdays:', thisWeekBdays.length);
         const thisMonthBdays = combined.filter(m => {
           const dobField = m.dateOfBirth || m.dob;
           if (!dobField) return false;
@@ -12189,7 +12201,6 @@ function SocialWall({
           return aDay - bDay;
         });
         setMonthBirthdays(thisMonthBdays);
-        console.log('[SocialWall] This month birthdays:', thisMonthBdays.length);
         const upcoming = combined.filter(m => {
           const dobField = m.dateOfBirth || m.dob;
           if (!dobField) return false;
@@ -12197,7 +12208,6 @@ function SocialWall({
           return days > 0 && days <= 30;
         }).sort((a, b) => getDaysUntilBday(a.dateOfBirth || a.dob) - getDaysUntilBday(b.dateOfBirth || b.dob)).slice(0, 15);
         setUpcomingBirthdays(upcoming);
-        console.log('[SocialWall] Upcoming birthdays (30 days):', upcoming.length);
         const getDaysUntilAnniv = joinDateString => {
           if (!joinDateString) return 999;
           const jDate = new Date(joinDateString);
@@ -12215,7 +12225,6 @@ function SocialWall({
           return j.getMonth() === todayMonth && j.getDate() === todayDate;
         });
         setAnniversaries(todayAnniversaries);
-        console.log('[SocialWall] Today anniversaries:', todayAnniversaries.length);
         const weekAnn = combined.filter(m => {
           if (!m.joiningDate) return false;
           const j = new Date(m.joiningDate);
@@ -12224,7 +12233,6 @@ function SocialWall({
           return days >= 0 && days <= 7;
         }).sort((a, b) => getDaysUntilAnniv(a.joiningDate) - getDaysUntilAnniv(b.joiningDate));
         setWeekAnniversaries(weekAnn);
-        console.log('[SocialWall] This week anniversaries:', weekAnn.length);
         const monthAnn = combined.filter(m => {
           if (!m.joiningDate) return false;
           const j = new Date(m.joiningDate);
@@ -12236,105 +12244,20 @@ function SocialWall({
           return aDay - bDay;
         });
         setMonthAnniversaries(monthAnn);
-        console.log('[SocialWall] This month anniversaries:', monthAnn.length);
         if (todayBirthdays.length > 0) {
           const dismissedToday = localStorage.getItem('birthdayDismissed_' + today.toDateString());
           if (!dismissedToday) {
             setShowBirthdayPopup(todayBirthdays[0]);
           }
         }
-        // ✅ FIX: Try ordered query first; fall back to unordered if index missing
-        let postsSnap;
-        try {
-          postsSnap = await db.collection('socialPosts').orderBy('createdAt', 'desc').limit(50).get();
-        } catch (indexErr) {
-          console.warn('[SocialWall] orderBy index not ready, fetching without sort:', indexErr.message);
-          postsSnap = await db.collection('socialPosts').limit(50).get();
-        }
-        const postsData = postsSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        // Sort client-side as fallback
-        postsData.sort((a, b) => {
-          const aTime = a.createdAt?.toDate?.()?.getTime() || new Date(a.createdAt || 0).getTime();
-          const bTime = b.createdAt?.toDate?.()?.getTime() || new Date(b.createdAt || 0).getTime();
-          return bTime - aTime;
-        });
-        setPosts(postsData);
       } catch (error) {
-        console.error('[SocialWall] Error loading posts:', error);
-        // ✅ FIX: Set empty posts so loading spinner stops - show empty state
-        setPosts([]);
-      } finally {
+        console.error('[SocialWall] Error loading member/celebration data:', error);
         setLoading(false);
       }
     };
     fetchData();
     loadCelebrationReactions();
   }, [teachers]);
-  useEffect(() => {
-    const fetchRecognitionData = async () => {
-      if (activeTab !== 'recognition') return;
-      setRecognitionLoading(true);
-      try {
-        const now = new Date();
-        const currentMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7); // last completed month
-        const currentStartDate = currentMonth + '-01';
-        const currentEndDate = currentMonth + '-31';
-        const prevMonth = new Date(now.getFullYear(), now.getMonth() - 2, 1); // two months ago
-        const prevMonthStr = prevMonth.toISOString().slice(0, 7);
-        const prevStartDate = prevMonthStr + '-01';
-        const prevEndDate = prevMonthStr + '-31';
-        const currentMonthSnap = await db.collection('timesheetEntries').where('date', '>=', currentStartDate).where('date', '<=', currentEndDate).where('status', '==', 'approved').get();
-        const currentTeacherHours = {};
-        currentMonthSnap.docs.forEach(doc => {
-          const data = doc.data();
-          const key = data.teacherAfid;
-          if (!currentTeacherHours[key]) {
-            currentTeacherHours[key] = {
-              afid: data.teacherAfid,
-              name: data.teacherName,
-              school: data.school,
-              subject: data.subject,
-              totalHours: 0,
-              entries: 0
-            };
-          }
-          currentTeacherHours[key].totalHours += parseFloat(data.hours) || 0;
-          currentTeacherHours[key].entries += 1;
-        });
-        const sortedCurrent = Object.values(currentTeacherHours).sort((a, b) => b.totalHours - a.totalHours).slice(0, 2);
-        setTopPerformers(sortedCurrent);
-        const prevMonthSnap = await db.collection('timesheetEntries').where('date', '>=', prevStartDate).where('date', '<=', prevEndDate).where('status', '==', 'approved').get();
-        const prevTeacherHours = {};
-        prevMonthSnap.docs.forEach(doc => {
-          const data = doc.data();
-          const key = data.teacherAfid;
-          if (!prevTeacherHours[key]) {
-            prevTeacherHours[key] = {
-              afid: data.teacherAfid,
-              name: data.teacherName,
-              school: data.school,
-              subject: data.subject,
-              totalHours: 0,
-              entries: 0,
-              month: prevMonthStr
-            };
-          }
-          prevTeacherHours[key].totalHours += parseFloat(data.hours) || 0;
-          prevTeacherHours[key].entries += 1;
-        });
-        const sortedPrev = Object.values(prevTeacherHours).sort((a, b) => b.totalHours - a.totalHours).slice(0, 2);
-        setPreviousMonthWinners(sortedPrev);
-      } catch (error) {
-        console.error('Error fetching recognition data:', error);
-      } finally {
-        setRecognitionLoading(false);
-      }
-    };
-    fetchRecognitionData();
-  }, [activeTab]);
   const handleCreatePost = async () => {
     if (!newPostContent.trim() && !postImage) return;
     setPosting(true);
@@ -12696,38 +12619,37 @@ function SocialWall({
           50% { box-shadow: 0 0 0 10px rgba(236, 72, 153, 0); }
         }
         
-        .tab-btn {
-          padding: 12px 24px;
-          border-radius: 12px;
+        .wall-tab {
+          padding: 8px 18px;
+          border-radius: 9999px;
           font-weight: 600;
-          transition: all 0.3s;
-        }
-        
-        .tab-active {
-          background: linear-gradient(135deg, #ec4899, #8b5cf6);
-          color: white;
-          box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
-        }
-        
-        .tab-inactive {
-          background: white;
+          font-size: 14px;
           color: #6b7280;
+          transition: all 0.2s;
+          white-space: nowrap;
         }
-        
-        .tab-inactive:hover {
-          background: #fdf2f8;
+
+        .wall-tab:hover {
+          color: #374151;
         }
-        
+
+        .wall-tab-active {
+          background: white;
+          color: #9333ea;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+        }
+
         .post-card {
           background: white;
-          border-radius: 20px;
-          border: 1px solid #f3e8ff;
-          transition: all 0.3s;
+          border-radius: 16px;
+          border: 1px solid #f1f0f4;
+          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+          transition: box-shadow 0.2s, border-color 0.2s;
         }
-        
+
         .post-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 30px rgba(139, 92, 246, 0.1);
+          border-color: #e9d5ff;
+          box-shadow: 0 4px 16px rgba(139, 92, 246, 0.08);
         }
         
         .emoji-btn {
@@ -12746,32 +12668,20 @@ function SocialWall({
           background: linear-gradient(135deg, #fce7f3, #ede9fe);
         }
       `), React.createElement("div", {
-    className: "text-center"
-  }, React.createElement("div", {
-    className: "inline-flex items-center gap-3 bg-gradient-to-r from-pink-100 via-purple-100 to-indigo-100 px-8 py-4 rounded-2xl shadow-lg"
-  }, React.createElement("span", {
-    className: "text-4xl animate-bounce"
-  }, "\uD83C\uDF89"), React.createElement("h2", {
-    className: "text-3xl font-bold bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent"
-  }, "Social Wall"), React.createElement("span", {
-    className: "text-4xl animate-bounce",
-    style: {
-      animationDelay: '0.5s'
-    }
-  }, "\uD83C\uDF8A"))), React.createElement("div", {
-    className: "flex justify-center gap-4 flex-wrap"
+    className: "flex items-center justify-between flex-wrap gap-3"
+  }, React.createElement("h2", {
+    className: "text-2xl font-extrabold text-gray-900 flex items-center gap-2"
+  }, React.createElement("span", null, "\u2728"), "Social Wall"), React.createElement("div", {
+    className: "flex gap-1 bg-gray-100 p-1 rounded-full"
   }, React.createElement("button", {
     onClick: () => setActiveTab('feed'),
-    className: `tab-btn ${activeTab === 'feed' ? 'tab-active' : 'tab-inactive'}`
-  }, "\uD83D\uDCDD Feed"), React.createElement("button", {
+    className: `wall-tab ${activeTab === 'feed' ? 'wall-tab-active' : ''}`
+  }, "Feed"), React.createElement("button", {
     onClick: () => setActiveTab('celebrations'),
-    className: `tab-btn ${activeTab === 'celebrations' ? 'tab-active' : 'tab-inactive'}`
-  }, "\uD83C\uDF82 Celebrations ", birthdays.length > 0 && React.createElement("span", {
-    className: "ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full"
-  }, birthdays.length)), React.createElement("button", {
-    onClick: () => setActiveTab('recognition'),
-    className: `tab-btn ${activeTab === 'recognition' ? 'tab-active' : 'tab-inactive'}`
-  }, "\uD83C\uDFC6 Recognition")), activeTab === 'celebrations' && React.createElement("div", {
+    className: `wall-tab ${activeTab === 'celebrations' ? 'wall-tab-active' : ''}`
+  }, "Celebrations", birthdays.length > 0 && React.createElement("span", {
+    className: "ml-1.5 bg-pink-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+  }, birthdays.length)))), activeTab === 'celebrations' && React.createElement("div", {
     className: "space-y-6"
   }, birthdays.length > 0 && React.createElement("div", {
     className: "celebration-card rounded-3xl p-6"
@@ -13257,6 +13167,8 @@ function SocialWall({
     }, React.createElement("img", {
       src: post.imageUrl,
       alt: "Post attachment",
+      loading: "lazy",
+      decoding: "async",
       className: "max-w-full rounded-xl border border-purple-100 max-h-96 object-contain"
     })), React.createElement("div", {
       className: "flex items-center gap-2 flex-wrap mb-3"
@@ -13341,6 +13253,8 @@ function SocialWall({
       }, part) : part)), reply.imageUrl && React.createElement("img", {
         src: reply.imageUrl,
         alt: "",
+        loading: "lazy",
+        decoding: "async",
         className: "mt-2 max-h-32 rounded-lg"
       })), React.createElement("div", {
         className: "reddit-action-row"
@@ -13524,101 +13438,7 @@ function SocialWall({
       },
       className: "absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-xs"
     }, "\u2715"))));
-  }))), activeTab === 'recognition' && React.createElement("div", {
-    className: "space-y-6"
-  }, recognitionLoading ? React.createElement("div", {
-    className: "flex items-center justify-center h-64"
-  }, React.createElement("div", {
-    className: "text-center"
-  }, React.createElement("div", {
-    className: "w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"
-  }), React.createElement("p", {
-    className: "text-gray-500"
-  }, "Loading recognition data..."))) : React.createElement(React.Fragment, null, React.createElement("div", {
-    className: "bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 p-1 rounded-2xl"
-  }, React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl"
-  }, React.createElement("div", {
-    className: "text-center"
-  }, React.createElement("div", {
-    className: "text-5xl mb-4"
-  }, "\uD83C\uDFC6"), React.createElement("h2", {
-    className: "text-2xl font-bold mb-2"
-  }, "Educators of the Month"), React.createElement("p", {
-    className: "text-gray-500 mb-6"
-  }, new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString('en-IN', {
-    month: 'long',
-    year: 'numeric'
-  })), topPerformers.length > 0 ? React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-6 max-w-2xl mx-auto"
-  }, topPerformers.map((educator, idx) => React.createElement("div", {
-    key: educator.afid,
-    className: `p-6 rounded-xl ${idx === 0 ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300' : 'bg-gradient-to-r from-gray-50 to-slate-50 border-2 border-gray-300'}`
-  }, React.createElement("div", {
-    className: "text-4xl mb-3"
-  }, idx === 0 ? '🥇' : '🥈'), React.createElement("div", {
-    className: `w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3 ${idx === 0 ? 'bg-gradient-to-br from-yellow-400 to-orange-500' : 'bg-gradient-to-br from-gray-400 to-slate-500'}`
-  }, educator.name?.charAt(0)), React.createElement("h3", {
-    className: "text-xl font-bold text-gray-800"
-  }, educator.name), React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, educator.subject), React.createElement("p", {
-    className: "text-xs text-gray-500"
-  }, educator.school), React.createElement("div", {
-    className: "mt-4 flex justify-center gap-3"
-  }, React.createElement("div", {
-    className: `px-3 py-2 rounded-lg ${idx === 0 ? 'bg-yellow-100' : 'bg-gray-100'}`
-  }, React.createElement("div", {
-    className: `text-xl font-bold ${idx === 0 ? 'text-yellow-600' : 'text-gray-600'}`
-  }, educator.totalHours?.toFixed(1), "h"), React.createElement("div", {
-    className: `text-xs ${idx === 0 ? 'text-yellow-700' : 'text-gray-500'}`
-  }, "Hours")), React.createElement("div", {
-    className: "bg-green-100 px-3 py-2 rounded-lg"
-  }, React.createElement("div", {
-    className: "text-xl font-bold text-green-600"
-  }, educator.entries), React.createElement("div", {
-    className: "text-xs text-green-700"
-  }, "Entries")))))) : React.createElement("div", {
-    className: "text-gray-500 py-8"
-  }, React.createElement("div", {
-    className: "text-4xl mb-2"
-  }, "\uD83D\uDCCA"), React.createElement("p", null, "Not enough data yet this month"), React.createElement("p", {
-    className: "text-sm"
-  }, "Keep logging your activities!"))))), previousMonthWinners.length > 0 && React.createElement("div", {
-    className: "bg-white p-6 rounded-xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-6 flex items-center gap-2"
-  }, React.createElement("span", null, "\uD83C\uDF1F"), " Previous Month's Top Performers", React.createElement("span", {
-    className: "text-sm font-normal text-gray-500 ml-2"
-  }, "(", new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1).toLocaleDateString('en-IN', {
-    month: 'long',
-    year: 'numeric'
-  }), ")")), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, previousMonthWinners.map((educator, idx) => React.createElement("div", {
-    key: educator.afid,
-    className: `p-4 rounded-xl border-2 flex items-center gap-4 ${idx === 0 ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`
-  }, React.createElement("div", {
-    className: `w-12 h-12 rounded-full flex items-center justify-center font-bold text-white ${idx === 0 ? 'bg-yellow-500' : 'bg-gray-400'}`
-  }, idx === 0 ? '🥇' : '🥈'), React.createElement("div", {
-    className: "flex-1"
-  }, React.createElement("div", {
-    className: "font-semibold"
-  }, educator.name), React.createElement("div", {
-    className: "text-xs text-gray-500"
-  }, educator.school, " \u2022 ", educator.subject)), React.createElement("div", {
-    className: "text-right"
-  }, React.createElement("span", {
-    className: "text-xl font-bold text-yellow-600"
-  }, educator.totalHours?.toFixed(1)), React.createElement("span", {
-    className: "text-gray-500 text-sm"
-  }, " hrs")))))), React.createElement("div", {
-    className: "bg-gradient-to-r from-purple-50 to-indigo-50 p-6 rounded-xl border-2 border-purple-200"
-  }, React.createElement("h4", {
-    className: "font-bold text-purple-800 mb-3 flex items-center gap-2"
-  }, React.createElement("span", null, "\uD83D\uDCA1"), " How Recognition Works"), React.createElement("ul", {
-    className: "text-sm text-purple-700 space-y-2"
-  }, React.createElement("li", null, "\u2022 Top 2 educators with most approved timesheet hours are recognized each month"), React.createElement("li", null, "\u2022 Make sure to log your daily activities in the Timesheet"), React.createElement("li", null, "\u2022 Get your entries approved by your line manager"), React.createElement("li", null, "\u2022 Previous month's winners are also displayed for motivation!"))))), showBirthdayPopup && React.createElement("div", {
+  }))), showBirthdayPopup && React.createElement("div", {
     className: "fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
   }, React.createElement("div", {
     className: "bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-bounce-in"
