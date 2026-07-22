@@ -11819,7 +11819,6 @@ function SocialWall({
   const [celebrationReactions, setCelebrationReactions] = useState({});
   const [wishMessage, setWishMessage] = useState('');
   const [showWishInput, setShowWishInput] = useState(null);
-  const [expandedCelebration, setExpandedCelebration] = useState(null);
   const loadCelebrationReactions = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -12304,13 +12303,11 @@ function SocialWall({
     const dob = new Date(dobField);
     const isToday = daysLeft === 0;
     const personId = person.afid || person.id || person.email;
-    const isExpanded = expandedCelebration === personId;
     return React.createElement("div", {
       key: idx,
-      className: `rounded-xl overflow-hidden ${isExpanded ? 'bg-gray-50' : ''}`
+      className: "rounded-xl overflow-hidden bg-gray-50"
     }, React.createElement("div", {
-      onClick: () => setExpandedCelebration(isExpanded ? null : personId),
-      className: `flex items-center justify-between p-3 cursor-pointer transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : isExpanded ? 'bg-gray-50' : 'bg-gray-50 hover:bg-pink-50'}`
+      className: `flex items-center justify-between p-3 ${isToday ? 'bg-pink-100 border-2 border-pink-300' : 'bg-gray-50'}`
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -12332,7 +12329,7 @@ function SocialWall({
       month: 'short'
     })), React.createElement("div", {
       className: "text-xs text-gray-500"
-    }, isToday ? '🎉 Today!' : daysLeft === 1 ? 'Tomorrow!' : `in ${daysLeft} days`))), isExpanded && React.createElement("div", {
+    }, isToday ? '🎉 Today!' : daysLeft === 1 ? 'Tomorrow!' : `in ${daysLeft} days`))), React.createElement("div", {
       className: "px-3 pb-3"
     }, renderCelebrationPanel(person, personId, 'pink')));
   }))), React.createElement("div", {
@@ -12354,13 +12351,11 @@ function SocialWall({
     const isPast = dob.getDate() < new Date().getDate();
     const isToday = daysLeft === 0;
     const personId = person.afid || person.id || person.email;
-    const isExpanded = expandedCelebration === personId;
     return React.createElement("div", {
       key: idx,
-      className: `rounded-xl overflow-hidden ${isExpanded ? 'bg-gray-50' : ''}`
+      className: "rounded-xl overflow-hidden bg-gray-50"
     }, React.createElement("div", {
-      onClick: () => setExpandedCelebration(isExpanded ? null : personId),
-      className: `flex items-center justify-between p-3 cursor-pointer transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : isPast ? 'bg-gray-100 opacity-60' : isExpanded ? 'bg-gray-50' : 'bg-gray-50 hover:bg-pink-50'}`
+      className: `flex items-center justify-between p-3 ${isToday ? 'bg-pink-100 border-2 border-pink-300' : isPast ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -12381,7 +12376,7 @@ function SocialWall({
       month: 'short'
     })), React.createElement("div", {
       className: "text-xs text-gray-500"
-    }, isToday ? '🎉 Today!' : isPast ? 'Passed' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`))), isExpanded && React.createElement("div", {
+    }, isToday ? '🎉 Today!' : isPast ? 'Passed' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`))), React.createElement("div", {
       className: "px-3 pb-3"
     }, renderCelebrationPanel(person, personId, 'pink')));
   }))), React.createElement("div", {
@@ -12398,13 +12393,11 @@ function SocialWall({
     const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
     const jDate = new Date(person.joiningDate);
     const personId = person.afid || person.id || person.email;
-    const isExpanded = expandedCelebration === personId;
     return React.createElement("div", {
       key: idx,
-      className: `rounded-xl overflow-hidden ${isExpanded ? 'bg-gray-50' : 'bg-amber-50'}`
+      className: "rounded-xl overflow-hidden bg-amber-50"
     }, React.createElement("div", {
-      onClick: () => setExpandedCelebration(isExpanded ? null : personId),
-      className: `flex items-center justify-between p-3 cursor-pointer transition-colors ${isExpanded ? '' : 'hover:bg-amber-100'}`
+      className: "flex items-center justify-between p-3"
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -12426,7 +12419,7 @@ function SocialWall({
     }, jDate.toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short'
-    })))), isExpanded && React.createElement("div", {
+    })))), React.createElement("div", {
       className: "px-3 pb-3"
     }, renderCelebrationPanel(person, personId, 'amber')));
   }))), React.createElement("div", {
@@ -12443,13 +12436,11 @@ function SocialWall({
     const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
     const jDate = new Date(person.joiningDate);
     const personId = person.afid || person.id || person.email;
-    const isExpanded = expandedCelebration === personId;
     return React.createElement("div", {
       key: idx,
-      className: `rounded-xl overflow-hidden ${isExpanded ? 'bg-gray-50' : 'bg-green-50'}`
+      className: "rounded-xl overflow-hidden bg-green-50"
     }, React.createElement("div", {
-      onClick: () => setExpandedCelebration(isExpanded ? null : personId),
-      className: `flex items-center justify-between p-3 cursor-pointer transition-colors ${isExpanded ? '' : 'hover:bg-green-100'}`
+      className: "flex items-center justify-between p-3"
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -12471,7 +12462,7 @@ function SocialWall({
     }, jDate.toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short'
-    })))), isExpanded && React.createElement("div", {
+    })))), React.createElement("div", {
       className: "px-3 pb-3"
     }, renderCelebrationPanel(person, personId, 'green')));
   }))), birthdays.length === 0 && anniversaries.length === 0 && upcomingBirthdays.length === 0 && weekAnniversaries.length === 0 && monthAnniversaries.length === 0 && React.createElement("div", {
