@@ -683,17 +683,6 @@ const DataSyncManager = {
 if (typeof window !== 'undefined') {
   DataSyncManager.init();
 }
-const LEAVE_REASONS = ['Present', 'Personal Leave', 'Sick Leave', 'Weekly Off', 'Public Holiday', 'Organization Holiday', 'School Holiday', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Comp Off'];
-const LEAVE_ENTITLEMENTS = {
-  'Personal Leave': 35,
-  'Sick Leave': 35,
-  'Emergency Leave': 35,
-  'Maternity Leave': 180,
-  'Paternity Leave': 15
-};
-const ENTITLED_LEAVE_TYPES = ['Personal Leave', 'Sick Leave', 'Emergency Leave'];
-const MATERNITY_LEAVE_TYPES = ['Maternity Leave'];
-const PATERNITY_LEAVE_TYPES = ['Paternity Leave'];
 const ASSET_CATEGORIES = ['Physics', 'Chemistry', 'Maths', 'Biology', 'General', 'Competition', 'Other'];
 const ASSET_TYPES = ['book', 'chromebook'];
 const CLASSROOM_OBSERVATION_PARAMETERS = [{
@@ -1046,49 +1035,6 @@ const CLASSROOM_OBSERVATION_PARAMETERS = [{
   }]
 }];
 const MAX_OBSERVATION_SCORE = CLASSROOM_OBSERVATION_PARAMETERS.reduce((sum, p) => sum + p.maxScore, 0);
-function calculateLeaveBalance(teacherAttendance, teacherId, leaveAdjustments = {}) {
-  const teacherLeaves = teacherAttendance.filter(a => a.teacherId === teacherId && a.status === 'On Leave');
-  let entitledUsed = 0;
-  let maternityUsed = 0;
-  let paternityUsed = 0;
-  teacherLeaves.forEach(leave => {
-    if (ENTITLED_LEAVE_TYPES.includes(leave.reason)) {
-      entitledUsed++;
-    } else if (MATERNITY_LEAVE_TYPES.includes(leave.reason)) {
-      maternityUsed++;
-    } else if (PATERNITY_LEAVE_TYPES.includes(leave.reason)) {
-      paternityUsed++;
-    }
-  });
-  const adjustment = leaveAdjustments[teacherId] || {
-    entitled: 0,
-    maternity: 0,
-    paternity: 0
-  };
-  entitledUsed += adjustment.entitled || 0;
-  maternityUsed += adjustment.maternity || 0;
-  paternityUsed += adjustment.paternity || 0;
-  return {
-    entitled: {
-      total: 35,
-      used: Math.max(0, entitledUsed),
-      remaining: Math.min(35, Math.max(0, 35 - entitledUsed)),
-      adjustment: adjustment.entitled || 0
-    },
-    maternity: {
-      total: 180,
-      used: Math.max(0, maternityUsed),
-      remaining: Math.min(180, Math.max(0, 180 - maternityUsed)),
-      adjustment: adjustment.maternity || 0
-    },
-    paternity: {
-      total: 15,
-      used: Math.max(0, paternityUsed),
-      remaining: Math.min(15, Math.max(0, 15 - paternityUsed)),
-      adjustment: adjustment.paternity || 0
-    }
-  };
-}
 const GENDERS = ['Male', 'Female', 'Other'];
 const isEditing = true;
 function TeacherProfileModal({
@@ -4667,8 +4613,6 @@ function App() {
   const [academicYearSettings, setAcademicYearSettings] = useState(null);
   const [precomputedRankings, setPrecomputedRankings] = useState(null);
   const [studentAttendance, setStudentAttendance] = useState([]);
-  const [teacherAttendance, setTeacherAttendance] = useState([]);
-  const [leaveAdjustments, setLeaveAdjustments] = useState({});
   const [schoolInfo, setSchoolInfo] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -5169,9 +5113,8 @@ function App() {
           const cachedTeachers = await window.DataCacheManager.loadFromCache('teachers_' + (userSchool || 'all'));
           const cachedCurriculum = await window.DataCacheManager.loadFromCache('curriculum');
           const cachedStudentAtt = await window.DataCacheManager.loadFromCache('studentAttendance_' + (userSchool || 'all'));
-          const cachedTeacherAtt = await window.DataCacheManager.loadFromCache('teacherAttendance_' + (userSchool || 'all'));
           const cachedProgress = await window.DataCacheManager.loadFromCache('chapterProgress');
-          if (cachedTeachers?.docs?.length || cachedCurriculum?.docs?.length || cachedStudentAtt?.docs?.length || cachedTeacherAtt?.docs?.length) {
+          if (cachedTeachers?.docs?.length || cachedCurriculum?.docs?.length || cachedStudentAtt?.docs?.length) {
             console.log('✅ Found cached data - displaying immediately');
             usedCache = true;
             if (cachedTeachers?.docs) {
@@ -5190,12 +5133,6 @@ function App() {
             }
             if (cachedStudentAtt?.docs) {
               setStudentAttendance(cachedStudentAtt.docs.map(d => ({
-                ...d.data,
-                docId: d.id
-              })));
-            }
-            if (cachedTeacherAtt?.docs) {
-              setTeacherAttendance(cachedTeacherAtt.docs.map(d => ({
                 ...d.data,
                 docId: d.id
               })));
@@ -5278,17 +5215,15 @@ function App() {
         }
         console.log('📊 Fetching secondary data...');
         if (window.updateShellStatus) window.updateShellStatus('Loading curriculum...');
-        let progressQuery, studentAttQuery, teacherAttQuery;
+        let progressQuery, studentAttQuery;
         if (userIsAdmin || !userSchool) {
           progressQuery = db.collection('chapterProgress').get();
           studentAttQuery = db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get();
-          teacherAttQuery = db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get();
         } else {
           progressQuery = db.collection('chapterProgress').get();
           studentAttQuery = fetchWithIndexFallback(db.collection('studentAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(), db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get(), data => data.school === userSchool, 'studentAttendance');
-          teacherAttQuery = fetchWithIndexFallback(db.collection('teacherAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(), db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get(), data => data.school === userSchool, 'teacherAttendance');
         }
-        const [progressSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, schoolsSnap, rankingsSnap] = await Promise.all([timeoutPromise(progressQuery, 25000), timeoutPromise(studentAttQuery, 30000), timeoutPromise(teacherAttQuery, 30000), timeoutPromise(db.collection('schoolInfo').get(), 20000), timeoutPromise(db.collection('leaveAdjustments').get(), 15000), timeoutPromise(db.collection('schoolsList').get(), 15000), timeoutPromise(db.collection('system').doc('schoolRankings').get(), 10000, {
+        const [progressSnap, studentAttSnap, schoolInfoSnap, schoolsSnap, rankingsSnap] = await Promise.all([timeoutPromise(progressQuery, 25000), timeoutPromise(studentAttQuery, 30000), timeoutPromise(db.collection('schoolInfo').get(), 20000), timeoutPromise(db.collection('schoolsList').get(), 15000), timeoutPromise(db.collection('system').doc('schoolRankings').get(), 10000, {
           exists: false
         })]);
         if (window._logLoadTime) window._logLoadTime('Secondary data loaded');
@@ -5406,10 +5341,6 @@ function App() {
           ...d.data(),
           docId: d.id
         }));
-        const teacherAttData = (teacherAttSnap.docs || []).map(d => ({
-          ...d.data(),
-          docId: d.id
-        }));
         if (studentAttData.length > 0 || !usedCache) {
           setStudentAttendance(studentAttData);
           window.DataCacheManager.saveToCache('studentAttendance_' + (userSchool || 'all'), {
@@ -5421,18 +5352,6 @@ function App() {
           console.log('✅ Student attendance loaded:', studentAttData.length, 'records');
         } else {
           console.log('⚠️ Student attendance query returned empty - keeping cached data');
-        }
-        if (teacherAttData.length > 0 || !usedCache) {
-          setTeacherAttendance(teacherAttData);
-          window.DataCacheManager.saveToCache('teacherAttendance_' + (userSchool || 'all'), {
-            docs: (teacherAttSnap.docs || []).map(d => ({
-              id: d.id,
-              data: d.data()
-            }))
-          });
-          console.log('✅ Teacher attendance loaded:', teacherAttData.length, 'records');
-        } else {
-          console.log('⚠️ Teacher attendance query returned empty - keeping cached data');
         }
         const progressData = (progressSnap.docs || []).map(d => ({
           id: d.id,
@@ -5452,11 +5371,6 @@ function App() {
           console.log('📊 Sample school info schools:', schoolInfoData.slice(0, 3).map(s => s.school));
         }
         setSchoolInfo(schoolInfoData);
-        const adjMap = {};
-        (leaveAdjSnap.docs || []).forEach(d => {
-          adjMap[d.id] = d.data();
-        });
-        setLeaveAdjustments(adjMap);
         const schoolsListData = (schoolsSnap.docs || []).map(d => d.data().name).filter(Boolean);
         SCHOOLS = schoolsListData.length > 0 ? schoolsListData : [...APPROVED_SCHOOLS];
         ALL_SCHOOLS_COUNT = SCHOOLS.length;
@@ -5482,12 +5396,8 @@ function App() {
       try {
         const userSchool = currentUser?.school;
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const [studentAttSnap, teacherAttSnap] = await Promise.all([db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get(), db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get()]);
+        const studentAttSnap = await db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get();
         const studentAttData = studentAttSnap.docs.map(d => ({
-          ...d.data(),
-          docId: d.id
-        }));
-        const teacherAttData = teacherAttSnap.docs.map(d => ({
           ...d.data(),
           docId: d.id
         }));
@@ -5500,16 +5410,7 @@ function App() {
             }))
           });
         }
-        if (teacherAttData.length > 0) {
-          setTeacherAttendance(teacherAttData);
-          window.DataCacheManager.saveToCache('teacherAttendance_' + (userSchool || 'all'), {
-            docs: teacherAttSnap.docs.map(d => ({
-              id: d.id,
-              data: d.data()
-            }))
-          });
-        }
-        console.log('[SmartSync] ✅ Attendance synced:', studentAttData.length, 'student,', teacherAttData.length, 'teacher records');
+        console.log('[SmartSync] ✅ Attendance synced:', studentAttData.length, 'student records');
         if (window.SmartSyncManager) window.SmartSyncManager.markSynced('attendance');
       } catch (e) {
         console.error('[SmartSync] Attendance fetch error:', e);
@@ -6184,11 +6085,8 @@ function App() {
     curriculum: curriculum,
     chapterProgress: chapterProgress,
     studentAttendance: studentAttendance,
-    teacherAttendance: teacherAttendance,
     schoolInfo: schoolInfo,
     setSchoolInfo: setSchoolInfo,
-    leaveAdjustments: leaveAdjustments,
-    setLeaveAdjustments: setLeaveAdjustments,
     managers: managers,
     isSuperAdmin: isSuperAdmin,
     accessibleSchools: accessibleSchools,
@@ -6206,220 +6104,16 @@ function App() {
     curriculum: curriculum,
     chapterProgress: chapterProgress,
     studentAttendance: studentAttendance,
-    teacherAttendance: teacherAttendance,
     schoolInfo: schoolInfo,
     setSchoolInfo: setSchoolInfo,
     updateChapterProgress: updateChapterProgress,
     activeTab: activeTab,
     setActiveTab: setActiveTab,
-    leaveAdjustments: leaveAdjustments,
     floatingCelebration: floatingCelebration,
     setFloatingCelebration: setFloatingCelebration,
     precomputedRankings: precomputedRankings,
     managers: managers
   }));
-}
-function APCTeacherAttendanceView({
-  currentUser,
-  teachers,
-  teacherAttendance,
-  leaveAdjustments
-}) {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [viewMode, setViewMode] = useState('daily');
-  const mySchool = currentUser.school;
-  const schoolTeachers = teachers.filter(t => t.school === mySchool && !t.isArchived && t.role !== 'apc');
-  const getDailyAttendance = () => {
-    return teacherAttendance.filter(att => att.date === selectedDate && att.school === mySchool);
-  };
-  const getMonthlyAttendance = () => {
-    const monthStart = selectedMonth + '-01';
-    const monthEnd = selectedMonth + '-31';
-    return teacherAttendance.filter(att => att.school === mySchool && att.date >= monthStart && att.date <= monthEnd);
-  };
-  const dailyAttendance = getDailyAttendance();
-  const monthlyAttendance = getMonthlyAttendance();
-  const presentToday = dailyAttendance.filter(a => a.status === 'Present').length;
-  const absentToday = schoolTeachers.length - presentToday;
-  const getTeacherMonthlyStats = teacherAfid => {
-    const teacherAtt = monthlyAttendance.filter(a => a.teacherId === teacherAfid || a.afid === teacherAfid);
-    const present = teacherAtt.filter(a => a.status === 'Present').length;
-    const leaves = teacherAtt.filter(a => a.status !== 'Present').length;
-    return {
-      present,
-      leaves,
-      total: teacherAtt.length
-    };
-  };
-  const findTeacherAttendance = teacherAfid => {
-    return dailyAttendance.find(a => a.teacherId === teacherAfid || a.afid === teacherAfid);
-  };
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("div", {
-    className: "flex flex-col md:flex-row md:items-center md:justify-between gap-4"
-  }, React.createElement("div", null, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "\uD83D\uDC68\u200D\uD83C\uDFEB Teacher Attendance"), React.createElement("p", {
-    className: "text-gray-600 mt-1"
-  }, mySchool, " - View Only"), React.createElement("span", {
-    className: "inline-block mt-2 px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm font-semibold"
-  }, "\uD83D\uDC64 APC View")), React.createElement("div", {
-    className: "flex items-center gap-2"
-  }, React.createElement("button", {
-    onClick: () => setViewMode('daily'),
-    className: `px-4 py-2 rounded-xl font-semibold ${viewMode === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`
-  }, "\uD83D\uDCC5 Daily View"), React.createElement("button", {
-    onClick: () => setViewMode('monthly'),
-    className: `px-4 py-2 rounded-xl font-semibold ${viewMode === 'monthly' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`
-  }, "\uD83D\uDCCA Monthly View"))), viewMode === 'daily' ? React.createElement(React.Fragment, null, React.createElement("div", {
-    className: "bg-white p-4 rounded-2xl shadow-lg"
-  }, React.createElement("div", {
-    className: "flex flex-wrap items-center gap-4"
-  }, React.createElement("label", {
-    className: "font-bold"
-  }, "Select Date:"), React.createElement("input", {
-    type: "date",
-    value: selectedDate,
-    onChange: e => setSelectedDate(e.target.value),
-    className: "px-4 py-2 border-2 rounded-xl"
-  }), React.createElement("div", {
-    className: "flex gap-2"
-  }, React.createElement("button", {
-    onClick: () => {
-      const d = new Date(selectedDate);
-      d.setDate(d.getDate() - 1);
-      setSelectedDate(d.toISOString().split('T')[0]);
-    },
-    className: "px-3 py-2 bg-gray-200 rounded-lg"
-  }, "\u25C0 Prev"), React.createElement("button", {
-    onClick: () => setSelectedDate(new Date().toISOString().split('T')[0]),
-    className: "px-3 py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold"
-  }, "Today"), React.createElement("button", {
-    onClick: () => {
-      const d = new Date(selectedDate);
-      d.setDate(d.getDate() + 1);
-      setSelectedDate(d.toISOString().split('T')[0]);
-    },
-    className: "px-3 py-2 bg-gray-200 rounded-lg"
-  }, "Next \u25B6")))), React.createElement("div", {
-    className: "grid grid-cols-2 md:grid-cols-4 gap-4"
-  }, React.createElement("div", {
-    className: "bg-white p-4 rounded-xl shadow text-center"
-  }, React.createElement("div", {
-    className: "text-3xl font-bold text-blue-600"
-  }, schoolTeachers.length), React.createElement("div", {
-    className: "text-sm text-gray-600"
-  }, "Total Teachers")), React.createElement("div", {
-    className: "bg-green-50 p-4 rounded-xl shadow text-center"
-  }, React.createElement("div", {
-    className: "text-3xl font-bold text-green-600"
-  }, presentToday), React.createElement("div", {
-    className: "text-sm text-gray-600"
-  }, "Present")), React.createElement("div", {
-    className: "bg-red-50 p-4 rounded-xl shadow text-center"
-  }, React.createElement("div", {
-    className: "text-3xl font-bold text-red-600"
-  }, absentToday), React.createElement("div", {
-    className: "text-sm text-gray-600"
-  }, "Absent/Leave")), React.createElement("div", {
-    className: "bg-purple-50 p-4 rounded-xl shadow text-center"
-  }, React.createElement("div", {
-    className: "text-3xl font-bold text-purple-600"
-  }, schoolTeachers.length > 0 ? Math.round(presentToday / schoolTeachers.length * 100) : 0, "%"), React.createElement("div", {
-    className: "text-sm text-gray-600"
-  }, "Attendance Rate"))), React.createElement("div", {
-    className: "bg-white rounded-2xl shadow-lg overflow-hidden"
-  }, React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "bg-gray-100"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Teacher"), React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Subject"), React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Status"), React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Check-in Time"))), React.createElement("tbody", null, schoolTeachers.map(teacher => {
-    const att = findTeacherAttendance(teacher.afid);
-    return React.createElement("tr", {
-      key: teacher.afid,
-      className: "border-b hover:bg-gray-50"
-    }, React.createElement("td", {
-      className: "p-4"
-    }, React.createElement("div", {
-      className: "font-semibold"
-    }, teacher.name), React.createElement("div", {
-      className: "text-xs text-gray-500"
-    }, teacher.afid)), React.createElement("td", {
-      className: "p-4"
-    }, teacher.subject), React.createElement("td", {
-      className: "p-4"
-    }, att ? React.createElement("span", {
-      className: `px-3 py-1 rounded-full text-sm font-semibold ${att.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`
-    }, att.status) : React.createElement("span", {
-      className: "px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-500"
-    }, "Not Marked")), React.createElement("td", {
-      className: "p-4 text-sm text-gray-600"
-    }, att?.punchInTime || att?.checkInTime || '—'));
-  }))))) : React.createElement(React.Fragment, null, React.createElement("div", {
-    className: "bg-white p-4 rounded-2xl shadow-lg"
-  }, React.createElement("div", {
-    className: "flex flex-wrap items-center gap-4"
-  }, React.createElement("label", {
-    className: "font-bold"
-  }, "Select Month:"), React.createElement("input", {
-    type: "month",
-    value: selectedMonth,
-    onChange: e => setSelectedMonth(e.target.value),
-    className: "px-4 py-2 border-2 rounded-xl"
-  }))), React.createElement("div", {
-    className: "bg-white rounded-2xl shadow-lg overflow-hidden"
-  }, React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "bg-gray-100"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Teacher"), React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Subject"), React.createElement("th", {
-    className: "p-4 text-center"
-  }, "Days Present"), React.createElement("th", {
-    className: "p-4 text-center"
-  }, "Days Leave"), React.createElement("th", {
-    className: "p-4 text-center"
-  }, "Attendance %"))), React.createElement("tbody", null, schoolTeachers.map(teacher => {
-    const stats = getTeacherMonthlyStats(teacher.afid);
-    const percentage = stats.total > 0 ? Math.round(stats.present / stats.total * 100) : 0;
-    return React.createElement("tr", {
-      key: teacher.afid,
-      className: "border-b hover:bg-gray-50"
-    }, React.createElement("td", {
-      className: "p-4"
-    }, React.createElement("div", {
-      className: "font-semibold"
-    }, teacher.name), React.createElement("div", {
-      className: "text-xs text-gray-500"
-    }, teacher.afid)), React.createElement("td", {
-      className: "p-4"
-    }, teacher.subject), React.createElement("td", {
-      className: "p-4 text-center"
-    }, React.createElement("span", {
-      className: "font-bold text-green-600"
-    }, stats.present)), React.createElement("td", {
-      className: "p-4 text-center"
-    }, React.createElement("span", {
-      className: "font-bold text-orange-600"
-    }, stats.leaves)), React.createElement("td", {
-      className: "p-4 text-center"
-    }, React.createElement("span", {
-      className: `px-3 py-1 rounded-full text-sm font-bold ${percentage >= 90 ? 'bg-green-100 text-green-700' : percentage >= 75 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`
-    }, percentage, "%")));
-  }))))));
 }
 function TeacherView({
   currentUser,
@@ -6432,13 +6126,11 @@ function TeacherView({
   curriculum,
   chapterProgress,
   studentAttendance,
-  teacherAttendance,
   schoolInfo,
   setSchoolInfo,
   updateChapterProgress,
   activeTab,
   setActiveTab,
-  leaveAdjustments,
   floatingCelebration,
   setFloatingCelebration,
   precomputedRankings,
@@ -6468,12 +6160,6 @@ function TeacherView({
     label: 'Attendance Dashboard',
     icon: React.createElement("i", {
       className: "fa-solid fa-calendar-check"
-    })
-  }, {
-    id: 'teacherattview',
-    label: 'Teacher Attendance',
-    icon: React.createElement("i", {
-      className: "fa-solid fa-chalkboard-user"
     })
   }, {
     id: 'assets',
@@ -6792,11 +6478,6 @@ function TeacherView({
   }, React.createElement(ProfileCompletionBanner, {
     currentUser: currentUser,
     onNavigateToProfile: () => setActiveTab('myprofile')
-  }), activeTab === 'teacherattview' && React.createElement(APCTeacherAttendanceView, {
-    currentUser: currentUser,
-    teachers: teachers,
-    teacherAttendance: teacherAttendance,
-    leaveAdjustments: leaveAdjustments
   }), activeTab === 'directory' && React.createElement(OrgChartDirectory, {
     teachers: teachers,
     currentUser: currentUser
@@ -6811,8 +6492,7 @@ function TeacherView({
     currentUser: currentUser,
     students: students,
     teachers: teachers,
-    studentAttendance: studentAttendance,
-    teacherAttendance: teacherAttendance
+    studentAttendance: studentAttendance
   }), activeTab === 'timetable' && React.createElement(TimetablePage, {
     currentUser: currentUser,
     mySchool: currentUser?.school
@@ -7855,7 +7535,7 @@ function APCManagement() {
     className: "text-teal-700 text-sm"
   }, "Academic Program Coordinators (APCs) have school-level access to:"), React.createElement("ul", {
     className: "mt-2 text-teal-700 text-sm space-y-1"
-  }, React.createElement("li", null, "\u2705 View syllabus/curriculum progress (all subjects)"), React.createElement("li", null, "\u2705 Mark student attendance"), React.createElement("li", null, "\u2705 View teacher attendance"), React.createElement("li", null, "\u2705 View analytics and dashboards"), React.createElement("li", null, "\u274C Cannot edit curriculum or chapters"), React.createElement("li", null, "\u274C Cannot add/edit teachers or students"))), React.createElement("div", {
+  }, React.createElement("li", null, "\u2705 View syllabus/curriculum progress (all subjects)"), React.createElement("li", null, "\u2705 Mark student attendance"), React.createElement("li", null, "\u2705 View analytics and dashboards"), React.createElement("li", null, "\u274C Cannot edit curriculum or chapters"), React.createElement("li", null, "\u274C Cannot add/edit teachers or students"))), React.createElement("div", {
     className: "grid grid-cols-2 md:grid-cols-3 gap-4"
   }, React.createElement("div", {
     className: "bg-white p-4 rounded-xl shadow text-center"
@@ -8269,1081 +7949,6 @@ function BirthdaysPage({
     month: 'short',
     day: 'numeric'
   }))))))));
-}
-function TeacherManagement({
-  teachers,
-  teacherAttendance,
-  leaveAdjustments,
-  setLeaveAdjustments,
-  isSuperAdmin = false
-}) {
-  const [showModal, setShowModal] = useState(false);
-  const [editingTeacher, setEditingTeacher] = useState(null);
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [selectedTeacherLeave, setSelectedTeacherLeave] = useState(null);
-  const [isEditingLeave, setIsEditingLeave] = useState(false);
-  const [leaveForm, setLeaveForm] = useState({
-    entitled: 0,
-    maternity: 0,
-    paternity: 0
-  });
-  const [savingLeave, setSavingLeave] = useState(false);
-  const [form, setForm] = useState({
-    name: '',
-    afid: '',
-    afCode: '',
-    email: '',
-    password: '',
-    dob: '',
-    joiningDate: '',
-    subject: '',
-    school: '',
-    phone: '',
-    role: 'teacher'
-  });
-  const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const [teacherToArchive, setTeacherToArchive] = useState(null);
-  const [archiveReason, setArchiveReason] = useState('');
-  const [archiveNotes, setArchiveNotes] = useState('');
-  const [archiving, setArchiving] = useState(false);
-  const [showArchivedTeachers, setShowArchivedTeachers] = useState(false);
-  const [showBulkImport, setShowBulkImport] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [importResults, setImportResults] = useState(null);
-  const bulkFileInputRef = useRef(null);
-  const handleBulkCSVImport = e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    Papa.parse(file, {
-      complete: async results => {
-        try {
-          setIsImporting(true);
-          setImportResults(null);
-          const rows = results.data;
-          if (rows.length < 2) {
-            alert('CSV file is empty or has no data rows');
-            setIsImporting(false);
-            return;
-          }
-          const teachersToAdd = [];
-          const errors = [];
-          const firebaseAuthList = [];
-          rows.forEach((row, index) => {
-            if (index === 0) return;
-            const afid = row[0] ? row[0].trim() : '';
-            const afCode = row[1] ? row[1].trim() : '';
-            const name = row[2] ? row[2].trim() : '';
-            const email = row[3] ? row[3].trim().toLowerCase() : '';
-            const password = row[4] ? row[4].trim() : '';
-            const subject = row[5] ? row[5].trim() : '';
-            const school = row[6] ? row[6].trim() : '';
-            const dob = row[7] ? row[7].trim() : '';
-            const joiningDate = row[8] ? row[8].trim() : '';
-            const phone = row[9] ? row[9].trim() : '';
-            if (!afid || !name || !email || !subject || !school) {
-              if (afid || name || email) {
-                errors.push(`Row ${index + 1}: Missing required fields (AFID, Name, Email, Subject, or School)`);
-              }
-              return;
-            }
-            if (!SUBJECTS.includes(subject)) {
-              errors.push(`Row ${index + 1}: Invalid subject "${subject}". Must be one of: ${SUBJECTS.join(', ')}`);
-              return;
-            }
-            if (!SCHOOLS.includes(school)) {
-              errors.push(`Row ${index + 1}: Invalid school "${school}". Must be one of: ${SCHOOLS.join(', ')}`);
-              return;
-            }
-            if (teachersToAdd.some(t => t.afid === afid)) {
-              errors.push(`Row ${index + 1}: Duplicate AFID "${afid}" in CSV`);
-              return;
-            }
-            teachersToAdd.push({
-              afid,
-              afCode: afCode || null,
-              name,
-              email,
-              subject,
-              school,
-              dob: dob || null,
-              joiningDate: joiningDate || null,
-              phone: phone || null,
-              isArchived: false
-            });
-            if (password) {
-              firebaseAuthList.push({
-                email,
-                password,
-                name,
-                afid
-              });
-            }
-          });
-          if (teachersToAdd.length === 0) {
-            alert('No valid teachers found in CSV.\n\nErrors:\n' + errors.join('\n'));
-            setIsImporting(false);
-            return;
-          }
-          const existingAFIDs = teachers.map(t => t.afid);
-          const duplicates = teachersToAdd.filter(t => existingAFIDs.includes(t.afid));
-          if (duplicates.length > 0) {
-            const proceed = confirm(`⚠️ Warning: ${duplicates.length} teacher(s) already exist with these AFIDs:\n${duplicates.map(d => `• ${d.afid} - ${d.name}`).join('\n')}\n\nDo you want to UPDATE these existing teachers?\n\nClick OK to update existing + add new, or Cancel to abort.`);
-            if (!proceed) {
-              setIsImporting(false);
-              if (bulkFileInputRef.current) bulkFileInputRef.current.value = '';
-              return;
-            }
-          }
-          let successCount = 0;
-          let failCount = 0;
-          for (const teacher of teachersToAdd) {
-            try {
-              await db.collection('teachers').doc(teacher.afid).set(teacher);
-              successCount++;
-            } catch (err) {
-              failCount++;
-              errors.push(`Failed to save ${teacher.name} (${teacher.afid}): ${err.message}`);
-            }
-          }
-          setIsImporting(false);
-          setImportResults({
-            success: successCount,
-            failed: failCount,
-            errors,
-            firebaseAuth: firebaseAuthList
-          });
-          if (bulkFileInputRef.current) bulkFileInputRef.current.value = '';
-        } catch (e) {
-          setIsImporting(false);
-          alert('Import failed: ' + e.message);
-        }
-      },
-      error: () => {
-        setIsImporting(false);
-        alert('Failed to parse CSV file');
-      }
-    });
-  };
-  const openAddModal = () => {
-    setEditingTeacher(null);
-    setForm({
-      name: '',
-      afid: '',
-      afCode: '',
-      email: '',
-      password: '',
-      dob: '',
-      joiningDate: '',
-      subject: '',
-      school: '',
-      phone: '',
-      role: 'teacher'
-    });
-    setShowModal(true);
-  };
-  const openEditModal = teacher => {
-    setEditingTeacher(teacher);
-    setForm({
-      ...teacher,
-      password: '',
-      role: teacher.role || 'teacher'
-    });
-    setShowModal(true);
-  };
-  const openLeaveModal = async teacher => {
-    setShowLeaveModal(true);
-    setSelectedTeacherLeave({ teacher, balance: null });
-    setIsEditingLeave(false);
-    const currentAdj = (leaveAdjustments || {})[teacher.afid] || { entitled: 0, maternity: 0, paternity: 0 };
-    setLeaveForm({ entitled: currentAdj.entitled || 0, maternity: currentAdj.maternity || 0, paternity: currentAdj.paternity || 0 });
-    try {
-      const snap = await db.collection('teacherAttendance')
-        .where('teacherId', '==', teacher.afid)
-        .where('status', '==', 'On Leave')
-        .get();
-      const fullLeaves = snap.docs.map(d => d.data());
-      const balance = calculateLeaveBalance(fullLeaves, teacher.afid, leaveAdjustments || {});
-      setSelectedTeacherLeave({ teacher, balance });
-    } catch (e) {
-      const balance = calculateLeaveBalance(teacherAttendance || [], teacher.afid, leaveAdjustments || {});
-      setSelectedTeacherLeave({ teacher, balance });
-    }
-  };
-  const handleSaveLeaveAdjustment = async () => {
-    if (!selectedTeacherLeave) return;
-    setSavingLeave(true);
-    try {
-      const teacherId = selectedTeacherLeave.teacher.afid;
-      await db.collection('leaveAdjustments').doc(teacherId).set({
-        entitled: parseInt(leaveForm.entitled) || 0,
-        maternity: parseInt(leaveForm.maternity) || 0,
-        paternity: parseInt(leaveForm.paternity) || 0,
-        updatedAt: new Date().toISOString(),
-        updatedBy: 'admin'
-      });
-      setLeaveAdjustments(prev => ({
-        ...prev,
-        [teacherId]: {
-          entitled: parseInt(leaveForm.entitled) || 0,
-          maternity: parseInt(leaveForm.maternity) || 0,
-          paternity: parseInt(leaveForm.paternity) || 0
-        }
-      }));
-      const newBalance = calculateLeaveBalance(teacherAttendance || [], teacherId, {
-        ...leaveAdjustments,
-        [teacherId]: {
-          entitled: parseInt(leaveForm.entitled) || 0,
-          maternity: parseInt(leaveForm.maternity) || 0,
-          paternity: parseInt(leaveForm.paternity) || 0
-        }
-      });
-      setSelectedTeacherLeave({
-        ...selectedTeacherLeave,
-        balance: newBalance
-      });
-      setIsEditingLeave(false);
-      alert('Leave adjustment saved successfully!');
-    } catch (e) {
-      alert('Failed to save: ' + e.message);
-    } finally {
-      setSavingLeave(false);
-    }
-  };
-  const handleResetLeaveAdjustment = async () => {
-    if (!selectedTeacherLeave) return;
-    if (!confirm(`Reset all leave adjustments for ${selectedTeacherLeave.teacher.name} to zero?\n\nThis will remove any manual adjustments so the balance reflects only system-tracked leaves.`)) return;
-    setSavingLeave(true);
-    try {
-      const teacherId = selectedTeacherLeave.teacher.afid;
-      await db.collection('leaveAdjustments').doc(teacherId).set({ entitled: 0, maternity: 0, paternity: 0, updatedAt: new Date().toISOString(), updatedBy: 'admin' });
-      const newAdjs = { ...leaveAdjustments, [teacherId]: { entitled: 0, maternity: 0, paternity: 0 } };
-      setLeaveAdjustments(newAdjs);
-      setLeaveForm({ entitled: 0, maternity: 0, paternity: 0 });
-      const snap = await db.collection('teacherAttendance').where('teacherId', '==', teacherId).where('status', '==', 'On Leave').get();
-      const newBalance = calculateLeaveBalance(snap.docs.map(d => d.data()), teacherId, newAdjs);
-      setSelectedTeacherLeave({ ...selectedTeacherLeave, balance: newBalance });
-      alert('✅ Leave adjustments reset to zero!');
-    } catch (e) {
-      alert('Failed to reset: ' + e.message);
-    } finally {
-      setSavingLeave(false);
-    }
-  };
-  const handleSave = async () => {
-    if (!form.afid || !form.name || !form.email || !form.subject || !form.school) {
-      alert('Please fill all required fields (AFID, Name, Email, Subject, School)');
-      return;
-    }
-    try {
-      await db.collection('teachers').doc(form.afid).set({
-        afid: form.afid,
-        afCode: form.afCode || null,
-        name: form.name,
-        email: form.email.toLowerCase(),
-        subject: form.subject,
-        school: form.school,
-        dob: form.dob || null,
-        joiningDate: form.joiningDate || null,
-        phone: form.phone || null,
-        role: form.role || 'teacher',
-        isArchived: form.isArchived || false,
-        archiveReason: form.archiveReason || null,
-        archiveNotes: form.archiveNotes || null,
-        archivedAt: form.archivedAt || null
-      });
-      if (!editingTeacher && form.password) {
-        alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`);
-      } else {
-        alert(form.role === 'apc' ? 'APC updated!' : 'Teacher updated!');
-      }
-      setShowModal(false);
-    } catch (e) {
-      alert('Failed: ' + e.message);
-    }
-  };
-  const openArchiveModal = teacher => {
-    setTeacherToArchive(teacher);
-    setArchiveReason('');
-    setArchiveNotes('');
-    setShowArchiveModal(true);
-  };
-  const handleArchive = async () => {
-    if (!archiveReason) {
-      alert('Please select a reason for archiving');
-      return;
-    }
-    setArchiving(true);
-    try {
-      await db.collection('teachers').doc(teacherToArchive.afid).update({
-        isArchived: true,
-        archiveReason: archiveReason,
-        archiveNotes: archiveNotes || '',
-        archivedAt: new Date().toISOString(),
-        archivedBy: 'admin'
-      });
-      alert(`✅ ${teacherToArchive.name} has been archived.\n\nReason: ${archiveReason}\n\n• All curriculum data is preserved\n• Student feedback history is preserved\n• A new teacher can be assigned to continue`);
-      setShowArchiveModal(false);
-      setTeacherToArchive(null);
-    } catch (e) {
-      alert('Failed to archive: ' + e.message);
-    } finally {
-      setArchiving(false);
-    }
-  };
-  const handleRestore = async teacher => {
-    if (!confirm(`Restore ${teacher.name} as an active teacher?`)) return;
-    try {
-      await db.collection('teachers').doc(teacher.afid).update({
-        isArchived: false,
-        archiveReason: null,
-        archiveNotes: null,
-        archivedAt: null,
-        archivedBy: null,
-        restoredAt: new Date().toISOString()
-      });
-      alert(`✅ ${teacher.name} has been restored as an active teacher.`);
-    } catch (e) {
-      alert('Failed to restore: ' + e.message);
-    }
-  };
-  const handlePermanentDelete = async teacher => {
-    const docRef = teacher.afid || teacher.docId;
-    if (!docRef) {
-      alert('Cannot delete: no document reference found for this record.');
-      return;
-    }
-    if (!confirm(`⚠️ PERMANENT DELETE\n\nAre you sure you want to permanently delete ${teacher.name || 'this incomplete record'}?\n\nThis action cannot be undone.\nNote: Historical data (feedback, observations) will remain but show "Deleted Teacher".`)) return;
-    try {
-      await db.collection('teachers').doc(docRef).delete();
-      alert('Teacher permanently deleted.');
-    } catch (e) {
-      alert('Failed to delete: ' + e.message);
-    }
-  };
-  const activeTeachers = teachers.filter(t => !t.isArchived);
-  const archivedTeachers = teachers.filter(t => t.isArchived);
-  const getLeaveBalanceDisplay = teacherId => {
-    const balance = calculateLeaveBalance(teacherAttendance || [], teacherId, leaveAdjustments || {});
-    return balance;
-  };
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center flex-wrap gap-4"
-  }, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "Teacher Management"), React.createElement("div", {
-    className: "flex items-center gap-4"
-  }, React.createElement("label", {
-    className: "flex items-center gap-2 cursor-pointer"
-  }, React.createElement("input", {
-    type: "checkbox",
-    checked: showArchivedTeachers,
-    onChange: e => setShowArchivedTeachers(e.target.checked),
-    className: "w-5 h-5"
-  }), React.createElement("span", {
-    className: "text-sm font-medium"
-  }, "Show Archived (", archivedTeachers.length, ")")), isSuperAdmin && React.createElement("button", {
-    onClick: openAddModal,
-    className: "px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold"
-  }, "+ Add Teacher"))), isSuperAdmin && React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg border-2 border-purple-200"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-4"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold text-purple-700"
-  }, "\uD83D\uDCE4 Bulk Import Teachers"), React.createElement("button", {
-    onClick: () => setShowBulkImport(!showBulkImport),
-    className: "px-4 py-2 bg-purple-100 text-purple-700 rounded-lg font-semibold hover:bg-purple-200"
-  }, showBulkImport ? '▲ Hide' : '▼ Expand')), showBulkImport && React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", {
-    className: "p-4 bg-purple-50 border-2 border-purple-200 rounded-xl"
-  }, React.createElement("p", {
-    className: "font-bold text-purple-800 mb-2"
-  }, "\uD83D\uDCCB CSV Format (10 columns):"), React.createElement("div", {
-    className: "text-sm text-purple-700 space-y-1"
-  }, React.createElement("p", null, React.createElement("strong", null, "Column A:"), " AFID * (unique identifier)"), React.createElement("p", null, React.createElement("strong", null, "Column B:"), " AF Code (e.g., AF355)"), React.createElement("p", null, React.createElement("strong", null, "Column C:"), " Name *"), React.createElement("p", null, React.createElement("strong", null, "Column D:"), " Email *"), React.createElement("p", null, React.createElement("strong", null, "Column E:"), " Password (for new teachers - you'll need to create in Firebase Auth)"), React.createElement("p", null, React.createElement("strong", null, "Column F:"), " Subject * (", SUBJECTS.join(', '), ")"), React.createElement("p", null, React.createElement("strong", null, "Column G:"), " School * (must match exactly: ", SCHOOLS.join(', '), ")"), React.createElement("p", null, React.createElement("strong", null, "Column H:"), " Date of Birth (YYYY-MM-DD)"), React.createElement("p", null, React.createElement("strong", null, "Column I:"), " Joining Date (YYYY-MM-DD)"), React.createElement("p", null, React.createElement("strong", null, "Column J:"), " Phone")), React.createElement("p", {
-    className: "text-xs text-purple-600 mt-2"
-  }, "* Required fields")), React.createElement("div", {
-    className: "bg-white p-3 rounded-lg text-xs font-mono overflow-x-auto border"
-  }, React.createElement("table", {
-    className: "w-full border-collapse"
-  }, React.createElement("thead", null, React.createElement("tr", {
-    className: "bg-gray-100"
-  }, React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "AFID"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "AF Code"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Name"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Email"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Password"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Subject"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "School"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "DOB"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Joining"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Phone"))), React.createElement("tbody", null, React.createElement("tr", null, React.createElement("td", {
-    className: "border p-1"
-  }, "T001"), React.createElement("td", {
-    className: "border p-1"
-  }, "AF355"), React.createElement("td", {
-    className: "border p-1"
-  }, "Rahul Sharma"), React.createElement("td", {
-    className: "border p-1"
-  }, "rahul@avanti.org"), React.createElement("td", {
-    className: "border p-1"
-  }, "pass123"), React.createElement("td", {
-    className: "border p-1"
-  }, "Physics"), React.createElement("td", {
-    className: "border p-1"
-  }, "CoE Barwani"), React.createElement("td", {
-    className: "border p-1"
-  }, "1990-05-15"), React.createElement("td", {
-    className: "border p-1"
-  }, "2023-06-01"), React.createElement("td", {
-    className: "border p-1"
-  }, "9876543210")), React.createElement("tr", {
-    className: "bg-gray-50"
-  }, React.createElement("td", {
-    className: "border p-1"
-  }, "T002"), React.createElement("td", {
-    className: "border p-1"
-  }, "AF356"), React.createElement("td", {
-    className: "border p-1"
-  }, "Priya Patel"), React.createElement("td", {
-    className: "border p-1"
-  }, "priya@avanti.org"), React.createElement("td", {
-    className: "border p-1"
-  }, "pass456"), React.createElement("td", {
-    className: "border p-1"
-  }, "Chemistry"), React.createElement("td", {
-    className: "border p-1"
-  }, "CoE Bundi"), React.createElement("td", {
-    className: "border p-1"
-  }, "1992-08-20"), React.createElement("td", {
-    className: "border p-1"
-  }, "2024-01-15"), React.createElement("td", {
-    className: "border p-1"
-  }, "9876543211"))))), React.createElement("div", {
-    className: "flex gap-3"
-  }, React.createElement("label", {
-    className: `flex-1 px-6 py-4 ${!isImporting ? 'bg-purple-600 hover:bg-purple-700 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-xl font-semibold text-center transition-all`
-  }, isImporting ? React.createElement("span", {
-    className: "flex items-center justify-center gap-2"
-  }, React.createElement("svg", {
-    className: "animate-spin h-5 w-5",
-    viewBox: "0 0 24 24"
-  }, React.createElement("circle", {
-    className: "opacity-25",
-    cx: "12",
-    cy: "12",
-    r: "10",
-    stroke: "currentColor",
-    strokeWidth: "4",
-    fill: "none"
-  }), React.createElement("path", {
-    className: "opacity-75",
-    fill: "currentColor",
-    d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-  })), "Importing Teachers...") : '📤 Select CSV File to Import', React.createElement("input", {
-    ref: bulkFileInputRef,
-    type: "file",
-    accept: ".csv",
-    onChange: handleBulkCSVImport,
-    disabled: isImporting,
-    className: "hidden"
-  }))), importResults && React.createElement("div", {
-    className: `p-4 rounded-xl ${importResults.failed > 0 ? 'bg-yellow-50 border-2 border-yellow-300' : 'bg-green-50 border-2 border-green-300'}`
-  }, React.createElement("h4", {
-    className: "font-bold text-lg mb-2"
-  }, importResults.failed > 0 ? '⚠️ Import Completed with Warnings' : '✅ Import Successful!'), React.createElement("div", {
-    className: "space-y-2 text-sm"
-  }, React.createElement("p", {
-    className: "text-green-700"
-  }, "\u2713 ", importResults.success, " teacher(s) imported successfully"), importResults.failed > 0 && React.createElement("p", {
-    className: "text-red-700"
-  }, "\u2717 ", importResults.failed, " teacher(s) failed"), importResults.errors.length > 0 && React.createElement("div", {
-    className: "mt-3 p-3 bg-red-50 rounded-lg"
-  }, React.createElement("p", {
-    className: "font-bold text-red-700 mb-1"
-  }, "Errors:"), React.createElement("ul", {
-    className: "text-red-600 text-xs space-y-1 max-h-32 overflow-y-auto"
-  }, importResults.errors.map((err, i) => React.createElement("li", {
-    key: i
-  }, "\u2022 ", err)))), importResults.firebaseAuth.length > 0 && React.createElement("div", {
-    className: "mt-3 p-3 bg-blue-50 rounded-lg"
-  }, React.createElement("p", {
-    className: "font-bold text-blue-700 mb-2"
-  }, "\uD83D\uDD10 Firebase Authentication Required:"), React.createElement("p", {
-    className: "text-blue-600 text-xs mb-2"
-  }, "Create these users in Firebase Console \u2192 Authentication \u2192 Add User:"), React.createElement("div", {
-    className: "bg-white rounded p-2 max-h-40 overflow-y-auto"
-  }, React.createElement("table", {
-    className: "w-full text-xs"
-  }, React.createElement("thead", null, React.createElement("tr", {
-    className: "bg-gray-100"
-  }, React.createElement("th", {
-    className: "p-1 text-left"
-  }, "Email"), React.createElement("th", {
-    className: "p-1 text-left"
-  }, "Password"), React.createElement("th", {
-    className: "p-1 text-left"
-  }, "Name"))), React.createElement("tbody", null, importResults.firebaseAuth.map((auth, i) => React.createElement("tr", {
-    key: i,
-    className: "border-b"
-  }, React.createElement("td", {
-    className: "p-1 font-mono"
-  }, auth.email), React.createElement("td", {
-    className: "p-1 font-mono"
-  }, auth.password), React.createElement("td", {
-    className: "p-1"
-  }, auth.name)))))))), React.createElement("button", {
-    onClick: () => setImportResults(null),
-    className: "mt-3 px-4 py-2 bg-gray-200 rounded-lg text-sm font-medium hover:bg-gray-300"
-  }, "Dismiss")))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg overflow-x-auto"
-  }, React.createElement("h3", {
-    className: "text-lg font-bold mb-4 text-green-600"
-  }, "\u2705 Active Teachers & APCs (", activeTeachers.length, ")"), React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "avanti-gradient-light"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-3 text-left"
-  }, "AFID"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "AF Code"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Name"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Role"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Email"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Subject"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "School"), React.createElement("th", {
-    className: "p-3 text-center"
-  }, "Leave Balance"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Actions"))), React.createElement("tbody", null, activeTeachers.map(t => {
-    const balance = getLeaveBalanceDisplay(t.afid);
-    const isIncomplete = !t.afid || !t.name || !t.email || !t.subject || !t.school;
-    return React.createElement("tr", {
-      key: t.docId || t.afid,
-      className: `border-b hover:bg-gray-50 ${isIncomplete ? 'bg-amber-50' : ''}`
-    }, React.createElement("td", {
-      className: "p-3 font-mono"
-    }, t.afid || React.createElement("span", {
-      className: "text-amber-600 italic text-xs",
-      title: t.docId ? `Missing AFID — doc id: ${t.docId}` : 'Missing AFID'
-    }, "⚠ no AFID")), React.createElement("td", {
-      className: "p-3 font-mono text-blue-600"
-    }, t.afCode || '—'), React.createElement("td", {
-      className: "p-3"
-    }, t.name || React.createElement("span", {
-      className: "text-amber-600 italic text-xs"
-    }, "⚠ no name")), React.createElement("td", {
-      className: "p-3"
-    }, React.createElement("span", {
-      className: `px-2 py-1 rounded-full text-xs font-semibold ${t.role === 'apc' ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}`
-    }, t.role === 'apc' ? '📋 APC' : '👨‍🏫 Teacher')), React.createElement("td", {
-      className: "p-3 text-sm"
-    }, t.email || '—'), React.createElement("td", {
-      className: "p-3"
-    }, t.subject || '—'), React.createElement("td", {
-      className: "p-3"
-    }, t.school || '—'), React.createElement("td", {
-      className: "p-3"
-    }, React.createElement("button", {
-      onClick: () => openLeaveModal(t),
-      className: "flex flex-col items-center gap-1 w-full hover:bg-gray-100 p-2 rounded-lg transition-colors"
-    }, React.createElement("div", {
-      className: "flex gap-2 text-xs"
-    }, React.createElement("span", {
-      className: "px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full",
-      title: "Entitled Leave"
-    }, "E: ", balance.entitled.remaining, "/", balance.entitled.total)), React.createElement("div", {
-      className: "flex gap-2 text-xs"
-    }, React.createElement("span", {
-      className: "px-2 py-0.5 bg-pink-100 text-pink-700 rounded-full",
-      title: "Maternity Leave"
-    }, "M: ", balance.maternity.remaining), React.createElement("span", {
-      className: "px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full",
-      title: "Paternity Leave"
-    }, "P: ", balance.paternity.remaining)), React.createElement("span", {
-      className: "text-xs text-gray-400"
-    }, "Click to view/edit"))), React.createElement("td", {
-      className: "p-3"
-    }, isSuperAdmin ? isIncomplete ? React.createElement("button", {
-      onClick: () => handlePermanentDelete(t),
-      className: "px-3 py-1 bg-red-600 text-white rounded-lg",
-      title: "This record is missing required fields — editing/archiving is unsafe, so only delete is offered"
-    }, "Delete") : React.createElement("div", {
-      className: "flex gap-2"
-    }, React.createElement("button", {
-      onClick: () => openEditModal(t),
-      className: "px-3 py-1 bg-yellow-400 rounded-lg"
-    }, "Edit"), React.createElement("button", {
-      onClick: () => openArchiveModal(t),
-      className: "px-3 py-1 bg-orange-500 text-white rounded-lg",
-      title: "Archive instead of delete"
-    }, "Archive")) : React.createElement("span", {
-      className: "text-gray-400 text-sm"
-    }, "View Only")));
-  })))), showArchivedTeachers && archivedTeachers.length > 0 && React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg overflow-x-auto border-2 border-red-200"
-  }, React.createElement("h3", {
-    className: "text-lg font-bold mb-4 text-red-600"
-  }, "\uD83D\uDCE6 Archived Teachers (", archivedTeachers.length, ")"), React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "bg-red-50"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-3 text-left"
-  }, "AFID"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Name"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Subject"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "School"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Archive Reason"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Archived Date"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Actions"))), React.createElement("tbody", null, archivedTeachers.map(t => React.createElement("tr", {
-    key: t.docId || t.afid,
-    className: "border-b bg-red-50/50 hover:bg-red-100/50"
-  }, React.createElement("td", {
-    className: "p-3 font-mono text-red-700"
-  }, t.afid || '—'), React.createElement("td", {
-    className: "p-3 text-red-700 font-medium"
-  }, t.name || '—'), React.createElement("td", {
-    className: "p-3 text-red-600"
-  }, t.subject || '—'), React.createElement("td", {
-    className: "p-3 text-red-600"
-  }, t.school || '—'), React.createElement("td", {
-    className: "p-3"
-  }, React.createElement("span", {
-    className: `px-2 py-1 rounded-full text-xs font-bold ${t.archiveReason === 'Resigned' ? 'bg-yellow-100 text-yellow-800' : t.archiveReason === 'Removed' ? 'bg-red-100 text-red-800' : t.archiveReason === 'Transferred' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`
-  }, t.archiveReason || 'Unknown'), t.archiveNotes && React.createElement("div", {
-    className: "text-xs text-gray-500 mt-1",
-    title: t.archiveNotes
-  }, "\uD83D\uDCDD ", t.archiveNotes.length > 30 ? t.archiveNotes.slice(0, 30) + '...' : t.archiveNotes)), React.createElement("td", {
-    className: "p-3 text-sm text-gray-600"
-  }, t.archivedAt ? new Date(t.archivedAt).toLocaleDateString() : '—'), React.createElement("td", {
-    className: "p-3"
-  }, isSuperAdmin && React.createElement("div", {
-    className: "flex gap-2"
-  }, React.createElement("button", {
-    onClick: () => handleRestore(t),
-    className: "px-3 py-1 bg-green-500 text-white rounded-lg text-sm"
-  }, "Restore"), React.createElement("button", {
-    onClick: () => handlePermanentDelete(t),
-    className: "px-3 py-1 bg-red-600 text-white rounded-lg text-sm"
-  }, "Delete")))))))), showLeaveModal && selectedTeacherLeave && React.createElement("div", {
-    className: "modal-overlay",
-    onClick: () => {
-      setShowLeaveModal(false);
-      setIsEditingLeave(false);
-    }
-  }, React.createElement("div", {
-    className: "modal-content max-w-lg",
-    onClick: e => e.stopPropagation()
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-4"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold"
-  }, "\uD83D\uDCCA Leave Balance - ", selectedTeacherLeave.teacher.name), !isEditingLeave && isSuperAdmin && React.createElement("div", { className: "flex gap-2" },
-    React.createElement("button", {
-      onClick: () => setIsEditingLeave(true),
-      className: "px-4 py-2 bg-yellow-400 rounded-lg font-semibold text-sm"
-    }, "\u270F\uFE0F Edit"),
-    React.createElement("button", {
-      onClick: handleResetLeaveAdjustment,
-      disabled: savingLeave,
-      className: "px-4 py-2 bg-red-100 text-red-700 rounded-lg font-semibold text-sm hover:bg-red-200 disabled:opacity-50"
-    }, savingLeave ? '...' : '\uD83D\uDD04 Reset'))), isEditingLeave ? React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", {
-    className: "bg-yellow-50 p-4 rounded-xl border-2 border-yellow-300 mb-4"
-  }, React.createElement("p", {
-    className: "text-sm text-yellow-800"
-  }, React.createElement("strong", null, "\uD83D\uDEE1\uFE0F Admin Leave Override:"), " Use positive values to reduce a teacher\u2019s leave balance (mark as used), or negative values to add back leave (increase remaining). Set to 0 to reset to system-tracked leaves only."), React.createElement("button", {
-    onClick: () => setLeaveForm({ entitled: 0, maternity: 0, paternity: 0 }),
-    className: "mt-2 px-3 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-semibold hover:bg-red-200"
-  }, "\uD83D\uDD04 Reset All Adjustments to 0")), React.createElement("div", {
-    className: "bg-blue-50 p-4 rounded-xl border-2 border-blue-200"
-  }, React.createElement("label", {
-    className: "block font-bold text-blue-800 mb-2"
-  }, "Entitled Leave Adjustment"), React.createElement("div", {
-    className: "flex items-center gap-3"
-  }, React.createElement("input", {
-    type: "number",
-    min: "-35",
-    max: "35",
-    value: leaveForm.entitled,
-    onChange: e => setLeaveForm({
-      ...leaveForm,
-      entitled: Math.min(35, Math.max(-35, parseInt(e.target.value) || 0))
-    }),
-    className: "w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
-  }), React.createElement("span", {
-    className: "text-blue-700"
-  }, leaveForm.entitled >= 0 ? "days deducted (reduces balance)" : "days added back (increases balance)")), React.createElement("p", {
-    className: "text-xs text-blue-600 mt-2"
-  }, "Range: -35 to +35 days (Personal, Sick, Emergency combined)")), React.createElement("div", {
-    className: "bg-pink-50 p-4 rounded-xl border-2 border-pink-200"
-  }, React.createElement("label", {
-    className: "block font-bold text-pink-800 mb-2"
-  }, "Maternity Leave Adjustment"), React.createElement("div", {
-    className: "flex items-center gap-3"
-  }, React.createElement("input", {
-    type: "number",
-    min: "-180",
-    max: "180",
-    value: leaveForm.maternity,
-    onChange: e => setLeaveForm({
-      ...leaveForm,
-      maternity: Math.min(180, Math.max(-180, parseInt(e.target.value) || 0))
-    }),
-    className: "w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
-  }), React.createElement("span", {
-    className: "text-pink-700"
-  }, leaveForm.maternity >= 0 ? "days deducted (reduces balance)" : "days added back (increases balance)")), React.createElement("p", {
-    className: "text-xs text-pink-600 mt-2"
-  }, "Range: -180 to +180 days")), React.createElement("div", {
-    className: "bg-purple-50 p-4 rounded-xl border-2 border-purple-200"
-  }, React.createElement("label", {
-    className: "block font-bold text-purple-800 mb-2"
-  }, "Paternity Leave Adjustment"), React.createElement("div", {
-    className: "flex items-center gap-3"
-  }, React.createElement("input", {
-    type: "number",
-    min: "-15",
-    max: "15",
-    value: leaveForm.paternity,
-    onChange: e => setLeaveForm({
-      ...leaveForm,
-      paternity: Math.min(15, Math.max(-15, parseInt(e.target.value) || 0))
-    }),
-    className: "w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
-  }), React.createElement("span", {
-    className: "text-purple-700"
-  }, leaveForm.paternity >= 0 ? "days deducted (reduces balance)" : "days added back (increases balance)")), React.createElement("p", {
-    className: "text-xs text-purple-600 mt-2"
-  }, "Range: -15 to +15 days")), React.createElement("div", {
-    className: "flex gap-3 mt-6"
-  }, React.createElement("button", {
-    onClick: handleSaveLeaveAdjustment,
-    disabled: savingLeave,
-    className: "flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold disabled:opacity-50"
-  }, savingLeave ? 'Saving...' : '💾 Save Adjustment'), React.createElement("button", {
-    onClick: () => {
-      setIsEditingLeave(false);
-      const currentAdj = leaveAdjustments[selectedTeacherLeave.teacher.afid] || {
-        entitled: 0,
-        maternity: 0,
-        paternity: 0
-      };
-      setLeaveForm({
-        entitled: currentAdj.entitled || 0,
-        maternity: currentAdj.maternity || 0,
-        paternity: currentAdj.paternity || 0
-      });
-    },
-    className: "flex-1 bg-gray-300 py-3 rounded-xl font-semibold"
-  }, "Cancel"))) : !selectedTeacherLeave.balance ? React.createElement("div", { className: "text-center py-8" }, React.createElement("div", { className: "animate-spin text-3xl mb-3" }, "⏳"), React.createElement("p", { className: "text-gray-500" }, "Loading leave history...")) : React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", {
-    className: "bg-blue-50 p-4 rounded-xl border-2 border-blue-200"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-2"
-  }, React.createElement("span", {
-    className: "font-bold text-blue-800"
-  }, "Entitled Leave"), React.createElement("span", {
-    className: "text-2xl font-bold text-blue-600"
-  }, selectedTeacherLeave.balance.entitled.remaining, "/", selectedTeacherLeave.balance.entitled.total)), React.createElement("div", {
-    className: "flex justify-between text-sm text-blue-700"
-  }, React.createElement("span", null, "Used: ", selectedTeacherLeave.balance.entitled.used, " days"), React.createElement("span", null, "Remaining: ", selectedTeacherLeave.balance.entitled.remaining, " days")), selectedTeacherLeave.balance.entitled.adjustment > 0 && React.createElement("div", {
-    className: "text-xs text-blue-600 mt-1"
-  }, "(includes ", selectedTeacherLeave.balance.entitled.adjustment, " prior adjustment)"), React.createElement("div", {
-    className: "mt-2 bg-blue-200 rounded-full h-3"
-  }, React.createElement("div", {
-    className: "bg-blue-500 h-3 rounded-full transition-all",
-    style: {
-      width: `${selectedTeacherLeave.balance.entitled.remaining / selectedTeacherLeave.balance.entitled.total * 100}%`
-    }
-  })), React.createElement("p", {
-    className: "text-xs text-blue-600 mt-2"
-  }, "Includes: Personal Leave, Sick Leave, Emergency Leave")), React.createElement("div", {
-    className: "bg-pink-50 p-4 rounded-xl border-2 border-pink-200"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-2"
-  }, React.createElement("span", {
-    className: "font-bold text-pink-800"
-  }, "Maternity Leave"), React.createElement("span", {
-    className: "text-2xl font-bold text-pink-600"
-  }, selectedTeacherLeave.balance.maternity.remaining, "/", selectedTeacherLeave.balance.maternity.total)), React.createElement("div", {
-    className: "flex justify-between text-sm text-pink-700"
-  }, React.createElement("span", null, "Used: ", selectedTeacherLeave.balance.maternity.used, " days"), React.createElement("span", null, "Remaining: ", selectedTeacherLeave.balance.maternity.remaining, " days")), selectedTeacherLeave.balance.maternity.adjustment > 0 && React.createElement("div", {
-    className: "text-xs text-pink-600 mt-1"
-  }, "(includes ", selectedTeacherLeave.balance.maternity.adjustment, " prior adjustment)"), React.createElement("div", {
-    className: "mt-2 bg-pink-200 rounded-full h-3"
-  }, React.createElement("div", {
-    className: "bg-pink-500 h-3 rounded-full transition-all",
-    style: {
-      width: `${selectedTeacherLeave.balance.maternity.remaining / selectedTeacherLeave.balance.maternity.total * 100}%`
-    }
-  }))), React.createElement("div", {
-    className: "bg-purple-50 p-4 rounded-xl border-2 border-purple-200"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-2"
-  }, React.createElement("span", {
-    className: "font-bold text-purple-800"
-  }, "Paternity Leave"), React.createElement("span", {
-    className: "text-2xl font-bold text-purple-600"
-  }, selectedTeacherLeave.balance.paternity.remaining, "/", selectedTeacherLeave.balance.paternity.total)), React.createElement("div", {
-    className: "flex justify-between text-sm text-purple-700"
-  }, React.createElement("span", null, "Used: ", selectedTeacherLeave.balance.paternity.used, " days"), React.createElement("span", null, "Remaining: ", selectedTeacherLeave.balance.paternity.remaining, " days")), selectedTeacherLeave.balance.paternity.adjustment > 0 && React.createElement("div", {
-    className: "text-xs text-purple-600 mt-1"
-  }, "(includes ", selectedTeacherLeave.balance.paternity.adjustment, " prior adjustment)"), React.createElement("div", {
-    className: "mt-2 bg-purple-200 rounded-full h-3"
-  }, React.createElement("div", {
-    className: "bg-purple-500 h-3 rounded-full transition-all",
-    style: {
-      width: `${selectedTeacherLeave.balance.paternity.remaining / selectedTeacherLeave.balance.paternity.total * 100}%`
-    }
-  }))), React.createElement("button", {
-    onClick: () => {
-      setShowLeaveModal(false);
-      setIsEditingLeave(false);
-    },
-    className: "w-full mt-6 bg-gray-300 py-3 rounded-xl font-semibold"
-  }, "Close")))), showArchiveModal && teacherToArchive && React.createElement("div", {
-    className: "modal-overlay",
-    onClick: () => setShowArchiveModal(false)
-  }, React.createElement("div", {
-    className: "modal-content max-w-md",
-    onClick: e => e.stopPropagation()
-  }, React.createElement("div", {
-    className: "text-center mb-6"
-  }, React.createElement("div", {
-    className: "text-5xl mb-3"
-  }, "\uD83D\uDCE6"), React.createElement("h3", {
-    className: "text-2xl font-bold text-gray-800"
-  }, "Archive Teacher"), React.createElement("p", {
-    className: "text-gray-600 mt-2"
-  }, "You are about to archive ", React.createElement("strong", {
-    className: "text-red-600"
-  }, teacherToArchive.name))), React.createElement("div", {
-    className: "bg-blue-50 p-4 rounded-xl mb-4 text-sm"
-  }, React.createElement("p", {
-    className: "font-bold text-blue-800 mb-2"
-  }, "\uD83D\uDCCC What happens when you archive:"), React.createElement("ul", {
-    className: "space-y-1 text-blue-700"
-  }, React.createElement("li", null, "\u2705 All curriculum data is ", React.createElement("strong", null, "preserved")), React.createElement("li", null, "\u2705 Student feedback history is ", React.createElement("strong", null, "preserved")), React.createElement("li", null, "\u2705 Teacher appears as \"Archived\" in directory"), React.createElement("li", null, "\u2705 Students see \"Vacant\" for this subject"), React.createElement("li", null, "\u2705 New teacher can continue from where they left off"))), React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block font-bold mb-2 text-gray-700"
-  }, "Reason for Archiving ", React.createElement("span", {
-    className: "text-red-500"
-  }, "*")), React.createElement("select", {
-    value: archiveReason,
-    onChange: e => setArchiveReason(e.target.value),
-    className: "w-full border-2 px-4 py-3 rounded-xl",
-    required: true
-  }, React.createElement("option", {
-    value: ""
-  }, "-- Select Reason --"), React.createElement("option", {
-    value: "Resigned"
-  }, "\uD83D\uDE14 Resigned"), React.createElement("option", {
-    value: "Removed"
-  }, "\u274C Removed"), React.createElement("option", {
-    value: "Transferred"
-  }, "\uD83D\uDD04 Transferred to another program"), React.createElement("option", {
-    value: "On Long Leave"
-  }, "\uD83C\uDFD6\uFE0F On Long Leave"), React.createElement("option", {
-    value: "Other"
-  }, "\uD83D\uDCDD Other"))), React.createElement("div", null, React.createElement("label", {
-    className: "block font-bold mb-2 text-gray-700"
-  }, "Additional Notes (Optional)"), React.createElement("textarea", {
-    value: archiveNotes,
-    onChange: e => setArchiveNotes(e.target.value),
-    placeholder: "E.g., Resigned for personal reasons, effective date, etc.",
-    className: "w-full border-2 px-4 py-3 rounded-xl resize-none",
-    rows: "3"
-  }))), React.createElement("div", {
-    className: "flex gap-3 mt-6"
-  }, React.createElement("button", {
-    onClick: () => setShowArchiveModal(false),
-    className: "flex-1 bg-gray-300 py-3 rounded-xl font-semibold",
-    disabled: archiving
-  }, "Cancel"), React.createElement("button", {
-    onClick: handleArchive,
-    disabled: !archiveReason || archiving,
-    className: `flex-1 py-3 rounded-xl font-semibold text-white ${!archiveReason || archiving ? 'bg-gray-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600'}`
-  }, archiving ? '⏳ Archiving...' : '📦 Archive Teacher')))), showModal && React.createElement("div", {
-    className: "modal-overlay",
-    onClick: () => setShowModal(false)
-  }, React.createElement("div", {
-    className: "modal-content",
-    onClick: e => e.stopPropagation()
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, editingTeacher ? 'Edit Teacher' : 'Add New Teacher'), React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", {
-    className: "grid grid-cols-2 gap-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "AFID *"), React.createElement("input", {
-    type: "text",
-    value: form.afid,
-    onChange: e => setForm({
-      ...form,
-      afid: e.target.value
-    }),
-    disabled: !!editingTeacher,
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "AF Code (e.g. AF355)"), React.createElement("input", {
-    type: "text",
-    value: form.afCode || '',
-    onChange: e => setForm({
-      ...form,
-      afCode: e.target.value
-    }),
-    placeholder: "AF355",
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  }))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Name *"), React.createElement("input", {
-    type: "text",
-    value: form.name,
-    onChange: e => setForm({
-      ...form,
-      name: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Email *"), React.createElement("input", {
-    type: "email",
-    value: form.email,
-    onChange: e => setForm({
-      ...form,
-      email: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), !editingTeacher && React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Password *"), React.createElement("input", {
-    type: "password",
-    value: form.password,
-    onChange: e => setForm({
-      ...form,
-      password: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), React.createElement("div", {
-    className: "grid grid-cols-2 gap-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Subject *"), React.createElement("select", {
-    value: form.subject,
-    onChange: e => setForm({
-      ...form,
-      subject: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  }, React.createElement("option", {
-    value: ""
-  }, "Select"), SUBJECTS.map(s => React.createElement("option", {
-    key: s,
-    value: s
-  }, s)))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "School *"), React.createElement("select", {
-    value: form.school,
-    onChange: e => setForm({
-      ...form,
-      school: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  }, React.createElement("option", {
-    value: ""
-  }, "Select"), SCHOOLS.map(s => React.createElement("option", {
-    key: s,
-    value: s
-  }, s))))), React.createElement("div", {
-    className: "grid grid-cols-2 gap-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Date of Birth"), React.createElement("input", {
-    type: "date",
-    value: form.dob,
-    onChange: e => setForm({
-      ...form,
-      dob: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Joining Date"), React.createElement("input", {
-    type: "date",
-    value: form.joiningDate,
-    onChange: e => setForm({
-      ...form,
-      joiningDate: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  }))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Phone"), React.createElement("input", {
-    type: "text",
-    value: form.phone,
-    onChange: e => setForm({
-      ...form,
-      phone: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Role *"), React.createElement("select", {
-    value: form.role || 'teacher',
-    onChange: e => setForm({
-      ...form,
-      role: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  }, React.createElement("option", {
-    value: "teacher"
-  }, "\uD83D\uDC68\u200D\uD83C\uDFEB Teacher"), React.createElement("option", {
-    value: "apc"
-  }, "\uD83D\uDCCB APC (Academic Program Coordinator)")), form.role === 'apc' && React.createElement("p", {
-    className: "text-xs text-teal-600 mt-1"
-  }, "\u2139\uFE0F APC can view all subjects, mark student attendance, view teacher attendance, but cannot edit curriculum.")), React.createElement("div", {
-    className: "flex gap-3"
-  }, React.createElement("button", {
-    onClick: handleSave,
-    className: "flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold"
-  }, "Save"), React.createElement("button", {
-    onClick: () => setShowModal(false),
-    className: "flex-1 bg-gray-300 py-3 rounded-xl font-semibold"
-  }, "Cancel"))))));
 }
 function AdminAssetManagement({
   accessibleSchools = [],
@@ -10474,8 +9079,7 @@ function TeacherAttendanceDashboard({
   currentUser,
   students,
   teachers,
-  studentAttendance,
-  teacherAttendance
+  studentAttendance
 }) {
   const [filterGrade, setFilterGrade] = useState('All');
   const today = getTodayDate();
@@ -11348,7 +9952,6 @@ function AdminAttendanceAnalytics({
   students,
   teachers,
   studentAttendance,
-  teacherAttendance,
   accessibleSchools = [],
   isSuperAdmin = false,
   isDirector = false
@@ -11373,7 +9976,6 @@ function AdminAttendanceAnalytics({
   const [lockFilterDate, setLockFilterDate] = useState(getTodayDate());
   const chart1Ref = useRef(null);
   const chart2Ref = useRef(null);
-  const chart3Ref = useRef(null);
   const chart4Ref = useRef(null);
   const chartInstances = useRef({});
   const loadAttendanceLocks = async () => {
@@ -11414,83 +10016,23 @@ function AdminAttendanceAnalytics({
     return true;
   });
   const [rangeStudentData, setRangeStudentData] = React.useState(null);
-  const [rangeTeacherData, setRangeTeacherData] = React.useState(null);
   const [loadingRange, setLoadingRange] = React.useState(false);
-  const [editSchool, setEditSchool] = React.useState('');
-  const [editDate, setEditDate] = React.useState(getTodayDate());
-  const [editTeachers, setEditTeachers] = React.useState([]);
-  const [editAttendanceMap, setEditAttendanceMap] = React.useState({});
-  const [editLoadingData, setEditLoadingData] = React.useState(false);
-  const [editModal, setEditModal] = React.useState(null);
-  const [editSaving, setEditSaving] = React.useState(false);
   const handleLoadRange = async () => {
     setLoadingRange(true);
     setRangeStudentData(null);
-    setRangeTeacherData(null);
     try {
-      const [stuSnap, tchSnap] = await Promise.all([
-        db.collection('studentAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get(),
-        db.collection('teacherAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get()
-      ]);
+      const stuSnap = await db.collection('studentAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get();
       let stuRecords = stuSnap.docs.map(d => d.data());
-      let tchRecords = tchSnap.docs.map(d => d.data());
       if (!hasFullDataAccess && accessibleSchools.length > 0) {
         stuRecords = stuRecords.filter(a => schoolMatchesFilter(a.school, accessibleSchools));
-        tchRecords = tchRecords.filter(a => schoolMatchesFilter(a.school, accessibleSchools));
       }
       setRangeStudentData(stuRecords);
-      setRangeTeacherData(tchRecords);
     } catch (err) { alert('Failed to load data: ' + err.message); }
     setLoadingRange(false);
   };
   React.useEffect(() => {
     setRangeStudentData(null);
-    setRangeTeacherData(null);
   }, [startDate, endDate, filterSchools]);
-  React.useEffect(() => {
-    if (!editSchool) { setEditTeachers([]); setEditAttendanceMap({}); return; }
-    setEditLoadingData(true);
-    let teacherList = [];
-    db.collection('teachers').where('school', '==', editSchool).get()
-      .then(snap => {
-        teacherList = snap.docs.map(d => ({ ...d.data(), docId: d.id })).filter(t => t.isArchived !== true);
-        setEditTeachers(teacherList);
-        return db.collection('teacherAttendance').where('school', '==', editSchool).where('date', '==', editDate).get();
-      })
-      .then(snap => {
-        const map = {};
-        snap.docs.forEach(d => { map[d.data().teacherId] = { ...d.data(), docId: d.id }; });
-        setEditAttendanceMap(map);
-        setEditLoadingData(false);
-      })
-      .catch(() => setEditLoadingData(false));
-  }, [editSchool, editDate]);
-  const saveTeacherAttendanceEdit = async () => {
-    if (!editModal) return;
-    setEditSaving(true);
-    const { teacher, existing, status, reason } = editModal;
-    const docId = `${teacher.afid}_${editDate}`;
-    const record = {
-      teacherId: teacher.afid,
-      teacherName: teacher.name,
-      school: teacher.school,
-      date: editDate,
-      status,
-      reason,
-      location: 'Marked by Admin',
-      punchInTime: status === 'Present' ? (existing && existing.status === 'Present' && existing.punchInTime ? existing.punchInTime : new Date().toISOString()) : 'Leave applied',
-      markedAt: new Date().toISOString(),
-      markedByAdmin: true,
-      adminOverride: true,
-    };
-    if (existing && existing.status !== status) record.originalStatus = existing.status;
-    try {
-      await db.collection('teacherAttendance').doc(docId).set(record);
-      setEditAttendanceMap(prev => ({ ...prev, [teacher.afid]: { ...record, docId } }));
-      setEditModal(null);
-    } catch (e) { alert('Error saving: ' + e.message); }
-    setEditSaving(false);
-  };
   const filteredStudentAttendance = useMemo(() => {
     const source = rangeStudentData !== null ? rangeStudentData : studentAttendance.filter(a => a.date >= startDate && a.date <= endDate);
     return source.filter(a => {
@@ -11499,13 +10041,6 @@ function AdminAttendanceAnalytics({
       return true;
     });
   }, [rangeStudentData, studentAttendance, filterSchools, filterGrade, startDate, endDate]);
-  const filteredTeacherAttendance = useMemo(() => {
-    const source = rangeTeacherData !== null ? rangeTeacherData : teacherAttendance.filter(a => a.date >= startDate && a.date <= endDate);
-    return source.filter(a => {
-      if (!schoolMatchesFilter(a.school, filterSchools)) return false;
-      return true;
-    });
-  }, [rangeTeacherData, teacherAttendance, filterSchools, startDate, endDate]);
   const todayStats = useMemo(() => {
     const studentRecords = studentAttendance.filter(a => {
       if (a.date !== selectedDate) return false;
@@ -11513,18 +10048,11 @@ function AdminAttendanceAnalytics({
       if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
       return true;
     });
-    const teacherRecords = teacherAttendance.filter(a => {
-      if (a.date !== selectedDate) return false;
-      if (!schoolMatchesFilter(a.school, filterSchools)) return false;
-      return true;
-    });
     return {
       studentPresent: studentRecords.filter(r => r.status === 'Present').length,
-      studentAbsent: studentRecords.filter(r => r.status === 'Absent').length,
-      teacherPresent: teacherRecords.filter(r => r.status === 'Present').length,
-      teacherAbsent: teacherRecords.filter(r => r.status === 'On Leave').length
+      studentAbsent: studentRecords.filter(r => r.status === 'Absent').length
     };
-  }, [studentAttendance, teacherAttendance, selectedDate, filterSchools, filterGrade]);
+  }, [studentAttendance, selectedDate, filterSchools, filterGrade]);
   const genderStats = useMemo(() => {
     const stats = {
       Male: {
@@ -11662,40 +10190,6 @@ function AdminAttendanceAnalytics({
         }
       });
     }
-    if (chart3Ref.current) {
-      const ctx = chart3Ref.current.getContext('2d');
-      const present = filteredTeacherAttendance.filter(a => a.status === 'Present').length;
-      const onLeave = filteredTeacherAttendance.filter(a => a.status === 'On Leave').length;
-      chartInstances.current.chart3 = new Chart(ctx, {
-        type: 'pie',
-        data: {
-          labels: ['Present', 'On Leave'],
-          datasets: [{
-            data: [present, onLeave],
-            backgroundColor: ['#5B8A8A', '#D4A574'],
-            borderWidth: 2,
-            borderColor: '#fff'
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            title: {
-              display: true,
-              text: 'Teacher Attendance Status (Month)',
-              font: {
-                size: 16,
-                weight: 'bold'
-              }
-            },
-            legend: {
-              position: 'bottom'
-            }
-          }
-        }
-      });
-    }
     if (chart4Ref.current) {
       const ctx = chart4Ref.current.getContext('2d');
       const present = filteredStudentAttendance.filter(a => a.status === 'Present').length;
@@ -11735,9 +10229,8 @@ function AdminAttendanceAnalytics({
         if (chart) chart.destroy();
       });
     };
-  }, [monthlyDayStats, genderStats, filteredTeacherAttendance, filteredStudentAttendance]);
+  }, [monthlyDayStats, genderStats, filteredStudentAttendance]);
   const [exportingStudents, setExportingStudents] = React.useState(false);
-  const [exportingTeachers, setExportingTeachers] = React.useState(false);
   const handleExportStudents = async () => {
     setExportingStudents(true);
     try {
@@ -11751,19 +10244,6 @@ function AdminAttendanceAnalytics({
       exportToExcel(records.map(a => ({ Date: a.date, School: a.school, Grade: a.grade, 'Student Name': a.studentName, Status: a.status, Remarks: a.remarks || '', 'Marked By': a.markedBy })), `student_attendance_${startDate}_to_${endDate}`);
     } catch (err) { alert('Export failed: ' + err.message); }
     setExportingStudents(false);
-  };
-  const handleExportTeachers = async () => {
-    setExportingTeachers(true);
-    try {
-      const snap = await db.collection('teacherAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get();
-      let records = snap.docs.map(d => d.data());
-      if (!hasFullDataAccess && accessibleSchools.length > 0) records = records.filter(a => schoolMatchesFilter(a.school, accessibleSchools));
-      if (filterSchools.length > 0) records = records.filter(a => schoolMatchesFilter(a.school, filterSchools));
-      records.sort((a, b) => a.date.localeCompare(b.date));
-      if (!records.length) { alert('No teacher records found for this period.'); setExportingTeachers(false); return; }
-      exportToExcel(records.map(a => ({ Date: a.date, 'Teacher Name': a.teacherName, School: a.school, 'Punch-In Time': a.punchInTime || 'Not recorded', Status: a.status, Reason: a.reason || '', Location: a.location || '' })), `teacher_attendance_${startDate}_to_${endDate}`);
-    } catch (err) { alert('Export failed: ' + err.message); }
-    setExportingTeachers(false);
   };
   return React.createElement("div", {
     className: "space-y-6"
@@ -11780,11 +10260,7 @@ function AdminAttendanceAnalytics({
     onClick: handleExportStudents,
     disabled: exportingStudents,
     className: `px-4 py-2 rounded-xl font-semibold text-white ${exportingStudents ? 'bg-green-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`
-  }, exportingStudents ? "\u23F3 Fetching..." : "\uD83D\uDCE5 Export Students"), React.createElement("button", {
-    onClick: handleExportTeachers,
-    disabled: exportingTeachers,
-    className: `px-4 py-2 rounded-xl font-semibold text-white ${exportingTeachers ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`
-  }, exportingTeachers ? "\u23F3 Fetching..." : "\uD83D\uDCE5 Export Teachers"))), showLockManagement && React.createElement("div", {
+  }, exportingStudents ? "\u23F3 Fetching..." : "\uD83D\uDCE5 Export Students"))), showLockManagement && React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg border-2 border-yellow-300"
   }, React.createElement("div", {
     className: "flex justify-between items-center mb-4"
@@ -11922,7 +10398,7 @@ function AdminAttendanceAnalytics({
     onChange: e => setSelectedDate(e.target.value),
     className: "w-full border-2 px-4 py-3 rounded-xl"
   })))), React.createElement("div", {
-    className: "grid grid-cols-2 md:grid-cols-4 gap-4"
+    className: "grid grid-cols-2 gap-4"
   }, React.createElement("div", {
     className: "stat-card bg-green-500 text-white"
   }, React.createElement("div", {
@@ -11935,19 +10411,7 @@ function AdminAttendanceAnalytics({
     className: "text-sm opacity-90"
   }, "Students Absent Today"), React.createElement("div", {
     className: "text-4xl font-bold"
-  }, todayStats.studentAbsent)), React.createElement("div", {
-    className: "stat-card bg-blue-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Teachers Present Today"), React.createElement("div", {
-    className: "text-4xl font-bold"
-  }, todayStats.teacherPresent)), React.createElement("div", {
-    className: "stat-card bg-orange-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Teachers on Leave Today"), React.createElement("div", {
-    className: "text-4xl font-bold"
-  }, todayStats.teacherAbsent))), React.createElement("div", {
+  }, todayStats.studentAbsent))), React.createElement("div", {
     className: "grid md:grid-cols-2 gap-6"
   }, React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg",
@@ -11969,189 +10433,8 @@ function AdminAttendanceAnalytics({
       height: '350px'
     }
   }, React.createElement("canvas", {
-    ref: chart3Ref
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg",
-    style: {
-      height: '350px'
-    }
-  }, React.createElement("canvas", {
     ref: chart4Ref
-  }))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4"
-  }, "\uD83D\uDCCB Detailed Teacher Attendance"), React.createElement("div", {
-    className: "overflow-x-auto"
-  }, React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "avanti-gradient-light"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Date"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Teacher"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "School"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Punch-In Time"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Status"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Reason"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Location"))), React.createElement("tbody", null, filteredTeacherAttendance.length === 0 ? React.createElement("tr", null, React.createElement("td", {
-    colSpan: "7",
-    className: "p-8 text-center text-gray-500"
-  }, rangeTeacherData === null ? "\u26A0\uFE0F Select dates above and click Load Data to view records" : "No records found for selected filters.")) : filteredTeacherAttendance.slice(0, 50).map((a, idx) => React.createElement("tr", {
-    key: idx,
-    className: "border-b hover:bg-gray-50"
-  }, React.createElement("td", {
-    className: "p-3 text-sm"
-  }, a.date), React.createElement("td", {
-    className: "p-3 font-semibold"
-  }, a.teacherName), React.createElement("td", {
-    className: "p-3"
-  }, a.school), React.createElement("td", {
-    className: "p-3"
-  }, React.createElement("span", {
-    className: "font-mono font-bold text-blue-600 text-lg"
-  }, "\u23F0 ", a.punchInTime || '--:--')), React.createElement("td", {
-    className: "p-3"
-  }, React.createElement("span", {
-    className: `px-2 py-1 rounded-full text-xs font-bold ${a.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`
-  }, a.status)), React.createElement("td", {
-    className: "p-3 text-sm"
-  }, a.reason), React.createElement("td", {
-    className: "p-3 text-sm"
-  }, "\uD83D\uDCCD ", a.location)))))))
-  , React.createElement("div", {className: "bg-white p-6 rounded-2xl shadow-lg"},
-    React.createElement("h3", {className: "text-xl font-bold mb-4"}, "\u270F\uFE0F Edit Teacher Attendance"),
-    React.createElement("div", {className: "flex gap-4 flex-wrap mb-4"},
-      React.createElement("div", {style: {flex: '1', minWidth: '200px'}},
-        React.createElement("label", {className: "block text-sm font-bold mb-2"}, "School"),
-        React.createElement("select", {
-          value: editSchool,
-          onChange: e => setEditSchool(e.target.value),
-          className: "w-full border-2 px-4 py-2 rounded-xl"
-        },
-          React.createElement("option", {value: ""}, "-- Select School --"),
-          schoolOptions.map(s => React.createElement("option", {key: s, value: s}, s))
-        )
-      ),
-      React.createElement("div", {style: {flex: '1', minWidth: '200px'}},
-        React.createElement("label", {className: "block text-sm font-bold mb-2"}, "Date"),
-        React.createElement("input", {
-          type: "date",
-          value: editDate,
-          onChange: e => setEditDate(e.target.value),
-          className: "w-full border-2 px-4 py-2 rounded-xl"
-        })
-      )
-    ),
-    !editSchool
-      ? React.createElement("div", {className: "text-center py-8 text-gray-400"}, "Select a school and date to edit teacher attendance")
-      : editLoadingData
-        ? React.createElement("div", {className: "text-center py-8 text-gray-500"}, "\u23F3 Loading...")
-        : editTeachers.length === 0
-          ? React.createElement("div", {className: "text-center py-8 text-gray-400"}, "No active teachers found for this school.")
-          : React.createElement("div", {className: "overflow-x-auto"},
-              React.createElement("div", {className: "py-2 mb-2 flex justify-between items-center"},
-                React.createElement("span", {className: "font-semibold text-gray-700"}, editSchool + " \u2014 " + editDate),
-                React.createElement("span", {className: "text-sm text-gray-500"}, editTeachers.length + " teachers, " + Object.keys(editAttendanceMap).length + " marked")
-              ),
-              React.createElement("table", {className: "w-full"},
-                React.createElement("thead", {className: "avanti-gradient-light"},
-                  React.createElement("tr", null,
-                    React.createElement("th", {className: "p-3 text-left"}, "Teacher"),
-                    React.createElement("th", {className: "p-3 text-left"}, "Status"),
-                    React.createElement("th", {className: "p-3 text-left"}, "Reason"),
-                    React.createElement("th", {className: "p-3 text-left"}, "Punch-In Time"),
-                    React.createElement("th", {className: "p-3 text-center"}, "Action")
-                  )
-                ),
-                React.createElement("tbody", null,
-                  editTeachers.map(t => {
-                    const rec = editAttendanceMap[t.afid];
-                    return React.createElement("tr", {key: t.afid, className: "border-b hover:bg-gray-50"},
-                      React.createElement("td", {className: "p-3"},
-                        React.createElement("div", {className: "font-semibold"}, t.name),
-                        rec && rec.markedByAdmin && React.createElement("span", {className: "text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold ml-1"}, "Admin Override")
-                      ),
-                      React.createElement("td", {className: "p-3"},
-                        rec
-                          ? React.createElement("span", {className: `px-2 py-1 rounded-full text-xs font-bold ${rec.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}, rec.status)
-                          : React.createElement("span", {className: "px-2 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500"}, "Not Marked")
-                      ),
-                      React.createElement("td", {className: "p-3 text-sm text-gray-600"}, rec ? rec.reason : "\u2014"),
-                      React.createElement("td", {className: "p-3 text-sm font-mono text-blue-600"}, rec && rec.punchInTime ? "\u23F0 " + rec.punchInTime : "\u2014"),
-                      React.createElement("td", {className: "p-3 text-center"},
-                        React.createElement("button", {
-                          onClick: () => setEditModal({teacher: t, existing: rec || null, status: rec ? rec.status : 'Present', reason: rec ? rec.reason : 'Present'}),
-                          className: `px-3 py-1 rounded-lg text-sm font-semibold transition-colors ${rec ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`
-                        }, rec ? "\u270F\uFE0F Edit" : "+ Mark")
-                      )
-                    );
-                  })
-                )
-              )
-            ),
-    editModal && React.createElement("div", {
-      className: "fixed inset-0 flex items-center justify-center z-50",
-      style: {background: 'rgba(0,0,0,0.55)'},
-      onClick: e => { if (e.target === e.currentTarget) setEditModal(null); }
-    },
-      React.createElement("div", {className: "bg-white rounded-2xl p-6 shadow-2xl w-full max-w-md mx-4"},
-        React.createElement("h3", {className: "text-xl font-bold mb-1"}, (editModal.existing ? "\u270F\uFE0F Edit" : "\u2795 Mark") + " Attendance"),
-        React.createElement("p", {className: "text-gray-500 text-sm mb-4"}, editModal.teacher.name + " \u2014 " + editDate),
-        React.createElement("div", {className: "space-y-4"},
-          React.createElement("div", null,
-            React.createElement("label", {className: "block text-sm font-semibold text-gray-700 mb-2"}, "Status"),
-            React.createElement("div", {className: "flex gap-3"},
-              ['Present', 'On Leave'].map(s =>
-                React.createElement("button", {
-                  key: s,
-                  onClick: () => setEditModal(prev => ({...prev, status: s, reason: s === 'Present' ? 'Present' : 'Personal Leave'})),
-                  className: `flex-1 py-2 rounded-lg font-semibold border-2 transition-colors ${editModal.status === s ? (s === 'Present' ? 'bg-green-500 text-white border-green-500' : 'bg-orange-500 text-white border-orange-500') : 'border-gray-300 text-gray-600 hover:border-gray-400'}`
-                }, s)
-              )
-            )
-          ),
-          React.createElement("div", null,
-            React.createElement("label", {className: "block text-sm font-semibold text-gray-700 mb-2"}, "Reason"),
-            React.createElement("select", {
-              value: editModal.reason,
-              onChange: e => setEditModal(prev => ({...prev, reason: e.target.value})),
-              className: "w-full border border-gray-300 rounded-lg p-2 focus:border-blue-400 focus:outline-none"
-            },
-              (editModal.status === 'Present' ? ['Present'] : ['Personal Leave', 'Sick Leave', 'Weekly Off', 'Public Holiday', 'Organization Holiday', 'School Holiday', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Comp Off']).map(r =>
-                React.createElement("option", {key: r, value: r}, r)
-              )
-            )
-          ),
-          editModal.existing && React.createElement("div", {className: "text-xs bg-blue-50 text-blue-700 rounded-lg p-3 border border-blue-200"},
-            "Current: ", React.createElement("strong", null, editModal.existing.status), " \u2014 ", editModal.existing.reason,
-            editModal.existing.markedByAdmin ? " (previously admin-marked)" : " (teacher-submitted)"
-          ),
-          React.createElement("div", {className: "text-xs bg-yellow-50 text-yellow-700 rounded-lg p-3 border border-yellow-200"},
-            "\u26A0\uFE0F This will be saved as an admin override and will overwrite any existing record."
-          )
-        ),
-        React.createElement("div", {className: "flex gap-3 mt-6"},
-          React.createElement("button", {
-            onClick: () => setEditModal(null),
-            className: "flex-1 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium"
-          }, "Cancel"),
-          React.createElement("button", {
-            onClick: saveTeacherAttendanceEdit,
-            disabled: editSaving,
-            className: "flex-1 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
-          }, editSaving ? "Saving..." : "Save")
-        )
-      )
-    )
-  )
+  })))
   );
 }
 function TimetableAdminSection({ currentUser, availableSchools }) {
