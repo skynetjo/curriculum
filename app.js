@@ -11820,7 +11820,6 @@ function SocialWall({
   const [wishMessage, setWishMessage] = useState('');
   const [showWishInput, setShowWishInput] = useState(null);
   const [expandedCelebration, setExpandedCelebration] = useState(null);
-  const celebrationEmojis = ['🎉', '🎂', '🥳', '❤️', '👏', '🎊'];
   const loadCelebrationReactions = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -12062,57 +12061,65 @@ function SocialWall({
   };
   const celebrationColorClasses = {
     pink: {
-      active: 'bg-pink-100 ring-2 ring-pink-400',
-      hover: 'hover:bg-pink-50',
+      likeActive: 'text-pink-600',
       border: 'border-pink-200',
       focusBorder: 'focus:border-pink-400',
       wishBg: 'bg-pink-50',
       wishText: 'text-pink-700',
       wishAvatar: 'bg-pink-300',
-      send: 'bg-pink-500 hover:bg-pink-600',
-      cta: 'from-pink-400 to-purple-500'
+      send: 'bg-pink-500 hover:bg-pink-600'
     },
     amber: {
-      active: 'bg-amber-100 ring-2 ring-amber-400',
-      hover: 'hover:bg-amber-50',
+      likeActive: 'text-amber-600',
       border: 'border-amber-200',
       focusBorder: 'focus:border-amber-400',
       wishBg: 'bg-amber-50',
       wishText: 'text-amber-700',
       wishAvatar: 'bg-amber-300',
-      send: 'bg-amber-500 hover:bg-amber-600',
-      cta: 'from-amber-400 to-orange-500'
+      send: 'bg-amber-500 hover:bg-amber-600'
     },
     green: {
-      active: 'bg-green-100 ring-2 ring-green-400',
-      hover: 'hover:bg-green-50',
+      likeActive: 'text-green-600',
       border: 'border-green-200',
       focusBorder: 'focus:border-green-400',
       wishBg: 'bg-green-50',
       wishText: 'text-green-700',
       wishAvatar: 'bg-green-300',
-      send: 'bg-green-500 hover:bg-green-600',
-      cta: 'from-green-400 to-teal-500'
+      send: 'bg-green-500 hover:bg-green-600'
     }
   };
+  // Facebook-style Like/Comment action bar, reused by the Today/Week/Month
+  // birthday and anniversary cards.
   const renderCelebrationPanel = (person, personId, color) => {
     const c = celebrationColorClasses[color];
     const reactionCounts = getReactionCounts(personId);
+    const totalReactions = Object.values(reactionCounts).reduce((sum, n) => sum + n, 0);
+    const topEmojis = Object.keys(reactionCounts).sort((a, b) => reactionCounts[b] - reactionCounts[a]).slice(0, 3);
     const myReaction = getUserReaction(personId);
     const wishes = celebrationReactions[personId]?.wishes || [];
+    const commentsOpen = showWishInput === personId;
     return React.createElement("div", {
-      className: "mt-2 pt-3 border-t border-gray-200",
+      className: "mt-3",
       onClick: e => e.stopPropagation()
-    }, React.createElement("div", {
-      className: "flex items-center gap-2 flex-wrap mb-3"
-    }, celebrationEmojis.map(emoji => React.createElement("button", {
-      key: emoji,
-      onClick: () => handleCelebrationReaction(person, emoji),
-      className: `px-3 py-1.5 rounded-full text-lg transition-all ${myReaction === emoji ? `${c.active} scale-110` : `bg-gray-100 ${c.hover} hover:scale-105`}`
-    }, emoji, " ", reactionCounts[emoji] ? React.createElement("span", {
-      className: "text-xs font-bold"
-    }, reactionCounts[emoji]) : ''))), wishes.length > 0 && React.createElement("div", {
-      className: "mb-3 max-h-32 overflow-y-auto space-y-1"
+    }, (totalReactions > 0 || wishes.length > 0) && React.createElement("div", {
+      className: "flex items-center justify-between text-sm text-gray-500 pb-2"
+    }, totalReactions > 0 ? React.createElement("span", {
+      className: "flex items-center gap-1"
+    }, topEmojis.join(''), " ", totalReactions) : React.createElement("span", null), wishes.length > 0 && React.createElement("button", {
+      onClick: () => setShowWishInput(commentsOpen ? null : personId),
+      className: "hover:underline"
+    }, wishes.length, " comment", wishes.length > 1 ? 's' : '')), React.createElement("div", {
+      className: "flex items-stretch border-t border-gray-200 pt-1 -mx-1"
+    }, React.createElement("button", {
+      onClick: () => handleCelebrationReaction(person, '👍'),
+      className: `flex-1 flex items-center justify-center gap-2 py-2 mx-1 rounded-lg font-semibold text-sm transition-colors ${myReaction ? `${c.likeActive} bg-gray-50` : 'text-gray-600 hover:bg-gray-100'}`
+    }, myReaction || '👍', React.createElement("span", null, myReaction ? 'Liked' : 'Like')), React.createElement("button", {
+      onClick: () => setShowWishInput(commentsOpen ? null : personId),
+      className: "flex-1 flex items-center justify-center gap-2 py-2 mx-1 rounded-lg font-semibold text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+    }, "💬", React.createElement("span", null, "Comment"))), commentsOpen && React.createElement("div", {
+      className: "pt-3"
+    }, wishes.length > 0 && React.createElement("div", {
+      className: "mb-3 max-h-40 overflow-y-auto space-y-1"
     }, wishes.map((wish, widx) => React.createElement("div", {
       key: widx,
       className: `flex items-start gap-2 p-2 ${c.wishBg} rounded-lg`
@@ -12124,7 +12131,7 @@ function SocialWall({
       className: `text-xs font-semibold ${c.wishText}`
     }, wish.userName), React.createElement("div", {
       className: "text-sm text-gray-700"
-    }, wish.message))))), showWishInput === personId ? React.createElement("div", {
+    }, wish.message))))), React.createElement("div", {
       className: "flex gap-2"
     }, React.createElement("input", {
       type: "text",
@@ -12133,22 +12140,13 @@ function SocialWall({
       onKeyDown: e => {
         if (e.key === 'Enter') sendWish(person);
       },
-      placeholder: "Add a comment...",
+      placeholder: "Write a comment...",
       className: `flex-1 border-2 ${c.border} px-3 py-2 rounded-lg text-sm ${c.focusBorder} focus:ring-0`,
       autoFocus: true
     }), React.createElement("button", {
       onClick: () => sendWish(person),
       className: `px-4 py-2 ${c.send} text-white rounded-lg font-semibold`
-    }, "Send"), React.createElement("button", {
-      onClick: () => {
-        setShowWishInput(null);
-        setWishMessage('');
-      },
-      className: "px-3 py-2 bg-gray-200 rounded-lg"
-    }, "✕")) : React.createElement("button", {
-      onClick: () => setShowWishInput(personId),
-      className: `w-full py-2 bg-gradient-to-r ${c.cta} text-white rounded-lg font-semibold text-sm hover:shadow-lg transition-all`
-    }, "💬 Comment"));
+    }, "Send"))));
   };
   if (loading) {
     return React.createElement("div", {
@@ -12235,14 +12233,11 @@ function SocialWall({
     className: "grid md:grid-cols-2 gap-4"
   }, birthdays.map((person, idx) => {
     const personId = person.afid || person.id || person.email;
-    const reactionCounts = getReactionCounts(personId);
-    const myReaction = getUserReaction(personId);
-    const wishes = celebrationReactions[personId]?.wishes || [];
     return React.createElement("div", {
       key: idx,
       className: "bg-white rounded-2xl p-4 shadow-lg border-2 border-pink-200"
     }, React.createElement("div", {
-      className: "flex items-center gap-4 mb-4"
+      className: "flex items-center gap-4 mb-2"
     }, person.profilePhoto ? React.createElement("img", {
       src: person.profilePhoto,
       alt: "",
@@ -12259,49 +12254,7 @@ function SocialWall({
       className: "text-xs text-gray-400"
     }, person.school), React.createElement("div", {
       className: "text-sm text-pink-600 font-medium mt-1"
-    }, "\uD83C\uDF88 Happy Birthday!"))), React.createElement("div", {
-      className: "flex items-center gap-2 flex-wrap mb-3"
-    }, celebrationEmojis.map(emoji => React.createElement("button", {
-      key: emoji,
-      onClick: () => handleCelebrationReaction(person, emoji),
-      className: `px-3 py-1.5 rounded-full text-lg transition-all ${myReaction === emoji ? 'bg-pink-100 scale-110 ring-2 ring-pink-400' : 'bg-gray-100 hover:bg-pink-50 hover:scale-105'}`
-    }, emoji, " ", reactionCounts[emoji] ? React.createElement("span", {
-      className: "text-xs font-bold"
-    }, reactionCounts[emoji]) : ''))), wishes.length > 0 && React.createElement("div", {
-      className: "mb-3 max-h-32 overflow-y-auto"
-    }, wishes.map((wish, widx) => React.createElement("div", {
-      key: widx,
-      className: "flex items-start gap-2 p-2 bg-pink-50 rounded-lg mb-1"
-    }, React.createElement("div", {
-      className: "w-6 h-6 rounded-full bg-pink-300 flex items-center justify-center text-xs text-white font-bold"
-    }, wish.userName?.charAt(0)), React.createElement("div", {
-      className: "flex-1"
-    }, React.createElement("div", {
-      className: "text-xs font-semibold text-pink-700"
-    }, wish.userName), React.createElement("div", {
-      className: "text-sm text-gray-700"
-    }, wish.message))))), showWishInput === personId ? React.createElement("div", {
-      className: "flex gap-2"
-    }, React.createElement("input", {
-      type: "text",
-      value: wishMessage,
-      onChange: e => setWishMessage(e.target.value),
-      placeholder: "Send your wishes...",
-      className: "flex-1 border-2 border-pink-200 px-3 py-2 rounded-lg text-sm focus:border-pink-400 focus:ring-0",
-      autoFocus: true
-    }), React.createElement("button", {
-      onClick: () => sendWish(person),
-      className: "px-4 py-2 bg-pink-500 text-white rounded-lg font-semibold hover:bg-pink-600"
-    }, "Send"), React.createElement("button", {
-      onClick: () => {
-        setShowWishInput(null);
-        setWishMessage('');
-      },
-      className: "px-3 py-2 bg-gray-200 rounded-lg"
-    }, "\u2715")) : React.createElement("button", {
-      onClick: () => setShowWishInput(personId),
-      className: "w-full py-2 bg-gradient-to-r from-pink-400 to-purple-500 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
-    }, "\uD83C\uDF81 Send Birthday Wishes"));
+    }, "\uD83C\uDF88 Happy Birthday!"))), renderCelebrationPanel(person, personId, 'pink'));
   }))), anniversaries.length > 0 && React.createElement("div", {
     className: "bg-gradient-to-r from-amber-50 to-orange-50 rounded-3xl p-6 border-2 border-amber-200"
   }, React.createElement("h3", {
@@ -12312,15 +12265,12 @@ function SocialWall({
     className: "grid md:grid-cols-2 gap-4"
   }, anniversaries.map((person, idx) => {
     const personId = person.afid || person.id || person.email;
-    const reactionCounts = getReactionCounts(personId);
-    const myReaction = getUserReaction(personId);
-    const wishes = celebrationReactions[personId]?.wishes || [];
     const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
     return React.createElement("div", {
       key: idx,
       className: "bg-white rounded-2xl p-4 shadow-lg border-2 border-amber-200"
     }, React.createElement("div", {
-      className: "flex items-center gap-4 mb-4"
+      className: "flex items-center gap-4 mb-2"
     }, person.profilePhoto ? React.createElement("img", {
       src: person.profilePhoto,
       alt: "",
@@ -12337,49 +12287,7 @@ function SocialWall({
       className: "text-xs text-gray-400"
     }, person.school), React.createElement("div", {
       className: "text-sm text-amber-600 font-medium mt-1"
-    }, "\uD83C\uDF8A ", years, " Year", years > 1 ? 's' : '', " at Avanti!"))), React.createElement("div", {
-      className: "flex items-center gap-2 flex-wrap mb-3"
-    }, celebrationEmojis.map(emoji => React.createElement("button", {
-      key: emoji,
-      onClick: () => handleCelebrationReaction(person, emoji),
-      className: `px-3 py-1.5 rounded-full text-lg transition-all ${myReaction === emoji ? 'bg-amber-100 scale-110 ring-2 ring-amber-400' : 'bg-gray-100 hover:bg-amber-50 hover:scale-105'}`
-    }, emoji, " ", reactionCounts[emoji] ? React.createElement("span", {
-      className: "text-xs font-bold"
-    }, reactionCounts[emoji]) : ''))), wishes.length > 0 && React.createElement("div", {
-      className: "mb-3 max-h-32 overflow-y-auto"
-    }, wishes.map((wish, widx) => React.createElement("div", {
-      key: widx,
-      className: "flex items-start gap-2 p-2 bg-amber-50 rounded-lg mb-1"
-    }, React.createElement("div", {
-      className: "w-6 h-6 rounded-full bg-amber-300 flex items-center justify-center text-xs text-white font-bold"
-    }, wish.userName?.charAt(0)), React.createElement("div", {
-      className: "flex-1"
-    }, React.createElement("div", {
-      className: "text-xs font-semibold text-amber-700"
-    }, wish.userName), React.createElement("div", {
-      className: "text-sm text-gray-700"
-    }, wish.message))))), showWishInput === personId ? React.createElement("div", {
-      className: "flex gap-2"
-    }, React.createElement("input", {
-      type: "text",
-      value: wishMessage,
-      onChange: e => setWishMessage(e.target.value),
-      placeholder: "Send congratulations...",
-      className: "flex-1 border-2 border-amber-200 px-3 py-2 rounded-lg text-sm focus:border-amber-400 focus:ring-0",
-      autoFocus: true
-    }), React.createElement("button", {
-      onClick: () => sendWish(person),
-      className: "px-4 py-2 bg-amber-500 text-white rounded-lg font-semibold hover:bg-amber-600"
-    }, "Send"), React.createElement("button", {
-      onClick: () => {
-        setShowWishInput(null);
-        setWishMessage('');
-      },
-      className: "px-3 py-2 bg-gray-200 rounded-lg"
-    }, "\u2715")) : React.createElement("button", {
-      onClick: () => setShowWishInput(personId),
-      className: "w-full py-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
-    }, "\uD83C\uDF89 Send Congratulations"));
+    }, "🎊 ", years, " Year", years > 1 ? 's' : '', " at Avanti!"))), renderCelebrationPanel(person, personId, 'amber'));
   }))), React.createElement("div", {
     className: "bg-white rounded-3xl p-6 shadow-lg"
   }, React.createElement("h3", {
