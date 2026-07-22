@@ -11801,7 +11801,6 @@ function SocialWall({
   teachers,
   currentUser
 }) {
-  const [posts, setPosts] = useState([]);
   const [birthdays, setBirthdays] = useState([]);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState([]);
   const [weekBirthdays, setWeekBirthdays] = useState([]);
@@ -11809,9 +11808,6 @@ function SocialWall({
   const [anniversaries, setAnniversaries] = useState([]);
   const [weekAnniversaries, setWeekAnniversaries] = useState([]);
   const [monthAnniversaries, setMonthAnniversaries] = useState([]);
-  const [showNewPost, setShowNewPost] = useState(false);
-  const [newPostContent, setNewPostContent] = useState('');
-  const [posting, setPosting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(null);
   // ✅ FIX: Safety timeout - if loading takes >10s, stop spinner and show empty state
@@ -11820,193 +11816,10 @@ function SocialWall({
     return () => clearTimeout(timer);
   }, []);
   const [allMembers, setAllMembers] = useState([]);
-  const [activeTab, setActiveTab] = useState('feed');
   const [celebrationReactions, setCelebrationReactions] = useState({});
   const [wishMessage, setWishMessage] = useState('');
   const [showWishInput, setShowWishInput] = useState(null);
-  const [postImage, setPostImage] = useState(null);
-  const [postImagePreview, setPostImagePreview] = useState(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [replyingTo, setReplyingTo] = useState(null);
-  const [replyContent, setReplyContent] = useState('');
-  const [replyImage, setReplyImage] = useState(null);
-  const [replyImagePreview, setReplyImagePreview] = useState(null);
-  const [showGifPicker, setShowGifPicker] = useState(null);
-  const [expandedReplies, setExpandedReplies] = useState({});
-  const [editingPost, setEditingPost] = useState(null);
-  const [editPostContent, setEditPostContent] = useState('');
-  const [editingComment, setEditingComment] = useState(null);
-  const [editCommentContent, setEditCommentContent] = useState('');
-  const isAdminOrModerator = currentUser?.role === 'super_admin' || currentUser?.role === 'aph' || currentUser?.role === 'senior_pm' || currentUser?.role === 'pm' || currentUser?.isSuperAdmin === true;
-  const compressImage = (file, maxWidth = 1200, quality = 0.7) => {
-    return new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        console.warn('[compressImage] Timeout - returning original file');
-        resolve(file);
-      }, 10000);
-      if (file.size < 200 * 1024) {
-        clearTimeout(timeoutId);
-        resolve(file);
-        return;
-      }
-      try {
-        const reader = new FileReader();
-        reader.onerror = () => {
-          clearTimeout(timeoutId);
-          console.warn('[compressImage] FileReader error - returning original file');
-          resolve(file);
-        };
-        reader.onload = e => {
-          const img = new Image();
-          img.onerror = () => {
-            clearTimeout(timeoutId);
-            console.warn('[compressImage] Image load error - returning original file');
-            resolve(file);
-          };
-          img.onload = () => {
-            try {
-              const canvas = document.createElement('canvas');
-              let width = img.width;
-              let height = img.height;
-              if (width > maxWidth) {
-                height = height * maxWidth / width;
-                width = maxWidth;
-              }
-              canvas.width = width;
-              canvas.height = height;
-              const ctx = canvas.getContext('2d');
-              if (!ctx) {
-                clearTimeout(timeoutId);
-                console.warn('[compressImage] Canvas context error - returning original file');
-                resolve(file);
-                return;
-              }
-              ctx.drawImage(img, 0, 0, width, height);
-              canvas.toBlob(blob => {
-                clearTimeout(timeoutId);
-                if (!blob) {
-                  console.warn('[compressImage] toBlob returned null - returning original file');
-                  resolve(file);
-                  return;
-                }
-                const compressedFile = new File([blob], file.name, {
-                  type: 'image/jpeg',
-                  lastModified: Date.now()
-                });
-                console.log(`Compressed: ${(file.size / 1024).toFixed(1)}KB → ${(compressedFile.size / 1024).toFixed(1)}KB`);
-                resolve(compressedFile);
-              }, 'image/jpeg', quality);
-            } catch (canvasError) {
-              clearTimeout(timeoutId);
-              console.warn('[compressImage] Canvas error:', canvasError);
-              resolve(file);
-            }
-          };
-          img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-      } catch (error) {
-        clearTimeout(timeoutId);
-        console.warn('[compressImage] Unexpected error:', error);
-        resolve(file);
-      }
-    });
-  };
-  const handlePostImageSelect = async e => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Image size should be less than 10MB');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => setPostImagePreview(reader.result);
-      reader.readAsDataURL(file);
-      const compressed = await compressImage(file);
-      setPostImage(compressed);
-    }
-  };
-  const handleReplyImageSelect = async e => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Image size should be less than 10MB');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => setReplyImagePreview(reader.result);
-      reader.readAsDataURL(file);
-      const compressed = await compressImage(file);
-      setReplyImage(compressed);
-    }
-  };
-  const uploadImage = async (file, path) => {
-    if (!file || typeof firebase === 'undefined') return null;
-    try {
-      const storageRef = firebase.storage().ref();
-      const fileRef = storageRef.child(path + '/' + Date.now() + '_' + file.name);
-      await fileRef.put(file);
-      const url = await fileRef.getDownloadURL();
-      console.log('[SocialWall] Image uploaded to Storage successfully');
-      return url;
-    } catch (e) {
-      console.warn('[SocialWall] Storage upload failed (CORS?), trying base64 fallback:', e.message);
-      try {
-        const compressedFile = await compressImageForBase64(file);
-        const base64 = await fileToBase64(compressedFile);
-        if (base64.length > 750000) {
-          throw new Error('Image too large even after compression');
-        }
-        console.log('[SocialWall] Using base64 fallback, size:', Math.round(base64.length / 1024) + 'KB');
-        return base64;
-      } catch (fallbackError) {
-        console.error('[SocialWall] Base64 fallback also failed:', fallbackError);
-        alert('⚠️ Image upload failed. Please try:\\n\\n1. Use a smaller image\\n2. Check your internet connection\\n3. Try again');
-        return null;
-      }
-    }
-  };
-  const compressImageForBase64 = async file => {
-    return new Promise(resolve => {
-      const reader = new FileReader();
-      reader.onload = e => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const maxSize = 600;
-          let {
-            width,
-            height
-          } = img;
-          if (width > maxSize || height > maxSize) {
-            if (width > height) {
-              height = height / width * maxSize;
-              width = maxSize;
-            } else {
-              width = width / height * maxSize;
-              height = maxSize;
-            }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob(resolve, 'image/jpeg', 0.5);
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-  const fileToBase64 = file => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-  const popularGifs = ['https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif', 'https://media.giphy.com/media/3oz8xIsloV7zOmt81G/giphy.gif', 'https://media.giphy.com/media/BPJmthQ3YRwD6QqcVD/giphy.gif', 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif', 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif', 'https://media.giphy.com/media/KJ1f5iTl4Oo7u/giphy.gif', 'https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif', 'https://media.giphy.com/media/l3q2K5jinAlChoCLS/giphy.gif'];
+  const [expandedCelebration, setExpandedCelebration] = useState(null);
   const celebrationEmojis = ['🎉', '🎂', '🥳', '❤️', '👏', '🎊'];
   const loadCelebrationReactions = async () => {
     try {
@@ -12126,15 +11939,9 @@ function SocialWall({
     const fetchData = async () => {
       try {
         setLoading(true);
-        // ✅ PERF: Fetch posts in parallel with managers/apcs instead of waiting on
-        // the birthday/anniversary data first - the feed (default tab) can paint as
-        // soon as posts resolve. Promise.allSettled so partial failures don't block
-        // the rest from loading.
-        const [managersResult, apcsResult, postsResult] = await Promise.allSettled([
+        const [managersResult, apcsResult] = await Promise.allSettled([
           db.collection('managers').get(),
-          db.collection('apcs').get(),
-          db.collection('socialPosts').orderBy('createdAt', 'desc').limit(50).get()
-            .catch(() => db.collection('socialPosts').limit(50).get())
+          db.collection('apcs').get()
         ]);
         const managers = managersResult.status === 'fulfilled'
           ? managersResult.value.docs.map(doc => ({id: doc.id, ...doc.data(), role: 'Manager'}))
@@ -12142,22 +11949,6 @@ function SocialWall({
         const apcs = apcsResult.status === 'fulfilled'
           ? apcsResult.value.docs.map(doc => ({id: doc.id, ...doc.data(), role: 'APC'}))
           : [];
-        if (postsResult.status === 'fulfilled') {
-          const postsData = postsResult.value.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          // Sort client-side as fallback in case the orderBy index wasn't used
-          postsData.sort((a, b) => {
-            const aTime = a.createdAt?.toDate?.()?.getTime() || new Date(a.createdAt || 0).getTime();
-            const bTime = b.createdAt?.toDate?.()?.getTime() || new Date(b.createdAt || 0).getTime();
-            return bTime - aTime;
-          });
-          setPosts(postsData);
-        } else {
-          console.error('[SocialWall] Error loading posts:', postsResult.reason);
-          setPosts([]);
-        }
         setLoading(false);
         // Use prop teachers (already loaded) instead of re-fetching
         const allTeachers = (teachers || []).map(t => ({...t, role: 'Teacher'}));
@@ -12258,314 +12049,106 @@ function SocialWall({
     fetchData();
     loadCelebrationReactions();
   }, [teachers]);
-  const handleCreatePost = async () => {
-    if (!newPostContent.trim() && !postImage) return;
-    setPosting(true);
-    setUploadingImage(true);
-    try {
-      let imageUrl = null;
-      if (postImage) {
-        imageUrl = await uploadImage(postImage, 'social_posts');
-        if (!imageUrl) {
-          const continueWithoutImage = confirm('⚠️ Could not upload image.\\n\\nWould you like to post without the image?');
-          if (!continueWithoutImage) {
-            setPosting(false);
-            setUploadingImage(false);
-            return;
-          }
-        }
-      }
-      const postData = {
-        content: newPostContent.trim(),
-        authorId: currentUser.afid || currentUser.uid,
-        authorName: currentUser.name,
-        authorPhoto: currentUser.profilePhoto || '',
-        authorSchool: currentUser.school,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        reactions: {},
-        comments: [],
-        imageUrl: imageUrl || null,
-        imageType: imageUrl?.startsWith('data:') ? 'base64' : 'url'
-      };
-      const docRef = await db.collection('socialPosts').add(postData);
-      setPosts([{
-        id: docRef.id,
-        ...postData,
-        createdAt: new Date()
-      }, ...posts]);
-      const postContent = newPostContent.trim();
-      const mentionRegex = /@(\w+(?:\s\w+)?)/g;
-      let match;
-      if (postContent.toLowerCase().includes('@everyone')) {
-        MentionNotificationSystem.sendEveryoneNotification(postContent, currentUser.name, currentUser.afid || currentUser.uid);
-      } else {
-        while ((match = mentionRegex.exec(postContent)) !== null) {
-          const mentionedName = match[1];
-          const mentionedMember = allMembers.find(m => m.name?.toLowerCase() === mentionedName.toLowerCase());
-          if (mentionedMember) {
-            const mentionedUserId = mentionedMember.afid || mentionedMember.uid || mentionedMember.id;
-            MentionNotificationSystem.sendMentionNotification(mentionedUserId, mentionedMember.name, postContent, currentUser.name, currentUser.afid || currentUser.uid);
-          }
-        }
-      }
-      setNewPostContent('');
-      setPostImage(null);
-      setPostImagePreview(null);
-      setShowNewPost(false);
-    } catch (error) {
-      console.error('[SocialWall] Failed to create post:', error);
-      alert('❌ Failed to create post. Please check your connection and try again.');
-    } finally {
-      setPosting(false);
-      setUploadingImage(false);
-    }
-  };
-  const handleReply = async postId => {
-    if (!replyContent.trim() && !replyImage && !replyImagePreview) return;
-    try {
-      const post = posts.find(p => p.id === postId);
-      if (!post) return;
-      let replyImageUrl = null;
-      if (replyImage) {
-        replyImageUrl = await uploadImage(replyImage, 'social_replies');
-      } else if (replyImagePreview && replyImagePreview.startsWith('http')) {
-        replyImageUrl = replyImagePreview;
-      }
-      const newReply = {
-        id: Date.now().toString(),
-        authorId: currentUser.afid || currentUser.uid,
-        authorName: currentUser.name,
-        authorPhoto: currentUser.profilePhoto || '',
-        content: replyContent.trim(),
-        imageUrl: replyImageUrl,
-        reactions: {},
-        createdAt: new Date().toISOString()
-      };
-      const updatedComments = [...(post.comments || []), newReply];
-      await db.collection('socialPosts').doc(postId).update({
-        comments: updatedComments
-      });
-      const commentContent = replyContent.trim();
-      const mentionRegex = /@(\w+(?:\s\w+)?)/g;
-      let match;
-      if (commentContent.toLowerCase().includes('@everyone')) {
-        MentionNotificationSystem.sendEveryoneNotification(commentContent, currentUser.name, currentUser.afid || currentUser.uid);
-      } else {
-        while ((match = mentionRegex.exec(commentContent)) !== null) {
-          const mentionedName = match[1];
-          const mentionedMember = allMembers.find(m => m.name?.toLowerCase() === mentionedName.toLowerCase());
-          if (mentionedMember) {
-            const mentionedUserId = mentionedMember.afid || mentionedMember.uid || mentionedMember.id;
-            MentionNotificationSystem.sendMentionNotification(mentionedUserId, mentionedMember.name, commentContent, currentUser.name, currentUser.afid || currentUser.uid);
-          }
-        }
-      }
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        comments: updatedComments
-      } : p));
-      setReplyContent('');
-      setReplyImage(null);
-      setReplyImagePreview(null);
-      setReplyingTo(null);
-      setShowGifPicker(null);
-    } catch (error) {
-      console.error('Reply error:', error);
-      alert('Failed to post reply');
-    }
-  };
-  const selectGif = gifUrl => {
-    setReplyImagePreview(gifUrl);
-    setReplyImage(null);
-    setShowGifPicker(null);
-  };
-  const handleReaction = async (postId, emoji) => {
-    const userId = currentUser.afid || currentUser.uid;
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-    let newReactions = {
-      ...(post.reactions || {})
-    };
-    if (newReactions[userId] === emoji) {
-      delete newReactions[userId];
-    } else {
-      newReactions[userId] = emoji;
-    }
-    try {
-      await db.collection('socialPosts').doc(postId).update({
-        reactions: newReactions
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        reactions: newReactions
-      } : p));
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
-  const handleCommentReaction = async (postId, commentId, emoji) => {
-    const userId = currentUser.afid || currentUser.uid;
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-    const comments = [...(post.comments || [])];
-    const commentIndex = comments.findIndex(c => c.id === commentId);
-    if (commentIndex === -1) return;
-    const comment = comments[commentIndex];
-    let newReactions = {
-      ...(comment.reactions || {})
-    };
-    if (newReactions[userId] === emoji) {
-      delete newReactions[userId];
-    } else {
-      newReactions[userId] = emoji;
-    }
-    comments[commentIndex] = {
-      ...comment,
-      reactions: newReactions
-    };
-    try {
-      await db.collection('socialPosts').doc(postId).update({
-        comments: comments
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        comments: comments
-      } : p));
-    } catch (error) {
-      console.error('Comment reaction error:', error);
-    }
-  };
-  const handleNestedReply = async (postId, parentCommentId, replyText) => {
-    if (!replyText.trim()) return;
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-    const comments = [...(post.comments || [])];
-    const commentIndex = comments.findIndex(c => c.id === parentCommentId);
-    if (commentIndex === -1) return;
-    const parentComment = comments[commentIndex];
-    const newNestedReply = {
-      id: Date.now().toString(),
-      authorId: currentUser.afid || currentUser.uid,
-      authorName: currentUser.name,
-      authorPhoto: currentUser.profilePhoto || '',
-      content: replyText.trim(),
-      reactions: {},
-      createdAt: new Date().toISOString()
-    };
-    const updatedReplies = [...(parentComment.replies || []), newNestedReply];
-    comments[commentIndex] = {
-      ...parentComment,
-      replies: updatedReplies
-    };
-    try {
-      await db.collection('socialPosts').doc(postId).update({
-        comments: comments
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        comments: comments
-      } : p));
-      const mentionRegex = /@(\w+(?:\s\w+)?)/g;
-      let match;
-      while ((match = mentionRegex.exec(replyText)) !== null) {
-        const mentionedName = match[1];
-        const mentionedMember = allMembers.find(m => m.name?.toLowerCase() === mentionedName.toLowerCase());
-        if (mentionedMember) {
-          const mentionedUserId = mentionedMember.afid || mentionedMember.uid || mentionedMember.id;
-          MentionNotificationSystem.sendMentionNotification(mentionedUserId, mentionedMember.name, replyText, currentUser.name, currentUser.afid || currentUser.uid);
-        }
-      }
-    } catch (error) {
-      console.error('Nested reply error:', error);
-      alert('Failed to post reply');
-    }
-  };
-  const handleEditPost = async postId => {
-    if (!editPostContent.trim()) return;
-    try {
-      await db.collection('socialPosts').doc(postId).update({
-        content: editPostContent.trim(),
-        editedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        content: editPostContent.trim(),
-        editedAt: new Date()
-      } : p));
-      setEditingPost(null);
-      setEditPostContent('');
-    } catch (error) {
-      console.error('Edit post error:', error);
-      alert('Failed to edit post');
-    }
-  };
-  const handleDeletePost = async postId => {
-    if (!confirm('Are you sure you want to delete this post?')) return;
-    try {
-      await db.collection('socialPosts').doc(postId).delete();
-      setPosts(posts.filter(p => p.id !== postId));
-    } catch (error) {
-      console.error('Delete post error:', error);
-      alert('Failed to delete post');
-    }
-  };
-  const handleEditComment = async (postId, commentId) => {
-    if (!editCommentContent.trim()) return;
-    try {
-      const post = posts.find(p => p.id === postId);
-      if (!post) return;
-      const updatedComments = post.comments.map(c => c.id === commentId ? {
-        ...c,
-        content: editCommentContent.trim(),
-        editedAt: new Date().toISOString()
-      } : c);
-      await db.collection('socialPosts').doc(postId).update({
-        comments: updatedComments
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        comments: updatedComments
-      } : p));
-      setEditingComment(null);
-      setEditCommentContent('');
-    } catch (error) {
-      console.error('Edit comment error:', error);
-      alert('Failed to edit comment');
-    }
-  };
-  const handleDeleteComment = async (postId, commentId) => {
-    if (!confirm('Are you sure you want to delete this comment?')) return;
-    try {
-      const post = posts.find(p => p.id === postId);
-      if (!post) return;
-      const updatedComments = post.comments.filter(c => c.id !== commentId);
-      await db.collection('socialPosts').doc(postId).update({
-        comments: updatedComments
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        comments: updatedComments
-      } : p));
-    } catch (error) {
-      console.error('Delete comment error:', error);
-      alert('Failed to delete comment');
-    }
-  };
-  const canModify = authorId => {
-    const currentUserId = currentUser.afid || currentUser.uid;
-    return authorId === currentUserId || isAdminOrModerator;
-  };
   const dismissBirthdayPopup = () => {
     localStorage.setItem('birthdayDismissed_' + new Date().toDateString(), 'true');
     setShowBirthdayPopup(null);
   };
-  const emojis = ['👍', '❤️', '😊', '🎉', '👏', '🙌'];
   const getDaysUntilBirthday = dob => {
     const today = new Date();
     const bday = new Date(dob);
     const thisYearBday = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
     if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
     return Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
+  };
+  const celebrationColorClasses = {
+    pink: {
+      active: 'bg-pink-100 ring-2 ring-pink-400',
+      hover: 'hover:bg-pink-50',
+      border: 'border-pink-200',
+      focusBorder: 'focus:border-pink-400',
+      wishBg: 'bg-pink-50',
+      wishText: 'text-pink-700',
+      wishAvatar: 'bg-pink-300',
+      send: 'bg-pink-500 hover:bg-pink-600',
+      cta: 'from-pink-400 to-purple-500'
+    },
+    amber: {
+      active: 'bg-amber-100 ring-2 ring-amber-400',
+      hover: 'hover:bg-amber-50',
+      border: 'border-amber-200',
+      focusBorder: 'focus:border-amber-400',
+      wishBg: 'bg-amber-50',
+      wishText: 'text-amber-700',
+      wishAvatar: 'bg-amber-300',
+      send: 'bg-amber-500 hover:bg-amber-600',
+      cta: 'from-amber-400 to-orange-500'
+    },
+    green: {
+      active: 'bg-green-100 ring-2 ring-green-400',
+      hover: 'hover:bg-green-50',
+      border: 'border-green-200',
+      focusBorder: 'focus:border-green-400',
+      wishBg: 'bg-green-50',
+      wishText: 'text-green-700',
+      wishAvatar: 'bg-green-300',
+      send: 'bg-green-500 hover:bg-green-600',
+      cta: 'from-green-400 to-teal-500'
+    }
+  };
+  const renderCelebrationPanel = (person, personId, color) => {
+    const c = celebrationColorClasses[color];
+    const reactionCounts = getReactionCounts(personId);
+    const myReaction = getUserReaction(personId);
+    const wishes = celebrationReactions[personId]?.wishes || [];
+    return React.createElement("div", {
+      className: "mt-2 pt-3 border-t border-gray-200",
+      onClick: e => e.stopPropagation()
+    }, React.createElement("div", {
+      className: "flex items-center gap-2 flex-wrap mb-3"
+    }, celebrationEmojis.map(emoji => React.createElement("button", {
+      key: emoji,
+      onClick: () => handleCelebrationReaction(person, emoji),
+      className: `px-3 py-1.5 rounded-full text-lg transition-all ${myReaction === emoji ? `${c.active} scale-110` : `bg-gray-100 ${c.hover} hover:scale-105`}`
+    }, emoji, " ", reactionCounts[emoji] ? React.createElement("span", {
+      className: "text-xs font-bold"
+    }, reactionCounts[emoji]) : ''))), wishes.length > 0 && React.createElement("div", {
+      className: "mb-3 max-h-32 overflow-y-auto space-y-1"
+    }, wishes.map((wish, widx) => React.createElement("div", {
+      key: widx,
+      className: `flex items-start gap-2 p-2 ${c.wishBg} rounded-lg`
+    }, React.createElement("div", {
+      className: `w-6 h-6 rounded-full ${c.wishAvatar} flex items-center justify-center text-xs text-white font-bold flex-shrink-0`
+    }, wish.userName?.charAt(0)), React.createElement("div", {
+      className: "flex-1"
+    }, React.createElement("div", {
+      className: `text-xs font-semibold ${c.wishText}`
+    }, wish.userName), React.createElement("div", {
+      className: "text-sm text-gray-700"
+    }, wish.message))))), showWishInput === personId ? React.createElement("div", {
+      className: "flex gap-2"
+    }, React.createElement("input", {
+      type: "text",
+      value: wishMessage,
+      onChange: e => setWishMessage(e.target.value),
+      onKeyDown: e => {
+        if (e.key === 'Enter') sendWish(person);
+      },
+      placeholder: "Add a comment...",
+      className: `flex-1 border-2 ${c.border} px-3 py-2 rounded-lg text-sm ${c.focusBorder} focus:ring-0`,
+      autoFocus: true
+    }), React.createElement("button", {
+      onClick: () => sendWish(person),
+      className: `px-4 py-2 ${c.send} text-white rounded-lg font-semibold`
+    }, "Send"), React.createElement("button", {
+      onClick: () => {
+        setShowWishInput(null);
+        setWishMessage('');
+      },
+      className: "px-3 py-2 bg-gray-200 rounded-lg"
+    }, "✕")) : React.createElement("button", {
+      onClick: () => setShowWishInput(personId),
+      className: `w-full py-2 bg-gradient-to-r ${c.cta} text-white rounded-lg font-semibold text-sm hover:shadow-lg transition-all`
+    }, "💬 Comment"));
   };
   if (loading) {
     return React.createElement("div", {
@@ -12619,39 +12202,6 @@ function SocialWall({
           50% { box-shadow: 0 0 0 10px rgba(236, 72, 153, 0); }
         }
         
-        .wall-tab {
-          padding: 8px 18px;
-          border-radius: 9999px;
-          font-weight: 600;
-          font-size: 14px;
-          color: #6b7280;
-          transition: all 0.2s;
-          white-space: nowrap;
-        }
-
-        .wall-tab:hover {
-          color: #374151;
-        }
-
-        .wall-tab-active {
-          background: white;
-          color: #9333ea;
-          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-        }
-
-        .post-card {
-          background: white;
-          border-radius: 16px;
-          border: 1px solid #f1f0f4;
-          box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
-          transition: box-shadow 0.2s, border-color 0.2s;
-        }
-
-        .post-card:hover {
-          border-color: #e9d5ff;
-          box-shadow: 0 4px 16px rgba(139, 92, 246, 0.08);
-        }
-        
         .emoji-btn {
           padding: 6px 10px;
           border-radius: 20px;
@@ -12668,20 +12218,12 @@ function SocialWall({
           background: linear-gradient(135deg, #fce7f3, #ede9fe);
         }
       `), React.createElement("div", {
-    className: "flex items-center justify-between flex-wrap gap-3"
+    className: "flex items-center gap-2"
   }, React.createElement("h2", {
     className: "text-2xl font-extrabold text-gray-900 flex items-center gap-2"
-  }, React.createElement("span", null, "\u2728"), "Social Wall"), React.createElement("div", {
-    className: "flex gap-1 bg-gray-100 p-1 rounded-full"
-  }, React.createElement("button", {
-    onClick: () => setActiveTab('feed'),
-    className: `wall-tab ${activeTab === 'feed' ? 'wall-tab-active' : ''}`
-  }, "Feed"), React.createElement("button", {
-    onClick: () => setActiveTab('celebrations'),
-    className: `wall-tab ${activeTab === 'celebrations' ? 'wall-tab-active' : ''}`
-  }, "Celebrations", birthdays.length > 0 && React.createElement("span", {
-    className: "ml-1.5 bg-pink-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-  }, birthdays.length)))), activeTab === 'celebrations' && React.createElement("div", {
+  }, React.createElement("span", null, "\ud83c\udf89"), "Celebrations"), birthdays.length > 0 && React.createElement("span", {
+    className: "bg-pink-500 text-white text-xs font-bold px-2 py-0.5 rounded-full"
+  }, birthdays.length, " today")), React.createElement("div", {
     className: "space-y-6"
   }, birthdays.length > 0 && React.createElement("div", {
     className: "celebration-card rounded-3xl p-6"
@@ -12853,9 +12395,14 @@ function SocialWall({
     const daysLeft = getDaysUntilBirthday(dobField);
     const dob = new Date(dobField);
     const isToday = daysLeft === 0;
+    const personId = person.afid || person.id || person.email;
+    const isExpanded = expandedCelebration === personId;
     return React.createElement("div", {
       key: idx,
-      className: `flex items-center justify-between p-3 rounded-xl transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : 'bg-gray-50 hover:bg-pink-50'}`
+      className: `rounded-xl overflow-hidden ${isExpanded ? 'bg-gray-50' : ''}`
+    }, React.createElement("div", {
+      onClick: () => setExpandedCelebration(isExpanded ? null : personId),
+      className: `flex items-center justify-between p-3 cursor-pointer transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : isExpanded ? 'bg-gray-50' : 'bg-gray-50 hover:bg-pink-50'}`
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -12877,7 +12424,9 @@ function SocialWall({
       month: 'short'
     })), React.createElement("div", {
       className: "text-xs text-gray-500"
-    }, isToday ? '🎉 Today!' : daysLeft === 1 ? 'Tomorrow!' : `in ${daysLeft} days`)));
+    }, isToday ? '🎉 Today!' : daysLeft === 1 ? 'Tomorrow!' : `in ${daysLeft} days`))), isExpanded && React.createElement("div", {
+      className: "px-3 pb-3"
+    }, renderCelebrationPanel(person, personId, 'pink')));
   }))), React.createElement("div", {
     className: "bg-white rounded-3xl p-6 shadow-lg"
   }, React.createElement("h3", {
@@ -12896,9 +12445,14 @@ function SocialWall({
     const daysLeft = getDaysUntilBirthday(dobField);
     const isPast = dob.getDate() < new Date().getDate();
     const isToday = daysLeft === 0;
+    const personId = person.afid || person.id || person.email;
+    const isExpanded = expandedCelebration === personId;
     return React.createElement("div", {
       key: idx,
-      className: `flex items-center justify-between p-3 rounded-xl transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : isPast ? 'bg-gray-100 opacity-60' : 'bg-gray-50 hover:bg-pink-50'}`
+      className: `rounded-xl overflow-hidden ${isExpanded ? 'bg-gray-50' : ''}`
+    }, React.createElement("div", {
+      onClick: () => setExpandedCelebration(isExpanded ? null : personId),
+      className: `flex items-center justify-between p-3 cursor-pointer transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : isPast ? 'bg-gray-100 opacity-60' : isExpanded ? 'bg-gray-50' : 'bg-gray-50 hover:bg-pink-50'}`
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -12919,7 +12473,9 @@ function SocialWall({
       month: 'short'
     })), React.createElement("div", {
       className: "text-xs text-gray-500"
-    }, isToday ? '🎉 Today!' : isPast ? 'Passed' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`)));
+    }, isToday ? '🎉 Today!' : isPast ? 'Passed' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`))), isExpanded && React.createElement("div", {
+      className: "px-3 pb-3"
+    }, renderCelebrationPanel(person, personId, 'pink')));
   }))), React.createElement("div", {
     className: "bg-white rounded-3xl p-6 shadow-lg"
   }, React.createElement("h3", {
@@ -12933,9 +12489,14 @@ function SocialWall({
   }, weekAnniversaries.map((person, idx) => {
     const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
     const jDate = new Date(person.joiningDate);
+    const personId = person.afid || person.id || person.email;
+    const isExpanded = expandedCelebration === personId;
     return React.createElement("div", {
       key: idx,
-      className: "flex items-center justify-between p-3 bg-amber-50 rounded-xl hover:bg-amber-100 transition-colors"
+      className: `rounded-xl overflow-hidden ${isExpanded ? 'bg-gray-50' : 'bg-amber-50'}`
+    }, React.createElement("div", {
+      onClick: () => setExpandedCelebration(isExpanded ? null : personId),
+      className: `flex items-center justify-between p-3 cursor-pointer transition-colors ${isExpanded ? '' : 'hover:bg-amber-100'}`
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -12957,7 +12518,9 @@ function SocialWall({
     }, jDate.toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short'
-    }))));
+    })))), isExpanded && React.createElement("div", {
+      className: "px-3 pb-3"
+    }, renderCelebrationPanel(person, personId, 'amber')));
   }))), React.createElement("div", {
     className: "bg-white rounded-3xl p-6 shadow-lg"
   }, React.createElement("h3", {
@@ -12971,9 +12534,14 @@ function SocialWall({
   }, monthAnniversaries.map((person, idx) => {
     const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
     const jDate = new Date(person.joiningDate);
+    const personId = person.afid || person.id || person.email;
+    const isExpanded = expandedCelebration === personId;
     return React.createElement("div", {
       key: idx,
-      className: "flex items-center justify-between p-3 bg-green-50 rounded-xl hover:bg-green-100 transition-colors"
+      className: `rounded-xl overflow-hidden ${isExpanded ? 'bg-gray-50' : 'bg-green-50'}`
+    }, React.createElement("div", {
+      onClick: () => setExpandedCelebration(isExpanded ? null : personId),
+      className: `flex items-center justify-between p-3 cursor-pointer transition-colors ${isExpanded ? '' : 'hover:bg-green-100'}`
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -12995,450 +12563,16 @@ function SocialWall({
     }, jDate.toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short'
-    }))));
+    })))), isExpanded && React.createElement("div", {
+      className: "px-3 pb-3"
+    }, renderCelebrationPanel(person, personId, 'green')));
   }))), birthdays.length === 0 && anniversaries.length === 0 && upcomingBirthdays.length === 0 && weekAnniversaries.length === 0 && monthAnniversaries.length === 0 && React.createElement("div", {
     className: "text-center py-12"
   }, React.createElement("div", {
     className: "text-6xl mb-4"
   }, "\uD83C\uDF88"), React.createElement("p", {
     className: "text-gray-500"
-  }, "No celebrations today. Check back soon!"))), activeTab === 'feed' && React.createElement("div", {
-    className: "space-y-6"
-  }, (birthdays.length > 0 || anniversaries.length > 0) && React.createElement("div", {
-    onClick: () => setActiveTab('celebrations'),
-    className: "celebration-card rounded-2xl p-4 cursor-pointer hover:shadow-lg transition-all"
-  }, React.createElement("div", {
-    className: "flex items-center justify-between"
-  }, React.createElement("div", {
-    className: "flex items-center gap-3"
-  }, React.createElement("span", {
-    className: "text-3xl"
-  }, "\uD83C\uDF89"), React.createElement("div", null, React.createElement("div", {
-    className: "font-bold text-pink-700"
-  }, birthdays.length > 0 && `${birthdays.length} Birthday${birthdays.length > 1 ? 's' : ''} Today!`, birthdays.length > 0 && anniversaries.length > 0 && ' + ', anniversaries.length > 0 && `${anniversaries.length} Anniversary`), React.createElement("div", {
-    className: "text-sm text-pink-600"
-  }, "Click to view celebrations \u2192"))), React.createElement("div", {
-    className: "flex -space-x-2"
-  }, [...birthdays, ...anniversaries].slice(0, 3).map((p, i) => p.profilePhoto ? React.createElement("img", {
-    key: i,
-    src: p.profilePhoto,
-    alt: "",
-    className: "w-10 h-10 rounded-full border-2 border-white object-cover"
-  }) : React.createElement("div", {
-    key: i,
-    className: "w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm"
-  }, p.name?.charAt(0)))))), React.createElement("div", {
-    className: "bg-white rounded-2xl p-4 shadow-lg border border-purple-100"
-  }, showNewPost ? React.createElement("div", {
-    className: "space-y-3"
-  }, React.createElement("div", {
-    className: "relative mention-input-container"
-  }, React.createElement(MentionTextarea, {
-    value: newPostContent,
-    onChange: setNewPostContent,
-    placeholder: "What's on your mind? Type @ to mention someone \uD83D\uDC4B",
-    allMembers: allMembers,
-    className: "w-full p-4 pr-12 border-2 border-purple-200 rounded-2xl focus:border-purple-400 focus:ring-0 resize-none",
-    rows: 3
-  }), React.createElement("label", {
-    className: "absolute bottom-3 right-3 cursor-pointer text-gray-400 hover:text-purple-600 transition-colors"
-  }, React.createElement("span", {
-    className: "text-xl"
-  }, "\uD83D\uDCCE"), React.createElement("input", {
-    type: "file",
-    accept: "image/*,video/*",
-    onChange: handlePostImageSelect,
-    className: "hidden"
-  }))), React.createElement("div", {
-    className: "text-xs text-gray-400 flex items-center gap-2"
-  }, React.createElement("span", null, "\uD83D\uDCA1 Tip: Type ", React.createElement("span", {
-    className: "mention-tag"
-  }, "@name"), " to mention someone or ", React.createElement("span", {
-    className: "mention-tag mention-everyone"
-  }, "@everyone"), " to notify all")), postImagePreview && React.createElement("div", {
-    className: "relative inline-block"
-  }, React.createElement("img", {
-    src: postImagePreview,
-    alt: "Preview",
-    className: "max-h-40 rounded-xl border-2 border-purple-200"
-  }), React.createElement("button", {
-    onClick: () => {
-      setPostImage(null);
-      setPostImagePreview(null);
-    },
-    className: "absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full text-sm font-bold hover:bg-red-600"
-  }, "\u2715")), React.createElement("div", {
-    className: "flex justify-end items-center gap-3"
-  }, React.createElement("button", {
-    onClick: () => {
-      setShowNewPost(false);
-      setNewPostContent('');
-      setPostImage(null);
-      setPostImagePreview(null);
-    },
-    className: "px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl"
-  }, "Cancel"), React.createElement("button", {
-    onClick: handleCreatePost,
-    disabled: !newPostContent.trim() && !postImage || posting,
-    className: "px-6 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-semibold disabled:opacity-50 hover:shadow-lg transition-all"
-  }, uploadingImage ? '📤 Uploading...' : posting ? 'Posting...' : '✨ Post'))) : React.createElement("div", {
-    onClick: () => setShowNewPost(true),
-    className: "flex items-center gap-4 cursor-pointer p-2 hover:bg-purple-50 rounded-xl transition-colors"
-  }, currentUser.profilePhoto ? React.createElement("img", {
-    src: currentUser.profilePhoto,
-    alt: "",
-    className: "w-11 h-11 rounded-full object-cover"
-  }) : React.createElement("div", {
-    className: "w-11 h-11 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg"
-  }, currentUser.name?.charAt(0)), React.createElement("div", {
-    className: "flex-1 text-gray-400 bg-gray-100 rounded-full py-3 px-4"
-  }, "What's on your mind?"))), posts.length === 0 ? React.createElement("div", {
-    className: "text-center py-12 bg-white rounded-2xl"
-  }, React.createElement("div", {
-    className: "text-6xl mb-4"
-  }, "\uD83D\uDCDD"), React.createElement("p", {
-    className: "text-gray-500"
-  }, "No posts yet. Be the first to share something!")) : React.createElement("div", {
-    className: "space-y-4"
-  }, posts.map(post => {
-    const reactionCounts = {};
-    Object.values(post.reactions || {}).forEach(emoji => {
-      reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
-    });
-    const myReaction = post.reactions?.[currentUser.afid || currentUser.uid];
-    return React.createElement("div", {
-      key: post.id,
-      className: "post-card p-5"
-    }, React.createElement("div", {
-      className: "flex items-start justify-between mb-4"
-    }, React.createElement("div", {
-      className: "flex items-center gap-3"
-    }, post.authorPhoto ? React.createElement("img", {
-      src: post.authorPhoto,
-      alt: "",
-      className: "w-12 h-12 rounded-full object-cover"
-    }) : React.createElement("div", {
-      className: "w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg"
-    }, post.authorName?.charAt(0)), React.createElement("div", null, React.createElement("div", {
-      className: "font-bold text-gray-800"
-    }, post.authorName), React.createElement("div", {
-      className: "text-xs text-gray-500"
-    }, post.authorSchool, " \u2022 ", post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short'
-    }) : 'Just now', post.editedAt && React.createElement("span", {
-      className: "ml-1 text-gray-400"
-    }, "(edited)")))), canModify(post.authorId) && React.createElement("div", {
-      className: "flex items-center gap-1"
-    }, React.createElement("button", {
-      onClick: () => {
-        setEditingPost(post.id);
-        setEditPostContent(post.content);
-      },
-      className: "p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all",
-      title: "Edit post"
-    }, "\u270F\uFE0F"), React.createElement("button", {
-      onClick: () => handleDeletePost(post.id),
-      className: "p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all",
-      title: isAdminOrModerator && post.authorId !== (currentUser.afid || currentUser.uid) ? 'Delete as moderator' : 'Delete post'
-    }, "\uD83D\uDDD1\uFE0F"))), editingPost === post.id ? React.createElement("div", {
-      className: "mb-4"
-    }, React.createElement("textarea", {
-      value: editPostContent,
-      onChange: e => setEditPostContent(e.target.value),
-      className: "w-full p-3 border-2 border-purple-200 rounded-xl focus:border-purple-400 focus:ring-0 resize-none",
-      rows: 3,
-      autoFocus: true
-    }), React.createElement("div", {
-      className: "flex gap-2 mt-2"
-    }, React.createElement("button", {
-      onClick: () => handleEditPost(post.id),
-      className: "px-4 py-2 bg-purple-500 text-white rounded-lg font-semibold hover:bg-purple-600"
-    }, "Save"), React.createElement("button", {
-      onClick: () => {
-        setEditingPost(null);
-        setEditPostContent('');
-      },
-      className: "px-4 py-2 bg-gray-200 rounded-lg font-semibold hover:bg-gray-300"
-    }, "Cancel"))) : React.createElement("p", {
-      className: "text-gray-700 mb-4 whitespace-pre-wrap"
-    }, post.content), post.imageUrl && React.createElement("div", {
-      className: "mb-4"
-    }, React.createElement("img", {
-      src: post.imageUrl,
-      alt: "Post attachment",
-      loading: "lazy",
-      decoding: "async",
-      className: "max-w-full rounded-xl border border-purple-100 max-h-96 object-contain"
-    })), React.createElement("div", {
-      className: "flex items-center gap-2 flex-wrap mb-3"
-    }, emojis.map(emoji => {
-      const reactedBy = Object.entries(post.reactions || {}).filter(([userId, reaction]) => reaction === emoji).map(([userId]) => userId);
-      return React.createElement(ReactionButton, {
-        key: emoji,
-        emoji: emoji,
-        count: reactionCounts[emoji],
-        isActive: myReaction === emoji,
-        onClick: () => handleReaction(post.id, emoji),
-        reactedBy: reactedBy,
-        allMembers: allMembers
-      });
-    }), post.comments?.length > 0 && React.createElement("span", {
-      className: "text-gray-400 text-sm ml-2"
-    }, "\uD83D\uDCAC ", post.comments.length, " ", post.comments.length === 1 ? 'comment' : 'comments')), post.comments?.length > 0 && React.createElement("div", {
-      className: "space-y-2 mb-3"
-    }, post.comments.slice(0, expandedReplies[post.id] ? post.comments.length : 2).map((reply, idx) => {
-      const commentReactionCounts = {};
-      Object.values(reply.reactions || {}).forEach(e => {
-        commentReactionCounts[e] = (commentReactionCounts[e] || 0) + 1;
-      });
-      const myCommentReaction = reply.reactions?.[currentUser.afid || currentUser.uid];
-      const commentEmojis = ['👍', '❤️', '😊'];
-      const isCollapsed = expandedReplies[`collapse_${post.id}_${reply.id}`];
-      const showEmojiPicker = expandedReplies[`emoji_${post.id}_${reply.id}`];
-      const hasAnyReactions = Object.keys(reply.reactions || {}).length > 0;
-      return React.createElement("div", {
-        key: reply.id || idx,
-        className: "reddit-comment-thread"
-      }, reply.replies?.length > 0 && React.createElement("button", {
-        className: "reddit-collapse-btn",
-        onClick: () => setExpandedReplies({
-          ...expandedReplies,
-          [`collapse_${post.id}_${reply.id}`]: !isCollapsed
-        }),
-        title: isCollapsed ? 'Expand' : 'Collapse'
-      }, isCollapsed ? '+' : '−'), React.createElement("div", {
-        className: "comment-wrapper flex gap-2 ml-0"
-      }, reply.authorPhoto ? React.createElement("img", {
-        src: reply.authorPhoto,
-        alt: "",
-        className: "w-8 h-8 rounded-full object-cover flex-shrink-0 border-0",
-        style: {
-          border: 'none'
-        }
-      }) : React.createElement("div", {
-        className: "w-8 h-8 rounded-full bg-gradient-to-br from-pink-300 to-purple-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-      }, reply.authorName?.charAt(0)), React.createElement("div", {
-        className: "flex-1"
-      }, editingComment?.postId === post.id && editingComment?.commentId === reply.id ? React.createElement("div", {
-        className: "mb-2"
-      }, React.createElement("textarea", {
-        value: editCommentContent,
-        onChange: e => setEditCommentContent(e.target.value),
-        className: "w-full p-2 border-2 border-purple-200 rounded-xl focus:border-purple-400 focus:ring-0 resize-none text-sm",
-        rows: 2,
-        autoFocus: true
-      }), React.createElement("div", {
-        className: "flex gap-2 mt-1"
-      }, React.createElement("button", {
-        onClick: () => handleEditComment(post.id, reply.id),
-        className: "px-3 py-1 bg-purple-500 text-white rounded-lg text-xs font-semibold hover:bg-purple-600"
-      }, "Save"), React.createElement("button", {
-        onClick: () => {
-          setEditingComment(null);
-          setEditCommentContent('');
-        },
-        className: "px-3 py-1 bg-gray-200 rounded-lg text-xs font-semibold hover:bg-gray-300"
-      }, "Cancel"))) : React.createElement("div", {
-        className: "bg-gray-50 rounded-2xl px-3 py-2"
-      }, React.createElement("span", {
-        className: "font-semibold text-sm"
-      }, reply.authorName), reply.editedAt && React.createElement("span", {
-        className: "text-xs text-gray-400 ml-1"
-      }, "(edited)"), React.createElement("span", {
-        className: "text-gray-700 text-sm ml-1"
-      }, reply.content?.split(/(@\w+(?:\s\w+)?)/g).map((part, i) => part.startsWith('@') ? React.createElement("span", {
-        key: i,
-        className: "mention-tag"
-      }, part) : part)), reply.imageUrl && React.createElement("img", {
-        src: reply.imageUrl,
-        alt: "",
-        loading: "lazy",
-        decoding: "async",
-        className: "mt-2 max-h-32 rounded-lg"
-      })), React.createElement("div", {
-        className: "reddit-action-row"
-      }, React.createElement("span", {
-        className: "reddit-timestamp"
-      }, reply.createdAt ? new Date(reply.createdAt).toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short'
-      }) : ''), React.createElement("button", {
-        className: "reddit-action-btn",
-        onClick: () => setExpandedReplies({
-          ...expandedReplies,
-          [`reply_${post.id}_${reply.id}`]: !expandedReplies[`reply_${post.id}_${reply.id}`]
-        })
-      }, React.createElement("span", {
-        className: "icon"
-      }, "\uD83D\uDCAC"), React.createElement("span", null, "Reply")), canModify(reply.authorId) && React.createElement(React.Fragment, null, React.createElement("button", {
-        className: "reddit-action-btn",
-        onClick: () => {
-          setEditingComment({
-            postId: post.id,
-            commentId: reply.id
-          });
-          setEditCommentContent(reply.content);
-        }
-      }, React.createElement("span", {
-        className: "icon"
-      }, "\u270F\uFE0F"), React.createElement("span", null, "Edit")), React.createElement("button", {
-        className: "reddit-action-btn text-red-500",
-        onClick: () => handleDeleteComment(post.id, reply.id)
-      }, React.createElement("span", {
-        className: "icon"
-      }, "\uD83D\uDDD1\uFE0F"), React.createElement("span", null, "Delete"))), React.createElement("div", {
-        className: "reddit-reactions"
-      }, commentEmojis.map(emoji => {
-        const count = commentReactionCounts[emoji] || 0;
-        const reactedBy = Object.entries(reply.reactions || {}).filter(([uid, reaction]) => reaction === emoji).map(([uid]) => uid);
-        return React.createElement("button", {
-          key: emoji,
-          className: `emoji-btn ${myCommentReaction === emoji ? 'active' : ''}`,
-          onClick: () => handleCommentReaction(post.id, reply.id, emoji),
-          title: reactedBy.length > 0 ? `${reactedBy.length} reaction${reactedBy.length > 1 ? 's' : ''}` : 'React'
-        }, emoji, count > 0 && React.createElement("span", {
-          style: {
-            fontSize: '10px',
-            marginLeft: '2px'
-          }
-        }, count));
-      })), reply.replies?.length > 0 && React.createElement("span", {
-        className: "reddit-timestamp",
-        style: {
-          marginLeft: '4px'
-        }
-      }, "\u2022 ", reply.replies.length, " ", reply.replies.length === 1 ? 'reply' : 'replies')), expandedReplies[`reply_${post.id}_${reply.id}`] && React.createElement("div", {
-        className: "reddit-reply-input mt-2"
-      }, React.createElement("div", {
-        className: "flex items-center gap-2"
-      }, React.createElement(MentionInput, {
-        value: expandedReplies[`replyText_${post.id}_${reply.id}`] || '',
-        onChange: val => setExpandedReplies({
-          ...expandedReplies,
-          [`replyText_${post.id}_${reply.id}`]: val
-        }),
-        placeholder: `Reply to ${reply.authorName}...`,
-        allMembers: allMembers,
-        className: "flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-400",
-        onSubmit: () => {
-          const replyText = expandedReplies[`replyText_${post.id}_${reply.id}`];
-          if (replyText?.trim()) {
-            handleNestedReply(post.id, reply.id, replyText.trim());
-            setExpandedReplies({
-              ...expandedReplies,
-              [`replyText_${post.id}_${reply.id}`]: '',
-              [`reply_${post.id}_${reply.id}`]: false
-            });
-          }
-        }
-      }), React.createElement("button", {
-        onClick: () => {
-          const replyText = expandedReplies[`replyText_${post.id}_${reply.id}`];
-          if (replyText?.trim()) {
-            handleNestedReply(post.id, reply.id, replyText.trim());
-            setExpandedReplies({
-              ...expandedReplies,
-              [`replyText_${post.id}_${reply.id}`]: '',
-              [`reply_${post.id}_${reply.id}`]: false
-            });
-          }
-        },
-        className: "text-purple-600 font-semibold text-sm hover:text-purple-800 px-3 py-2"
-      }, "Post"))), !isCollapsed && reply.replies?.length > 0 && React.createElement("div", {
-        className: "mt-2 space-y-2 ml-4 pl-4 border-l-2 border-gray-200"
-      }, reply.replies.map((nestedReply, nidx) => {
-        const nestedReactionCounts = {};
-        Object.values(nestedReply.reactions || {}).forEach(e => {
-          nestedReactionCounts[e] = (nestedReactionCounts[e] || 0) + 1;
-        });
-        const myNestedReaction = nestedReply.reactions?.[currentUser.afid || currentUser.uid];
-        return React.createElement("div", {
-          key: nestedReply.id || nidx,
-          className: "comment-wrapper flex gap-2"
-        }, nestedReply.authorPhoto ? React.createElement("img", {
-          src: nestedReply.authorPhoto,
-          alt: "",
-          className: "w-6 h-6 rounded-full object-cover flex-shrink-0"
-        }) : React.createElement("div", {
-          className: "w-6 h-6 rounded-full bg-gradient-to-br from-blue-300 to-indigo-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-        }, nestedReply.authorName?.charAt(0)), React.createElement("div", {
-          className: "flex-1"
-        }, React.createElement("div", {
-          className: "bg-gray-50 rounded-xl px-3 py-1.5"
-        }, React.createElement("span", {
-          className: "font-semibold text-xs"
-        }, nestedReply.authorName), React.createElement("span", {
-          className: "text-gray-700 text-xs ml-1"
-        }, nestedReply.content?.split(/(@\w+(?:\s\w+)?)/g).map((part, i) => part.startsWith('@') ? React.createElement("span", {
-          key: i,
-          className: "mention-tag"
-        }, part) : part))), React.createElement("div", {
-          className: "flex items-center gap-1 mt-0.5 ml-2 text-xs text-gray-400"
-        }, nestedReply.createdAt && new Date(nestedReply.createdAt).toLocaleDateString('en-IN', {
-          day: 'numeric',
-          month: 'short'
-        }))));
-      })))));
-    }), post.comments.length > 2 && !expandedReplies[post.id] && React.createElement("button", {
-      onClick: () => setExpandedReplies({
-        ...expandedReplies,
-        [post.id]: true
-      }),
-      className: "text-sm text-gray-500 font-medium hover:text-gray-700 ml-10"
-    }, "View all ", post.comments.length, " comments")), React.createElement("div", {
-      className: "border-t border-gray-100 pt-3 mt-2"
-    }, React.createElement("div", {
-      className: "flex items-center gap-3"
-    }, currentUser.profilePhoto ? React.createElement("img", {
-      src: currentUser.profilePhoto,
-      alt: "",
-      className: "w-8 h-8 rounded-full object-cover flex-shrink-0"
-    }) : React.createElement("div", {
-      className: "w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-    }, currentUser.name?.charAt(0)), React.createElement("div", {
-      className: "flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2 border border-gray-200 focus-within:border-purple-400 focus-within:bg-white transition-all"
-    }, React.createElement(MentionInput, {
-      value: replyingTo === post.id ? replyContent : '',
-      onChange: val => {
-        setReplyingTo(post.id);
-        setReplyContent(val);
-      },
-      placeholder: "Add a comment... (type @ to mention)",
-      allMembers: allMembers,
-      className: "flex-1 bg-transparent border-none outline-none text-sm",
-      onSubmit: () => {
-        if (replyContent.trim()) handleReply(post.id);
-      }
-    }), React.createElement("label", {
-      className: "cursor-pointer text-gray-400 hover:text-gray-600 p-1 ml-1"
-    }, React.createElement("span", {
-      className: "text-lg"
-    }, "\uD83D\uDCCE"), React.createElement("input", {
-      type: "file",
-      accept: "image/*,video/*",
-      onChange: e => {
-        setReplyingTo(post.id);
-        handleReplyImageSelect(e);
-      },
-      className: "hidden"
-    })), replyingTo === post.id && (replyContent.trim() || replyImagePreview) && React.createElement("button", {
-      onClick: () => handleReply(post.id),
-      className: "text-purple-600 font-semibold text-sm ml-2 hover:text-purple-800"
-    }, "Post"))), replyingTo === post.id && replyImagePreview && React.createElement("div", {
-      className: "relative inline-block ml-11 mt-2"
-    }, React.createElement("img", {
-      src: replyImagePreview,
-      alt: "Preview",
-      className: "max-h-20 rounded-lg"
-    }), React.createElement("button", {
-      onClick: () => {
-        setReplyImage(null);
-        setReplyImagePreview(null);
-      },
-      className: "absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-xs"
-    }, "\u2715"))));
-  }))), showBirthdayPopup && React.createElement("div", {
+  }, "No celebrations today. Check back soon!"))), showBirthdayPopup && React.createElement("div", {
     className: "fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
   }, React.createElement("div", {
     className: "bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-bounce-in"
