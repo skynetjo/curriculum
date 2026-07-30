@@ -10486,7 +10486,9 @@ function TimetablePage({ currentUser, mySchool }) {
   var [teacherFilter, setTeacherFilter] = useState('');
   var [lastSaved, setLastSaved] = useState(null);
   var [numPeriods, setNumPeriods] = useState(8);
-  var [periodTimes, setPeriodTimes] = useState(['6:00–7:00','7:30–9:00','9:30–10:30','10:30–12:00','12:00–1:30','3:00–4:30','5:00–8:00','9:00–10:30']);
+  var [periodTimes11, setPeriodTimes11] = useState(['6:00–7:00','7:30–9:00','9:30–10:30','10:30–12:00','12:00–1:30','3:00–4:30','5:00–8:00','9:00–10:30']);
+  var [periodTimes12, setPeriodTimes12] = useState(['6:00–7:00','7:30–9:00','9:30–10:30','10:30–12:00','12:00–1:30','3:00–4:30','5:00–8:00','9:00–10:30']);
+  var periodTimes = activeClass==='11'?periodTimes11:periodTimes12;
   var [breakTimes, setBreakTimes] = useState({});
   var [editingTime, setEditingTime] = useState(null);
   var [periodLabels, setPeriodLabels] = useState({});
@@ -10519,16 +10521,19 @@ function TimetablePage({ currentUser, mySchool }) {
   function addPeriod(){
     var n=numPeriods+1;
     setNumPeriods(n);
-    setPeriodTimes(function(prev){ var next=prev.slice(); next.push(''); return next; });
+    setPeriodTimes11(function(prev){ var next=prev.slice(); next.push(''); return next; });
+    setPeriodTimes12(function(prev){ var next=prev.slice(); next.push(''); return next; });
   }
   function removePeriod(){
     if(numPeriods<=1) return;
     var n=numPeriods-1;
     setNumPeriods(n);
-    setPeriodTimes(function(prev){ return prev.slice(0,n); });
+    setPeriodTimes11(function(prev){ return prev.slice(0,n); });
+    setPeriodTimes12(function(prev){ return prev.slice(0,n); });
   }
   function updatePeriodTime(idx,val){
-    setPeriodTimes(function(prev){ var next=prev.slice(); next[idx]=val; return next; });
+    var setter=activeClass==='11'?setPeriodTimes11:setPeriodTimes12;
+    setter(function(prev){ var next=prev.slice(); next[idx]=val; return next; });
   }
   // Placeholder "teacher" available for any subject that has no dedicated
   // teacher assigned yet, e.g. "IT CBSE Teacher". Named per-subject (not one
@@ -10566,9 +10571,9 @@ function TimetablePage({ currentUser, mySchool }) {
         var d1=r[1].data();
         setTimetable11(d1.slots||{});
         setLastSaved(d1.updatedAt||null);
+        if(d1.periodTimes) setPeriodTimes11(d1.periodTimes);
         if(d1.periodLabels){setPeriodLabels(d1.periodLabels);metaLoaded=true;}
         if(d1.colTypes){setColTypes(d1.colTypes);metaLoaded=true;}
-        if(d1.periodTimes){setPeriodTimes(d1.periodTimes);metaLoaded=true;}
         if(d1.numPeriods){setNumPeriods(d1.numPeriods);}else if(d1.periodTimes){setNumPeriods(d1.periodTimes.length);}
         if(d1.breakTimes){setBreakTimes(d1.breakTimes);}
         if(d1.weeklyOffDays){setWeeklyOffDays(d1.weeklyOffDays);}
@@ -10576,10 +10581,10 @@ function TimetablePage({ currentUser, mySchool }) {
       if (r[2].exists) {
         var d2=r[2].data();
         setTimetable12(d2.slots||{});
+        if(d2.periodTimes) setPeriodTimes12(d2.periodTimes);
         if(!metaLoaded){
           if(d2.periodLabels)setPeriodLabels(d2.periodLabels);
           if(d2.colTypes)setColTypes(d2.colTypes);
-          if(d2.periodTimes)setPeriodTimes(d2.periodTimes);
           if(d2.numPeriods){setNumPeriods(d2.numPeriods);}else if(d2.periodTimes){setNumPeriods(d2.periodTimes.length);}
           if(d2.breakTimes)setBreakTimes(d2.breakTimes);
         }
@@ -10605,7 +10610,7 @@ function TimetablePage({ currentUser, mySchool }) {
     if(autoSaveRef.current) clearTimeout(autoSaveRef.current);
     autoSaveRef.current=setTimeout(function(){saveTimetable(true);},3000);
     return function(){if(autoSaveRef.current)clearTimeout(autoSaveRef.current);};
-  },[timetable11,timetable12,periodLabels,colTypes,periodTimes,breakTimes]);
+  },[timetable11,timetable12,periodLabels,colTypes,periodTimes11,periodTimes12,breakTimes]);
   function canEdit() {
     if (!currentUser) return false;
     var utype = (currentUser.userType||'').toLowerCase();
@@ -10650,11 +10655,11 @@ function TimetablePage({ currentUser, mySchool }) {
     if(isAutoSave)setSaveMsg('Auto-saving...');
     try{
       var db=getFirestore(); var now=new Date().toISOString();
-      var meta={periodLabels:periodLabels,colTypes:colTypes,periodTimes:periodTimes,breakTimes:breakTimes,weeklyOffDays:weeklyOffDays,numPeriods:numPeriods};
+      var meta={periodLabels:periodLabels,colTypes:colTypes,breakTimes:breakTimes,weeklyOffDays:weeklyOffDays,numPeriods:numPeriods};
       var base=Object.assign({school:mySchool,updatedAt:now,updatedBy:(currentUser&&(currentUser.afid||currentUser.email))||'',updatedByName:(currentUser&&currentUser.name)||''},meta);
       await Promise.all([
-        db.collection('timetables').doc(mySchool+'_class11').set(Object.assign({},base,{grade:'11',slots:timetable11})),
-        db.collection('timetables').doc(mySchool+'_class12').set(Object.assign({},base,{grade:'12',slots:timetable12}))
+        db.collection('timetables').doc(mySchool+'_class11').set(Object.assign({},base,{grade:'11',slots:timetable11,periodTimes:periodTimes11})),
+        db.collection('timetables').doc(mySchool+'_class12').set(Object.assign({},base,{grade:'12',slots:timetable12,periodTimes:periodTimes12}))
       ]);
       setLastSaved(now); setSaveMsg(isAutoSave?'✅ Auto-saved':'✅ Saved successfully!');
       // Schedule exam notifications for non-CBSE teachers
@@ -10669,13 +10674,14 @@ function TimetablePage({ currentUser, mySchool }) {
     var now=new Date();
     [timetable11,timetable12].forEach(function(tt,gi){
       var grade=gi===0?'11':'12';
+      var gradePeriodTimes=gi===0?periodTimes11:periodTimes12;
       DAYS.forEach(function(day){
         PERIODS.forEach(function(p,pi){
           var slot=tt[day+'_'+p]; if(!slot||!slot.teacherId||!slot.subject) return;
           if(isCbseTeacherId(slot.teacherId)) return; // Skip CBSE teachers
           var teacher=teachers.find(function(t){return getTId(t)===slot.teacherId;});
           if(!teacher) return;
-          var targetDay=dayMap[day]; var timeStr=periodTimes[pi]||'';
+          var targetDay=dayMap[day]; var timeStr=gradePeriodTimes[pi]||'';
           var timeParts=timeStr.split(/[–\-]/); if(timeParts.length<1) return;
           var startRaw=timeParts[0].trim();
           // Determine AM/PM: prefer explicit AM/PM in the stored time,
