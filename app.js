@@ -10840,6 +10840,7 @@ function TimetablePage({ currentUser, mySchool }) {
                 },
                   React.createElement('option',{value:'Class'},'Class'),
                   React.createElement('option',{value:'Assembly'},'Assembly'),
+                  React.createElement('option',{value:'Break'},'Break'),
                   React.createElement('option',{value:'Lunch'},'Lunch'),
                   React.createElement('option',{value:'Breakfast'},'Breakfast'),
                   React.createElement('option',{value:'Snack'},'Snack'),
