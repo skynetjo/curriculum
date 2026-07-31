@@ -10750,10 +10750,29 @@ function TimetablePage({ currentUser, mySchool }) {
   }
   function formatHours(minutes){ return (Math.round((minutes/60)*10)/10)+'h'; }
   function getTeacherSchedule(tid){ var sch={}; DAYS.forEach(function(day){ PERIODS.forEach(function(p){ var key=day+'_'+p; var s11=timetable11[key]||{}; var s12=timetable12[key]||{}; if(s11.teacherId===tid) sch[key]={grade:'11',subject:s11.subject||''}; else if(s12.teacherId===tid) sch[key]={grade:'12',subject:s12.subject||''}; }); }); return sch; }
+  // Builds the Day x column grid for one class, matching exactly what's
+  // rendered on screen (column labels/times/order, break columns, weekly-off rows).
+  function buildClassRows(grade,gradePeriodTimes){
+    var rows=[['Day'].concat(visibleSchedule.map(function(col){
+      var displayLabel=periodLabels[col.key]||col.label;
+      var pidx=PERIODS.indexOf(col.key);
+      var dispTime=col.type==='break'?(breakTimes[col.key]||col.time):(pidx>=0&&gradePeriodTimes[pidx]?gradePeriodTimes[pidx]:col.time);
+      return displayLabel+(dispTime?' ('+dispTime+')':'');
+    }))];
+    DAYS.forEach(function(day){
+      var row=[day];
+      visibleSchedule.forEach(function(col){
+        if(weeklyOffDays[day]){ row.push('Weekly Off'); return; }
+        var slot=getSlot(grade,day,col.key);
+        row.push(slot.subject?slot.subject+(slot.teacherName?' ('+slot.teacherName+')':''):'');
+      });
+      rows.push(row);
+    });
+    return rows;
+  }
   function exportCSV(){
-    var tt=activeClass==='11'?timetable11:timetable12;
-    var rows=[['Day'].concat(PLABELS.map(function(p,i){ return p+(periodTimes[i]?' ('+periodTimes[i]+')':''); }))];
-    DAYS.forEach(function(day){ var row=[day]; PERIODS.forEach(function(p){ var slot=tt[day+'_'+p]||{}; row.push(slot.subject?slot.subject+(slot.teacherName?' ('+slot.teacherName+')':''):''); }); rows.push(row); });
+    var rows=[['Class 11']].concat(buildClassRows('11',periodTimes11));
+    rows.push([]); rows.push(['Class 12']); rows=rows.concat(buildClassRows('12',periodTimes12));
     rows.push([]); rows.push(['Teacher','Periods Assigned (Wk)','Weekly Hours']);
     teachers.forEach(function(t){
       var tid=getTId(t); var cnt=Object.keys(getTeacherSchedule(tid)).length;
@@ -10761,7 +10780,7 @@ function TimetablePage({ currentUser, mySchool }) {
     });
     var csv=rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
     var blob=new Blob([csv],{type:'text/csv'}); var url=URL.createObjectURL(blob);
-    var a=document.createElement('a'); a.href=url; a.download='Timetable_Class'+activeClass+'_'+(mySchool||'').replace(/\s+/g,'_')+'.csv';
+    var a=document.createElement('a'); a.href=url; a.download='Timetable_'+(mySchool||'').replace(/\s+/g,'_')+'.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }
   if(isLoading) return React.createElement('div',{className:'text-center py-16 text-gray-500'},React.createElement('div',{className:'text-4xl mb-3'},'⏳'),React.createElement('p',null,'Loading timetable...'));
