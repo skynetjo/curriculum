@@ -10708,10 +10708,57 @@ function TimetablePage({ currentUser, mySchool }) {
       });
     });
   }
+  // Parses a clock time like "8:15 AM" / "8:15" into minutes-since-midnight.
+  // refHasPM is used when the string itself has no AM/PM marker.
+  function parseClockToMinutes(raw,refHasPM){
+    raw=(raw||'').trim(); if(!raw) return null;
+    var hasPM=/pm/i.test(raw); var hasAM=/am/i.test(raw);
+    raw=raw.replace(/\s*(AM|PM)/i,'').trim();
+    var hm=raw.split(':'); if(hm.length<2) return null;
+    var h=parseInt(hm[0],10); var m=parseInt(hm[1],10);
+    if(isNaN(h)||isNaN(m)) return null;
+    var pm=hasPM||(!hasAM&&!!refHasPM);
+    if(pm&&h!==12) h+=12; else if(!pm&&h===12) h=0;
+    return h*60+m;
+  }
+  // Duration in minutes for a period's stored time-range string, e.g. "10:25 – 11:45 AM".
+  function getPeriodDurationMinutes(timeStr,periodIdx){
+    if(!timeStr) return 0;
+    var parts=timeStr.split(/[–\-]/); if(parts.length<2) return 0;
+    var fsEntry=FULL_SCHEDULE.find(function(fs){return fs.key===PERIODS[periodIdx];});
+    var refHasPM=/pm/i.test(fsEntry?fsEntry.time:'');
+    var endRaw=parts[1].trim();
+    var endHasPM=/pm/i.test(endRaw)||(!(/am/i.test(endRaw))&&refHasPM);
+    var endMin=parseClockToMinutes(endRaw,endHasPM);
+    var startMin=parseClockToMinutes(parts[0].trim(),endHasPM);
+    if(endMin===null||startMin===null) return 0;
+    var diff=endMin-startMin;
+    return diff>0?diff:0;
+  }
+  // Total weekly minutes a teacher is scheduled for, across both classes.
+  function getTeacherWeeklyMinutes(tid){
+    var total=0;
+    [{tt:timetable11,times:periodTimes11},{tt:timetable12,times:periodTimes12}].forEach(function(cls){
+      DAYS.forEach(function(day){
+        PERIODS.forEach(function(p,pi){
+          var slot=cls.tt[day+'_'+p];
+          if(slot&&slot.teacherId===tid) total+=getPeriodDurationMinutes(cls.times[pi],pi);
+        });
+      });
+    });
+    return total;
+  }
+  function formatHours(minutes){ return (Math.round((minutes/60)*10)/10)+'h'; }
+  function getTeacherSchedule(tid){ var sch={}; DAYS.forEach(function(day){ PERIODS.forEach(function(p){ var key=day+'_'+p; var s11=timetable11[key]||{}; var s12=timetable12[key]||{}; if(s11.teacherId===tid) sch[key]={grade:'11',subject:s11.subject||''}; else if(s12.teacherId===tid) sch[key]={grade:'12',subject:s12.subject||''}; }); }); return sch; }
   function exportCSV(){
     var tt=activeClass==='11'?timetable11:timetable12;
     var rows=[['Day'].concat(PLABELS.map(function(p,i){ return p+(periodTimes[i]?' ('+periodTimes[i]+')':''); }))];
     DAYS.forEach(function(day){ var row=[day]; PERIODS.forEach(function(p){ var slot=tt[day+'_'+p]||{}; row.push(slot.subject?slot.subject+(slot.teacherName?' ('+slot.teacherName+')':''):''); }); rows.push(row); });
+    rows.push([]); rows.push(['Teacher','Periods Assigned (Wk)','Weekly Hours']);
+    teachers.forEach(function(t){
+      var tid=getTId(t); var cnt=Object.keys(getTeacherSchedule(tid)).length;
+      if(cnt>0) rows.push([t.name,cnt,formatHours(getTeacherWeeklyMinutes(tid))]);
+    });
     var csv=rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
     var blob=new Blob([csv],{type:'text/csv'}); var url=URL.createObjectURL(blob);
     var a=document.createElement('a'); a.href=url; a.download='Timetable_Class'+activeClass+'_'+(mySchool||'').replace(/\s+/g,'_')+'.csv';
@@ -10719,7 +10766,6 @@ function TimetablePage({ currentUser, mySchool }) {
   }
   if(isLoading) return React.createElement('div',{className:'text-center py-16 text-gray-500'},React.createElement('div',{className:'text-4xl mb-3'},'⏳'),React.createElement('p',null,'Loading timetable...'));
   if(activeView==='teacher'){
-    function getTeacherSchedule(tid){ var sch={}; DAYS.forEach(function(day){ PERIODS.forEach(function(p){ var key=day+'_'+p; var s11=timetable11[key]||{}; var s12=timetable12[key]||{}; if(s11.teacherId===tid) sch[key]={grade:'11',subject:s11.subject||''}; else if(s12.teacherId===tid) sch[key]={grade:'12',subject:s12.subject||''}; }); }); return sch; }
     var selT=teacherFilter?teachers.find(function(t){ return getTId(t)===teacherFilter; }):null;
     return React.createElement('div',{className:'space-y-4'},
       React.createElement('div',{className:'flex flex-wrap gap-2 items-center justify-between'},
@@ -10735,7 +10781,7 @@ function TimetablePage({ currentUser, mySchool }) {
       selT?React.createElement('div',{className:'space-y-3'},
         React.createElement('div',{className:'bg-purple-50 border border-purple-200 rounded-2xl p-4'},
           React.createElement('h4',{className:'font-bold text-purple-800 text-lg'},selT.name+' — '+(selT.subject||'N/A')),
-          React.createElement('p',{className:'text-sm text-purple-600 mt-1'},Object.keys(getTeacherSchedule(getTId(selT))).length+' periods assigned this week')
+          React.createElement('p',{className:'text-sm text-purple-600 mt-1'},Object.keys(getTeacherSchedule(getTId(selT))).length+' periods assigned this week · '+formatHours(getTeacherWeeklyMinutes(getTId(selT)))+' / week')
         ),
         React.createElement('div',{className:'overflow-x-auto'},
           React.createElement('table',{className:'w-full min-w-[600px] border-collapse text-xs'},
@@ -10743,7 +10789,7 @@ function TimetablePage({ currentUser, mySchool }) {
             React.createElement('tbody',null,DAYS.map(function(day){ return React.createElement('tr',{key:day,className:'odd:bg-white even:bg-gray-50'},React.createElement('td',{className:'border p-2 font-semibold whitespace-nowrap'},day),PERIODS.map(function(period,i){ var slot=getTeacherSchedule(getTId(selT))[day+'_'+period]; return React.createElement('td',{key:i,className:'border p-1 text-center '+(slot?'bg-green-50':'')},slot?React.createElement('div',null,React.createElement('div',{className:'font-bold text-green-700'},slot.subject),React.createElement('div',{className:'text-gray-500'},'Cl '+slot.grade)):React.createElement('span',{className:'text-gray-300'},'—')); })); }))
           )
         )
-      ):React.createElement('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-4'},teachers.map(function(t){ var cnt=Object.keys(getTeacherSchedule(getTId(t))).length; return React.createElement('div',{key:getTId(t),className:'bg-white rounded-2xl shadow p-4 border-l-4 border-purple-400 cursor-pointer hover:shadow-md',onClick:function(){setTeacherFilter(getTId(t));}},React.createElement('div',{className:'font-bold text-gray-800'},t.name),React.createElement('div',{className:'text-sm text-gray-500 mb-2'},t.subject||'—'),React.createElement('span',{className:'px-3 py-1 rounded-full text-xs font-semibold '+(cnt>0?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500')},cnt+' period'+(cnt!==1?'s':'')+' assigned')); }))
+      ):React.createElement('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-4'},teachers.map(function(t){ var tid=getTId(t); var cnt=Object.keys(getTeacherSchedule(tid)).length; return React.createElement('div',{key:tid,className:'bg-white rounded-2xl shadow p-4 border-l-4 border-purple-400 cursor-pointer hover:shadow-md',onClick:function(){setTeacherFilter(tid);}},React.createElement('div',{className:'font-bold text-gray-800'},t.name),React.createElement('div',{className:'text-sm text-gray-500 mb-2'},t.subject||'—'),React.createElement('div',{className:'flex flex-wrap gap-2'},React.createElement('span',{className:'px-3 py-1 rounded-full text-xs font-semibold '+(cnt>0?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500')},cnt+' period'+(cnt!==1?'s':'')+' assigned'),cnt>0&&React.createElement('span',{className:'px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700'},formatHours(getTeacherWeeklyMinutes(tid))+'/wk'))); }))
     );
   }
   var currentTT=activeClass==='11'?timetable11:timetable12;
