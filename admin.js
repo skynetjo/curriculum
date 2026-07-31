@@ -2006,7 +2006,7 @@ function StudentManagement({
   const openAddModal = () => {
     setEditingStudent(null);
     setForm({
-      school: '',
+      school: hasFullDataAccess ? '' : availableSchools[0] || '',
       grade: '',
       name: '',
       gender: '',
@@ -2294,10 +2294,10 @@ function StudentManagement({
     className: "text-sm text-gray-500 mt-1"
   }, "\uD83D\uDC41\uFE0F View Only Mode - Contact Super Admin for modifications")), React.createElement("div", {
     className: "flex gap-3 flex-wrap"
-  }, isSuperAdmin && React.createElement(React.Fragment, null, React.createElement("button", {
+  }, canEdit && React.createElement("button", {
     onClick: openAddModal,
     className: "px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold"
-  }, "+ Add Student"), React.createElement("label", {
+  }, "+ Add Student"), isSuperAdmin && React.createElement(React.Fragment, null, React.createElement("label", {
     className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer"
   }, "\uD83D\uDCE4 Import CSV", React.createElement("input", {
     ref: fileInputRef,
@@ -2506,7 +2506,7 @@ function StudentManagement({
     className: "w-full border-2 px-3 py-2 rounded-lg"
   }, React.createElement("option", {
     value: ""
-  }, "Select"), SCHOOLS.map(s => React.createElement("option", {
+  }, "Select"), availableSchools.map(s => React.createElement("option", {
     key: s,
     value: s
   }, s)))), React.createElement("div", null, React.createElement("label", {
