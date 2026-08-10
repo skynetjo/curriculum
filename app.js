@@ -6162,6 +6162,12 @@ function TeacherView({
       className: "fa-solid fa-calendar-check"
     })
   }, {
+    id: 'myattendance',
+    label: 'My Attendance',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-location-dot"
+    })
+  }, {
     id: 'assets',
     label: 'Asset Management',
     icon: React.createElement("i", {
@@ -6202,6 +6208,12 @@ function TeacherView({
     label: 'Attendance Dashboard',
     icon: React.createElement("i", {
       className: "fa-solid fa-calendar-check"
+    })
+  }, {
+    id: 'myattendance',
+    label: 'My Attendance',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-location-dot"
     })
   }, {
     id: 'assets',
@@ -6493,6 +6505,8 @@ function TeacherView({
     students: students,
     teachers: teachers,
     studentAttendance: studentAttendance
+  }), activeTab === 'myattendance' && React.createElement(TeacherSelfAttendanceView, {
+    currentUser: currentUser
   }), activeTab === 'timetable' && React.createElement(TimetablePage, {
     currentUser: currentUser,
     mySchool: currentUser?.school
@@ -9355,6 +9369,186 @@ function TeacherAttendanceDashboard({
   }, React.createElement("span", {
     className: `px-2 py-1 rounded-full text-xs font-bold ${a.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`
   }, a.status)))))))));
+}
+
+async function reverseGeocodeCoords(latitude, longitude) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=18`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data && data.display_name ? data.display_name : null;
+  } catch (e) {
+    console.warn('Reverse geocode failed:', e.message);
+    return null;
+  }
+}
+
+function detectCurrentLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Location detection is not supported on this device/browser.'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(pos => resolve(pos.coords), err => reject(err), {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0
+    });
+  });
+}
+
+function geolocationErrorMessage(err) {
+  if (err.code === 1) return '❌ Location permission denied. Please allow location access in your browser settings to mark attendance.';
+  if (err.code === 2) return '❌ Could not detect your location. Please check your device GPS/network and try again.';
+  if (err.code === 3) return '❌ Location request timed out. Please try again in an area with better signal.';
+  return '❌ ' + (err.message || 'Failed to detect location. Please try again.');
+}
+
+function TeacherSelfAttendanceView({
+  currentUser
+}) {
+  const today = getTodayDate();
+  const mySchool = currentUser.school;
+  const docId = `${mySchool}_${currentUser.afid}_${today}`;
+  const [isLoading, setIsLoading] = useState(true);
+  const [todayRecord, setTodayRecord] = useState(null);
+  const [isMarking, setIsMarking] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [history, setHistory] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const loadTodayStatus = async () => {
+    setIsLoading(true);
+    try {
+      const doc = await db.collection('teacherAttendance').doc(docId).get();
+      setTodayRecord(doc.exists ? doc.data() : null);
+    } catch (e) {
+      console.error('Error checking today\'s attendance:', e);
+    }
+    setIsLoading(false);
+  };
+  const loadHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const snap = await db.collection('teacherAttendance').where('teacherId', '==', currentUser.afid).get();
+      const sorted = snap.docs.map(d => d.data()).sort((a, b) => b.date.localeCompare(a.date));
+      setHistory(sorted.slice(0, 14));
+    } catch (e) {
+      console.error('Error loading attendance history:', e);
+    }
+    setIsLoadingHistory(false);
+  };
+  useEffect(() => {
+    loadTodayStatus();
+    loadHistory();
+  }, []);
+  const handleMarkAttendance = async () => {
+    if (todayRecord) {
+      alert('You have already marked your attendance for today.');
+      return;
+    }
+    setIsMarking(true);
+    setStatusMessage('📍 Detecting your location...');
+    try {
+      const coords = await detectCurrentLocation();
+      setStatusMessage('🔎 Looking up your address...');
+      const address = await reverseGeocodeCoords(coords.latitude, coords.longitude);
+      setStatusMessage('💾 Saving attendance...');
+      const existing = await db.collection('teacherAttendance').doc(docId).get();
+      if (existing.exists) {
+        setTodayRecord(existing.data());
+        alert('You have already marked your attendance for today.');
+        return;
+      }
+      const attendanceData = {
+        school: mySchool,
+        teacherId: currentUser.afid,
+        teacherName: currentUser.name || currentUser.afid,
+        date: today,
+        status: 'Present',
+        markedAt: new Date().toISOString(),
+        location: {
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy: coords.accuracy || null,
+          address: address || null
+        },
+        docId
+      };
+      await db.collection('teacherAttendance').doc(docId).set(attendanceData);
+      setTodayRecord(attendanceData);
+      showAttendanceSavedToast('✅ Attendance marked!', 'success');
+      loadHistory();
+    } catch (e) {
+      alert(e && e.code ? geolocationErrorMessage(e) : '❌ Failed to mark attendance: ' + e.message);
+    } finally {
+      setStatusMessage('');
+      setIsMarking(false);
+    }
+  };
+  const formatLocation = loc => loc ? loc.address || `${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)}` : '-';
+  let statusCardContent;
+  if (isLoading) {
+    statusCardContent = React.createElement("p", { className: "text-gray-500" }, "Checking today's status...");
+  } else if (todayRecord) {
+    statusCardContent = React.createElement("div", {
+      className: "flex items-start gap-4"
+    }, React.createElement("div", { className: "text-4xl" }, "✅"), React.createElement("div", null,
+      React.createElement("p", { className: "text-xl font-bold text-green-700" }, "Attendance marked for today (", today, ")"),
+      React.createElement("p", { className: "text-gray-600 mt-1" }, "Marked at: ", new Date(todayRecord.markedAt).toLocaleTimeString()),
+      todayRecord.location && React.createElement("p", { className: "text-gray-600 mt-1" }, "📍 ", formatLocation(todayRecord.location)),
+      todayRecord.location && React.createElement("a", {
+        href: `https://www.google.com/maps?q=${todayRecord.location.latitude},${todayRecord.location.longitude}`,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        className: "text-blue-600 text-sm underline mt-1 inline-block"
+      }, "View on map")
+    ));
+  } else {
+    statusCardContent = React.createElement("div", null,
+      React.createElement("p", { className: "text-gray-600 mb-4" }, "Mark your attendance for today (", today, "). Your current location will be detected automatically. Attendance can only be marked once per day."),
+      React.createElement("button", {
+        onClick: handleMarkAttendance,
+        disabled: isMarking,
+        className: "avanti-gradient text-white px-6 py-3 rounded-xl font-semibold disabled:opacity-60"
+      }, isMarking ? statusMessage || 'Working...' : '📍 Mark My Attendance Now')
+    );
+  }
+  let historyContent;
+  if (isLoadingHistory) {
+    historyContent = React.createElement("p", { className: "text-gray-500" }, "Loading history...");
+  } else if (history.length === 0) {
+    historyContent = React.createElement("p", { className: "text-gray-500" }, "No attendance records yet.");
+  } else {
+    const headerRow = React.createElement("tr", null,
+      React.createElement("th", { className: "p-3 text-left" }, "Date"),
+      React.createElement("th", { className: "p-3 text-left" }, "Time"),
+      React.createElement("th", { className: "p-3 text-left" }, "Location")
+    );
+    const bodyRows = history.map((h, idx) => React.createElement("tr", {
+      key: idx,
+      className: "border-b hover:bg-gray-50"
+    },
+      React.createElement("td", { className: "p-3 text-sm" }, h.date),
+      React.createElement("td", { className: "p-3 text-sm" }, h.markedAt ? new Date(h.markedAt).toLocaleTimeString() : '-'),
+      React.createElement("td", { className: "p-3 text-sm" }, formatLocation(h.location))
+    ));
+    historyContent = React.createElement("div", { className: "overflow-x-auto" },
+      React.createElement("table", { className: "w-full" },
+        React.createElement("thead", { className: "avanti-gradient-light" }, headerRow),
+        React.createElement("tbody", null, bodyRows)
+      )
+    );
+  }
+  return React.createElement("div", { className: "space-y-6" },
+    React.createElement("h2", { className: "text-3xl font-bold" }, "📍 My Attendance"),
+    React.createElement("div", { className: "bg-white p-6 rounded-2xl shadow-lg" }, statusCardContent),
+    React.createElement("div", { className: "bg-white p-6 rounded-2xl shadow-lg" },
+      React.createElement("h3", { className: "text-xl font-bold mb-4" }, "📋 Recent Attendance"),
+      historyContent
+    )
+  );
 }
 
 function RemarksModal({

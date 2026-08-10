@@ -107,6 +107,12 @@ function AdminView({
       className: "fa-solid fa-calendar-check"
     })
   }, {
+    id: 'teacherattendance',
+    label: 'Teacher Attendance',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-location-dot"
+    })
+  }, {
     id: 'assets',
     label: 'Asset Management',
     icon: React.createElement("i", {
@@ -381,6 +387,9 @@ function AdminView({
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
     isDirector: isDirector
+  }), activeTab === 'teacherattendance' && React.createElement(AdminTeacherAttendanceView, {
+    accessibleSchools: availableSchools,
+    hasFullDataAccess: hasFullDataAccess
   }), activeTab === 'assets' && React.createElement(AdminAssetManagement, {
     accessibleSchools: availableSchools,
     isSuperAdmin: isSuperAdmin,
@@ -1906,6 +1915,133 @@ function AdminBirthdays({
     }, years, " Years"));
   })))));
 }
+
+function AdminTeacherAttendanceView({
+  accessibleSchools = [],
+  hasFullDataAccess = false
+}) {
+  const schoolOptions = hasFullDataAccess ? SCHOOLS : accessibleSchools;
+  const [filterSchool, setFilterSchool] = useState('All');
+  const [filterDate, setFilterDate] = useState(getTodayDate());
+  const [records, setRecords] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const loadRecords = async () => {
+    setIsLoading(true);
+    try {
+      const snap = await db.collection('teacherAttendance').where('date', '==', filterDate).get();
+      let data = snap.docs.map(d => d.data());
+      if (!hasFullDataAccess) {
+        const allowed = schoolOptions.map(s => (s || '').toString().toLowerCase().trim());
+        data = data.filter(r => allowed.includes((r.school || '').toString().toLowerCase().trim()));
+      }
+      if (filterSchool !== 'All') {
+        data = data.filter(r => (r.school || '').toLowerCase() === filterSchool.toLowerCase());
+      }
+      data.sort((a, b) => (a.teacherName || '').localeCompare(b.teacherName || ''));
+      setRecords(data);
+    } catch (e) {
+      console.error('Error loading teacher attendance:', e);
+    }
+    setIsLoading(false);
+  };
+  useEffect(() => {
+    loadRecords();
+  }, [filterDate, filterSchool]);
+  const handleExport = () => {
+    if (!records.length) { alert('No records to export for this filter.'); return; }
+    exportToExcel(records.map(r => ({
+      Date: r.date,
+      School: r.school,
+      Teacher: r.teacherName,
+      AFID: r.teacherId,
+      Time: r.markedAt ? new Date(r.markedAt).toLocaleTimeString() : '',
+      Latitude: r.location ? r.location.latitude : '',
+      Longitude: r.location ? r.location.longitude : '',
+      Address: r.location ? r.location.address || '' : ''
+    })), `teacher_attendance_${filterSchool}_${filterDate}`);
+  };
+  const filtersCard = React.createElement("div", { className: "bg-white p-6 rounded-2xl shadow-lg" },
+    React.createElement("div", { className: "grid md:grid-cols-3 gap-4" },
+      React.createElement("div", null,
+        React.createElement("label", { className: "block text-sm font-bold mb-2" }, "Date"),
+        React.createElement("input", {
+          type: "date",
+          value: filterDate,
+          onChange: e => setFilterDate(e.target.value),
+          className: "w-full border-2 px-4 py-3 rounded-xl"
+        })
+      ),
+      React.createElement("div", null,
+        React.createElement("label", { className: "block text-sm font-bold mb-2" }, "School"),
+        React.createElement("select", {
+          value: filterSchool,
+          onChange: e => setFilterSchool(e.target.value),
+          className: "w-full border-2 px-4 py-3 rounded-xl"
+        },
+          React.createElement("option", { value: "All" }, "All Schools"),
+          schoolOptions.map(s => React.createElement("option", { key: s, value: s }, s))
+        )
+      ),
+      React.createElement("div", { className: "flex items-end" },
+        React.createElement("button", {
+          onClick: handleExport,
+          className: "w-full px-6 py-3 bg-green-600 text-white rounded-xl font-semibold"
+        }, "📥 Export")
+      )
+    )
+  );
+  const statsRow = React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4" },
+    React.createElement("div", { className: "stat-card bg-green-500 text-white" },
+      React.createElement("div", { className: "text-sm opacity-90" }, "Marked Present"),
+      React.createElement("div", { className: "text-4xl font-bold" }, records.length)
+    )
+  );
+  const formatLocation = loc => loc ? (loc.address || `${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)}`) : '-';
+  let tableContent;
+  if (isLoading) {
+    tableContent = React.createElement("p", { className: "text-gray-500" }, "Loading...");
+  } else if (records.length === 0) {
+    tableContent = React.createElement("p", { className: "text-gray-500" }, "No teacher attendance records for this date.");
+  } else {
+    const headerRow = React.createElement("tr", null,
+      React.createElement("th", { className: "p-3 text-left" }, "Teacher"),
+      React.createElement("th", { className: "p-3 text-left" }, "School"),
+      React.createElement("th", { className: "p-3 text-left" }, "Time"),
+      React.createElement("th", { className: "p-3 text-left" }, "Location")
+    );
+    const bodyRows = records.map((r, idx) => React.createElement("tr", {
+      key: idx,
+      className: "border-b hover:bg-gray-50"
+    },
+      React.createElement("td", { className: "p-3 font-semibold" }, r.teacherName),
+      React.createElement("td", { className: "p-3" }, r.school),
+      React.createElement("td", { className: "p-3 text-sm" }, r.markedAt ? new Date(r.markedAt).toLocaleTimeString() : '-'),
+      React.createElement("td", { className: "p-3 text-sm" }, r.location ? React.createElement("a", {
+        href: `https://www.google.com/maps?q=${r.location.latitude},${r.location.longitude}`,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        className: "text-blue-600 underline"
+      }, formatLocation(r.location)) : '-')
+    ));
+    tableContent = React.createElement("div", { className: "overflow-x-auto" },
+      React.createElement("table", { className: "w-full" },
+        React.createElement("thead", { className: "avanti-gradient-light sticky top-0" }, headerRow),
+        React.createElement("tbody", null, bodyRows)
+      )
+    );
+  }
+  const tableCard = React.createElement("div", { className: "bg-white p-6 rounded-2xl shadow-lg" },
+    React.createElement("h3", { className: "text-xl font-bold mb-4" }, "📋 Attendance for ", filterDate),
+    tableContent
+  );
+  return React.createElement("div", { className: "space-y-6" },
+    React.createElement("h2", { className: "text-3xl font-bold" }, "📍 Teacher Attendance"),
+    filtersCard,
+    statsRow,
+    tableCard
+  );
+}
+
 function StudentManagement({
   students,
   isSuperAdmin = true,
