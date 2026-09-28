@@ -4608,6 +4608,8 @@ function App() {
   const [curriculum, setCurriculum] = useState({});
   const [chapterProgress, setChapterProgress] = useState({});
   const [students, setStudents] = useState([]);
+  const [studentsStatus, setStudentsStatus] = useState('loading');
+  const reloadStudentsRef = useRef(null);
   const [managers, setManagers] = useState([]);
   const [accessibleSchools, setAccessibleSchools] = useState([]);
   const [academicYearSettings, setAcademicYearSettings] = useState(null);
@@ -5083,11 +5085,112 @@ function App() {
       }
       return false;
     };
+    const userIsAdmin = currentUser && (currentUser.email === 'admin@avantifellows.org' || currentUser.role === 'super_admin' || currentUser.role === 'program_head' || currentUser.role === 'program_manager' || currentUser.role === 'associate_program_manager' || currentUser.role === 'aph' || currentUser.role === 'senior_pm' || currentUser.role === 'pm' || currentUser.role === 'apm' || currentUser.role === 'director' || currentUser.role === 'assoc_director' || currentUser.role === 'training');
+
+    // ✅ FIX: Students load on their own, in parallel with everything else.
+    // Previously they were fetched last inside fetchData (after ~50s of other
+    // queries on slow networks), were never cached, and any failure - or
+    // Firestore answering from an empty offline cache - left the list empty
+    // with no retry, so teachers saw "Students (0)" on the attendance page.
+    let studentsCancelled = false;
+    let studentsRetryTimer = null;
+    let studentsRetryCount = 0;
+    const STUDENTS_RETRY_DELAYS = [3000, 10000, 30000];
+    const toStudent = d => {
+      const data = d.data();
+      let studentId = data.id;
+      if (!studentId) {
+        const parts = d.id.split('_');
+        studentId = parts[parts.length - 1];
+      }
+      return {
+        ...data,
+        id: studentId,
+        docId: d.id
+      };
+    };
+    const withTimeout = (promise, ms) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout after ' + ms + 'ms')), ms))]);
+    const fetchStudents = async () => {
+      clearTimeout(studentsRetryTimer);
+      if (currentUser.userType === 'student') {
+        setStudentsStatus('ready');
+        return;
+      }
+      const teacherSchool = currentUser.school;
+      const cacheKey = 'students_' + (userIsAdmin ? 'all' : teacherSchool || 'none');
+      let hasCachedStudents = false;
+      try {
+        const cached = await window.DataCacheManager.loadFromCache(cacheKey);
+        if (!studentsCancelled && cached?.students?.length) {
+          setStudents(cached.students);
+          setStudentsStatus('ready');
+          hasCachedStudents = true;
+          console.log('📦 Showing', cached.students.length, 'cached students while refreshing');
+        }
+      } catch (e) {
+        console.log('Students cache load skipped:', e.message);
+      }
+      try {
+        let studentsData;
+        if (userIsAdmin) {
+          console.log('📊 Admin detected - fetching ALL students');
+          const allStudentsSnap = await withTimeout(db.collection('students').get(), 30000);
+          if (allStudentsSnap.empty && allStudentsSnap.metadata.fromCache) throw new Error('offline - Firestore returned an empty local cache');
+          studentsData = allStudentsSnap.docs.map(toStudent);
+          console.log('✅ Admin loaded ALL', studentsData.length, 'students');
+        } else if (!teacherSchool) {
+          console.warn('⚠️ Teacher has no school set - no students to load');
+          studentsData = [];
+        } else {
+          console.log('📊 Teacher detected - fetching students for:', teacherSchool);
+          const schoolStudentsSnap = await withTimeout(db.collection('students').where('school', '==', teacherSchool).get(), 30000);
+          // With offline persistence on, a failed network read resolves from the
+          // local cache instead of erroring. Empty + fromCache means "unknown",
+          // not "this school has no students" - retry instead of showing 0.
+          if (schoolStudentsSnap.empty && schoolStudentsSnap.metadata.fromCache) throw new Error('offline - Firestore returned an empty local cache');
+          studentsData = schoolStudentsSnap.docs.map(toStudent);
+          console.log('✅ Teacher loaded', studentsData.length, 'students for', teacherSchool);
+          if (studentsData.length === 0) {
+            console.log('⚠️ No students found with exact match, trying case-insensitive search...');
+            try {
+              const allStudentsSnap = await withTimeout(db.collection('students').get(), 30000);
+              const teacherSchoolLower = teacherSchool.toString().trim().toLowerCase();
+              studentsData = allStudentsSnap.docs.filter(d => (d.data().school || '').toString().trim().toLowerCase() === teacherSchoolLower).map(toStudent);
+              console.log('✅ Case-insensitive search found', studentsData.length, 'students');
+            } catch (e) {
+              console.log('Case-insensitive search skipped:', e.message);
+            }
+          }
+        }
+        if (studentsCancelled) return;
+        setStudents(studentsData);
+        setStudentsStatus('ready');
+        studentsRetryCount = 0;
+        window.DataCacheManager.saveToCache(cacheKey, {
+          students: studentsData
+        });
+        if (window.SmartSyncManager) window.SmartSyncManager.markSynced('students');
+      } catch (e) {
+        if (studentsCancelled) return;
+        console.error('❌ Error fetching students:', e);
+        if (!hasCachedStudents) setStudentsStatus('error');
+        if (studentsRetryCount < STUDENTS_RETRY_DELAYS.length) {
+          const delay = STUDENTS_RETRY_DELAYS[studentsRetryCount++];
+          console.log('🔁 Retrying students fetch in', delay / 1000, 's');
+          studentsRetryTimer = setTimeout(fetchStudents, delay);
+        }
+      }
+    };
+    reloadStudentsRef.current = () => {
+      studentsRetryCount = 0;
+      setStudentsStatus('loading');
+      fetchStudents();
+    };
     const fetchData = async () => {
+      fetchStudents();
       try {
         const hasCachedData = loadCachedData();
         const userSchool = currentUser?.school;
-        const userIsAdmin = currentUser && (currentUser.email === 'admin@avantifellows.org' || currentUser.role === 'super_admin' || currentUser.role === 'program_head' || currentUser.role === 'program_manager' || currentUser.role === 'associate_program_manager' || currentUser.role === 'aph' || currentUser.role === 'senior_pm' || currentUser.role === 'pm' || currentUser.role === 'apm' || currentUser.role === 'director' || currentUser.role === 'assoc_director' || currentUser.role === 'training');
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         console.log('📊 Fetching critical data...');
         if (window.updateShellStatus) window.updateShellStatus('Loading teachers...');
@@ -5246,97 +5349,6 @@ function App() {
             return newCount >= prevCount ? { ...(prev || {}), ...progressMap } : prev;
           });
         }
-        let studentsData = [];
-        if (currentUser && currentUser.userType !== 'student') {
-          if (userIsAdmin) {
-            console.log('📊 Admin detected - fetching ALL students');
-            const allStudentsSnap = await db.collection('students').get();
-            studentsData = allStudentsSnap.docs.map(d => {
-              const data = d.data();
-              let studentId = data.id;
-              if (!studentId) {
-                const parts = d.id.split('_');
-                studentId = parts[parts.length - 1];
-              }
-              return {
-                ...data,
-                id: studentId,
-                docId: d.id
-              };
-            });
-            console.log('✅ Admin loaded ALL', studentsData.length, 'students');
-          } else {
-            const teacherSchool = currentUser.school;
-            console.log('📊 Teacher detected - fetching students for:', teacherSchool);
-            try {
-              const schoolStudentsSnap = await db.collection('students').where('school', '==', teacherSchool).get();
-              studentsData = schoolStudentsSnap.docs.map(d => {
-                const data = d.data();
-                let studentId = data.id;
-                if (!studentId) {
-                  const parts = d.id.split('_');
-                  studentId = parts[parts.length - 1];
-                }
-                return {
-                  ...data,
-                  id: studentId,
-                  docId: d.id
-                };
-              });
-              console.log('✅ Teacher loaded', studentsData.length, 'students for', teacherSchool);
-              if (studentsData.length === 0) {
-                console.log('⚠️ No students found with exact match, trying case-insensitive search...');
-                const allStudentsSnap = await db.collection('students').get();
-                const teacherSchoolLower = (teacherSchool || '').toString().trim().toLowerCase();
-                studentsData = allStudentsSnap.docs.filter(d => {
-                  const studentSchool = (d.data().school || '').toString().trim().toLowerCase();
-                  return studentSchool === teacherSchoolLower;
-                }).map(d => {
-                  const data = d.data();
-                  let studentId = data.id;
-                  if (!studentId) {
-                    const parts = d.id.split('_');
-                    studentId = parts[parts.length - 1];
-                  }
-                  return {
-                    ...data,
-                    id: studentId,
-                    docId: d.id
-                  };
-                });
-                console.log('✅ Case-insensitive search found', studentsData.length, 'students');
-                if (studentsData.length > 0 && allStudentsSnap.docs.length > 0) {
-                  const sampleSchools = Array.from(new Set(allStudentsSnap.docs.map(d => d.data().school))).slice(0, 5);
-                  console.log('📋 Sample school names in database:', sampleSchools);
-                  console.log('📋 Teacher school name:', teacherSchool);
-                }
-              }
-            } catch (e) {
-              console.error('❌ Error fetching students:', e);
-              console.log('⚠️ Fallback: Fetching all students and filtering...');
-              const allStudentsSnap = await db.collection('students').get();
-              const teacherSchoolLower = (teacherSchool || '').toString().trim().toLowerCase();
-              studentsData = allStudentsSnap.docs.filter(d => {
-                const studentSchool = (d.data().school || '').toString().trim().toLowerCase();
-                return studentSchool === teacherSchoolLower;
-              }).map(d => {
-                const data = d.data();
-                let studentId = data.id;
-                if (!studentId) {
-                  const parts = d.id.split('_');
-                  studentId = parts[parts.length - 1];
-                }
-                return {
-                  ...data,
-                  id: studentId,
-                  docId: d.id
-                };
-              });
-              console.log('✅ Fallback loaded', studentsData.length, 'students');
-            }
-          }
-        }
-        setStudents(studentsData);
         const studentAttData = (studentAttSnap.docs || []).map(d => ({
           ...d.data(),
           docId: d.id
@@ -5382,7 +5394,6 @@ function App() {
           window.SmartSyncManager.markSynced('teachers');
           window.SmartSyncManager.markSynced('curriculum');
           window.SmartSyncManager.markSynced('attendance');
-          window.SmartSyncManager.markSynced('students');
           window.SmartSyncManager.markSynced('rankings');
         }
       } catch (e) {
@@ -5492,6 +5503,8 @@ function App() {
     window._smartRefreshData = handleSmartRefresh;
     window._forceFullRefresh = fetchData;
     return () => {
+      studentsCancelled = true;
+      clearTimeout(studentsRetryTimer);
       if (window.SmartSyncManager) {
         window.SmartSyncManager.clearInterval('attendance');
         window.SmartSyncManager.clearInterval('curriculum');
@@ -6112,7 +6125,9 @@ function App() {
     floatingCelebration: floatingCelebration,
     setFloatingCelebration: setFloatingCelebration,
     precomputedRankings: precomputedRankings,
-    managers: managers
+    managers: managers,
+    studentsStatus: studentsStatus,
+    onReloadStudents: () => reloadStudentsRef.current && reloadStudentsRef.current()
   }));
 }
 function TeacherView({
@@ -6134,7 +6149,9 @@ function TeacherView({
   floatingCelebration,
   setFloatingCelebration,
   precomputedRankings,
-  managers = []
+  managers = [],
+  studentsStatus,
+  onReloadStudents
 }) {
   const isAPC = currentUser.userType === 'apc' || currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC;
   const teacherTabs = isAPC ? [{
@@ -6499,7 +6516,9 @@ function TeacherView({
   }), activeTab === 'attendance' && React.createElement(StudentAttendanceView, {
     currentUser: currentUser,
     students: students,
-    studentAttendance: studentAttendance
+    studentAttendance: studentAttendance,
+    studentsStatus: studentsStatus,
+    onReloadStudents: onReloadStudents
   }), activeTab === 'attendancedash' && React.createElement(TeacherAttendanceDashboard, {
     currentUser: currentUser,
     students: students,
@@ -9625,7 +9644,9 @@ function showAttendanceSavedToast(message, type) {
 function StudentAttendanceView({
   currentUser,
   students,
-  studentAttendance
+  studentAttendance,
+  studentsStatus = 'ready',
+  onReloadStudents
 }) {
   const [selectedGrade, setSelectedGrade] = useState('11');
   const [selectedDate, setSelectedDate] = useState(getTodayDate());
@@ -9653,7 +9674,8 @@ function StudentAttendanceView({
   const mySchoolNormalized = normalizeSchool(mySchool);
   const filteredStudents = students.filter(s => {
     const studentSchoolNormalized = normalizeSchool(s.school);
-    const gradeMatches = String(s.grade) === String(selectedGrade);
+    // grade is stored as "11", "Class 11" or "Grade 11" depending on how the student was added
+    const gradeMatches = (String(s.grade ?? '').match(/\d+/) || [''])[0] === String(selectedGrade);
     const schoolMatches = studentSchoolNormalized === mySchoolNormalized;
     return schoolMatches && gradeMatches;
   }).sort((a, b) => a.name.localeCompare(b.name));
@@ -10089,7 +10111,20 @@ function StudentAttendanceView({
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "font-bold mb-4"
-  }, "Students (", filteredStudents.length, ")"), filteredStudents.length === 0 ? React.createElement("div", {
+  }, "Students (", filteredStudents.length, ")"), students.length === 0 && studentsStatus === 'loading' ? React.createElement("div", {
+    className: "text-center py-8"
+  }, React.createElement("p", {
+    className: "text-gray-500"
+  }, "\u23F3 Loading students...")) : students.length === 0 && studentsStatus === 'error' ? React.createElement("div", {
+    className: "text-center py-8"
+  }, React.createElement("p", {
+    className: "text-red-600 font-semibold mb-2"
+  }, "Couldn't load students"), React.createElement("p", {
+    className: "text-gray-500 text-sm mb-4"
+  }, "Please check your internet connection and try again."), onReloadStudents && React.createElement("button", {
+    onClick: onReloadStudents,
+    className: "px-6 py-2 bg-blue-600 text-white rounded-xl font-semibold"
+  }, "\uD83D\uDD04 Retry")) : filteredStudents.length === 0 ? React.createElement("div", {
     className: "text-center py-8"
   }, React.createElement("p", {
     className: "text-gray-500 mb-4"

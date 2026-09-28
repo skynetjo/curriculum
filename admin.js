@@ -3064,7 +3064,9 @@ function RemarksModal({
 function StudentAttendanceView({
   currentUser,
   students,
-  studentAttendance
+  studentAttendance,
+  studentsStatus = 'ready',
+  onReloadStudents
 }) {
   const [selectedGrade, setSelectedGrade] = useState('11');
   const [selectedDate, setSelectedDate] = useState(getTodayDate());
@@ -3092,7 +3094,8 @@ function StudentAttendanceView({
   const mySchoolNormalized = normalizeSchool(mySchool);
   const filteredStudents = students.filter(s => {
     const studentSchoolNormalized = normalizeSchool(s.school);
-    const gradeMatches = String(s.grade) === String(selectedGrade);
+    // grade is stored as "11", "Class 11" or "Grade 11" depending on how the student was added
+    const gradeMatches = (String(s.grade ?? '').match(/\d+/) || [''])[0] === String(selectedGrade);
     const schoolMatches = studentSchoolNormalized === mySchoolNormalized;
     return schoolMatches && gradeMatches;
   }).sort((a, b) => a.name.localeCompare(b.name));
@@ -3527,7 +3530,20 @@ function StudentAttendanceView({
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "font-bold mb-4"
-  }, "Students (", filteredStudents.length, ")"), filteredStudents.length === 0 ? React.createElement("div", {
+  }, "Students (", filteredStudents.length, ")"), students.length === 0 && studentsStatus === 'loading' ? React.createElement("div", {
+    className: "text-center py-8"
+  }, React.createElement("p", {
+    className: "text-gray-500"
+  }, "\u23F3 Loading students...")) : students.length === 0 && studentsStatus === 'error' ? React.createElement("div", {
+    className: "text-center py-8"
+  }, React.createElement("p", {
+    className: "text-red-600 font-semibold mb-2"
+  }, "Couldn't load students"), React.createElement("p", {
+    className: "text-gray-500 text-sm mb-4"
+  }, "Please check your internet connection and try again."), onReloadStudents && React.createElement("button", {
+    onClick: onReloadStudents,
+    className: "px-6 py-2 bg-blue-600 text-white rounded-xl font-semibold"
+  }, "\uD83D\uDD04 Retry")) : filteredStudents.length === 0 ? React.createElement("div", {
     className: "text-center py-8"
   }, React.createElement("p", {
     className: "text-gray-500 mb-4"
