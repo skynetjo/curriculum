@@ -25,7 +25,7 @@ folder is provider-agnostic.
 ## One-time setup
 
 You need the [Firebase CLI](https://firebase.google.com/docs/cli) installed
-and logged in (`npm install -g firebase-tools && firebase login`), and your
+and logged in (`npm install -g firebase-tools@latest && firebase login`; Cloud Functions here run on Node.js 24, which needs firebase-tools 15 or newer), and your
 Firebase project (`curriculum-dbb10`, already set in `.firebaserc` at the
 repo root) upgraded to the **Blaze (pay-as-you-go)** plan — Cloud Functions,
 even ones that stay within the free tier, require billing to be enabled.
