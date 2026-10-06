@@ -48,7 +48,10 @@
           studentSession: localStorage.getItem('studentSession'),
           authToken: localStorage.getItem('authToken'),
           avanti_device_id: localStorage.getItem('avanti_device_id'),
-          darkMode: localStorage.getItem('darkMode')
+          darkMode: localStorage.getItem('darkMode'),
+          // Unsynced offline work - must survive a version change or it is lost for good
+          offlineQueue: localStorage.getItem('offlineQueue'),
+          pendingDataSync: localStorage.getItem('pendingDataSync')
         };
         
         // 4. Clear ALL localStorage (removes old cached data)
@@ -59,6 +62,8 @@
         if (preserve.authToken) localStorage.setItem('authToken', preserve.authToken);
         if (preserve.avanti_device_id) localStorage.setItem('avanti_device_id', preserve.avanti_device_id);
         if (preserve.darkMode) localStorage.setItem('darkMode', preserve.darkMode);
+        if (preserve.offlineQueue) localStorage.setItem('offlineQueue', preserve.offlineQueue);
+        if (preserve.pendingDataSync) localStorage.setItem('pendingDataSync', preserve.pendingDataSync);
         
         // 6. Store new version BEFORE reload
         localStorage.setItem('appCacheVersion', APP_VERSION);
