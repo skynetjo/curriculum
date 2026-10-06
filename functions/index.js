@@ -3,13 +3,15 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret } = require('firebase-functions/params');
 const { setGlobalOptions } = require('firebase-functions/v2');
 const logger = require('firebase-functions/logger');
-const admin = require('firebase-admin');
+// Modular Admin SDK API (the namespaced style was removed in firebase-admin 14)
+const { initializeApp } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 
-const { parseTimetableDocId, diffAffectedTeacherIds, teacherRowsFromSlots, renderScheduleHtml, DAY_ORDER } = require('./lib/timetable');
+const { parseTimetableDocId, diffAffectedTeacherIds, teacherRowsFromSlots, renderScheduleHtml, escapeHtml, DAY_ORDER } = require('./lib/timetable');
 const { sendMail } = require('./lib/mailer');
 
-admin.initializeApp();
-const db = admin.firestore();
+initializeApp();
+const db = getFirestore();
 
 // Must match the region your Firestore database lives in, or the trigger
 // will fail to deploy — see functions/README.md.
@@ -56,8 +58,8 @@ exports.onTimetableWrite = onDocumentWritten({
     if (!teacher || !teacher.email || teacher.isArchived) continue;
     const rows = teacherRowsFromSlots(afterData.slots, teacherId, parsed.grade);
     const html = `
-      <p>Hi ${teacher.name || ''},</p>
-      <p>Your Class ${parsed.grade} timetable at <strong>${parsed.school}</strong> was just updated. Here is your current schedule for this class:</p>
+      <p>Hi ${escapeHtml(teacher.name || '')},</p>
+      <p>Your Class ${parsed.grade} timetable at <strong>${escapeHtml(parsed.school)}</strong> was just updated. Here is your current schedule for this class:</p>
       ${renderScheduleHtml(rows, afterData.periodLabels, afterData.periodTimes)}
       <p style="color:#888;font-size:12px;">Automated message from Curriculum Tracker.</p>
     `;
@@ -132,8 +134,8 @@ exports.dailyScheduleDigest = onSchedule({
       if (!teacher || !teacher.email || teacher.isArchived) continue;
       if (rows.length === 0) continue;
       const html = `
-        <p>Hi ${teacher.name || ''},</p>
-        <p>Here is your schedule for <strong>${today}</strong> at <strong>${school}</strong>:</p>
+        <p>Hi ${escapeHtml(teacher.name || '')},</p>
+        <p>Here is your schedule for <strong>${today}</strong> at <strong>${escapeHtml(school)}</strong>:</p>
         ${renderScheduleHtml(rows)}
         <p style="color:#888;font-size:12px;">Automated daily digest from Curriculum Tracker.</p>
       `;

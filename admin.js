@@ -1,3 +1,8 @@
+// NOTE FOR EDITORS: these components are defined in BOTH app.js and admin.js:
+// AdminAssetManagement, AdminBirthdays, BirthdaysPage, ClassView, RemarksModal,
+// StudentAttendanceView, StudentManagement, TeacherAttendanceDashboard.
+// admin.js loads after app.js, so the copy in THIS file is the one users see.
+// Make every change in both files (or remove the app.js copy) - otherwise the fix never reaches users.
 // ✅ CURRICULUM TRACKER v5.6.8 - CHUNK 2: Admin + Attendance Features
 // Loaded in parallel with app.js, executes after app.js
 // Contains: AdminView, TeacherManagement, StudentManagement,
@@ -2884,16 +2889,27 @@ function TeacherAttendanceDashboard({
       });
     };
   }, [dailyStats, gradeStats]);
-  const handleExportStudents = () => {
-    const exportData = filteredStudentAttendance.map(a => ({
-      Date: a.date,
-      Grade: a.grade,
-      'Student Name': a.studentName,
-      Status: a.status,
-      Remarks: a.remarks || '',
-      'Marked By': a.markedBy
-    }));
-    exportToExcel(exportData, `student_attendance_${mySchool}_${startDate}_to_${endDate}`);
+  const [exportingStudents, setExportingStudents] = React.useState(false);
+  const handleExportStudents = async () => {
+    setExportingStudents(true);
+    try {
+      // Query Firestore for the full chosen period (the in-memory list only holds the last 30 days).
+      // school + date range needs a composite index; if it is missing, fall back to a date-only query.
+      let records;
+      try {
+        const snap = await db.collection('studentAttendance').where('school', '==', mySchool).where('date', '>=', startDate).where('date', '<=', endDate).get();
+        records = snap.docs.map(d => d.data());
+      } catch (indexErr) {
+        if (!(indexErr.message || '').toLowerCase().includes('index')) throw indexErr;
+        const snap = await db.collection('studentAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get();
+        records = snap.docs.map(d => d.data()).filter(a => a.school === mySchool);
+      }
+      if (filterGrade !== 'All') records = records.filter(a => a.grade === filterGrade);
+      records.sort((a, b) => a.date.localeCompare(b.date));
+      if (!records.length) { alert('No student records found for this period.'); setExportingStudents(false); return; }
+      exportToExcel(records.map(a => ({ Date: a.date, Grade: a.grade, 'Student Name': a.studentName, Status: a.status, Remarks: a.remarks || '', 'Marked By': a.markedBy })), `student_attendance_${mySchool}_${startDate}_to_${endDate}`);
+    } catch (err) { alert('Export failed: ' + err.message); }
+    setExportingStudents(false);
   };
   return React.createElement("div", {
     className: "space-y-6"
@@ -3245,6 +3261,7 @@ function StudentAttendanceView({
           }
           savedSuccessfully = true;
           console.log('✅ Attendance saved:', docId);
+          showAttendanceSavedToast('✅ Saved!', 'success');
         } catch (firebaseError) {
           console.warn('Firebase save failed, queuing offline:', firebaseError.message);
           if (window.OfflineQueue) {
@@ -3368,7 +3385,7 @@ function StudentAttendanceView({
       const newMap = {};
       filteredStudents.forEach(s => newMap[s.id] = 'Present');
       setAttendanceMap(newMap);
-      alert('All students marked present!');
+      showAttendanceSavedToast(`✅ All ${filteredStudents.length} students marked Present!`, 'success');
     } catch (e) {
       alert('Failed: ' + e.message);
     } finally {

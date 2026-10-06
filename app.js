@@ -8006,23 +8006,22 @@ function AdminAssetManagement({
   useEffect(() => {
     const fetchData = async () => {
       try {
-        let allAssets = [];
-        let allAssignments = [];
         const schoolsToFetch = hasFullDataAccess ? SCHOOLS : accessibleSchools;
-        for (const school of schoolsToFetch) {
-          const assetsSnap = await db.collection('assets').where('school', '==', school).get();
-          allAssets = [...allAssets, ...assetsSnap.docs.map(d => ({
-            ...d.data(),
-            docId: d.id
-          }))];
-          const assignmentsSnap = await db.collection('assetAssignments').where('school', '==', school).get();
-          allAssignments = [...allAssignments, ...assignmentsSnap.docs.map(d => ({
-            ...d.data(),
-            docId: d.id
-          }))];
-        }
-        setAssets(allAssets);
-        setAssignments(allAssignments);
+        const perSchool = await Promise.all(schoolsToFetch.map(async school => {
+          const [assetsSnap, assignmentsSnap] = await Promise.all([db.collection('assets').where('school', '==', school).get(), db.collection('assetAssignments').where('school', '==', school).get()]);
+          return {
+            assets: assetsSnap.docs.map(d => ({
+              ...d.data(),
+              docId: d.id
+            })),
+            assignments: assignmentsSnap.docs.map(d => ({
+              ...d.data(),
+              docId: d.id
+            }))
+          };
+        }));
+        setAssets(perSchool.flatMap(r => r.assets));
+        setAssignments(perSchool.flatMap(r => r.assignments));
         setLoading(false);
       } catch (error) {
         console.error('Error fetching assets:', error);
@@ -8069,6 +8068,19 @@ function AdminAssetManagement({
       };
     });
   }, [assets, accessibleSchools, isSuperAdmin]);
+  const handleDeleteAsset = async asset => {
+    const isAssigned = asset.status === 'assigned';
+    const confirmMsg = isAssigned ? `\u26A0\uFE0F WARNING: This asset is currently assigned to ${asset.currentAssignee?.studentName}.\n\nAre you sure you want to permanently delete "${asset.title}" (Copy #${asset.copyNumber || 1})?\n\nThis action cannot be undone.` : `Are you sure you want to permanently delete "${asset.title}" (Copy #${asset.copyNumber || 1})?\n\nThis action cannot be undone.`;
+    if (!confirm(confirmMsg)) return;
+    try {
+      await db.collection('assets').doc(asset.docId).delete();
+      setAssets(prev => prev.filter(a => a.docId !== asset.docId));
+      alert('Asset deleted successfully.');
+    } catch (error) {
+      console.error('Error deleting asset:', error);
+      alert('Failed to delete asset: ' + error.message);
+    }
+  };
   if (loading) return React.createElement("div", {
     className: "text-center py-8"
   }, "Loading assets...");
@@ -8201,8 +8213,10 @@ function AdminAssetManagement({
     className: "p-3 text-left"
   }, "Assigned To"), React.createElement("th", {
     className: "p-3 text-left"
-  }, "Copy #"))), React.createElement("tbody", null, filteredAssets.length === 0 ? React.createElement("tr", null, React.createElement("td", {
-    colSpan: "6",
+  }, "Copy #"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Actions"))), React.createElement("tbody", null, filteredAssets.length === 0 ? React.createElement("tr", null, React.createElement("td", {
+    colSpan: "7",
     className: "p-8 text-center text-gray-500"
   }, "No assets found")) : filteredAssets.slice(0, 100).map(asset => React.createElement("tr", {
     key: asset.docId,
@@ -8225,7 +8239,13 @@ function AdminAssetManagement({
     className: "p-3 text-sm"
   }, asset.currentAssignee?.studentName || '-'), React.createElement("td", {
     className: "p-3 text-sm"
-  }, asset.copyNumber || 1))))), filteredAssets.length > 100 && React.createElement("p", {
+  }, asset.copyNumber || 1), React.createElement("td", {
+    className: "p-3"
+  }, React.createElement("button", {
+    onClick: () => handleDeleteAsset(asset),
+    className: "px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-colors",
+    title: "Delete this asset"
+  }, "🗑️ Delete")))))), filteredAssets.length > 100 && React.createElement("p", {
     className: "text-center text-gray-500 mt-4"
   }, "Showing first 100 of ", filteredAssets.length, " assets")), activeSubTab === 'history' && React.createElement("div", {
     className: "bg-white p-6 rounded-xl shadow-lg"
@@ -8431,7 +8451,8 @@ function StudentManagement({
   students,
   isSuperAdmin = true,
   isDirector = false,
-  accessibleSchools = SCHOOLS
+  accessibleSchools = SCHOOLS,
+  canEdit = isSuperAdmin
 }) {
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -8526,7 +8547,7 @@ function StudentManagement({
   const openAddModal = () => {
     setEditingStudent(null);
     setForm({
-      school: '',
+      school: hasFullDataAccess ? '' : availableSchools[0] || '',
       grade: '',
       name: '',
       gender: '',
@@ -8803,20 +8824,21 @@ function StudentManagement({
     }));
     exportToExcel(exportData, 'students_list');
   };
+  const colCount = 5 + (isSuperAdmin ? 1 : 0) + (canEdit ? 1 : 0);
   return React.createElement("div", {
     className: "space-y-6"
   }, React.createElement("div", {
     className: "flex justify-between items-center flex-wrap gap-4"
   }, React.createElement("div", null, React.createElement("h2", {
     className: "text-3xl font-bold"
-  }, "Student Management"), !isSuperAdmin && React.createElement("p", {
+  }, "Student Management"), !canEdit && React.createElement("p", {
     className: "text-sm text-gray-500 mt-1"
   }, "\uD83D\uDC41\uFE0F View Only Mode - Contact Super Admin for modifications")), React.createElement("div", {
     className: "flex gap-3 flex-wrap"
-  }, isSuperAdmin && React.createElement(React.Fragment, null, React.createElement("button", {
+  }, canEdit && React.createElement("button", {
     onClick: openAddModal,
     className: "px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold"
-  }, "+ Add Student"), React.createElement("label", {
+  }, "+ Add Student"), isSuperAdmin && React.createElement(React.Fragment, null, React.createElement("label", {
     className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer"
   }, "\uD83D\uDCE4 Import CSV", React.createElement("input", {
     ref: fileInputRef,
@@ -8964,10 +8986,10 @@ function StudentManagement({
     className: "p-3 text-left"
   }, "Name"), React.createElement("th", {
     className: "p-3 text-left"
-  }, "Gender"), isSuperAdmin && React.createElement("th", {
+  }, "Gender"), canEdit && React.createElement("th", {
     className: "p-3 text-left"
   }, "Actions"))), React.createElement("tbody", null, filteredStudents.length === 0 ? React.createElement("tr", null, React.createElement("td", {
-    colSpan: isSuperAdmin ? "7" : "5",
+    colSpan: colCount,
     className: "p-8 text-center text-gray-500"
   }, "No students found")) : filteredStudents.map(s => React.createElement("tr", {
     key: s.docId,
@@ -8991,7 +9013,7 @@ function StudentManagement({
     className: "p-3 font-semibold"
   }, s.name), React.createElement("td", {
     className: "p-3"
-  }, s.gender), isSuperAdmin && React.createElement("td", {
+  }, s.gender), canEdit && React.createElement("td", {
     className: "p-3"
   }, React.createElement("div", {
     className: "flex gap-2"
@@ -9001,7 +9023,7 @@ function StudentManagement({
   }, "Edit"), React.createElement("button", {
     onClick: () => handleDelete(s),
     className: "px-3 py-1 bg-red-500 text-white rounded-lg font-semibold"
-  }, "Delete")))))))), isSuperAdmin && showModal && React.createElement("div", {
+  }, "Delete")))))))), canEdit && showModal && React.createElement("div", {
     className: "modal-overlay",
     onClick: () => {
       setShowModal(false);
@@ -9025,7 +9047,7 @@ function StudentManagement({
     className: "w-full border-2 px-3 py-2 rounded-lg"
   }, React.createElement("option", {
     value: ""
-  }, "Select"), SCHOOLS.map(s => React.createElement("option", {
+  }, "Select"), availableSchools.map(s => React.createElement("option", {
     key: s,
     value: s
   }, s)))), React.createElement("div", null, React.createElement("label", {
@@ -9271,8 +9293,17 @@ function TeacherAttendanceDashboard({
   const handleExportStudents = async () => {
     setExportingStudents(true);
     try {
-      const snap = await db.collection('studentAttendance').where('school', '==', mySchool).where('date', '>=', startDate).where('date', '<=', endDate).get();
-      let records = snap.docs.map(d => d.data());
+      // Query Firestore for the full chosen period (the in-memory list only holds the last 30 days).
+      // school + date range needs a composite index; if it is missing, fall back to a date-only query.
+      let records;
+      try {
+        const snap = await db.collection('studentAttendance').where('school', '==', mySchool).where('date', '>=', startDate).where('date', '<=', endDate).get();
+        records = snap.docs.map(d => d.data());
+      } catch (indexErr) {
+        if (!(indexErr.message || '').toLowerCase().includes('index')) throw indexErr;
+        const snap = await db.collection('studentAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get();
+        records = snap.docs.map(d => d.data()).filter(a => a.school === mySchool);
+      }
       if (filterGrade !== 'All') records = records.filter(a => a.grade === filterGrade);
       records.sort((a, b) => a.date.localeCompare(b.date));
       if (!records.length) { alert('No student records found for this period.'); setExportingStudents(false); return; }
