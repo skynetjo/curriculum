@@ -10742,12 +10742,12 @@ function TimetablePage({ currentUser, mySchool }) {
   var [isSaving, setIsSaving] = useState(false);
   var [isLoading, setIsLoading] = useState(true);
   var [saveMsg, setSaveMsg] = useState('');
-  var [conflicts, setConflicts] = useState([]);
   var [teacherFilter, setTeacherFilter] = useState('');
   var [lastSaved, setLastSaved] = useState(null);
   var [numPeriods, setNumPeriods] = useState(8);
-  var [periodTimes11, setPeriodTimes11] = useState(['6:00–7:00','7:30–9:00','9:30–10:30','10:30–12:00','12:00–1:30','3:00–4:30','5:00–8:00','9:00–10:30']);
-  var [periodTimes12, setPeriodTimes12] = useState(['6:00–7:00','7:30–9:00','9:30–10:30','10:30–12:00','12:00–1:30','3:00–4:30','5:00–8:00','9:00–10:30']);
+  var DEFAULT_PERIOD_TIMES = ['6:00–7:00','7:30–9:00','9:30–10:30','10:30–12:00','12:00–1:30','3:00–4:30','5:00–8:00','9:00–10:30'];
+  var [periodTimes11, setPeriodTimes11] = useState(DEFAULT_PERIOD_TIMES);
+  var [periodTimes12, setPeriodTimes12] = useState(DEFAULT_PERIOD_TIMES);
   var periodTimes = activeClass==='11'?periodTimes11:periodTimes12;
   var [breakTimes, setBreakTimes] = useState({});
   var [editingTime, setEditingTime] = useState(null);
@@ -10805,6 +10805,36 @@ function TimetablePage({ currentUser, mySchool }) {
   // Subjects that are always taught by CBSE Teacher (language / PT)
   var CBSE_SUBJECTS = ['English','Hindi','Sanskrit','Marathi','Gujarati','PT','Physical Education','Sports','Language'];
   function isCbseSubject(sub){ return sub && CBSE_SUBJECTS.some(function(cs){ return sub.toLowerCase().includes(cs.toLowerCase()); }); }
+  // Centres that also run a NEET section. When Maths runs there the class
+  // splits: JEE students go to Maths and NEET students to Biology at the same
+  // time. Such a slot holds two teachers (teacherId = Maths, teacherId2 =
+  // Biology), shown merged as "Maths teacher/Biology teacher".
+  var SPLIT_SUBJECT = 'Maths/Biology';
+  var SPLIT_PARTS = SPLIT_SUBJECT.split('/');
+  var NEET_SPLIT_SCHOOLS = ['EMRS Bhopal','EMRS Kundra','JNV Bharuch'];
+  var PAIR_SEP = '||';
+  function normSchool(s){ return (s||'').toLowerCase().replace(/_neet$/,'').replace(/[^a-z]/g,''); }
+  var hasNeetSplit = NEET_SPLIT_SCHOOLS.some(function(s){ return normSchool(s)===normSchool(mySchool); });
+  function isSplitSlot(s){ return !!s && s.subject===SPLIT_SUBJECT; }
+  function slotTeacherIds(s){ return s ? [s.teacherId,s.teacherId2].filter(Boolean) : []; }
+  function slotTeacherNames(s){
+    if(!s) return '';
+    if(isSplitSlot(s)&&(s.teacherName||s.teacherName2)) return (s.teacherName||'—')+'/'+(s.teacherName2||'—');
+    return s.teacherName||'';
+  }
+  // The subject a given teacher actually teaches in a slot (their half of a split slot).
+  function slotSubjectFor(s,tid){ return isSplitSlot(s) ? SPLIT_PARTS[tid===s.teacherId2?1:0] : (s.subject||''); }
+  function subjectKey(sub){ var k=(sub||'').toLowerCase().replace(/[^a-z]/g,''); return (k==='math'||k==='mathematics')?'maths':k==='bio'?'biology':k; }
+  function getSplitTeachers(part){ return teachers.filter(function(t){ return subjectKey(t.subject)===subjectKey(part); }); }
+  // Every Maths x Biology teacher pairing for a split slot: real teachers
+  // first, then pairings that use a per-subject placeholder.
+  function getSplitPairs(){
+    var a=getSplitTeachers(SPLIT_PARTS[0]).concat([getCbseTeacher(SPLIT_PARTS[0])]);
+    var b=getSplitTeachers(SPLIT_PARTS[1]).concat([getCbseTeacher(SPLIT_PARTS[1])]);
+    var pairs=[];
+    a.forEach(function(x){ b.forEach(function(y){ pairs.push({value:getTId(x)+PAIR_SEP+getTId(y),a:x,b:y,rank:(x.isCbse?1:0)+(y.isCbse?1:0)}); }); });
+    return pairs.sort(function(p,q){ return p.rank-q.rank; });
+  }
   // All subjects = teacher subjects + always-show language subjects
   function getAllSubjects(){
     var seen={}; var s=[];
@@ -10816,13 +10846,23 @@ function TimetablePage({ currentUser, mySchool }) {
   useEffect(function() {
     if (!mySchool) return;
     var db = getFirestore();
+    initialLoadDone.current=false;
     setIsLoading(true); setTeachers([]); setTimetable11({}); setTimetable12({}); setLastSaved(null);
+    // Reset per-school settings so switching schools doesn't carry the previous
+    // school's labels/times/off-days into one that hasn't customised them.
+    setNumPeriods(8); setPeriodTimes11(DEFAULT_PERIOD_TIMES); setPeriodTimes12(DEFAULT_PERIOD_TIMES);
+    setPeriodLabels({}); setColTypes({}); setBreakTimes({}); setWeeklyOffDays({Sunday:true});
+    // NEET-section teachers may be registered under "<school>_NEET"; load
+    // them too so they can be picked for the Maths/Biology split.
+    var neetSchool = hasNeetSplit && !/_neet$/i.test(mySchool) ? mySchool+'_NEET' : null;
     Promise.all([
       db.collection('teachers').where('school','==',mySchool).get(),
       db.collection('timetables').doc(mySchool+'_class11').get(),
-      db.collection('timetables').doc(mySchool+'_class12').get()
+      db.collection('timetables').doc(mySchool+'_class12').get(),
+      neetSchool ? db.collection('teachers').where('school','==',neetSchool).get().catch(function(){ return null; }) : Promise.resolve(null)
     ]).then(function(r) {
-      var tList = r[0].docs.map(function(d){ return Object.assign({},d.data(),{docId:d.id}); })
+      var tDocs = r[0].docs.concat(r[3] ? r[3].docs : []);
+      var tList = tDocs.map(function(d){ return Object.assign({},d.data(),{docId:d.id}); })
         .filter(function(t){ return !t.isArchived; })
         .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
       setTeachers(tList);
@@ -10852,25 +10892,32 @@ function TimetablePage({ currentUser, mySchool }) {
     }).catch(function(e){ console.error('Timetable load error:',e); })
     .finally(function(){ setIsLoading(false); setTimeout(function(){initialLoadDone.current=true;},800); });
   }, [mySchool]);
-  useEffect(function() {
+  // Same teacher in Class 11 and Class 12 at the same time. Derived on every
+  // render (not kept in state) so auto-save always checks the exact data it is
+  // about to save, instead of the conflicts from the previous edit.
+  function findConflicts(tt11,tt12) {
     var found = [];
     DAYS.forEach(function(day) {
       PERIODS.forEach(function(period) {
         var key = day+'_'+period;
-        var s11 = timetable11[key]||{}; var s12 = timetable12[key]||{};
-        if (s11.teacherId && s12.teacherId && s11.teacherId===s12.teacherId)
-          found.push({day:day,period:period,teacherName:s11.teacherName||'Unknown'});
+        var s11 = tt11[key]||{}; var s12 = tt12[key]||{};
+        var ids12 = slotTeacherIds(s12);
+        slotTeacherIds(s11).forEach(function(tid) {
+          if (ids12.indexOf(tid)!==-1)
+            found.push({day:day,period:period,teacherName:(tid===s11.teacherId2?s11.teacherName2:s11.teacherName)||'Unknown'});
+        });
       });
     });
-    setConflicts(found);
-  }, [timetable11,timetable12]);
+    return found;
+  }
+  var conflicts = findConflicts(timetable11,timetable12);
   // Auto-save: debounce 3s after any data change
   useEffect(function(){
     if(!initialLoadDone.current||isLoading||!canEdit()) return;
     if(autoSaveRef.current) clearTimeout(autoSaveRef.current);
     autoSaveRef.current=setTimeout(function(){saveTimetable(true);},3000);
     return function(){if(autoSaveRef.current)clearTimeout(autoSaveRef.current);};
-  },[timetable11,timetable12,periodLabels,colTypes,periodTimes11,periodTimes12,breakTimes]);
+  },[timetable11,timetable12,periodLabels,colTypes,periodTimes11,periodTimes12,breakTimes,weeklyOffDays,numPeriods]);
   function canEdit() {
     if (!currentUser) return false;
     var utype = (currentUser.userType||'').toLowerCase();
@@ -10887,13 +10934,21 @@ function TimetablePage({ currentUser, mySchool }) {
     return filtered.concat([getCbseTeacher(sub)]);
   }
   function getSlot(grade,day,period){ var key=day+'_'+period; return grade==='11'?(timetable11[key]||{}):(timetable12[key]||{}); }
-  function updateSlot(grade,day,period,updates){ var key=day+'_'+period; var setter=grade==='11'?setTimetable11:setTimetable12; setter(function(prev){ return Object.assign({},prev,{[key]:Object.assign({},prev[key]||{},updates)}); }); }
+  // A null value in `updates` removes that field from the slot.
+  function updateSlot(grade,day,period,updates){ var key=day+'_'+period; var setter=grade==='11'?setTimetable11:setTimetable12; setter(function(prev){ var next=Object.assign({},prev[key]||{},updates); Object.keys(next).forEach(function(k){ if(next[k]===null) delete next[k]; }); return Object.assign({},prev,{[key]:next}); }); }
   function clearSlot(grade,day,period){ var key=day+'_'+period; var setter=grade==='11'?setTimetable11:setTimetable12; setter(function(prev){ var n=Object.assign({},prev); delete n[key]; return n; }); }
   function isConflict(day,period){ return conflicts.some(function(c){ return c.day===day&&c.period===period; }); }
   function handleSubjectChange(grade,day,period,subject){
     var cur=getSlot(grade,day,period);
     var upd={subject:subject};
+    if(subject!==SPLIT_SUBJECT){ upd.teacherId2=null; upd.teacherName2=null; }
     if(!subject){ upd.teacherId=''; upd.teacherName=''; }
+    else if(subject===SPLIT_SUBJECT){
+      // Auto-select the pair when the centre has exactly one Maths and one Biology teacher
+      var ma=getSplitTeachers(SPLIT_PARTS[0]); var bi=getSplitTeachers(SPLIT_PARTS[1]);
+      if(ma.length===1&&bi.length===1){ upd.teacherId=getTId(ma[0]); upd.teacherName=ma[0].name||''; upd.teacherId2=getTId(bi[0]); upd.teacherName2=bi[0].name||''; }
+      else { upd.teacherId=''; upd.teacherName=''; upd.teacherId2=null; upd.teacherName2=null; }
+    }
     else if(isCbseSubject(subject)){
       // Language/PT → auto-select this subject's CBSE Teacher placeholder
       var cbseT=getCbseTeacher(subject); upd.teacherId=cbseT.docId; upd.teacherName=cbseT.name;
@@ -10902,13 +10957,23 @@ function TimetablePage({ currentUser, mySchool }) {
       var matching=teachers.filter(function(t){ return t.subject===subject; });
       if(matching.length===1){ upd.teacherId=getTId(matching[0]); upd.teacherName=matching[0].name||''; }
       else if(cur.teacherId){
+        // Drop a teacher (or another subject's placeholder) that doesn't teach the new subject
         var t=teachers.find(function(x){ return getTId(x)===cur.teacherId; });
-        if(t&&t.subject!==subject){ upd.teacherId=''; upd.teacherName=''; }
+        if(t?t.subject!==subject:cur.teacherId!==getCbseTeacher(subject).docId){ upd.teacherId=''; upd.teacherName=''; }
       }
     }
     updateSlot(grade,day,period,upd);
   }
-  function handleTeacherChange(grade,day,period,teacherId){ var cur=getSlot(grade,day,period); var t=getTeachersForSubject(cur.subject).find(function(x){ return getTId(x)===teacherId; })||teachers.find(function(x){ return getTId(x)===teacherId; }); updateSlot(grade,day,period,{teacherId:teacherId,teacherName:t?(t.name||''):'',subject:t?(t.subject||cur.subject||''):(cur.subject||'')}); }
+  function handleTeacherChange(grade,day,period,teacherId){
+    var cur=getSlot(grade,day,period);
+    if(isSplitSlot(cur)){
+      var p=getSplitPairs().find(function(x){ return x.value===teacherId; });
+      updateSlot(grade,day,period,p?{teacherId:getTId(p.a),teacherName:p.a.name||'',teacherId2:getTId(p.b),teacherName2:p.b.name||''}:{teacherId:'',teacherName:'',teacherId2:null,teacherName2:null});
+      return;
+    }
+    var t=getTeachersForSubject(cur.subject).find(function(x){ return getTId(x)===teacherId; })||teachers.find(function(x){ return getTId(x)===teacherId; });
+    updateSlot(grade,day,period,{teacherId:teacherId,teacherName:t?(t.name||''):'',subject:t?(t.subject||cur.subject||''):(cur.subject||'')});
+  }
   async function saveTimetable(isAutoSave){
     if(conflicts.length>0){if(!isAutoSave)setSaveMsg('❌ Fix all conflicts before saving!'); if(!isAutoSave)setTimeout(function(){setSaveMsg('');},4000); return;}
     setIsSaving(true); if(!isAutoSave)setSaveMsg('');
@@ -10937,33 +11002,37 @@ function TimetablePage({ currentUser, mySchool }) {
       var gradePeriodTimes=gi===0?periodTimes11:periodTimes12;
       DAYS.forEach(function(day){
         PERIODS.forEach(function(p,pi){
-          var slot=tt[day+'_'+p]; if(!slot||!slot.teacherId||!slot.subject) return;
-          if(isCbseTeacherId(slot.teacherId)) return; // Skip CBSE teachers
-          var teacher=teachers.find(function(t){return getTId(t)===slot.teacherId;});
-          if(!teacher) return;
-          var targetDay=dayMap[day]; var timeStr=gradePeriodTimes[pi]||'';
-          var timeParts=timeStr.split(/[–\-]/); if(timeParts.length<1) return;
-          var startRaw=timeParts[0].trim();
-          // Determine AM/PM: prefer explicit AM/PM in the stored time,
-          // fall back to the FULL_SCHEDULE reference time for this period
-          var fsEntry=FULL_SCHEDULE.find(function(fs){return fs.key===PERIODS[pi];});
-          var refTime=fsEntry?fsEntry.time:'';
-          var hasPM=/pm/i.test(startRaw)||(!(/am/i.test(startRaw))&&/pm/i.test(refTime));
-          startRaw=startRaw.replace(/\s*(AM|PM)/i,'');
-          var hm=startRaw.split(':'); if(hm.length<2) return;
-          var h=parseInt(hm[0])||0; var m=parseInt(hm[1])||0;
-          if(hasPM&&h!==12) h+=12; else if(!hasPM&&h===12) h=0;
-          var next=new Date(); next.setHours(h,m,0,0);
-          var diff=targetDay-now.getDay(); if(diff<0||(diff===0&&next<=now)) diff+=7;
-          next.setDate(next.getDate()+diff);
-          var delay=next.getTime()-Date.now()-5*60*1000;
-          if(delay>0&&delay<7*24*60*60*1000){
-            setTimeout(function(){
-              if(Notification.permission==='granted'){
-                new Notification('📚 Class Reminder - Avanti',{body:'Class '+grade+' | '+slot.subject+' with '+teacher.name+' starting at '+timeStr,icon:'/icon-192.png'});
-              }
-            },delay);
-          }
+          var slot=tt[day+'_'+p]; if(!slot||!slot.subject) return;
+          // A Maths/Biology split slot has two teachers; remind each about their own half
+          slotTeacherIds(slot).forEach(function(tid){
+            if(isCbseTeacherId(tid)) return; // Skip CBSE teachers
+            var teacher=teachers.find(function(t){return getTId(t)===tid;});
+            if(!teacher) return;
+            var subject=slotSubjectFor(slot,tid);
+            var targetDay=dayMap[day]; var timeStr=gradePeriodTimes[pi]||'';
+            var timeParts=timeStr.split(/[–\-]/); if(timeParts.length<1) return;
+            var startRaw=timeParts[0].trim();
+            // Determine AM/PM: prefer explicit AM/PM in the stored time,
+            // fall back to the FULL_SCHEDULE reference time for this period
+            var fsEntry=FULL_SCHEDULE.find(function(fs){return fs.key===PERIODS[pi];});
+            var refTime=fsEntry?fsEntry.time:'';
+            var hasPM=/pm/i.test(startRaw)||(!(/am/i.test(startRaw))&&/pm/i.test(refTime));
+            startRaw=startRaw.replace(/\s*(AM|PM)/i,'');
+            var hm=startRaw.split(':'); if(hm.length<2) return;
+            var h=parseInt(hm[0])||0; var m=parseInt(hm[1])||0;
+            if(hasPM&&h!==12) h+=12; else if(!hasPM&&h===12) h=0;
+            var next=new Date(); next.setHours(h,m,0,0);
+            var diff=targetDay-now.getDay(); if(diff<0||(diff===0&&next<=now)) diff+=7;
+            next.setDate(next.getDate()+diff);
+            var delay=next.getTime()-Date.now()-5*60*1000;
+            if(delay>0&&delay<7*24*60*60*1000){
+              setTimeout(function(){
+                if(Notification.permission==='granted'){
+                  new Notification('📚 Class Reminder - Avanti',{body:'Class '+grade+' | '+subject+' with '+teacher.name+' starting at '+timeStr,icon:'/icon-192.png'});
+                }
+              },delay);
+            }
+          });
         });
       });
     });
@@ -11002,14 +11071,14 @@ function TimetablePage({ currentUser, mySchool }) {
       DAYS.forEach(function(day){
         PERIODS.forEach(function(p,pi){
           var slot=cls.tt[day+'_'+p];
-          if(slot&&slot.teacherId===tid) total+=getPeriodDurationMinutes(cls.times[pi],pi);
+          if(slotTeacherIds(slot).indexOf(tid)!==-1) total+=getPeriodDurationMinutes(cls.times[pi],pi);
         });
       });
     });
     return total;
   }
   function formatHours(minutes){ return (Math.round((minutes/60)*10)/10)+'h'; }
-  function getTeacherSchedule(tid){ var sch={}; DAYS.forEach(function(day){ PERIODS.forEach(function(p){ var key=day+'_'+p; var s11=timetable11[key]||{}; var s12=timetable12[key]||{}; if(s11.teacherId===tid) sch[key]={grade:'11',subject:s11.subject||''}; else if(s12.teacherId===tid) sch[key]={grade:'12',subject:s12.subject||''}; }); }); return sch; }
+  function getTeacherSchedule(tid){ var sch={}; DAYS.forEach(function(day){ PERIODS.forEach(function(p){ var key=day+'_'+p; var s11=timetable11[key]||{}; var s12=timetable12[key]||{}; if(slotTeacherIds(s11).indexOf(tid)!==-1) sch[key]={grade:'11',subject:slotSubjectFor(s11,tid)}; else if(slotTeacherIds(s12).indexOf(tid)!==-1) sch[key]={grade:'12',subject:slotSubjectFor(s12,tid)}; }); }); return sch; }
   // Builds the Day x column grid for one class, matching exactly what's
   // rendered on screen (column labels/times/order, break columns, weekly-off rows).
   function buildClassRows(grade,gradePeriodTimes){
@@ -11024,7 +11093,8 @@ function TimetablePage({ currentUser, mySchool }) {
       visibleSchedule.forEach(function(col){
         if(weeklyOffDays[day]){ row.push('Weekly Off'); return; }
         var slot=getSlot(grade,day,col.key);
-        row.push(slot.subject?slot.subject+(slot.teacherName?' ('+slot.teacherName+')':''):'');
+        var names=slotTeacherNames(slot);
+        row.push(slot.subject?slot.subject+(names?' ('+names+')':''):'');
       });
       rows.push(row);
     });
@@ -11084,7 +11154,7 @@ function TimetablePage({ currentUser, mySchool }) {
         React.createElement('div',{className:'flex flex-wrap gap-2 items-center'},
           React.createElement('button',{onClick:function(){setActiveView('teacher');},className:'px-3 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-xl font-semibold text-xs border border-white border-opacity-30'},'👩‍🏫 Teacher View'),
           React.createElement('button',{onClick:exportCSV,className:'px-3 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-xl font-semibold text-xs border border-white border-opacity-30'},'📤 Export'),
-          editable&&React.createElement('button',{onClick:saveTimetable,disabled:isSaving,className:'px-4 py-2 rounded-xl font-semibold text-sm bg-white text-yellow-700 hover:bg-yellow-50 disabled:opacity-60 disabled:cursor-not-allowed shadow'},isSaving?'⏳ Saving...':'💾 Save'),
+          editable&&React.createElement('button',{onClick:function(){saveTimetable(false);},disabled:isSaving,className:'px-4 py-2 rounded-xl font-semibold text-sm bg-white text-yellow-700 hover:bg-yellow-50 disabled:opacity-60 disabled:cursor-not-allowed shadow'},isSaving?'⏳ Saving...':'💾 Save'),
           !editable&&React.createElement('span',{className:'px-3 py-1 bg-white bg-opacity-20 rounded-full text-xs border border-white border-opacity-30'},'👁️ View only')
         )
       )
@@ -11240,7 +11310,9 @@ function TimetablePage({ currentUser, mySchool }) {
               var period=col.key;
               var s=getSlot(activeClass,day,period);
               var conf=isConflict(day,period);
-              var tfs=getTeachersForSubject(s.subject);
+              var isSplit=isSplitSlot(s);
+              var tfs=isSplit?[]:getTeachersForSubject(s.subject);
+              var splitPairs=isSplit?getSplitPairs():[];
               var cellBg=conf?'#fef2f2':(s.subject||s.teacherName)?'#faf5ff':rowBg;
               return React.createElement('div',{key:period,className:'flex flex-col justify-start',style:{width:'160px',minHeight:'90px',background:cellBg,borderLeft:'1px solid #e5e7eb',padding:'8px 8px',flexShrink:0}},
                 conf&&React.createElement('div',{className:'text-xs font-bold text-red-500 text-center leading-none mb-1'},'⚠️ Conflict'),
@@ -11248,12 +11320,15 @@ function TimetablePage({ currentUser, mySchool }) {
                   ?React.createElement('div',{className:'space-y-1.5 w-full'},
                       React.createElement('select',{value:s.subject||'',onChange:function(e){handleSubjectChange(activeClass,day,period,e.target.value);},className:'w-full border border-gray-300 rounded text-xs py-1.5 px-2 bg-white focus:border-yellow-400 focus:outline-none'},
                         React.createElement('option',{value:''},'— Sub —'),
+                        (hasNeetSplit||isSplit)&&React.createElement('optgroup',{label:'JEE + NEET split'},React.createElement('option',{value:SPLIT_SUBJECT},SPLIT_SUBJECT)),
                         React.createElement('optgroup',{label:'Subjects'},subjects.filter(function(sub){return !isCbseSubject(sub);}).map(function(sub){return React.createElement('option',{key:sub,value:sub},sub);})),
                         React.createElement('optgroup',{label:'Language / PT'},subjects.filter(function(sub){return isCbseSubject(sub);}).map(function(sub){return React.createElement('option',{key:sub,value:sub},sub);}))
                       ),
-                      React.createElement('select',{value:s.teacherId||'',onChange:function(e){handleTeacherChange(activeClass,day,period,e.target.value);},className:'w-full border rounded text-xs py-1.5 px-2 bg-white focus:border-yellow-400 focus:outline-none '+(conf?'border-red-400':isCbseTeacherId(s.teacherId)?'border-blue-300':'border-gray-300')},
-                        React.createElement('option',{value:''},'— Teacher —'),
-                        tfs.map(function(t){return React.createElement('option',{key:getTId(t),value:getTId(t)},t.name);})
+                      React.createElement('select',{value:isSplit?(s.teacherId&&s.teacherId2?s.teacherId+PAIR_SEP+s.teacherId2:''):(s.teacherId||''),onChange:function(e){handleTeacherChange(activeClass,day,period,e.target.value);},className:'w-full border rounded text-xs py-1.5 px-2 bg-white focus:border-yellow-400 focus:outline-none '+(conf?'border-red-400':(isCbseTeacherId(s.teacherId)||isCbseTeacherId(s.teacherId2))?'border-blue-300':'border-gray-300')},
+                        React.createElement('option',{value:''},isSplit?'— Maths/Bio Teachers —':'— Teacher —'),
+                        isSplit
+                          ?splitPairs.map(function(pr){return React.createElement('option',{key:pr.value,value:pr.value},pr.a.name+'/'+pr.b.name);})
+                          :tfs.map(function(t){return React.createElement('option',{key:getTId(t),value:getTId(t)},t.name);})
                       ),
                       (s.subject||s.teacherId)&&React.createElement('button',{onClick:function(){clearSlot(activeClass,day,period);},className:'text-xs text-gray-400 hover:text-red-500 self-end leading-none'},'✕ clear')
                     )
@@ -11261,7 +11336,7 @@ function TimetablePage({ currentUser, mySchool }) {
                       s.subject
                         ?React.createElement('div',null,
                             React.createElement('div',{className:'text-xs font-bold '+(isCbseSubject(s.subject)?'text-blue-700':'text-purple-700')},s.subject),
-                            React.createElement('div',{className:'text-xs text-gray-600 mt-0.5'},s.teacherName||'—')
+                            React.createElement('div',{className:'text-xs text-gray-600 mt-0.5'},slotTeacherNames(s)||'—')
                           )
                         :React.createElement('span',{className:'text-gray-300 text-xs'},'—')
                     )

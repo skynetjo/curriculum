@@ -1,10 +1,16 @@
 // Mirrors the small slice of TimetablePage's (app.js) schedule model that
 // this backend needs — the doc ID convention, the default period grid, and
 // the shape of a `slots` entry. Kept minimal on purpose: this does not need
-// to know about self-study columns, CBSE-teacher special-casing, or
-// break-row rendering — it only reads whatever ended up stored in `slots`.
+// to know about self-study columns or break-row rendering — it only reads
+// whatever ended up stored in `slots`.
 
-const CBSE_TEACHER_ID = '__cbse__';
+// Placeholder "teachers" are stored as '__cbse_<Subject>' (e.g. '__cbse_English').
+const CBSE_TEACHER_PREFIX = '__cbse_';
+// At centres with a NEET section, Maths and Biology run at the same time.
+// That slot has subject 'Maths/Biology', teacherId = Maths teacher and
+// teacherId2 = Biology teacher.
+const SPLIT_SUBJECT = 'Maths/Biology';
+const SPLIT_PARTS = SPLIT_SUBJECT.split('/');
 const TIMETABLE_DOC_SUFFIX = /_class(11|12)$/;
 
 // Default period grid, copied from FULL_SCHEDULE in app.js (period rows only).
@@ -22,10 +28,28 @@ function parseTimetableDocId(docId) {
   return { school: docId.slice(0, match.index), grade: match[1] };
 }
 
+function isPlaceholderTeacherId(teacherId) {
+  return typeof teacherId === 'string' && teacherId.startsWith(CBSE_TEACHER_PREFIX);
+}
+
+// All real teachers in a slot (two for a Maths/Biology split slot).
+function slotTeacherIds(slot) {
+  if (!slot) return [];
+  return [slot.teacherId, slot.teacherId2].filter(id => id && !isPlaceholderTeacherId(id));
+}
+
+// The subject a teacher actually teaches in a slot (their half of a split slot).
+function slotSubjectFor(slot, teacherId) {
+  if (slot.subject === SPLIT_SUBJECT) return SPLIT_PARTS[teacherId === slot.teacherId2 ? 1 : 0];
+  return slot.subject || '';
+}
+
 function slotsEqual(a, b) {
   if (!a && !b) return true;
   if (!a || !b) return false;
-  return (a.teacherId || '') === (b.teacherId || '') && (a.subject || '') === (b.subject || '');
+  return (a.teacherId || '') === (b.teacherId || '') &&
+    (a.teacherId2 || '') === (b.teacherId2 || '') &&
+    (a.subject || '') === (b.subject || '');
 }
 
 // Returns the set of teacherIds whose slot actually changed between two
@@ -37,8 +61,8 @@ function diffAffectedTeacherIds(beforeSlots, afterSlots) {
     const before = (beforeSlots || {})[key];
     const after = (afterSlots || {})[key];
     if (slotsEqual(before, after)) return;
-    if (before && before.teacherId && before.teacherId !== CBSE_TEACHER_ID) affected.add(before.teacherId);
-    if (after && after.teacherId && after.teacherId !== CBSE_TEACHER_ID) affected.add(after.teacherId);
+    slotTeacherIds(before).forEach(id => affected.add(id));
+    slotTeacherIds(after).forEach(id => affected.add(id));
   });
   return affected;
 }
@@ -68,10 +92,10 @@ function teacherRowsFromSlots(slots, teacherId, grade, onlyDay) {
   const rows = [];
   Object.keys(slots || {}).forEach(key => {
     const slot = slots[key];
-    if (!slot || slot.teacherId !== teacherId) return;
+    if (!slotTeacherIds(slot).includes(teacherId)) return;
     const { day, period } = splitSlotKey(key);
     if (onlyDay && day !== onlyDay) return;
-    rows.push({ day, period, subject: slot.subject || '', grade });
+    rows.push({ day, period, subject: slotSubjectFor(slot, teacherId), grade });
   });
   return rows;
 }
@@ -108,9 +132,9 @@ function escapeHtml(s) {
 }
 
 module.exports = {
-  CBSE_TEACHER_ID,
   DAY_ORDER,
   parseTimetableDocId,
+  slotTeacherIds,
   diffAffectedTeacherIds,
   splitSlotKey,
   teacherRowsFromSlots,
