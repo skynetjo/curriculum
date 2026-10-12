@@ -7,7 +7,7 @@ const logger = require('firebase-functions/logger');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 
-const { parseTimetableDocId, diffAffectedTeacherIds, teacherRowsFromSlots, renderScheduleHtml, escapeHtml, DAY_ORDER } = require('./lib/timetable');
+const { parseTimetableDocId, diffAffectedTeacherIds, slotTeacherIds, teacherRowsFromSlots, renderScheduleHtml, escapeHtml, DAY_ORDER } = require('./lib/timetable');
 const { sendMail } = require('./lib/mailer');
 
 initializeApp();
@@ -113,8 +113,7 @@ exports.dailyScheduleDigest = onSchedule({
 
     const teacherIdsToday = new Set();
     Object.keys(data.slots || {}).forEach(key => {
-      const slot = data.slots[key];
-      if (slot && slot.teacherId) teacherIdsToday.add(slot.teacherId);
+      slotTeacherIds(data.slots[key]).forEach(id => teacherIdsToday.add(id));
     });
     teacherIdsToday.forEach(teacherId => {
       const rows = teacherRowsFromSlots(data.slots, teacherId, parsed.grade, today);
