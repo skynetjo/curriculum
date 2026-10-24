@@ -51,7 +51,7 @@ function AdminView({
     const itemSchoolLower = (itemSchool || '').toString().toLowerCase().trim();
     return allowedSchools.some(s => (s || '').toString().toLowerCase().trim() === itemSchoolLower);
   };
-  const filteredTeachers = hasFullDataAccess ? teachers.filter(t => !t.isArchived) : teachers.filter(t => schoolMatches(t.school, accessibleSchools) && !t.isArchived);
+  const filteredTeachers = hasFullDataAccess ? teachers.filter(t => !t.isArchived) : teachers.filter(t => getTeacherSchools(t).some(s => schoolMatches(s, accessibleSchools)) && !t.isArchived);
   const filteredStudents = hasFullDataAccess ? students : students.filter(s => schoolMatches(s.school, accessibleSchools));
   const filteredStudentAttendance = hasFullDataAccess ? studentAttendance : studentAttendance.filter(a => schoolMatches(a.school, accessibleSchools));
   const filteredSchoolInfo = hasFullDataAccess ? schoolInfo : schoolInfo.filter(s => schoolMatches(s.school, accessibleSchools));
@@ -694,6 +694,7 @@ function TeacherManagement({
     joiningDate: '',
     subject: '',
     school: '',
+    additionalSchools: [],
     phone: '',
     role: 'teacher'
   });
@@ -832,6 +833,7 @@ function TeacherManagement({
       joiningDate: '',
       subject: '',
       school: '',
+      additionalSchools: [],
       phone: '',
       role: 'teacher'
     });
@@ -841,6 +843,7 @@ function TeacherManagement({
     setEditingTeacher(teacher);
     setForm({
       ...teacher,
+      additionalSchools: teacher.additionalSchools || [],
       password: '',
       role: teacher.role || 'teacher'
     });
@@ -859,6 +862,7 @@ function TeacherManagement({
         email: form.email.toLowerCase(),
         subject: form.subject,
         school: form.school,
+        additionalSchools: (form.additionalSchools || []).filter(s => s && s !== form.school),
         dob: form.dob || null,
         joiningDate: form.joiningDate || null,
         phone: form.phone || null,
@@ -867,6 +871,9 @@ function TeacherManagement({
         archiveReason: form.archiveReason || null,
         archiveNotes: form.archiveNotes || null,
         archivedAt: form.archivedAt || null
+      }, {
+        // merge: keep fields the teacher filled in themselves (bio, photo, WhatsApp...)
+        merge: true
       });
       if (!editingTeacher && form.password) {
         alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`);
@@ -1172,7 +1179,10 @@ function TeacherManagement({
       className: "p-3"
     }, t.subject || '—'), React.createElement("td", {
       className: "p-3"
-    }, t.school || '—'), React.createElement("td", {
+    }, t.school || '—', t.additionalSchools?.length > 0 && React.createElement("div", {
+      className: "text-xs text-blue-600 mt-1",
+      title: "Also works at these centres"
+    }, "+ ", t.additionalSchools.join(', '))), React.createElement("td", {
       className: "p-3"
     }, isSuperAdmin ? isIncomplete ? React.createElement("button", {
       onClick: () => handlePermanentDelete(t),
@@ -1399,7 +1409,23 @@ function TeacherManagement({
   }, "Select"), SCHOOLS.map(s => React.createElement("option", {
     key: s,
     value: s
-  }, s))))), React.createElement("div", {
+  }, s))))), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-1"
+  }, "Additional Centres"), React.createElement("p", {
+    className: "text-xs text-gray-500 mb-2"
+  }, "Tick any other centre this teacher also works at (e.g. on deputation). They can switch between centres in the app."), React.createElement("div", {
+    className: "border-2 rounded-lg p-2 max-h-40 overflow-y-auto grid grid-cols-2 gap-1"
+  }, SCHOOLS.filter(s => s !== form.school).map(s => React.createElement("label", {
+    key: s,
+    className: "flex items-center gap-2 text-sm cursor-pointer"
+  }, React.createElement("input", {
+    type: "checkbox",
+    checked: (form.additionalSchools || []).includes(s),
+    onChange: e => setForm({
+      ...form,
+      additionalSchools: e.target.checked ? [...(form.additionalSchools || []), s] : (form.additionalSchools || []).filter(x => x !== s)
+    })
+  }), s)))), React.createElement("div", {
     className: "grid grid-cols-2 gap-4"
   }, React.createElement("div", null, React.createElement("label", {
     className: "block text-sm font-bold mb-1"

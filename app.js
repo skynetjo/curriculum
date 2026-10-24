@@ -470,6 +470,28 @@ function cacheSchools(schools) {
   ALL_SCHOOLS_COUNT = SCHOOLS.length;
   console.log('📊 [Schools] Initialized with', cached.length > 0 ? 'cached' : 'approved', 'schools:', SCHOOLS.join(', '));
 })();
+
+// A teacher can work at more than one centre (e.g. sent to another JNV on deputation).
+// `school` stays their home centre and `additionalSchools` lists the others. The centre
+// they are working at is remembered per device and applied as currentUser.school (with
+// the home centre kept in currentUser.homeSchool), so every school-scoped page follows it.
+function getTeacherSchools(teacher) {
+  if (!teacher) return [];
+  const extra = Array.isArray(teacher.additionalSchools) ? teacher.additionalSchools : [];
+  return [...new Set([teacher.homeSchool || teacher.school, ...extra].filter(Boolean))];
+}
+function applyActiveSchool(user) {
+  if (!user || user.homeSchool || !Array.isArray(user.additionalSchools) || user.additionalSchools.length === 0) return user;
+  let active = null;
+  try {
+    active = localStorage.getItem('activeSchool_' + user.afid);
+  } catch (e) {}
+  return {
+    ...user,
+    homeSchool: user.school,
+    school: getTeacherSchools(user).includes(active) ? active : user.school
+  };
+}
 const MANAGER_ROLES = {
   SUPER_ADMIN: 'super_admin',
   DIRECTOR: 'director',
@@ -4587,7 +4609,8 @@ function MaintenanceScreen({ onAdminLogin }) {
   );
 }
 function App() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUserState] = useState(null);
+  const setCurrentUser = useCallback(user => setCurrentUserState(applyActiveSchool(user)), []);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -5267,7 +5290,12 @@ function App() {
         if (userIsAdmin || !userSchool) {
           teachersQuery = db.collection('teachers').get();
         } else {
-          teachersQuery = db.collection('teachers').where('school', '==', userSchool).get();
+          // Also include teachers from other centres who work here too (additionalSchools)
+          teachersQuery = Promise.all([db.collection('teachers').where('school', '==', userSchool).get(), db.collection('teachers').where('additionalSchools', 'array-contains', userSchool).get().catch(() => ({
+            docs: []
+          }))]).then(([homeSnap, extraSnap]) => ({
+            docs: [...homeSnap.docs, ...extraSnap.docs.filter(d => !homeSnap.docs.some(h => h.id === d.id))]
+          }));
         }
         const [teachersSnap, curriculumSnap, managersSnap, aySnap] = await Promise.all([timeoutPromise(teachersQuery, 20000), timeoutPromise(db.collection('curriculum').get(), 20000), timeoutPromise(db.collection('managers').where('status', '==', 'active').get(), 15000), timeoutPromise(db.collection('system').doc('academicYear').get(), 10000, {
           exists: false
@@ -6154,6 +6182,17 @@ function TeacherView({
   onReloadStudents
 }) {
   const isAPC = currentUser.userType === 'apc' || currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC;
+  const myCentres = getTeacherSchools(currentUser);
+  const switchCentre = school => {
+    if (!school || school === currentUser.school) return;
+    try {
+      localStorage.setItem('activeSchool_' + currentUser.afid, school);
+      // The quick-start cache holds the previous centre's teachers; don't flash them.
+      localStorage.removeItem('cachedAppData');
+    } catch (e) {}
+    // Reload so every page and cached list is rebuilt for the new centre.
+    window.location.reload();
+  };
   const teacherTabs = isAPC ? [{
     id: 'directory',
     label: 'Directory',
@@ -6504,7 +6543,22 @@ function TeacherView({
     className: "avanti-gradient text-white text-center py-4 text-xl font-bold"
   }, celebrationMessage), React.createElement("div", {
     className: "px-4 py-6"
-  }, React.createElement(ProfileCompletionBanner, {
+  }, myCentres.length > 1 && React.createElement("div", {
+    className: `mb-4 p-3 rounded-xl border-2 flex items-center gap-3 flex-wrap ${darkMode ? 'bg-gray-800 border-gray-600 text-gray-100' : 'bg-blue-50 border-blue-200 text-blue-800'}`
+  }, React.createElement("span", {
+    className: "text-sm font-semibold"
+  }, React.createElement("i", {
+    className: "fa-solid fa-school mr-2"
+  }), "Working at:"), React.createElement("select", {
+    value: currentUser.school,
+    onChange: e => switchCentre(e.target.value),
+    className: "border-2 border-blue-300 px-3 py-1.5 rounded-lg text-sm font-semibold bg-white text-gray-800"
+  }, myCentres.map(s => React.createElement("option", {
+    key: s,
+    value: s
+  }, s === currentUser.homeSchool ? `${s} (home centre)` : s))), React.createElement("span", {
+    className: "text-xs opacity-75"
+  }, "You are assigned to ", myCentres.length, " centres. Students, curriculum, attendance and timetable follow the centre selected here.")), React.createElement(ProfileCompletionBanner, {
     currentUser: currentUser,
     onNavigateToProfile: () => setActiveTab('myprofile')
   }), activeTab === 'directory' && React.createElement(OrgChartDirectory, {
@@ -10859,9 +10913,12 @@ function TimetablePage({ currentUser, mySchool }) {
       db.collection('teachers').where('school','==',mySchool).get(),
       db.collection('timetables').doc(mySchool+'_class11').get(),
       db.collection('timetables').doc(mySchool+'_class12').get(),
-      neetSchool ? db.collection('teachers').where('school','==',neetSchool).get().catch(function(){ return null; }) : Promise.resolve(null)
+      neetSchool ? db.collection('teachers').where('school','==',neetSchool).get().catch(function(){ return null; }) : Promise.resolve(null),
+      // Teachers from other centres who also work here (additionalSchools)
+      db.collection('teachers').where('additionalSchools','array-contains',mySchool).get().catch(function(){ return null; })
     ]).then(function(r) {
       var tDocs = r[0].docs.concat(r[3] ? r[3].docs : []);
+      if (r[4]) r[4].docs.forEach(function(d){ if (!tDocs.some(function(x){ return x.id===d.id; })) tDocs.push(d); });
       var tList = tDocs.map(function(d){ return Object.assign({},d.data(),{docId:d.id}); })
         .filter(function(t){ return !t.isArchived; })
         .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
@@ -11362,11 +11419,11 @@ function TeacherDirectory({
   const [filterSchool, setFilterSchool] = useState('All');
   const [filterSubject, setFilterSubject] = useState('All');
   const [selectedTeacher, setSelectedTeacher] = useState(null);
-  const schools = ['All', ...new Set(teachers.filter(t => !t.isArchived).map(t => t.school))];
+  const schools = ['All', ...new Set(teachers.filter(t => !t.isArchived).flatMap(getTeacherSchools))];
   const filteredTeachers = teachers.filter(teacher => {
     if (teacher.isArchived) return false;
     const matchesSearch = teacher.name?.toLowerCase().includes(searchTerm.toLowerCase()) || teacher.email?.toLowerCase().includes(searchTerm.toLowerCase()) || teacher.phone?.includes(searchTerm);
-    const matchesSchool = filterSchool === 'All' || teacher.school === filterSchool;
+    const matchesSchool = filterSchool === 'All' || getTeacherSchools(teacher).includes(filterSchool);
     const matchesSubject = filterSubject === 'All' || teacher.subject === filterSubject;
     return matchesSearch && matchesSchool && matchesSubject;
   });
@@ -11761,6 +11818,7 @@ function OrgChartDirectory({
     allMembers.forEach(m => {
       if (m.school) schools.add(m.school);
       if (m.directSchools) m.directSchools.forEach(s => schools.add(s));
+      if (m.additionalSchools) m.additionalSchools.forEach(s => schools.add(s));
       if (m.subject) subjects.add(m.subject);
     });
     return {
@@ -11788,6 +11846,7 @@ function OrgChartDirectory({
       if (!matchesSchool) {
         if (m.school === filterSchool) matchesSchool = true;
         if (m.directSchools?.includes(filterSchool)) matchesSchool = true;
+        if (m.additionalSchools?.includes(filterSchool)) matchesSchool = true;
       }
       const matchesSubject = filterSubject === 'all' || m.subject === filterSubject;
       let matchesManager = filterManager === 'all';
@@ -11797,6 +11856,7 @@ function OrgChartDirectory({
         if (m.id === filterManager) matchesManager = true;
         const selectedManager = managers.find(mgr => mgr.id === filterManager);
         if (selectedManager?.directSchools?.includes(m.school)) matchesManager = true;
+        if (m.additionalSchools?.some(s => selectedManager?.directSchools?.includes(s))) matchesManager = true;
       }
       return matchesSearch && matchesRole && matchesSchool && matchesSubject && matchesManager;
     });
@@ -12003,7 +12063,7 @@ function OrgChartDirectory({
       className: `text-xs px-2 py-0.5 rounded-full inline-block ${roleColor.bg} ${roleColor.text} font-medium mt-1`
     }, member.displayRole), member.school && React.createElement("div", {
       className: "text-sm text-gray-500 mt-1 truncate flex items-center gap-1"
-    }, React.createElement("span", null, "\uD83C\uDFEB"), " ", member.school), member.directSchools?.length > 0 && React.createElement("div", {
+    }, React.createElement("span", null, "\uD83C\uDFEB"), " ", member.school, member.additionalSchools?.length > 0 && ` + ${member.additionalSchools.join(', ')}`), member.directSchools?.length > 0 && React.createElement("div", {
       className: "text-xs text-gray-400 mt-1 truncate"
     }, "Manages: ", member.directSchools.slice(0, 2).join(', '), member.directSchools.length > 2 ? ` +${member.directSchools.length - 2}` : ''), member.subject && React.createElement("span", {
       className: "inline-block mt-1 text-xs px-2 py-0.5 rounded-full text-white font-medium",
