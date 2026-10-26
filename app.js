@@ -123,6 +123,9 @@ const firebaseWithTimeout = async (promise, timeoutMs = 15000, fallback = null) 
 };
 const auth = firebase.auth();
 const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology', 'CS', 'IT', 'IP'];
+// Centres running online classes (winter vacation) - attendance is marked per lecture
+const ONLINE_CLASS_CENTRE_PATTERNS = [/kolhapur/i, /barwani/i, /cutta(c)?k/i, /\bpuri\b/i];
+const isOnlineClassCentre = school => ONLINE_CLASS_CENTRE_PATTERNS.some(p => p.test(school || ''));
 const APC_NAME_OVERRIDES = ['sharda'];
 const getStaffRoleText = staff => String(staff?.role || staff?.userType || staff?.type || staff?.position || '').toLowerCase();
 const isApcStaff = staff => {
@@ -6530,6 +6533,16 @@ function TeacherView({
       className: "fa-solid fa-user"
     })
   }];
+  if (isOnlineClassCentre(currentUser.school)) {
+    const attendanceTabIndex = teacherTabs.findIndex(tab => tab.id === 'attendance');
+    teacherTabs.splice(attendanceTabIndex + 1, 0, {
+      id: 'onlineattendance',
+      label: 'Online Class Attendance',
+      icon: React.createElement("i", {
+        className: "fa-solid fa-laptop"
+      })
+    });
+  }
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarHovering, setSidebarHovering] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -6795,6 +6808,10 @@ function TeacherView({
     currentUser: currentUser,
     students: students,
     studentAttendance: studentAttendance
+  }), activeTab === 'onlineattendance' && React.createElement(OnlineClassAttendance, {
+    currentUser: currentUser,
+    students: students,
+    schools: [currentUser.school]
   }), activeTab === 'attendancedash' && React.createElement(TeacherAttendanceDashboard, {
     currentUser: currentUser,
     students: students,
@@ -11310,6 +11327,394 @@ function StudentAttendanceView({
       setSelectedStudent(null);
     }
   }));
+}
+// One 'onlineClassAttendance' doc per lecture: id school_grade_date_subject_L<n>,
+// records = { [studentDocId]: { name, status: 'Present' | 'Absent' } }
+const ONLINE_LECTURE_NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8'];
+const getDateDaysAgo = days => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().split('T')[0];
+};
+function OnlineClassAttendance({
+  currentUser,
+  students,
+  schools,
+  canDeleteAnyLecture = false
+}) {
+  const centres = (schools || []).filter(Boolean);
+  const [selectedSchool, setSelectedSchool] = useState(centres[0] || '');
+  const [mode, setMode] = useState('mark');
+  const [selectedDate, setSelectedDate] = useState(getTodayDate());
+  const [selectedGrade, setSelectedGrade] = useState('11');
+  const [selectedSubject, setSelectedSubject] = useState(currentUser.subject || SUBJECTS[0]);
+  const [selectedLecture, setSelectedLecture] = useState('1');
+  const [lectures, setLectures] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [reportStart, setReportStart] = useState(getDateDaysAgo(6));
+  const [reportEnd, setReportEnd] = useState(getTodayDate());
+  const [reportGrade, setReportGrade] = useState('11');
+  const subjectOptions = Array.from(new Set([...SUBJECTS, currentUser.subject, selectedSubject].filter(Boolean)));
+  useEffect(() => {
+    if (!selectedSchool) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    const unsubscribe = db.collection('onlineClassAttendance').where('school', '==', selectedSchool).onSnapshot(snap => {
+      setLectures(snap.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      })));
+      setIsLoading(false);
+    }, err => {
+      console.error('Online class attendance load error:', err);
+      setIsLoading(false);
+      showAttendanceSavedToast('Could not load online attendance', 'error');
+    });
+    return unsubscribe;
+  }, [selectedSchool]);
+  const normalizeSchool = school => (school || '').toString().trim().toLowerCase();
+  const centreStudents = useMemo(() => students.filter(s => normalizeSchool(s.school) === normalizeSchool(selectedSchool)), [students, selectedSchool]);
+  const getGradeStudents = grade => centreStudents.filter(s => String(s.grade) === String(grade)).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const classStudents = getGradeStudents(selectedGrade);
+  const lectureId = `${selectedSchool}_${selectedGrade}_${selectedDate}_${selectedSubject}_L${selectedLecture}`.replace(/\//g, '-');
+  const currentLecture = lectures.find(l => l.id === lectureId);
+  const records = currentLecture?.records || {};
+  const presentCount = classStudents.filter(s => records[s.id]?.status === 'Present').length;
+  const absentCount = classStudents.filter(s => records[s.id]?.status === 'Absent').length;
+  const unmarkedCount = classStudents.length - presentCount - absentCount;
+  const lecturesOnDate = lectures.filter(l => l.date === selectedDate).sort((a, b) => String(a.grade).localeCompare(String(b.grade)) || (a.lecture || 0) - (b.lecture || 0));
+  const canDeleteLecture = currentLecture && (canDeleteAnyLecture || currentLecture.createdBy === currentUser.afid);
+  const countPresent = lecture => Object.values(lecture.records || {}).filter(r => r.status === 'Present').length;
+  const saveRecords = async newRecords => {
+    const data = {
+      school: selectedSchool,
+      grade: selectedGrade,
+      date: selectedDate,
+      subject: selectedSubject,
+      lecture: Number(selectedLecture),
+      records: newRecords,
+      updatedBy: currentUser.afid || '',
+      updatedByName: currentUser.name || currentUser.afid || '',
+      updatedAt: new Date().toISOString()
+    };
+    if (!currentLecture) {
+      data.createdBy = currentUser.afid || '';
+      data.createdByName = currentUser.name || currentUser.afid || '';
+      data.createdAt = data.updatedAt;
+    }
+    try {
+      await db.collection('onlineClassAttendance').doc(lectureId).set(data, {
+        merge: true
+      });
+      return true;
+    } catch (e) {
+      alert('Failed to save: ' + e.message);
+      return false;
+    }
+  };
+  const markStudent = async (student, status) => {
+    if (await saveRecords({
+      [student.id]: {
+        name: student.name || '',
+        status
+      }
+    })) {
+      showAttendanceSavedToast('✅ Saved!', 'success');
+    }
+  };
+  const markStudents = async (studentList, status) => {
+    if (studentList.length === 0) return;
+    const newRecords = {};
+    studentList.forEach(s => {
+      newRecords[s.id] = {
+        name: s.name || '',
+        status
+      };
+    });
+    setIsSaving(true);
+    const saved = await saveRecords(newRecords);
+    setIsSaving(false);
+    if (saved) showAttendanceSavedToast(`✅ ${studentList.length} students marked ${status}!`, 'success');
+  };
+  const deleteLecture = async () => {
+    if (!confirm(`Delete attendance for Class ${selectedGrade} ${selectedSubject} Lecture ${selectedLecture} on ${selectedDate}?\n\nUse this only if the lecture was entered by mistake.`)) return;
+    try {
+      setIsSaving(true);
+      await db.collection('onlineClassAttendance').doc(lectureId).delete();
+      showAttendanceSavedToast('Lecture deleted', 'warning');
+    } catch (e) {
+      alert('Failed to delete: ' + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  const openLecture = lecture => {
+    setSelectedGrade(String(lecture.grade));
+    setSelectedSubject(lecture.subject);
+    setSelectedLecture(String(lecture.lecture));
+  };
+  const reportLectures = lectures.filter(l => String(l.grade) === reportGrade && l.date >= reportStart && l.date <= reportEnd).sort((a, b) => a.date.localeCompare(b.date) || (a.lecture || 0) - (b.lecture || 0));
+  const reportStudents = getGradeStudents(reportGrade);
+  const reportRows = reportStudents.map(s => {
+    const attended = reportLectures.filter(l => l.records?.[s.id]?.status === 'Present').length;
+    return {
+      student: s,
+      attended,
+      percent: reportLectures.length ? Math.round(attended / reportLectures.length * 100) : 0
+    };
+  });
+  const downloadReport = () => {
+    if (typeof XLSX === 'undefined') {
+      alert('Excel library is still loading. Please try again in a moment.');
+      return;
+    }
+    const summary = reportRows.map(r => ({
+      'Student ID': r.student.studentId || r.student.id,
+      'Student Name': r.student.name,
+      'Class': reportGrade,
+      'Lectures Held': reportLectures.length,
+      'Lectures Attended': r.attended,
+      'Attendance %': r.percent
+    }));
+    const lectureWise = [];
+    reportLectures.forEach(l => reportStudents.forEach(s => lectureWise.push({
+      'Date': l.date,
+      'Class': l.grade,
+      'Subject': l.subject,
+      'Lecture': l.lecture,
+      'Student ID': s.studentId || s.id,
+      'Student Name': s.name,
+      'Status': l.records?.[s.id]?.status || 'Not marked',
+      'Marked By': l.updatedByName || ''
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lectureWise), 'Lecture-wise');
+    XLSX.writeFile(wb, `Online_Attendance_${selectedSchool}_Class${reportGrade}_${reportStart}_to_${reportEnd}.xlsx`.replace(/\s+/g, '_'));
+  };
+  if (centres.length === 0) {
+    return React.createElement("div", {
+      className: "bg-white p-6 rounded-2xl shadow-lg text-gray-600"
+    }, "Online class attendance is only enabled for the Kolhapur, Barwani, Cuttack and Puri centres.");
+  }
+  const tabButton = (id, label) => React.createElement("button", {
+    onClick: () => setMode(id),
+    className: `px-5 py-2 rounded-xl font-semibold ${mode === id ? 'bg-blue-600 text-white' : 'bg-gray-200'}`
+  }, label);
+  return React.createElement("div", {
+    className: "space-y-6"
+  }, React.createElement("div", null, React.createElement("h2", {
+    className: "text-3xl font-bold"
+  }, "Online Class Attendance - ", selectedSchool), React.createElement("p", {
+    className: "text-gray-600 mt-1"
+  }, "Mark students for each online lecture. Every lecture is saved separately.")), React.createElement("div", {
+    className: "flex flex-wrap items-center gap-3"
+  }, tabButton('mark', '✏️ Mark Attendance'), tabButton('report', '📊 Report'), centres.length > 1 && React.createElement("select", {
+    value: selectedSchool,
+    onChange: e => setSelectedSchool(e.target.value),
+    className: "border-2 px-4 py-2 rounded-xl"
+  }, centres.map(c => React.createElement("option", {
+    key: c,
+    value: c
+  }, c)))), isLoading ? React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg text-center text-gray-500"
+  }, "Loading...") : mode === 'mark' ? React.createElement(React.Fragment, null, React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg"
+  }, React.createElement("div", {
+    className: "grid grid-cols-2 md:grid-cols-4 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Date"), React.createElement("input", {
+    type: "date",
+    value: selectedDate,
+    max: getTodayDate(),
+    onChange: e => setSelectedDate(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Class"), React.createElement("select", {
+    value: selectedGrade,
+    onChange: e => setSelectedGrade(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  }, React.createElement("option", {
+    value: "11"
+  }, "Class 11"), React.createElement("option", {
+    value: "12"
+  }, "Class 12"))), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Subject"), React.createElement("select", {
+    value: selectedSubject,
+    onChange: e => setSelectedSubject(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  }, subjectOptions.map(sub => React.createElement("option", {
+    key: sub,
+    value: sub
+  }, sub)))), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Lecture"), React.createElement("select", {
+    value: selectedLecture,
+    onChange: e => setSelectedLecture(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  }, ONLINE_LECTURE_NUMBERS.map(n => React.createElement("option", {
+    key: n,
+    value: n
+  }, "Lecture ", n))))), React.createElement("div", {
+    className: "flex flex-wrap items-center gap-2 mt-4 text-sm"
+  }, React.createElement("span", {
+    className: "px-3 py-1 rounded-full bg-green-100 text-green-800 font-semibold"
+  }, "Present: ", presentCount), React.createElement("span", {
+    className: "px-3 py-1 rounded-full bg-red-100 text-red-800 font-semibold"
+  }, "Absent: ", absentCount), React.createElement("span", {
+    className: "px-3 py-1 rounded-full bg-gray-100 text-gray-700 font-semibold"
+  }, "Not marked: ", unmarkedCount), currentLecture && React.createElement("span", {
+    className: "text-gray-500"
+  }, "Last updated by ", currentLecture.updatedByName, " at ", new Date(currentLecture.updatedAt).toLocaleTimeString())), React.createElement("div", {
+    className: "flex flex-wrap gap-3 mt-4"
+  }, React.createElement("button", {
+    onClick: () => markStudents(classStudents, 'Present'),
+    disabled: isSaving || classStudents.length === 0,
+    className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+  }, "✅ Mark All Present"), React.createElement("button", {
+    onClick: () => markStudents(classStudents.filter(s => !records[s.id]), 'Absent'),
+    disabled: isSaving || unmarkedCount === 0,
+    className: "px-6 py-3 bg-red-600 text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+  }, "✗ Mark Remaining Absent"), canDeleteLecture && React.createElement("button", {
+    onClick: deleteLecture,
+    disabled: isSaving,
+    className: "px-6 py-3 bg-gray-200 text-gray-800 rounded-xl font-semibold disabled:opacity-50"
+  }, "🗑 Delete Lecture"))), lecturesOnDate.length > 0 && React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg"
+  }, React.createElement("h3", {
+    className: "font-bold mb-3"
+  }, "Lectures marked on ", selectedDate), React.createElement("div", {
+    className: "flex flex-wrap gap-2"
+  }, lecturesOnDate.map(l => React.createElement("button", {
+    key: l.id,
+    onClick: () => openLecture(l),
+    className: `px-4 py-2 rounded-xl border-2 text-sm text-left ${l.id === lectureId ? 'border-blue-600 bg-blue-50' : 'border-gray-200'}`
+  }, React.createElement("div", {
+    className: "font-semibold"
+  }, "Class ", l.grade, " \xB7 ", l.subject, " \xB7 L", l.lecture), React.createElement("div", {
+    className: "text-gray-600"
+  }, countPresent(l), " present"))))), React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg"
+  }, React.createElement("h3", {
+    className: "font-bold mb-4"
+  }, "Students (", classStudents.length, ")"), classStudents.length === 0 ? React.createElement("p", {
+    className: "text-center py-8 text-gray-500"
+  }, "No Class ", selectedGrade, " students found for ", selectedSchool) : React.createElement("div", {
+    className: "space-y-2"
+  }, classStudents.map(student => React.createElement("div", {
+    key: student.id,
+    className: "flex items-center justify-between gap-2 p-4 border-2 rounded-xl hover:bg-gray-50"
+  }, React.createElement("div", {
+    className: "flex-1"
+  }, React.createElement("div", {
+    className: "font-semibold text-lg"
+  }, student.name), React.createElement("div", {
+    className: "text-sm text-gray-600"
+  }, student.gender)), React.createElement("div", {
+    className: "flex gap-2"
+  }, React.createElement("button", {
+    onClick: () => markStudent(student, 'Present'),
+    className: `px-4 md:px-6 py-2 rounded-lg font-semibold ${records[student.id]?.status === 'Present' ? 'bg-green-500 text-white' : 'bg-gray-200'}`
+  }, "✓ Present"), React.createElement("button", {
+    onClick: () => markStudent(student, 'Absent'),
+    className: `px-4 md:px-6 py-2 rounded-lg font-semibold ${records[student.id]?.status === 'Absent' ? 'bg-red-500 text-white' : 'bg-gray-200'}`
+  }, "✗ Absent"))))))) : React.createElement(React.Fragment, null, React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg"
+  }, React.createElement("div", {
+    className: "grid grid-cols-2 md:grid-cols-4 gap-4"
+  }, React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "From"), React.createElement("input", {
+    type: "date",
+    value: reportStart,
+    onChange: e => setReportStart(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "To"), React.createElement("input", {
+    type: "date",
+    value: reportEnd,
+    onChange: e => setReportEnd(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  })), React.createElement("div", null, React.createElement("label", {
+    className: "block text-sm font-bold mb-2"
+  }, "Class"), React.createElement("select", {
+    value: reportGrade,
+    onChange: e => setReportGrade(e.target.value),
+    className: "w-full border-2 px-4 py-3 rounded-xl"
+  }, React.createElement("option", {
+    value: "11"
+  }, "Class 11"), React.createElement("option", {
+    value: "12"
+  }, "Class 12"))), React.createElement("div", {
+    className: "flex items-end"
+  }, React.createElement("button", {
+    onClick: downloadReport,
+    disabled: reportLectures.length === 0,
+    className: "w-full px-6 py-3 bg-green-600 text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+  }, "⬇ Download Excel")))), React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg overflow-x-auto"
+  }, React.createElement("h3", {
+    className: "font-bold mb-4"
+  }, "Lectures (", reportLectures.length, ")"), reportLectures.length === 0 ? React.createElement("p", {
+    className: "text-gray-500"
+  }, "No lectures marked for Class ", reportGrade, " in this date range.") : React.createElement("table", {
+    className: "w-full text-sm"
+  }, React.createElement("thead", null, React.createElement("tr", {
+    className: "text-left border-b-2"
+  }, React.createElement("th", {
+    className: "py-2 pr-4"
+  }, "Date"), React.createElement("th", {
+    className: "py-2 pr-4"
+  }, "Lecture"), React.createElement("th", {
+    className: "py-2 pr-4"
+  }, "Subject"), React.createElement("th", {
+    className: "py-2 pr-4"
+  }, "Present"), React.createElement("th", {
+    className: "py-2 pr-4"
+  }, "Marked By"))), React.createElement("tbody", null, reportLectures.map(l => React.createElement("tr", {
+    key: l.id,
+    className: "border-b"
+  }, React.createElement("td", {
+    className: "py-2 pr-4"
+  }, l.date), React.createElement("td", {
+    className: "py-2 pr-4"
+  }, "L", l.lecture), React.createElement("td", {
+    className: "py-2 pr-4"
+  }, l.subject), React.createElement("td", {
+    className: "py-2 pr-4"
+  }, countPresent(l), " / ", reportStudents.length), React.createElement("td", {
+    className: "py-2 pr-4"
+  }, l.updatedByName)))))), React.createElement("div", {
+    className: "bg-white p-6 rounded-2xl shadow-lg overflow-x-auto"
+  }, React.createElement("h3", {
+    className: "font-bold mb-4"
+  }, "Student-wise (", reportStudents.length, ")"), React.createElement("table", {
+    className: "w-full text-sm"
+  }, React.createElement("thead", null, React.createElement("tr", {
+    className: "text-left border-b-2"
+  }, React.createElement("th", {
+    className: "py-2 pr-4"
+  }, "Student"), React.createElement("th", {
+    className: "py-2 pr-4"
+  }, "Attended"), React.createElement("th", {
+    className: "py-2 pr-4"
+  }, "Attendance %"))), React.createElement("tbody", null, reportRows.map(r => React.createElement("tr", {
+    key: r.student.id,
+    className: "border-b"
+  }, React.createElement("td", {
+    className: "py-2 pr-4"
+  }, r.student.name), React.createElement("td", {
+    className: "py-2 pr-4"
+  }, r.attended, " / ", reportLectures.length), React.createElement("td", {
+    className: `py-2 pr-4 font-semibold ${reportLectures.length && r.percent < 75 ? 'text-red-600' : 'text-green-700'}`
+  }, reportLectures.length ? `${r.percent}%` : '-'))))))));
 }
 function AdminAttendanceAnalytics({
   students,
