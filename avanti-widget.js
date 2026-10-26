@@ -2145,10 +2145,10 @@
                     <div class="avanti-ticket-icon">🎫</div>
                     <div class="avanti-ticket-content">
                         <div class="avanti-ticket-top">
-                            <span class="avanti-ticket-id">#${t.ticketId || t.docId.substring(0, 8)}</span>
-                            <span class="avanti-ticket-status ${t.status}">${t.status}</span>
+                            <span class="avanti-ticket-id">#${this.escapeHtml(t.ticketId || t.docId.substring(0, 8))}</span>
+                            <span class="avanti-ticket-status ${this.escapeHtml(t.status || '')}">${this.escapeHtml(t.status || '')}</span>
                         </div>
-                        <div class="avanti-ticket-subject">${t.subject || 'No subject'}</div>
+                        <div class="avanti-ticket-subject">${this.escapeHtml(t.subject || 'No subject')}</div>
                         <div class="avanti-ticket-meta">
                             ${this.formatDate(t.createdAt)} • ${t.replies?.length || 0} replies
                         </div>
@@ -2196,9 +2196,8 @@
             if (t.replies && t.replies.length > 0) {
                 replies = t.replies.map(r => `
                     <div class="avanti-message ${r.isAdmin ? 'bot' : 'user'}">
-                        <div class="avanti-message-bubble">
-                            ${r.message}
-                            <div style="font-size: 11px; opacity: 0.7; margin-top: 6px;">
+                        <div class="avanti-message-bubble" style="white-space: pre-wrap;">${this.escapeHtml(r.message || '')}
+                            <div style="font-size: 11px; opacity: 0.7; margin-top: 6px; white-space: normal;">
                                 ${r.isAdmin ? 'Support' : 'You'} • ${this.formatDate(r.timestamp)}
                             </div>
                         </div>
@@ -2215,19 +2214,17 @@
                 
                 <div style="margin-bottom: 20px;">
                     <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
-                        <span class="avanti-ticket-id" style="font-size: 16px;">#${t.ticketId || docId.substring(0, 8)}</span>
-                        <span class="avanti-ticket-status ${t.status}">${t.status}</span>
+                        <span class="avanti-ticket-id" style="font-size: 16px;">#${this.escapeHtml(t.ticketId || docId.substring(0, 8))}</span>
+                        <span class="avanti-ticket-status ${this.escapeHtml(t.status || '')}">${this.escapeHtml(t.status || '')}</span>
                     </div>
-                    <h2 style="font-size: 18px; font-weight: 700; color: var(--km-text);">${t.subject || 'No subject'}</h2>
+                    <h2 style="font-size: 18px; font-weight: 700; color: var(--km-text);">${this.escapeHtml(t.subject || 'No subject')}</h2>
                     <p style="font-size: 13px; color: var(--km-text-muted); margin-top: 4px;">
                         Created ${this.formatDate(t.createdAt)}
                     </p>
                 </div>
                 
                 <div style="background: #FFFFFF; border-radius: 12px; padding: 16px; margin-bottom: 20px; border: 1px solid var(--km-border);">
-                    <p style="font-size: 14px; color: var(--km-text); line-height: 1.6;">
-                        ${t.description || 'No description'}
-                    </p>
+                    <p style="font-size: 14px; color: var(--km-text); line-height: 1.6; white-space: pre-wrap;">${this.escapeHtml(t.description || 'No description')}</p>
                 </div>
                 
                 ${t.screenshotUrl ? `

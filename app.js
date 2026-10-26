@@ -473,6 +473,28 @@ function cacheSchools(schools) {
   ALL_SCHOOLS_COUNT = SCHOOLS.length;
   console.log('📊 [Schools] Initialized with', cached.length > 0 ? 'cached' : 'approved', 'schools:', SCHOOLS.join(', '));
 })();
+
+// A teacher can work at more than one centre (e.g. sent to another JNV on deputation).
+// `school` stays their home centre and `additionalSchools` lists the others. The centre
+// they are working at is remembered per device and applied as currentUser.school (with
+// the home centre kept in currentUser.homeSchool), so every school-scoped page follows it.
+function getTeacherSchools(teacher) {
+  if (!teacher) return [];
+  const extra = Array.isArray(teacher.additionalSchools) ? teacher.additionalSchools : [];
+  return [...new Set([teacher.homeSchool || teacher.school, ...extra].filter(Boolean))];
+}
+function applyActiveSchool(user) {
+  if (!user || user.homeSchool || !Array.isArray(user.additionalSchools) || user.additionalSchools.length === 0) return user;
+  let active = null;
+  try {
+    active = localStorage.getItem('activeSchool_' + user.afid);
+  } catch (e) {}
+  return {
+    ...user,
+    homeSchool: user.school,
+    school: getTeacherSchools(user).includes(active) ? active : user.school
+  };
+}
 const MANAGER_ROLES = {
   SUPER_ADMIN: 'super_admin',
   DIRECTOR: 'director',
@@ -686,17 +708,6 @@ const DataSyncManager = {
 if (typeof window !== 'undefined') {
   DataSyncManager.init();
 }
-const LEAVE_REASONS = ['Present', 'Personal Leave', 'Sick Leave', 'Weekly Off', 'Public Holiday', 'Organization Holiday', 'School Holiday', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Comp Off'];
-const LEAVE_ENTITLEMENTS = {
-  'Personal Leave': 35,
-  'Sick Leave': 35,
-  'Emergency Leave': 35,
-  'Maternity Leave': 180,
-  'Paternity Leave': 15
-};
-const ENTITLED_LEAVE_TYPES = ['Personal Leave', 'Sick Leave', 'Emergency Leave'];
-const MATERNITY_LEAVE_TYPES = ['Maternity Leave'];
-const PATERNITY_LEAVE_TYPES = ['Paternity Leave'];
 const ASSET_CATEGORIES = ['Physics', 'Chemistry', 'Maths', 'Biology', 'General', 'Competition', 'Other'];
 const ASSET_TYPES = ['book', 'chromebook'];
 const CLASSROOM_OBSERVATION_PARAMETERS = [{
@@ -1049,49 +1060,6 @@ const CLASSROOM_OBSERVATION_PARAMETERS = [{
   }]
 }];
 const MAX_OBSERVATION_SCORE = CLASSROOM_OBSERVATION_PARAMETERS.reduce((sum, p) => sum + p.maxScore, 0);
-function calculateLeaveBalance(teacherAttendance, teacherId, leaveAdjustments = {}) {
-  const teacherLeaves = teacherAttendance.filter(a => a.teacherId === teacherId && a.status === 'On Leave');
-  let entitledUsed = 0;
-  let maternityUsed = 0;
-  let paternityUsed = 0;
-  teacherLeaves.forEach(leave => {
-    if (ENTITLED_LEAVE_TYPES.includes(leave.reason)) {
-      entitledUsed++;
-    } else if (MATERNITY_LEAVE_TYPES.includes(leave.reason)) {
-      maternityUsed++;
-    } else if (PATERNITY_LEAVE_TYPES.includes(leave.reason)) {
-      paternityUsed++;
-    }
-  });
-  const adjustment = leaveAdjustments[teacherId] || {
-    entitled: 0,
-    maternity: 0,
-    paternity: 0
-  };
-  entitledUsed += adjustment.entitled || 0;
-  maternityUsed += adjustment.maternity || 0;
-  paternityUsed += adjustment.paternity || 0;
-  return {
-    entitled: {
-      total: 35,
-      used: Math.max(0, entitledUsed),
-      remaining: Math.min(35, Math.max(0, 35 - entitledUsed)),
-      adjustment: adjustment.entitled || 0
-    },
-    maternity: {
-      total: 180,
-      used: Math.max(0, maternityUsed),
-      remaining: Math.min(180, Math.max(0, 180 - maternityUsed)),
-      adjustment: adjustment.maternity || 0
-    },
-    paternity: {
-      total: 15,
-      used: Math.max(0, paternityUsed),
-      remaining: Math.min(15, Math.max(0, 15 - paternityUsed)),
-      adjustment: adjustment.paternity || 0
-    }
-  };
-}
 const GENDERS = ['Male', 'Female', 'Other'];
 const isEditing = true;
 function TeacherProfileModal({
@@ -4644,7 +4612,8 @@ function MaintenanceScreen({ onAdminLogin }) {
   );
 }
 function App() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUserState] = useState(null);
+  const setCurrentUser = useCallback(user => setCurrentUserState(applyActiveSchool(user)), []);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -4665,13 +4634,13 @@ function App() {
   const [curriculum, setCurriculum] = useState({});
   const [chapterProgress, setChapterProgress] = useState({});
   const [students, setStudents] = useState([]);
+  const [studentsStatus, setStudentsStatus] = useState('loading');
+  const reloadStudentsRef = useRef(null);
   const [managers, setManagers] = useState([]);
   const [accessibleSchools, setAccessibleSchools] = useState([]);
   const [academicYearSettings, setAcademicYearSettings] = useState(null);
   const [precomputedRankings, setPrecomputedRankings] = useState(null);
   const [studentAttendance, setStudentAttendance] = useState([]);
-  const [teacherAttendance, setTeacherAttendance] = useState([]);
-  const [leaveAdjustments, setLeaveAdjustments] = useState({});
   const [schoolInfo, setSchoolInfo] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -5142,11 +5111,112 @@ function App() {
       }
       return false;
     };
+    const userIsAdmin = currentUser && (currentUser.email === 'admin@avantifellows.org' || currentUser.role === 'super_admin' || currentUser.role === 'program_head' || currentUser.role === 'program_manager' || currentUser.role === 'associate_program_manager' || currentUser.role === 'aph' || currentUser.role === 'senior_pm' || currentUser.role === 'pm' || currentUser.role === 'apm' || currentUser.role === 'director' || currentUser.role === 'assoc_director' || currentUser.role === 'training');
+
+    // ✅ FIX: Students load on their own, in parallel with everything else.
+    // Previously they were fetched last inside fetchData (after ~50s of other
+    // queries on slow networks), were never cached, and any failure - or
+    // Firestore answering from an empty offline cache - left the list empty
+    // with no retry, so teachers saw "Students (0)" on the attendance page.
+    let studentsCancelled = false;
+    let studentsRetryTimer = null;
+    let studentsRetryCount = 0;
+    const STUDENTS_RETRY_DELAYS = [3000, 10000, 30000];
+    const toStudent = d => {
+      const data = d.data();
+      let studentId = data.id;
+      if (!studentId) {
+        const parts = d.id.split('_');
+        studentId = parts[parts.length - 1];
+      }
+      return {
+        ...data,
+        id: studentId,
+        docId: d.id
+      };
+    };
+    const withTimeout = (promise, ms) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout after ' + ms + 'ms')), ms))]);
+    const fetchStudents = async () => {
+      clearTimeout(studentsRetryTimer);
+      if (currentUser.userType === 'student') {
+        setStudentsStatus('ready');
+        return;
+      }
+      const teacherSchool = currentUser.school;
+      const cacheKey = 'students_' + (userIsAdmin ? 'all' : teacherSchool || 'none');
+      let hasCachedStudents = false;
+      try {
+        const cached = await window.DataCacheManager.loadFromCache(cacheKey);
+        if (!studentsCancelled && cached?.students?.length) {
+          setStudents(cached.students);
+          setStudentsStatus('ready');
+          hasCachedStudents = true;
+          console.log('📦 Showing', cached.students.length, 'cached students while refreshing');
+        }
+      } catch (e) {
+        console.log('Students cache load skipped:', e.message);
+      }
+      try {
+        let studentsData;
+        if (userIsAdmin) {
+          console.log('📊 Admin detected - fetching ALL students');
+          const allStudentsSnap = await withTimeout(db.collection('students').get(), 30000);
+          if (allStudentsSnap.empty && allStudentsSnap.metadata.fromCache) throw new Error('offline - Firestore returned an empty local cache');
+          studentsData = allStudentsSnap.docs.map(toStudent);
+          console.log('✅ Admin loaded ALL', studentsData.length, 'students');
+        } else if (!teacherSchool) {
+          console.warn('⚠️ Teacher has no school set - no students to load');
+          studentsData = [];
+        } else {
+          console.log('📊 Teacher detected - fetching students for:', teacherSchool);
+          const schoolStudentsSnap = await withTimeout(db.collection('students').where('school', '==', teacherSchool).get(), 30000);
+          // With offline persistence on, a failed network read resolves from the
+          // local cache instead of erroring. Empty + fromCache means "unknown",
+          // not "this school has no students" - retry instead of showing 0.
+          if (schoolStudentsSnap.empty && schoolStudentsSnap.metadata.fromCache) throw new Error('offline - Firestore returned an empty local cache');
+          studentsData = schoolStudentsSnap.docs.map(toStudent);
+          console.log('✅ Teacher loaded', studentsData.length, 'students for', teacherSchool);
+          if (studentsData.length === 0) {
+            console.log('⚠️ No students found with exact match, trying case-insensitive search...');
+            try {
+              const allStudentsSnap = await withTimeout(db.collection('students').get(), 30000);
+              const teacherSchoolLower = teacherSchool.toString().trim().toLowerCase();
+              studentsData = allStudentsSnap.docs.filter(d => (d.data().school || '').toString().trim().toLowerCase() === teacherSchoolLower).map(toStudent);
+              console.log('✅ Case-insensitive search found', studentsData.length, 'students');
+            } catch (e) {
+              console.log('Case-insensitive search skipped:', e.message);
+            }
+          }
+        }
+        if (studentsCancelled) return;
+        setStudents(studentsData);
+        setStudentsStatus('ready');
+        studentsRetryCount = 0;
+        window.DataCacheManager.saveToCache(cacheKey, {
+          students: studentsData
+        });
+        if (window.SmartSyncManager) window.SmartSyncManager.markSynced('students');
+      } catch (e) {
+        if (studentsCancelled) return;
+        console.error('❌ Error fetching students:', e);
+        if (!hasCachedStudents) setStudentsStatus('error');
+        if (studentsRetryCount < STUDENTS_RETRY_DELAYS.length) {
+          const delay = STUDENTS_RETRY_DELAYS[studentsRetryCount++];
+          console.log('🔁 Retrying students fetch in', delay / 1000, 's');
+          studentsRetryTimer = setTimeout(fetchStudents, delay);
+        }
+      }
+    };
+    reloadStudentsRef.current = () => {
+      studentsRetryCount = 0;
+      setStudentsStatus('loading');
+      fetchStudents();
+    };
     const fetchData = async () => {
+      fetchStudents();
       try {
         const hasCachedData = loadCachedData();
         const userSchool = currentUser?.school;
-        const userIsAdmin = currentUser && (currentUser.email === 'admin@avantifellows.org' || currentUser.role === 'super_admin' || currentUser.role === 'program_head' || currentUser.role === 'program_manager' || currentUser.role === 'associate_program_manager' || currentUser.role === 'aph' || currentUser.role === 'senior_pm' || currentUser.role === 'pm' || currentUser.role === 'apm' || currentUser.role === 'director' || currentUser.role === 'assoc_director' || currentUser.role === 'training');
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         console.log('📊 Fetching critical data...');
         if (window.updateShellStatus) window.updateShellStatus('Loading teachers...');
@@ -5172,9 +5242,8 @@ function App() {
           const cachedTeachers = await window.DataCacheManager.loadFromCache('teachers_' + (userSchool || 'all'));
           const cachedCurriculum = await window.DataCacheManager.loadFromCache('curriculum');
           const cachedStudentAtt = await window.DataCacheManager.loadFromCache('studentAttendance_' + (userSchool || 'all'));
-          const cachedTeacherAtt = await window.DataCacheManager.loadFromCache('teacherAttendance_' + (userSchool || 'all'));
           const cachedProgress = await window.DataCacheManager.loadFromCache('chapterProgress');
-          if (cachedTeachers?.docs?.length || cachedCurriculum?.docs?.length || cachedStudentAtt?.docs?.length || cachedTeacherAtt?.docs?.length) {
+          if (cachedTeachers?.docs?.length || cachedCurriculum?.docs?.length || cachedStudentAtt?.docs?.length) {
             console.log('✅ Found cached data - displaying immediately');
             usedCache = true;
             if (cachedTeachers?.docs) {
@@ -5193,12 +5262,6 @@ function App() {
             }
             if (cachedStudentAtt?.docs) {
               setStudentAttendance(cachedStudentAtt.docs.map(d => ({
-                ...d.data,
-                docId: d.id
-              })));
-            }
-            if (cachedTeacherAtt?.docs) {
-              setTeacherAttendance(cachedTeacherAtt.docs.map(d => ({
                 ...d.data,
                 docId: d.id
               })));
@@ -5230,7 +5293,12 @@ function App() {
         if (userIsAdmin || !userSchool) {
           teachersQuery = db.collection('teachers').get();
         } else {
-          teachersQuery = db.collection('teachers').where('school', '==', userSchool).get();
+          // Also include teachers from other centres who work here too (additionalSchools)
+          teachersQuery = Promise.all([db.collection('teachers').where('school', '==', userSchool).get(), db.collection('teachers').where('additionalSchools', 'array-contains', userSchool).get().catch(() => ({
+            docs: []
+          }))]).then(([homeSnap, extraSnap]) => ({
+            docs: [...homeSnap.docs, ...extraSnap.docs.filter(d => !homeSnap.docs.some(h => h.id === d.id))]
+          }));
         }
         const [teachersSnap, curriculumSnap, managersSnap, aySnap] = await Promise.all([timeoutPromise(teachersQuery, 20000), timeoutPromise(db.collection('curriculum').get(), 20000), timeoutPromise(db.collection('managers').where('status', '==', 'active').get(), 15000), timeoutPromise(db.collection('system').doc('academicYear').get(), 10000, {
           exists: false
@@ -5281,17 +5349,15 @@ function App() {
         }
         console.log('📊 Fetching secondary data...');
         if (window.updateShellStatus) window.updateShellStatus('Loading curriculum...');
-        let progressQuery, studentAttQuery, teacherAttQuery;
+        let progressQuery, studentAttQuery;
         if (userIsAdmin || !userSchool) {
           progressQuery = db.collection('chapterProgress').get();
           studentAttQuery = db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get();
-          teacherAttQuery = db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get();
         } else {
           progressQuery = db.collection('chapterProgress').get();
           studentAttQuery = fetchWithIndexFallback(db.collection('studentAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(), db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get(), data => data.school === userSchool, 'studentAttendance');
-          teacherAttQuery = fetchWithIndexFallback(db.collection('teacherAttendance').where('school', '==', userSchool).where('date', '>=', thirtyDaysAgo).get(), db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get(), data => data.school === userSchool, 'teacherAttendance');
         }
-        const [progressSnap, studentAttSnap, teacherAttSnap, schoolInfoSnap, leaveAdjSnap, schoolsSnap, rankingsSnap] = await Promise.all([timeoutPromise(progressQuery, 25000), timeoutPromise(studentAttQuery, 30000), timeoutPromise(teacherAttQuery, 30000), timeoutPromise(db.collection('schoolInfo').get(), 20000), timeoutPromise(db.collection('leaveAdjustments').get(), 15000), timeoutPromise(db.collection('schoolsList').get(), 15000), timeoutPromise(db.collection('system').doc('schoolRankings').get(), 10000, {
+        const [progressSnap, studentAttSnap, schoolInfoSnap, schoolsSnap, rankingsSnap] = await Promise.all([timeoutPromise(progressQuery, 25000), timeoutPromise(studentAttQuery, 30000), timeoutPromise(db.collection('schoolInfo').get(), 20000), timeoutPromise(db.collection('schoolsList').get(), 15000), timeoutPromise(db.collection('system').doc('schoolRankings').get(), 10000, {
           exists: false
         })]);
         if (window._logLoadTime) window._logLoadTime('Secondary data loaded');
@@ -5314,102 +5380,7 @@ function App() {
             return newCount >= prevCount ? { ...(prev || {}), ...progressMap } : prev;
           });
         }
-        let studentsData = [];
-        if (currentUser && currentUser.userType !== 'student') {
-          if (userIsAdmin) {
-            console.log('📊 Admin detected - fetching ALL students');
-            const allStudentsSnap = await db.collection('students').get();
-            studentsData = allStudentsSnap.docs.map(d => {
-              const data = d.data();
-              let studentId = data.id;
-              if (!studentId) {
-                const parts = d.id.split('_');
-                studentId = parts[parts.length - 1];
-              }
-              return {
-                ...data,
-                id: studentId,
-                docId: d.id
-              };
-            });
-            console.log('✅ Admin loaded ALL', studentsData.length, 'students');
-          } else {
-            const teacherSchool = currentUser.school;
-            console.log('📊 Teacher detected - fetching students for:', teacherSchool);
-            try {
-              const schoolStudentsSnap = await db.collection('students').where('school', '==', teacherSchool).get();
-              studentsData = schoolStudentsSnap.docs.map(d => {
-                const data = d.data();
-                let studentId = data.id;
-                if (!studentId) {
-                  const parts = d.id.split('_');
-                  studentId = parts[parts.length - 1];
-                }
-                return {
-                  ...data,
-                  id: studentId,
-                  docId: d.id
-                };
-              });
-              console.log('✅ Teacher loaded', studentsData.length, 'students for', teacherSchool);
-              if (studentsData.length === 0) {
-                console.log('⚠️ No students found with exact match, trying case-insensitive search...');
-                const allStudentsSnap = await db.collection('students').get();
-                const teacherSchoolLower = (teacherSchool || '').toString().trim().toLowerCase();
-                studentsData = allStudentsSnap.docs.filter(d => {
-                  const studentSchool = (d.data().school || '').toString().trim().toLowerCase();
-                  return studentSchool === teacherSchoolLower;
-                }).map(d => {
-                  const data = d.data();
-                  let studentId = data.id;
-                  if (!studentId) {
-                    const parts = d.id.split('_');
-                    studentId = parts[parts.length - 1];
-                  }
-                  return {
-                    ...data,
-                    id: studentId,
-                    docId: d.id
-                  };
-                });
-                console.log('✅ Case-insensitive search found', studentsData.length, 'students');
-                if (studentsData.length > 0 && allStudentsSnap.docs.length > 0) {
-                  const sampleSchools = Array.from(new Set(allStudentsSnap.docs.map(d => d.data().school))).slice(0, 5);
-                  console.log('📋 Sample school names in database:', sampleSchools);
-                  console.log('📋 Teacher school name:', teacherSchool);
-                }
-              }
-            } catch (e) {
-              console.error('❌ Error fetching students:', e);
-              console.log('⚠️ Fallback: Fetching all students and filtering...');
-              const allStudentsSnap = await db.collection('students').get();
-              const teacherSchoolLower = (teacherSchool || '').toString().trim().toLowerCase();
-              studentsData = allStudentsSnap.docs.filter(d => {
-                const studentSchool = (d.data().school || '').toString().trim().toLowerCase();
-                return studentSchool === teacherSchoolLower;
-              }).map(d => {
-                const data = d.data();
-                let studentId = data.id;
-                if (!studentId) {
-                  const parts = d.id.split('_');
-                  studentId = parts[parts.length - 1];
-                }
-                return {
-                  ...data,
-                  id: studentId,
-                  docId: d.id
-                };
-              });
-              console.log('✅ Fallback loaded', studentsData.length, 'students');
-            }
-          }
-        }
-        setStudents(studentsData);
         const studentAttData = (studentAttSnap.docs || []).map(d => ({
-          ...d.data(),
-          docId: d.id
-        }));
-        const teacherAttData = (teacherAttSnap.docs || []).map(d => ({
           ...d.data(),
           docId: d.id
         }));
@@ -5424,18 +5395,6 @@ function App() {
           console.log('✅ Student attendance loaded:', studentAttData.length, 'records');
         } else {
           console.log('⚠️ Student attendance query returned empty - keeping cached data');
-        }
-        if (teacherAttData.length > 0 || !usedCache) {
-          setTeacherAttendance(teacherAttData);
-          window.DataCacheManager.saveToCache('teacherAttendance_' + (userSchool || 'all'), {
-            docs: (teacherAttSnap.docs || []).map(d => ({
-              id: d.id,
-              data: d.data()
-            }))
-          });
-          console.log('✅ Teacher attendance loaded:', teacherAttData.length, 'records');
-        } else {
-          console.log('⚠️ Teacher attendance query returned empty - keeping cached data');
         }
         const progressData = (progressSnap.docs || []).map(d => ({
           id: d.id,
@@ -5455,11 +5414,6 @@ function App() {
           console.log('📊 Sample school info schools:', schoolInfoData.slice(0, 3).map(s => s.school));
         }
         setSchoolInfo(schoolInfoData);
-        const adjMap = {};
-        (leaveAdjSnap.docs || []).forEach(d => {
-          adjMap[d.id] = d.data();
-        });
-        setLeaveAdjustments(adjMap);
         const schoolsListData = (schoolsSnap.docs || []).map(d => d.data().name).filter(Boolean);
         SCHOOLS = schoolsListData.length > 0 ? schoolsListData : [...APPROVED_SCHOOLS];
         ALL_SCHOOLS_COUNT = SCHOOLS.length;
@@ -5471,7 +5425,6 @@ function App() {
           window.SmartSyncManager.markSynced('teachers');
           window.SmartSyncManager.markSynced('curriculum');
           window.SmartSyncManager.markSynced('attendance');
-          window.SmartSyncManager.markSynced('students');
           window.SmartSyncManager.markSynced('rankings');
         }
       } catch (e) {
@@ -5485,12 +5438,8 @@ function App() {
       try {
         const userSchool = currentUser?.school;
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const [studentAttSnap, teacherAttSnap] = await Promise.all([db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get(), db.collection('teacherAttendance').where('date', '>=', thirtyDaysAgo).get()]);
+        const studentAttSnap = await db.collection('studentAttendance').where('date', '>=', thirtyDaysAgo).get();
         const studentAttData = studentAttSnap.docs.map(d => ({
-          ...d.data(),
-          docId: d.id
-        }));
-        const teacherAttData = teacherAttSnap.docs.map(d => ({
           ...d.data(),
           docId: d.id
         }));
@@ -5503,16 +5452,7 @@ function App() {
             }))
           });
         }
-        if (teacherAttData.length > 0) {
-          setTeacherAttendance(teacherAttData);
-          window.DataCacheManager.saveToCache('teacherAttendance_' + (userSchool || 'all'), {
-            docs: teacherAttSnap.docs.map(d => ({
-              id: d.id,
-              data: d.data()
-            }))
-          });
-        }
-        console.log('[SmartSync] ✅ Attendance synced:', studentAttData.length, 'student,', teacherAttData.length, 'teacher records');
+        console.log('[SmartSync] ✅ Attendance synced:', studentAttData.length, 'student records');
         if (window.SmartSyncManager) window.SmartSyncManager.markSynced('attendance');
       } catch (e) {
         console.error('[SmartSync] Attendance fetch error:', e);
@@ -5594,6 +5534,8 @@ function App() {
     window._smartRefreshData = handleSmartRefresh;
     window._forceFullRefresh = fetchData;
     return () => {
+      studentsCancelled = true;
+      clearTimeout(studentsRetryTimer);
       if (window.SmartSyncManager) {
         window.SmartSyncManager.clearInterval('attendance');
         window.SmartSyncManager.clearInterval('curriculum');
@@ -6187,11 +6129,8 @@ function App() {
     curriculum: curriculum,
     chapterProgress: chapterProgress,
     studentAttendance: studentAttendance,
-    teacherAttendance: teacherAttendance,
     schoolInfo: schoolInfo,
     setSchoolInfo: setSchoolInfo,
-    leaveAdjustments: leaveAdjustments,
-    setLeaveAdjustments: setLeaveAdjustments,
     managers: managers,
     isSuperAdmin: isSuperAdmin,
     accessibleSchools: accessibleSchools,
@@ -6209,220 +6148,18 @@ function App() {
     curriculum: curriculum,
     chapterProgress: chapterProgress,
     studentAttendance: studentAttendance,
-    teacherAttendance: teacherAttendance,
     schoolInfo: schoolInfo,
     setSchoolInfo: setSchoolInfo,
     updateChapterProgress: updateChapterProgress,
     activeTab: activeTab,
     setActiveTab: setActiveTab,
-    leaveAdjustments: leaveAdjustments,
     floatingCelebration: floatingCelebration,
     setFloatingCelebration: setFloatingCelebration,
     precomputedRankings: precomputedRankings,
-    managers: managers
+    managers: managers,
+    studentsStatus: studentsStatus,
+    onReloadStudents: () => reloadStudentsRef.current && reloadStudentsRef.current()
   }));
-}
-function APCTeacherAttendanceView({
-  currentUser,
-  teachers,
-  teacherAttendance,
-  leaveAdjustments
-}) {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [viewMode, setViewMode] = useState('daily');
-  const mySchool = currentUser.school;
-  const schoolTeachers = teachers.filter(t => t.school === mySchool && !t.isArchived && t.role !== 'apc');
-  const getDailyAttendance = () => {
-    return teacherAttendance.filter(att => att.date === selectedDate && att.school === mySchool);
-  };
-  const getMonthlyAttendance = () => {
-    const monthStart = selectedMonth + '-01';
-    const monthEnd = selectedMonth + '-31';
-    return teacherAttendance.filter(att => att.school === mySchool && att.date >= monthStart && att.date <= monthEnd);
-  };
-  const dailyAttendance = getDailyAttendance();
-  const monthlyAttendance = getMonthlyAttendance();
-  const presentToday = dailyAttendance.filter(a => a.status === 'Present').length;
-  const absentToday = schoolTeachers.length - presentToday;
-  const getTeacherMonthlyStats = teacherAfid => {
-    const teacherAtt = monthlyAttendance.filter(a => a.teacherId === teacherAfid || a.afid === teacherAfid);
-    const present = teacherAtt.filter(a => a.status === 'Present').length;
-    const leaves = teacherAtt.filter(a => a.status !== 'Present').length;
-    return {
-      present,
-      leaves,
-      total: teacherAtt.length
-    };
-  };
-  const findTeacherAttendance = teacherAfid => {
-    return dailyAttendance.find(a => a.teacherId === teacherAfid || a.afid === teacherAfid);
-  };
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("div", {
-    className: "flex flex-col md:flex-row md:items-center md:justify-between gap-4"
-  }, React.createElement("div", null, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "\uD83D\uDC68\u200D\uD83C\uDFEB Teacher Attendance"), React.createElement("p", {
-    className: "text-gray-600 mt-1"
-  }, mySchool, " - View Only"), React.createElement("span", {
-    className: "inline-block mt-2 px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm font-semibold"
-  }, "\uD83D\uDC64 APC View")), React.createElement("div", {
-    className: "flex items-center gap-2"
-  }, React.createElement("button", {
-    onClick: () => setViewMode('daily'),
-    className: `px-4 py-2 rounded-xl font-semibold ${viewMode === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`
-  }, "\uD83D\uDCC5 Daily View"), React.createElement("button", {
-    onClick: () => setViewMode('monthly'),
-    className: `px-4 py-2 rounded-xl font-semibold ${viewMode === 'monthly' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`
-  }, "\uD83D\uDCCA Monthly View"))), viewMode === 'daily' ? React.createElement(React.Fragment, null, React.createElement("div", {
-    className: "bg-white p-4 rounded-2xl shadow-lg"
-  }, React.createElement("div", {
-    className: "flex flex-wrap items-center gap-4"
-  }, React.createElement("label", {
-    className: "font-bold"
-  }, "Select Date:"), React.createElement("input", {
-    type: "date",
-    value: selectedDate,
-    onChange: e => setSelectedDate(e.target.value),
-    className: "px-4 py-2 border-2 rounded-xl"
-  }), React.createElement("div", {
-    className: "flex gap-2"
-  }, React.createElement("button", {
-    onClick: () => {
-      const d = new Date(selectedDate);
-      d.setDate(d.getDate() - 1);
-      setSelectedDate(d.toISOString().split('T')[0]);
-    },
-    className: "px-3 py-2 bg-gray-200 rounded-lg"
-  }, "\u25C0 Prev"), React.createElement("button", {
-    onClick: () => setSelectedDate(new Date().toISOString().split('T')[0]),
-    className: "px-3 py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold"
-  }, "Today"), React.createElement("button", {
-    onClick: () => {
-      const d = new Date(selectedDate);
-      d.setDate(d.getDate() + 1);
-      setSelectedDate(d.toISOString().split('T')[0]);
-    },
-    className: "px-3 py-2 bg-gray-200 rounded-lg"
-  }, "Next \u25B6")))), React.createElement("div", {
-    className: "grid grid-cols-2 md:grid-cols-4 gap-4"
-  }, React.createElement("div", {
-    className: "bg-white p-4 rounded-xl shadow text-center"
-  }, React.createElement("div", {
-    className: "text-3xl font-bold text-blue-600"
-  }, schoolTeachers.length), React.createElement("div", {
-    className: "text-sm text-gray-600"
-  }, "Total Teachers")), React.createElement("div", {
-    className: "bg-green-50 p-4 rounded-xl shadow text-center"
-  }, React.createElement("div", {
-    className: "text-3xl font-bold text-green-600"
-  }, presentToday), React.createElement("div", {
-    className: "text-sm text-gray-600"
-  }, "Present")), React.createElement("div", {
-    className: "bg-red-50 p-4 rounded-xl shadow text-center"
-  }, React.createElement("div", {
-    className: "text-3xl font-bold text-red-600"
-  }, absentToday), React.createElement("div", {
-    className: "text-sm text-gray-600"
-  }, "Absent/Leave")), React.createElement("div", {
-    className: "bg-purple-50 p-4 rounded-xl shadow text-center"
-  }, React.createElement("div", {
-    className: "text-3xl font-bold text-purple-600"
-  }, schoolTeachers.length > 0 ? Math.round(presentToday / schoolTeachers.length * 100) : 0, "%"), React.createElement("div", {
-    className: "text-sm text-gray-600"
-  }, "Attendance Rate"))), React.createElement("div", {
-    className: "bg-white rounded-2xl shadow-lg overflow-hidden"
-  }, React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "bg-gray-100"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Teacher"), React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Subject"), React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Status"), React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Check-in Time"))), React.createElement("tbody", null, schoolTeachers.map(teacher => {
-    const att = findTeacherAttendance(teacher.afid);
-    return React.createElement("tr", {
-      key: teacher.afid,
-      className: "border-b hover:bg-gray-50"
-    }, React.createElement("td", {
-      className: "p-4"
-    }, React.createElement("div", {
-      className: "font-semibold"
-    }, teacher.name), React.createElement("div", {
-      className: "text-xs text-gray-500"
-    }, teacher.afid)), React.createElement("td", {
-      className: "p-4"
-    }, teacher.subject), React.createElement("td", {
-      className: "p-4"
-    }, att ? React.createElement("span", {
-      className: `px-3 py-1 rounded-full text-sm font-semibold ${att.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`
-    }, att.status) : React.createElement("span", {
-      className: "px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-500"
-    }, "Not Marked")), React.createElement("td", {
-      className: "p-4 text-sm text-gray-600"
-    }, att?.punchInTime || att?.checkInTime || '—'));
-  }))))) : React.createElement(React.Fragment, null, React.createElement("div", {
-    className: "bg-white p-4 rounded-2xl shadow-lg"
-  }, React.createElement("div", {
-    className: "flex flex-wrap items-center gap-4"
-  }, React.createElement("label", {
-    className: "font-bold"
-  }, "Select Month:"), React.createElement("input", {
-    type: "month",
-    value: selectedMonth,
-    onChange: e => setSelectedMonth(e.target.value),
-    className: "px-4 py-2 border-2 rounded-xl"
-  }))), React.createElement("div", {
-    className: "bg-white rounded-2xl shadow-lg overflow-hidden"
-  }, React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "bg-gray-100"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Teacher"), React.createElement("th", {
-    className: "p-4 text-left"
-  }, "Subject"), React.createElement("th", {
-    className: "p-4 text-center"
-  }, "Days Present"), React.createElement("th", {
-    className: "p-4 text-center"
-  }, "Days Leave"), React.createElement("th", {
-    className: "p-4 text-center"
-  }, "Attendance %"))), React.createElement("tbody", null, schoolTeachers.map(teacher => {
-    const stats = getTeacherMonthlyStats(teacher.afid);
-    const percentage = stats.total > 0 ? Math.round(stats.present / stats.total * 100) : 0;
-    return React.createElement("tr", {
-      key: teacher.afid,
-      className: "border-b hover:bg-gray-50"
-    }, React.createElement("td", {
-      className: "p-4"
-    }, React.createElement("div", {
-      className: "font-semibold"
-    }, teacher.name), React.createElement("div", {
-      className: "text-xs text-gray-500"
-    }, teacher.afid)), React.createElement("td", {
-      className: "p-4"
-    }, teacher.subject), React.createElement("td", {
-      className: "p-4 text-center"
-    }, React.createElement("span", {
-      className: "font-bold text-green-600"
-    }, stats.present)), React.createElement("td", {
-      className: "p-4 text-center"
-    }, React.createElement("span", {
-      className: "font-bold text-orange-600"
-    }, stats.leaves)), React.createElement("td", {
-      className: "p-4 text-center"
-    }, React.createElement("span", {
-      className: `px-3 py-1 rounded-full text-sm font-bold ${percentage >= 90 ? 'bg-green-100 text-green-700' : percentage >= 75 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'}`
-    }, percentage, "%")));
-  }))))));
 }
 function TeacherView({
   currentUser,
@@ -6435,19 +6172,30 @@ function TeacherView({
   curriculum,
   chapterProgress,
   studentAttendance,
-  teacherAttendance,
   schoolInfo,
   setSchoolInfo,
   updateChapterProgress,
   activeTab,
   setActiveTab,
-  leaveAdjustments,
   floatingCelebration,
   setFloatingCelebration,
   precomputedRankings,
-  managers = []
+  managers = [],
+  studentsStatus,
+  onReloadStudents
 }) {
   const isAPC = currentUser.userType === 'apc' || currentUser.role === 'apc' || currentUser.role === MANAGER_ROLES.APC;
+  const myCentres = getTeacherSchools(currentUser);
+  const switchCentre = school => {
+    if (!school || school === currentUser.school) return;
+    try {
+      localStorage.setItem('activeSchool_' + currentUser.afid, school);
+      // The quick-start cache holds the previous centre's teachers; don't flash them.
+      localStorage.removeItem('cachedAppData');
+    } catch (e) {}
+    // Reload so every page and cached list is rebuilt for the new centre.
+    window.location.reload();
+  };
   const teacherTabs = isAPC ? [{
     id: 'directory',
     label: 'Directory',
@@ -6473,16 +6221,22 @@ function TeacherView({
       className: "fa-solid fa-calendar-check"
     })
   }, {
-    id: 'teacherattview',
-    label: 'Teacher Attendance',
+    id: 'myattendance',
+    label: 'My Attendance',
     icon: React.createElement("i", {
-      className: "fa-solid fa-chalkboard-user"
+      className: "fa-solid fa-location-dot"
     })
   }, {
     id: 'assets',
     label: 'Asset Management',
     icon: React.createElement("i", {
       className: "fa-solid fa-boxes-stacked"
+    })
+  }, {
+    id: 'students',
+    label: 'Students',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-user-graduate"
     })
   }, {
     id: 'timetable',
@@ -6515,10 +6269,22 @@ function TeacherView({
       className: "fa-solid fa-calendar-check"
     })
   }, {
+    id: 'myattendance',
+    label: 'My Attendance',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-location-dot"
+    })
+  }, {
     id: 'assets',
     label: 'Asset Management',
     icon: React.createElement("i", {
       className: "fa-solid fa-boxes-stacked"
+    })
+  }, {
+    id: 'students',
+    label: 'Students',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-user-graduate"
     })
   }, {
     id: 'timetable',
@@ -6790,14 +6556,24 @@ function TeacherView({
     className: "avanti-gradient text-white text-center py-4 text-xl font-bold"
   }, celebrationMessage), React.createElement("div", {
     className: "px-4 py-6"
-  }, React.createElement(ProfileCompletionBanner, {
+  }, myCentres.length > 1 && React.createElement("div", {
+    className: `mb-4 p-3 rounded-xl border-2 flex items-center gap-3 flex-wrap ${darkMode ? 'bg-gray-800 border-gray-600 text-gray-100' : 'bg-blue-50 border-blue-200 text-blue-800'}`
+  }, React.createElement("span", {
+    className: "text-sm font-semibold"
+  }, React.createElement("i", {
+    className: "fa-solid fa-school mr-2"
+  }), "Working at:"), React.createElement("select", {
+    value: currentUser.school,
+    onChange: e => switchCentre(e.target.value),
+    className: "border-2 border-blue-300 px-3 py-1.5 rounded-lg text-sm font-semibold bg-white text-gray-800"
+  }, myCentres.map(s => React.createElement("option", {
+    key: s,
+    value: s
+  }, s === currentUser.homeSchool ? `${s} (home centre)` : s))), React.createElement("span", {
+    className: "text-xs opacity-75"
+  }, "You are assigned to ", myCentres.length, " centres. Students, curriculum, attendance and timetable follow the centre selected here.")), React.createElement(ProfileCompletionBanner, {
     currentUser: currentUser,
     onNavigateToProfile: () => setActiveTab('myprofile')
-  }), activeTab === 'teacherattview' && React.createElement(APCTeacherAttendanceView, {
-    currentUser: currentUser,
-    teachers: teachers,
-    teacherAttendance: teacherAttendance,
-    leaveAdjustments: leaveAdjustments
   }), activeTab === 'directory' && React.createElement(OrgChartDirectory, {
     teachers: teachers,
     currentUser: currentUser
@@ -6807,8 +6583,11 @@ function TeacherView({
   }), activeTab === 'attendance' && React.createElement(StudentAttendanceView, {
     currentUser: currentUser,
     students: students,
-    studentAttendance: studentAttendance
-  }), activeTab === 'onlineattendance' && React.createElement(OnlineClassAttendance, {
+    studentAttendance: studentAttendance,
+    studentsStatus: studentsStatus,
+    onReloadStudents: onReloadStudents
+  }), activeTab === 'onlineattendance' && isOnlineClassCentre(currentUser.school) && React.createElement(OnlineClassAttendance, {
+    key: currentUser.school,
     currentUser: currentUser,
     students: students,
     schools: [currentUser.school]
@@ -6816,14 +6595,21 @@ function TeacherView({
     currentUser: currentUser,
     students: students,
     teachers: teachers,
-    studentAttendance: studentAttendance,
-    teacherAttendance: teacherAttendance
+    studentAttendance: studentAttendance
+  }), activeTab === 'myattendance' && React.createElement(TeacherSelfAttendanceView, {
+    currentUser: currentUser
   }), activeTab === 'timetable' && React.createElement(TimetablePage, {
     currentUser: currentUser,
     mySchool: currentUser?.school
   }), activeTab === 'assets' && React.createElement(AssetManagement, {
     currentUser: currentUser,
     students: students
+  }), activeTab === 'students' && React.createElement(StudentManagement, {
+    students: students,
+    isSuperAdmin: false,
+    isDirector: false,
+    accessibleSchools: [currentUser?.school],
+    canEdit: true
   }), activeTab === 'socialwall' && React.createElement(SocialWall, {
     teachers: teachers,
     currentUser: currentUser
@@ -7854,7 +7640,7 @@ function APCManagement() {
     className: "text-teal-700 text-sm"
   }, "Academic Program Coordinators (APCs) have school-level access to:"), React.createElement("ul", {
     className: "mt-2 text-teal-700 text-sm space-y-1"
-  }, React.createElement("li", null, "\u2705 View syllabus/curriculum progress (all subjects)"), React.createElement("li", null, "\u2705 Mark student attendance"), React.createElement("li", null, "\u2705 View teacher attendance"), React.createElement("li", null, "\u2705 View analytics and dashboards"), React.createElement("li", null, "\u274C Cannot edit curriculum or chapters"), React.createElement("li", null, "\u274C Cannot add/edit teachers or students"))), React.createElement("div", {
+  }, React.createElement("li", null, "\u2705 View syllabus/curriculum progress (all subjects)"), React.createElement("li", null, "\u2705 Mark student attendance"), React.createElement("li", null, "\u2705 View analytics and dashboards"), React.createElement("li", null, "\u274C Cannot edit curriculum or chapters"), React.createElement("li", null, "\u274C Cannot add/edit teachers or students"))), React.createElement("div", {
     className: "grid grid-cols-2 md:grid-cols-3 gap-4"
   }, React.createElement("div", {
     className: "bg-white p-4 rounded-xl shadow text-center"
@@ -8269,1066 +8055,6 @@ function BirthdaysPage({
     day: 'numeric'
   }))))))));
 }
-function TeacherManagement({
-  teachers,
-  teacherAttendance,
-  leaveAdjustments,
-  setLeaveAdjustments,
-  isSuperAdmin = false
-}) {
-  const [showModal, setShowModal] = useState(false);
-  const [editingTeacher, setEditingTeacher] = useState(null);
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [selectedTeacherLeave, setSelectedTeacherLeave] = useState(null);
-  const [isEditingLeave, setIsEditingLeave] = useState(false);
-  const [leaveForm, setLeaveForm] = useState({
-    entitled: 0,
-    maternity: 0,
-    paternity: 0
-  });
-  const [savingLeave, setSavingLeave] = useState(false);
-  const [form, setForm] = useState({
-    name: '',
-    afid: '',
-    afCode: '',
-    email: '',
-    password: '',
-    dob: '',
-    joiningDate: '',
-    subject: '',
-    school: '',
-    phone: '',
-    role: 'teacher'
-  });
-  const [showArchiveModal, setShowArchiveModal] = useState(false);
-  const [teacherToArchive, setTeacherToArchive] = useState(null);
-  const [archiveReason, setArchiveReason] = useState('');
-  const [archiveNotes, setArchiveNotes] = useState('');
-  const [archiving, setArchiving] = useState(false);
-  const [showArchivedTeachers, setShowArchivedTeachers] = useState(false);
-  const [showBulkImport, setShowBulkImport] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [importResults, setImportResults] = useState(null);
-  const bulkFileInputRef = useRef(null);
-  const handleBulkCSVImport = e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    Papa.parse(file, {
-      complete: async results => {
-        try {
-          setIsImporting(true);
-          setImportResults(null);
-          const rows = results.data;
-          if (rows.length < 2) {
-            alert('CSV file is empty or has no data rows');
-            setIsImporting(false);
-            return;
-          }
-          const teachersToAdd = [];
-          const errors = [];
-          const firebaseAuthList = [];
-          rows.forEach((row, index) => {
-            if (index === 0) return;
-            const afid = row[0] ? row[0].trim() : '';
-            const afCode = row[1] ? row[1].trim() : '';
-            const name = row[2] ? row[2].trim() : '';
-            const email = row[3] ? row[3].trim().toLowerCase() : '';
-            const password = row[4] ? row[4].trim() : '';
-            const subject = row[5] ? row[5].trim() : '';
-            const school = row[6] ? row[6].trim() : '';
-            const dob = row[7] ? row[7].trim() : '';
-            const joiningDate = row[8] ? row[8].trim() : '';
-            const phone = row[9] ? row[9].trim() : '';
-            if (!afid || !name || !email || !subject || !school) {
-              if (afid || name || email) {
-                errors.push(`Row ${index + 1}: Missing required fields (AFID, Name, Email, Subject, or School)`);
-              }
-              return;
-            }
-            if (!SUBJECTS.includes(subject)) {
-              errors.push(`Row ${index + 1}: Invalid subject "${subject}". Must be one of: ${SUBJECTS.join(', ')}`);
-              return;
-            }
-            if (!SCHOOLS.includes(school)) {
-              errors.push(`Row ${index + 1}: Invalid school "${school}". Must be one of: ${SCHOOLS.join(', ')}`);
-              return;
-            }
-            if (teachersToAdd.some(t => t.afid === afid)) {
-              errors.push(`Row ${index + 1}: Duplicate AFID "${afid}" in CSV`);
-              return;
-            }
-            teachersToAdd.push({
-              afid,
-              afCode: afCode || null,
-              name,
-              email,
-              subject,
-              school,
-              dob: dob || null,
-              joiningDate: joiningDate || null,
-              phone: phone || null,
-              isArchived: false
-            });
-            if (password) {
-              firebaseAuthList.push({
-                email,
-                password,
-                name,
-                afid
-              });
-            }
-          });
-          if (teachersToAdd.length === 0) {
-            alert('No valid teachers found in CSV.\n\nErrors:\n' + errors.join('\n'));
-            setIsImporting(false);
-            return;
-          }
-          const existingAFIDs = teachers.map(t => t.afid);
-          const duplicates = teachersToAdd.filter(t => existingAFIDs.includes(t.afid));
-          if (duplicates.length > 0) {
-            const proceed = confirm(`⚠️ Warning: ${duplicates.length} teacher(s) already exist with these AFIDs:\n${duplicates.map(d => `• ${d.afid} - ${d.name}`).join('\n')}\n\nDo you want to UPDATE these existing teachers?\n\nClick OK to update existing + add new, or Cancel to abort.`);
-            if (!proceed) {
-              setIsImporting(false);
-              if (bulkFileInputRef.current) bulkFileInputRef.current.value = '';
-              return;
-            }
-          }
-          let successCount = 0;
-          let failCount = 0;
-          for (const teacher of teachersToAdd) {
-            try {
-              await db.collection('teachers').doc(teacher.afid).set(teacher);
-              successCount++;
-            } catch (err) {
-              failCount++;
-              errors.push(`Failed to save ${teacher.name} (${teacher.afid}): ${err.message}`);
-            }
-          }
-          setIsImporting(false);
-          setImportResults({
-            success: successCount,
-            failed: failCount,
-            errors,
-            firebaseAuth: firebaseAuthList
-          });
-          if (bulkFileInputRef.current) bulkFileInputRef.current.value = '';
-        } catch (e) {
-          setIsImporting(false);
-          alert('Import failed: ' + e.message);
-        }
-      },
-      error: () => {
-        setIsImporting(false);
-        alert('Failed to parse CSV file');
-      }
-    });
-  };
-  const openAddModal = () => {
-    setEditingTeacher(null);
-    setForm({
-      name: '',
-      afid: '',
-      afCode: '',
-      email: '',
-      password: '',
-      dob: '',
-      joiningDate: '',
-      subject: '',
-      school: '',
-      phone: '',
-      role: 'teacher'
-    });
-    setShowModal(true);
-  };
-  const openEditModal = teacher => {
-    setEditingTeacher(teacher);
-    setForm({
-      ...teacher,
-      password: '',
-      role: teacher.role || 'teacher'
-    });
-    setShowModal(true);
-  };
-  const openLeaveModal = async teacher => {
-    setShowLeaveModal(true);
-    setSelectedTeacherLeave({ teacher, balance: null });
-    setIsEditingLeave(false);
-    const currentAdj = (leaveAdjustments || {})[teacher.afid] || { entitled: 0, maternity: 0, paternity: 0 };
-    setLeaveForm({ entitled: currentAdj.entitled || 0, maternity: currentAdj.maternity || 0, paternity: currentAdj.paternity || 0 });
-    try {
-      const snap = await db.collection('teacherAttendance')
-        .where('teacherId', '==', teacher.afid)
-        .where('status', '==', 'On Leave')
-        .get();
-      const fullLeaves = snap.docs.map(d => d.data());
-      const balance = calculateLeaveBalance(fullLeaves, teacher.afid, leaveAdjustments || {});
-      setSelectedTeacherLeave({ teacher, balance });
-    } catch (e) {
-      const balance = calculateLeaveBalance(teacherAttendance || [], teacher.afid, leaveAdjustments || {});
-      setSelectedTeacherLeave({ teacher, balance });
-    }
-  };
-  const handleSaveLeaveAdjustment = async () => {
-    if (!selectedTeacherLeave) return;
-    setSavingLeave(true);
-    try {
-      const teacherId = selectedTeacherLeave.teacher.afid;
-      await db.collection('leaveAdjustments').doc(teacherId).set({
-        entitled: parseInt(leaveForm.entitled) || 0,
-        maternity: parseInt(leaveForm.maternity) || 0,
-        paternity: parseInt(leaveForm.paternity) || 0,
-        updatedAt: new Date().toISOString(),
-        updatedBy: 'admin'
-      });
-      setLeaveAdjustments(prev => ({
-        ...prev,
-        [teacherId]: {
-          entitled: parseInt(leaveForm.entitled) || 0,
-          maternity: parseInt(leaveForm.maternity) || 0,
-          paternity: parseInt(leaveForm.paternity) || 0
-        }
-      }));
-      const newBalance = calculateLeaveBalance(teacherAttendance || [], teacherId, {
-        ...leaveAdjustments,
-        [teacherId]: {
-          entitled: parseInt(leaveForm.entitled) || 0,
-          maternity: parseInt(leaveForm.maternity) || 0,
-          paternity: parseInt(leaveForm.paternity) || 0
-        }
-      });
-      setSelectedTeacherLeave({
-        ...selectedTeacherLeave,
-        balance: newBalance
-      });
-      setIsEditingLeave(false);
-      alert('Leave adjustment saved successfully!');
-    } catch (e) {
-      alert('Failed to save: ' + e.message);
-    } finally {
-      setSavingLeave(false);
-    }
-  };
-  const handleResetLeaveAdjustment = async () => {
-    if (!selectedTeacherLeave) return;
-    if (!confirm(`Reset all leave adjustments for ${selectedTeacherLeave.teacher.name} to zero?\n\nThis will remove any manual adjustments so the balance reflects only system-tracked leaves.`)) return;
-    setSavingLeave(true);
-    try {
-      const teacherId = selectedTeacherLeave.teacher.afid;
-      await db.collection('leaveAdjustments').doc(teacherId).set({ entitled: 0, maternity: 0, paternity: 0, updatedAt: new Date().toISOString(), updatedBy: 'admin' });
-      const newAdjs = { ...leaveAdjustments, [teacherId]: { entitled: 0, maternity: 0, paternity: 0 } };
-      setLeaveAdjustments(newAdjs);
-      setLeaveForm({ entitled: 0, maternity: 0, paternity: 0 });
-      const snap = await db.collection('teacherAttendance').where('teacherId', '==', teacherId).where('status', '==', 'On Leave').get();
-      const newBalance = calculateLeaveBalance(snap.docs.map(d => d.data()), teacherId, newAdjs);
-      setSelectedTeacherLeave({ ...selectedTeacherLeave, balance: newBalance });
-      alert('✅ Leave adjustments reset to zero!');
-    } catch (e) {
-      alert('Failed to reset: ' + e.message);
-    } finally {
-      setSavingLeave(false);
-    }
-  };
-  const handleSave = async () => {
-    if (!form.afid || !form.name || !form.email || !form.subject || !form.school) {
-      alert('Please fill all required fields (AFID, Name, Email, Subject, School)');
-      return;
-    }
-    try {
-      await db.collection('teachers').doc(form.afid).set({
-        afid: form.afid,
-        afCode: form.afCode || null,
-        name: form.name,
-        email: form.email.toLowerCase(),
-        subject: form.subject,
-        school: form.school,
-        dob: form.dob || null,
-        joiningDate: form.joiningDate || null,
-        phone: form.phone || null,
-        role: form.role || 'teacher',
-        isArchived: form.isArchived || false,
-        archiveReason: form.archiveReason || null,
-        archiveNotes: form.archiveNotes || null,
-        archivedAt: form.archivedAt || null
-      });
-      if (!editingTeacher && form.password) {
-        alert(`Teacher added!\n\nCREATE FIREBASE AUTH:\n1. Firebase Console → Authentication\n2. Add User\n3. Email: ${form.email}\n4. Password: ${form.password}`);
-      } else {
-        alert(form.role === 'apc' ? 'APC updated!' : 'Teacher updated!');
-      }
-      setShowModal(false);
-    } catch (e) {
-      alert('Failed: ' + e.message);
-    }
-  };
-  const openArchiveModal = teacher => {
-    setTeacherToArchive(teacher);
-    setArchiveReason('');
-    setArchiveNotes('');
-    setShowArchiveModal(true);
-  };
-  const handleArchive = async () => {
-    if (!archiveReason) {
-      alert('Please select a reason for archiving');
-      return;
-    }
-    setArchiving(true);
-    try {
-      await db.collection('teachers').doc(teacherToArchive.afid).update({
-        isArchived: true,
-        archiveReason: archiveReason,
-        archiveNotes: archiveNotes || '',
-        archivedAt: new Date().toISOString(),
-        archivedBy: 'admin'
-      });
-      alert(`✅ ${teacherToArchive.name} has been archived.\n\nReason: ${archiveReason}\n\n• All curriculum data is preserved\n• Student feedback history is preserved\n• A new teacher can be assigned to continue`);
-      setShowArchiveModal(false);
-      setTeacherToArchive(null);
-    } catch (e) {
-      alert('Failed to archive: ' + e.message);
-    } finally {
-      setArchiving(false);
-    }
-  };
-  const handleRestore = async teacher => {
-    if (!confirm(`Restore ${teacher.name} as an active teacher?`)) return;
-    try {
-      await db.collection('teachers').doc(teacher.afid).update({
-        isArchived: false,
-        archiveReason: null,
-        archiveNotes: null,
-        archivedAt: null,
-        archivedBy: null,
-        restoredAt: new Date().toISOString()
-      });
-      alert(`✅ ${teacher.name} has been restored as an active teacher.`);
-    } catch (e) {
-      alert('Failed to restore: ' + e.message);
-    }
-  };
-  const handlePermanentDelete = async teacher => {
-    if (!confirm(`⚠️ PERMANENT DELETE\n\nAre you sure you want to permanently delete ${teacher.name}?\n\nThis action cannot be undone.\nNote: Historical data (feedback, observations) will remain but show "Deleted Teacher".`)) return;
-    try {
-      await db.collection('teachers').doc(teacher.afid).delete();
-      alert('Teacher permanently deleted.');
-    } catch (e) {
-      alert('Failed to delete: ' + e.message);
-    }
-  };
-  const activeTeachers = teachers.filter(t => !t.isArchived);
-  const archivedTeachers = teachers.filter(t => t.isArchived);
-  const getLeaveBalanceDisplay = teacherId => {
-    const balance = calculateLeaveBalance(teacherAttendance || [], teacherId, leaveAdjustments || {});
-    return balance;
-  };
-  return React.createElement("div", {
-    className: "space-y-6"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center flex-wrap gap-4"
-  }, React.createElement("h2", {
-    className: "text-3xl font-bold"
-  }, "Teacher Management"), React.createElement("div", {
-    className: "flex items-center gap-4"
-  }, React.createElement("label", {
-    className: "flex items-center gap-2 cursor-pointer"
-  }, React.createElement("input", {
-    type: "checkbox",
-    checked: showArchivedTeachers,
-    onChange: e => setShowArchivedTeachers(e.target.checked),
-    className: "w-5 h-5"
-  }), React.createElement("span", {
-    className: "text-sm font-medium"
-  }, "Show Archived (", archivedTeachers.length, ")")), isSuperAdmin && React.createElement("button", {
-    onClick: openAddModal,
-    className: "px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold"
-  }, "+ Add Teacher"))), isSuperAdmin && React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg border-2 border-purple-200"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-4"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold text-purple-700"
-  }, "\uD83D\uDCE4 Bulk Import Teachers"), React.createElement("button", {
-    onClick: () => setShowBulkImport(!showBulkImport),
-    className: "px-4 py-2 bg-purple-100 text-purple-700 rounded-lg font-semibold hover:bg-purple-200"
-  }, showBulkImport ? '▲ Hide' : '▼ Expand')), showBulkImport && React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", {
-    className: "p-4 bg-purple-50 border-2 border-purple-200 rounded-xl"
-  }, React.createElement("p", {
-    className: "font-bold text-purple-800 mb-2"
-  }, "\uD83D\uDCCB CSV Format (10 columns):"), React.createElement("div", {
-    className: "text-sm text-purple-700 space-y-1"
-  }, React.createElement("p", null, React.createElement("strong", null, "Column A:"), " AFID * (unique identifier)"), React.createElement("p", null, React.createElement("strong", null, "Column B:"), " AF Code (e.g., AF355)"), React.createElement("p", null, React.createElement("strong", null, "Column C:"), " Name *"), React.createElement("p", null, React.createElement("strong", null, "Column D:"), " Email *"), React.createElement("p", null, React.createElement("strong", null, "Column E:"), " Password (for new teachers - you'll need to create in Firebase Auth)"), React.createElement("p", null, React.createElement("strong", null, "Column F:"), " Subject * (", SUBJECTS.join(', '), ")"), React.createElement("p", null, React.createElement("strong", null, "Column G:"), " School * (must match exactly: ", SCHOOLS.join(', '), ")"), React.createElement("p", null, React.createElement("strong", null, "Column H:"), " Date of Birth (YYYY-MM-DD)"), React.createElement("p", null, React.createElement("strong", null, "Column I:"), " Joining Date (YYYY-MM-DD)"), React.createElement("p", null, React.createElement("strong", null, "Column J:"), " Phone")), React.createElement("p", {
-    className: "text-xs text-purple-600 mt-2"
-  }, "* Required fields")), React.createElement("div", {
-    className: "bg-white p-3 rounded-lg text-xs font-mono overflow-x-auto border"
-  }, React.createElement("table", {
-    className: "w-full border-collapse"
-  }, React.createElement("thead", null, React.createElement("tr", {
-    className: "bg-gray-100"
-  }, React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "AFID"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "AF Code"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Name"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Email"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Password"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Subject"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "School"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "DOB"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Joining"), React.createElement("th", {
-    className: "border p-1 text-left"
-  }, "Phone"))), React.createElement("tbody", null, React.createElement("tr", null, React.createElement("td", {
-    className: "border p-1"
-  }, "T001"), React.createElement("td", {
-    className: "border p-1"
-  }, "AF355"), React.createElement("td", {
-    className: "border p-1"
-  }, "Rahul Sharma"), React.createElement("td", {
-    className: "border p-1"
-  }, "rahul@avanti.org"), React.createElement("td", {
-    className: "border p-1"
-  }, "pass123"), React.createElement("td", {
-    className: "border p-1"
-  }, "Physics"), React.createElement("td", {
-    className: "border p-1"
-  }, "CoE Barwani"), React.createElement("td", {
-    className: "border p-1"
-  }, "1990-05-15"), React.createElement("td", {
-    className: "border p-1"
-  }, "2023-06-01"), React.createElement("td", {
-    className: "border p-1"
-  }, "9876543210")), React.createElement("tr", {
-    className: "bg-gray-50"
-  }, React.createElement("td", {
-    className: "border p-1"
-  }, "T002"), React.createElement("td", {
-    className: "border p-1"
-  }, "AF356"), React.createElement("td", {
-    className: "border p-1"
-  }, "Priya Patel"), React.createElement("td", {
-    className: "border p-1"
-  }, "priya@avanti.org"), React.createElement("td", {
-    className: "border p-1"
-  }, "pass456"), React.createElement("td", {
-    className: "border p-1"
-  }, "Chemistry"), React.createElement("td", {
-    className: "border p-1"
-  }, "CoE Bundi"), React.createElement("td", {
-    className: "border p-1"
-  }, "1992-08-20"), React.createElement("td", {
-    className: "border p-1"
-  }, "2024-01-15"), React.createElement("td", {
-    className: "border p-1"
-  }, "9876543211"))))), React.createElement("div", {
-    className: "flex gap-3"
-  }, React.createElement("label", {
-    className: `flex-1 px-6 py-4 ${!isImporting ? 'bg-purple-600 hover:bg-purple-700 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'} text-white rounded-xl font-semibold text-center transition-all`
-  }, isImporting ? React.createElement("span", {
-    className: "flex items-center justify-center gap-2"
-  }, React.createElement("svg", {
-    className: "animate-spin h-5 w-5",
-    viewBox: "0 0 24 24"
-  }, React.createElement("circle", {
-    className: "opacity-25",
-    cx: "12",
-    cy: "12",
-    r: "10",
-    stroke: "currentColor",
-    strokeWidth: "4",
-    fill: "none"
-  }), React.createElement("path", {
-    className: "opacity-75",
-    fill: "currentColor",
-    d: "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-  })), "Importing Teachers...") : '📤 Select CSV File to Import', React.createElement("input", {
-    ref: bulkFileInputRef,
-    type: "file",
-    accept: ".csv",
-    onChange: handleBulkCSVImport,
-    disabled: isImporting,
-    className: "hidden"
-  }))), importResults && React.createElement("div", {
-    className: `p-4 rounded-xl ${importResults.failed > 0 ? 'bg-yellow-50 border-2 border-yellow-300' : 'bg-green-50 border-2 border-green-300'}`
-  }, React.createElement("h4", {
-    className: "font-bold text-lg mb-2"
-  }, importResults.failed > 0 ? '⚠️ Import Completed with Warnings' : '✅ Import Successful!'), React.createElement("div", {
-    className: "space-y-2 text-sm"
-  }, React.createElement("p", {
-    className: "text-green-700"
-  }, "\u2713 ", importResults.success, " teacher(s) imported successfully"), importResults.failed > 0 && React.createElement("p", {
-    className: "text-red-700"
-  }, "\u2717 ", importResults.failed, " teacher(s) failed"), importResults.errors.length > 0 && React.createElement("div", {
-    className: "mt-3 p-3 bg-red-50 rounded-lg"
-  }, React.createElement("p", {
-    className: "font-bold text-red-700 mb-1"
-  }, "Errors:"), React.createElement("ul", {
-    className: "text-red-600 text-xs space-y-1 max-h-32 overflow-y-auto"
-  }, importResults.errors.map((err, i) => React.createElement("li", {
-    key: i
-  }, "\u2022 ", err)))), importResults.firebaseAuth.length > 0 && React.createElement("div", {
-    className: "mt-3 p-3 bg-blue-50 rounded-lg"
-  }, React.createElement("p", {
-    className: "font-bold text-blue-700 mb-2"
-  }, "\uD83D\uDD10 Firebase Authentication Required:"), React.createElement("p", {
-    className: "text-blue-600 text-xs mb-2"
-  }, "Create these users in Firebase Console \u2192 Authentication \u2192 Add User:"), React.createElement("div", {
-    className: "bg-white rounded p-2 max-h-40 overflow-y-auto"
-  }, React.createElement("table", {
-    className: "w-full text-xs"
-  }, React.createElement("thead", null, React.createElement("tr", {
-    className: "bg-gray-100"
-  }, React.createElement("th", {
-    className: "p-1 text-left"
-  }, "Email"), React.createElement("th", {
-    className: "p-1 text-left"
-  }, "Password"), React.createElement("th", {
-    className: "p-1 text-left"
-  }, "Name"))), React.createElement("tbody", null, importResults.firebaseAuth.map((auth, i) => React.createElement("tr", {
-    key: i,
-    className: "border-b"
-  }, React.createElement("td", {
-    className: "p-1 font-mono"
-  }, auth.email), React.createElement("td", {
-    className: "p-1 font-mono"
-  }, auth.password), React.createElement("td", {
-    className: "p-1"
-  }, auth.name)))))))), React.createElement("button", {
-    onClick: () => setImportResults(null),
-    className: "mt-3 px-4 py-2 bg-gray-200 rounded-lg text-sm font-medium hover:bg-gray-300"
-  }, "Dismiss")))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg overflow-x-auto"
-  }, React.createElement("h3", {
-    className: "text-lg font-bold mb-4 text-green-600"
-  }, "\u2705 Active Teachers & APCs (", activeTeachers.length, ")"), React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "avanti-gradient-light"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-3 text-left"
-  }, "AFID"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "AF Code"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Name"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Role"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Email"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Subject"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "School"), React.createElement("th", {
-    className: "p-3 text-center"
-  }, "Leave Balance"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Actions"))), React.createElement("tbody", null, activeTeachers.map(t => {
-    const balance = getLeaveBalanceDisplay(t.afid);
-    return React.createElement("tr", {
-      key: t.id,
-      className: "border-b hover:bg-gray-50"
-    }, React.createElement("td", {
-      className: "p-3 font-mono"
-    }, t.afid), React.createElement("td", {
-      className: "p-3 font-mono text-blue-600"
-    }, t.afCode || '—'), React.createElement("td", {
-      className: "p-3"
-    }, t.name), React.createElement("td", {
-      className: "p-3"
-    }, React.createElement("span", {
-      className: `px-2 py-1 rounded-full text-xs font-semibold ${t.role === 'apc' ? 'bg-teal-100 text-teal-700' : 'bg-blue-100 text-blue-700'}`
-    }, t.role === 'apc' ? '📋 APC' : '👨‍🏫 Teacher')), React.createElement("td", {
-      className: "p-3 text-sm"
-    }, t.email), React.createElement("td", {
-      className: "p-3"
-    }, t.subject), React.createElement("td", {
-      className: "p-3"
-    }, t.school), React.createElement("td", {
-      className: "p-3"
-    }, React.createElement("button", {
-      onClick: () => openLeaveModal(t),
-      className: "flex flex-col items-center gap-1 w-full hover:bg-gray-100 p-2 rounded-lg transition-colors"
-    }, React.createElement("div", {
-      className: "flex gap-2 text-xs"
-    }, React.createElement("span", {
-      className: "px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full",
-      title: "Entitled Leave"
-    }, "E: ", balance.entitled.remaining, "/", balance.entitled.total)), React.createElement("div", {
-      className: "flex gap-2 text-xs"
-    }, React.createElement("span", {
-      className: "px-2 py-0.5 bg-pink-100 text-pink-700 rounded-full",
-      title: "Maternity Leave"
-    }, "M: ", balance.maternity.remaining), React.createElement("span", {
-      className: "px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full",
-      title: "Paternity Leave"
-    }, "P: ", balance.paternity.remaining)), React.createElement("span", {
-      className: "text-xs text-gray-400"
-    }, "Click to view/edit"))), React.createElement("td", {
-      className: "p-3"
-    }, isSuperAdmin ? React.createElement("div", {
-      className: "flex gap-2"
-    }, React.createElement("button", {
-      onClick: () => openEditModal(t),
-      className: "px-3 py-1 bg-yellow-400 rounded-lg"
-    }, "Edit"), React.createElement("button", {
-      onClick: () => openArchiveModal(t),
-      className: "px-3 py-1 bg-orange-500 text-white rounded-lg",
-      title: "Archive instead of delete"
-    }, "Archive")) : React.createElement("span", {
-      className: "text-gray-400 text-sm"
-    }, "View Only")));
-  })))), showArchivedTeachers && archivedTeachers.length > 0 && React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg overflow-x-auto border-2 border-red-200"
-  }, React.createElement("h3", {
-    className: "text-lg font-bold mb-4 text-red-600"
-  }, "\uD83D\uDCE6 Archived Teachers (", archivedTeachers.length, ")"), React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "bg-red-50"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-3 text-left"
-  }, "AFID"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Name"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Subject"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "School"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Archive Reason"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Archived Date"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Actions"))), React.createElement("tbody", null, archivedTeachers.map(t => React.createElement("tr", {
-    key: t.id,
-    className: "border-b bg-red-50/50 hover:bg-red-100/50"
-  }, React.createElement("td", {
-    className: "p-3 font-mono text-red-700"
-  }, t.afid), React.createElement("td", {
-    className: "p-3 text-red-700 font-medium"
-  }, t.name), React.createElement("td", {
-    className: "p-3 text-red-600"
-  }, t.subject), React.createElement("td", {
-    className: "p-3 text-red-600"
-  }, t.school), React.createElement("td", {
-    className: "p-3"
-  }, React.createElement("span", {
-    className: `px-2 py-1 rounded-full text-xs font-bold ${t.archiveReason === 'Resigned' ? 'bg-yellow-100 text-yellow-800' : t.archiveReason === 'Removed' ? 'bg-red-100 text-red-800' : t.archiveReason === 'Transferred' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`
-  }, t.archiveReason || 'Unknown'), t.archiveNotes && React.createElement("div", {
-    className: "text-xs text-gray-500 mt-1",
-    title: t.archiveNotes
-  }, "\uD83D\uDCDD ", t.archiveNotes.length > 30 ? t.archiveNotes.slice(0, 30) + '...' : t.archiveNotes)), React.createElement("td", {
-    className: "p-3 text-sm text-gray-600"
-  }, t.archivedAt ? new Date(t.archivedAt).toLocaleDateString() : '—'), React.createElement("td", {
-    className: "p-3"
-  }, isSuperAdmin && React.createElement("div", {
-    className: "flex gap-2"
-  }, React.createElement("button", {
-    onClick: () => handleRestore(t),
-    className: "px-3 py-1 bg-green-500 text-white rounded-lg text-sm"
-  }, "Restore"), React.createElement("button", {
-    onClick: () => handlePermanentDelete(t),
-    className: "px-3 py-1 bg-red-600 text-white rounded-lg text-sm"
-  }, "Delete")))))))), showLeaveModal && selectedTeacherLeave && React.createElement("div", {
-    className: "modal-overlay",
-    onClick: () => {
-      setShowLeaveModal(false);
-      setIsEditingLeave(false);
-    }
-  }, React.createElement("div", {
-    className: "modal-content max-w-lg",
-    onClick: e => e.stopPropagation()
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-4"
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold"
-  }, "\uD83D\uDCCA Leave Balance - ", selectedTeacherLeave.teacher.name), !isEditingLeave && isSuperAdmin && React.createElement("div", { className: "flex gap-2" },
-    React.createElement("button", {
-      onClick: () => setIsEditingLeave(true),
-      className: "px-4 py-2 bg-yellow-400 rounded-lg font-semibold text-sm"
-    }, "\u270F\uFE0F Edit"),
-    React.createElement("button", {
-      onClick: handleResetLeaveAdjustment,
-      disabled: savingLeave,
-      className: "px-4 py-2 bg-red-100 text-red-700 rounded-lg font-semibold text-sm hover:bg-red-200 disabled:opacity-50"
-    }, savingLeave ? '...' : '\uD83D\uDD04 Reset'))), isEditingLeave ? React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", {
-    className: "bg-yellow-50 p-4 rounded-xl border-2 border-yellow-300 mb-4"
-  }, React.createElement("p", {
-    className: "text-sm text-yellow-800"
-  }, React.createElement("strong", null, "\uD83D\uDEE1\uFE0F Admin Leave Override:"), " Use positive values to reduce a teacher\u2019s leave balance (mark as used), or negative values to add back leave (increase remaining). Set to 0 to reset to system-tracked leaves only."), React.createElement("button", {
-    onClick: () => setLeaveForm({ entitled: 0, maternity: 0, paternity: 0 }),
-    className: "mt-2 px-3 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-semibold hover:bg-red-200"
-  }, "\uD83D\uDD04 Reset All Adjustments to 0")), React.createElement("div", {
-    className: "bg-blue-50 p-4 rounded-xl border-2 border-blue-200"
-  }, React.createElement("label", {
-    className: "block font-bold text-blue-800 mb-2"
-  }, "Entitled Leave Adjustment"), React.createElement("div", {
-    className: "flex items-center gap-3"
-  }, React.createElement("input", {
-    type: "number",
-    min: "-35",
-    max: "35",
-    value: leaveForm.entitled,
-    onChange: e => setLeaveForm({
-      ...leaveForm,
-      entitled: Math.min(35, Math.max(-35, parseInt(e.target.value) || 0))
-    }),
-    className: "w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
-  }), React.createElement("span", {
-    className: "text-blue-700"
-  }, leaveForm.entitled >= 0 ? "days deducted (reduces balance)" : "days added back (increases balance)")), React.createElement("p", {
-    className: "text-xs text-blue-600 mt-2"
-  }, "Range: -35 to +35 days (Personal, Sick, Emergency combined)")), React.createElement("div", {
-    className: "bg-pink-50 p-4 rounded-xl border-2 border-pink-200"
-  }, React.createElement("label", {
-    className: "block font-bold text-pink-800 mb-2"
-  }, "Maternity Leave Adjustment"), React.createElement("div", {
-    className: "flex items-center gap-3"
-  }, React.createElement("input", {
-    type: "number",
-    min: "-180",
-    max: "180",
-    value: leaveForm.maternity,
-    onChange: e => setLeaveForm({
-      ...leaveForm,
-      maternity: Math.min(180, Math.max(-180, parseInt(e.target.value) || 0))
-    }),
-    className: "w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
-  }), React.createElement("span", {
-    className: "text-pink-700"
-  }, leaveForm.maternity >= 0 ? "days deducted (reduces balance)" : "days added back (increases balance)")), React.createElement("p", {
-    className: "text-xs text-pink-600 mt-2"
-  }, "Range: -180 to +180 days")), React.createElement("div", {
-    className: "bg-purple-50 p-4 rounded-xl border-2 border-purple-200"
-  }, React.createElement("label", {
-    className: "block font-bold text-purple-800 mb-2"
-  }, "Paternity Leave Adjustment"), React.createElement("div", {
-    className: "flex items-center gap-3"
-  }, React.createElement("input", {
-    type: "number",
-    min: "-15",
-    max: "15",
-    value: leaveForm.paternity,
-    onChange: e => setLeaveForm({
-      ...leaveForm,
-      paternity: Math.min(15, Math.max(-15, parseInt(e.target.value) || 0))
-    }),
-    className: "w-24 border-2 px-3 py-2 rounded-lg text-center font-bold text-lg"
-  }), React.createElement("span", {
-    className: "text-purple-700"
-  }, leaveForm.paternity >= 0 ? "days deducted (reduces balance)" : "days added back (increases balance)")), React.createElement("p", {
-    className: "text-xs text-purple-600 mt-2"
-  }, "Range: -15 to +15 days")), React.createElement("div", {
-    className: "flex gap-3 mt-6"
-  }, React.createElement("button", {
-    onClick: handleSaveLeaveAdjustment,
-    disabled: savingLeave,
-    className: "flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold disabled:opacity-50"
-  }, savingLeave ? 'Saving...' : '💾 Save Adjustment'), React.createElement("button", {
-    onClick: () => {
-      setIsEditingLeave(false);
-      const currentAdj = leaveAdjustments[selectedTeacherLeave.teacher.afid] || {
-        entitled: 0,
-        maternity: 0,
-        paternity: 0
-      };
-      setLeaveForm({
-        entitled: currentAdj.entitled || 0,
-        maternity: currentAdj.maternity || 0,
-        paternity: currentAdj.paternity || 0
-      });
-    },
-    className: "flex-1 bg-gray-300 py-3 rounded-xl font-semibold"
-  }, "Cancel"))) : !selectedTeacherLeave.balance ? React.createElement("div", { className: "text-center py-8" }, React.createElement("div", { className: "animate-spin text-3xl mb-3" }, "⏳"), React.createElement("p", { className: "text-gray-500" }, "Loading leave history...")) : React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", {
-    className: "bg-blue-50 p-4 rounded-xl border-2 border-blue-200"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-2"
-  }, React.createElement("span", {
-    className: "font-bold text-blue-800"
-  }, "Entitled Leave"), React.createElement("span", {
-    className: "text-2xl font-bold text-blue-600"
-  }, selectedTeacherLeave.balance.entitled.remaining, "/", selectedTeacherLeave.balance.entitled.total)), React.createElement("div", {
-    className: "flex justify-between text-sm text-blue-700"
-  }, React.createElement("span", null, "Used: ", selectedTeacherLeave.balance.entitled.used, " days"), React.createElement("span", null, "Remaining: ", selectedTeacherLeave.balance.entitled.remaining, " days")), selectedTeacherLeave.balance.entitled.adjustment > 0 && React.createElement("div", {
-    className: "text-xs text-blue-600 mt-1"
-  }, "(includes ", selectedTeacherLeave.balance.entitled.adjustment, " prior adjustment)"), React.createElement("div", {
-    className: "mt-2 bg-blue-200 rounded-full h-3"
-  }, React.createElement("div", {
-    className: "bg-blue-500 h-3 rounded-full transition-all",
-    style: {
-      width: `${selectedTeacherLeave.balance.entitled.remaining / selectedTeacherLeave.balance.entitled.total * 100}%`
-    }
-  })), React.createElement("p", {
-    className: "text-xs text-blue-600 mt-2"
-  }, "Includes: Personal Leave, Sick Leave, Emergency Leave")), React.createElement("div", {
-    className: "bg-pink-50 p-4 rounded-xl border-2 border-pink-200"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-2"
-  }, React.createElement("span", {
-    className: "font-bold text-pink-800"
-  }, "Maternity Leave"), React.createElement("span", {
-    className: "text-2xl font-bold text-pink-600"
-  }, selectedTeacherLeave.balance.maternity.remaining, "/", selectedTeacherLeave.balance.maternity.total)), React.createElement("div", {
-    className: "flex justify-between text-sm text-pink-700"
-  }, React.createElement("span", null, "Used: ", selectedTeacherLeave.balance.maternity.used, " days"), React.createElement("span", null, "Remaining: ", selectedTeacherLeave.balance.maternity.remaining, " days")), selectedTeacherLeave.balance.maternity.adjustment > 0 && React.createElement("div", {
-    className: "text-xs text-pink-600 mt-1"
-  }, "(includes ", selectedTeacherLeave.balance.maternity.adjustment, " prior adjustment)"), React.createElement("div", {
-    className: "mt-2 bg-pink-200 rounded-full h-3"
-  }, React.createElement("div", {
-    className: "bg-pink-500 h-3 rounded-full transition-all",
-    style: {
-      width: `${selectedTeacherLeave.balance.maternity.remaining / selectedTeacherLeave.balance.maternity.total * 100}%`
-    }
-  }))), React.createElement("div", {
-    className: "bg-purple-50 p-4 rounded-xl border-2 border-purple-200"
-  }, React.createElement("div", {
-    className: "flex justify-between items-center mb-2"
-  }, React.createElement("span", {
-    className: "font-bold text-purple-800"
-  }, "Paternity Leave"), React.createElement("span", {
-    className: "text-2xl font-bold text-purple-600"
-  }, selectedTeacherLeave.balance.paternity.remaining, "/", selectedTeacherLeave.balance.paternity.total)), React.createElement("div", {
-    className: "flex justify-between text-sm text-purple-700"
-  }, React.createElement("span", null, "Used: ", selectedTeacherLeave.balance.paternity.used, " days"), React.createElement("span", null, "Remaining: ", selectedTeacherLeave.balance.paternity.remaining, " days")), selectedTeacherLeave.balance.paternity.adjustment > 0 && React.createElement("div", {
-    className: "text-xs text-purple-600 mt-1"
-  }, "(includes ", selectedTeacherLeave.balance.paternity.adjustment, " prior adjustment)"), React.createElement("div", {
-    className: "mt-2 bg-purple-200 rounded-full h-3"
-  }, React.createElement("div", {
-    className: "bg-purple-500 h-3 rounded-full transition-all",
-    style: {
-      width: `${selectedTeacherLeave.balance.paternity.remaining / selectedTeacherLeave.balance.paternity.total * 100}%`
-    }
-  }))), React.createElement("button", {
-    onClick: () => {
-      setShowLeaveModal(false);
-      setIsEditingLeave(false);
-    },
-    className: "w-full mt-6 bg-gray-300 py-3 rounded-xl font-semibold"
-  }, "Close")))), showArchiveModal && teacherToArchive && React.createElement("div", {
-    className: "modal-overlay",
-    onClick: () => setShowArchiveModal(false)
-  }, React.createElement("div", {
-    className: "modal-content max-w-md",
-    onClick: e => e.stopPropagation()
-  }, React.createElement("div", {
-    className: "text-center mb-6"
-  }, React.createElement("div", {
-    className: "text-5xl mb-3"
-  }, "\uD83D\uDCE6"), React.createElement("h3", {
-    className: "text-2xl font-bold text-gray-800"
-  }, "Archive Teacher"), React.createElement("p", {
-    className: "text-gray-600 mt-2"
-  }, "You are about to archive ", React.createElement("strong", {
-    className: "text-red-600"
-  }, teacherToArchive.name))), React.createElement("div", {
-    className: "bg-blue-50 p-4 rounded-xl mb-4 text-sm"
-  }, React.createElement("p", {
-    className: "font-bold text-blue-800 mb-2"
-  }, "\uD83D\uDCCC What happens when you archive:"), React.createElement("ul", {
-    className: "space-y-1 text-blue-700"
-  }, React.createElement("li", null, "\u2705 All curriculum data is ", React.createElement("strong", null, "preserved")), React.createElement("li", null, "\u2705 Student feedback history is ", React.createElement("strong", null, "preserved")), React.createElement("li", null, "\u2705 Teacher appears as \"Archived\" in directory"), React.createElement("li", null, "\u2705 Students see \"Vacant\" for this subject"), React.createElement("li", null, "\u2705 New teacher can continue from where they left off"))), React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block font-bold mb-2 text-gray-700"
-  }, "Reason for Archiving ", React.createElement("span", {
-    className: "text-red-500"
-  }, "*")), React.createElement("select", {
-    value: archiveReason,
-    onChange: e => setArchiveReason(e.target.value),
-    className: "w-full border-2 px-4 py-3 rounded-xl",
-    required: true
-  }, React.createElement("option", {
-    value: ""
-  }, "-- Select Reason --"), React.createElement("option", {
-    value: "Resigned"
-  }, "\uD83D\uDE14 Resigned"), React.createElement("option", {
-    value: "Removed"
-  }, "\u274C Removed"), React.createElement("option", {
-    value: "Transferred"
-  }, "\uD83D\uDD04 Transferred to another program"), React.createElement("option", {
-    value: "On Long Leave"
-  }, "\uD83C\uDFD6\uFE0F On Long Leave"), React.createElement("option", {
-    value: "Other"
-  }, "\uD83D\uDCDD Other"))), React.createElement("div", null, React.createElement("label", {
-    className: "block font-bold mb-2 text-gray-700"
-  }, "Additional Notes (Optional)"), React.createElement("textarea", {
-    value: archiveNotes,
-    onChange: e => setArchiveNotes(e.target.value),
-    placeholder: "E.g., Resigned for personal reasons, effective date, etc.",
-    className: "w-full border-2 px-4 py-3 rounded-xl resize-none",
-    rows: "3"
-  }))), React.createElement("div", {
-    className: "flex gap-3 mt-6"
-  }, React.createElement("button", {
-    onClick: () => setShowArchiveModal(false),
-    className: "flex-1 bg-gray-300 py-3 rounded-xl font-semibold",
-    disabled: archiving
-  }, "Cancel"), React.createElement("button", {
-    onClick: handleArchive,
-    disabled: !archiveReason || archiving,
-    className: `flex-1 py-3 rounded-xl font-semibold text-white ${!archiveReason || archiving ? 'bg-gray-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600'}`
-  }, archiving ? '⏳ Archiving...' : '📦 Archive Teacher')))), showModal && React.createElement("div", {
-    className: "modal-overlay",
-    onClick: () => setShowModal(false)
-  }, React.createElement("div", {
-    className: "modal-content",
-    onClick: e => e.stopPropagation()
-  }, React.createElement("h3", {
-    className: "text-2xl font-bold mb-4"
-  }, editingTeacher ? 'Edit Teacher' : 'Add New Teacher'), React.createElement("div", {
-    className: "space-y-4"
-  }, React.createElement("div", {
-    className: "grid grid-cols-2 gap-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "AFID *"), React.createElement("input", {
-    type: "text",
-    value: form.afid,
-    onChange: e => setForm({
-      ...form,
-      afid: e.target.value
-    }),
-    disabled: !!editingTeacher,
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "AF Code (e.g. AF355)"), React.createElement("input", {
-    type: "text",
-    value: form.afCode || '',
-    onChange: e => setForm({
-      ...form,
-      afCode: e.target.value
-    }),
-    placeholder: "AF355",
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  }))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Name *"), React.createElement("input", {
-    type: "text",
-    value: form.name,
-    onChange: e => setForm({
-      ...form,
-      name: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Email *"), React.createElement("input", {
-    type: "email",
-    value: form.email,
-    onChange: e => setForm({
-      ...form,
-      email: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), !editingTeacher && React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Password *"), React.createElement("input", {
-    type: "password",
-    value: form.password,
-    onChange: e => setForm({
-      ...form,
-      password: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), React.createElement("div", {
-    className: "grid grid-cols-2 gap-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Subject *"), React.createElement("select", {
-    value: form.subject,
-    onChange: e => setForm({
-      ...form,
-      subject: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  }, React.createElement("option", {
-    value: ""
-  }, "Select"), SUBJECTS.map(s => React.createElement("option", {
-    key: s,
-    value: s
-  }, s)))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "School *"), React.createElement("select", {
-    value: form.school,
-    onChange: e => setForm({
-      ...form,
-      school: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  }, React.createElement("option", {
-    value: ""
-  }, "Select"), SCHOOLS.map(s => React.createElement("option", {
-    key: s,
-    value: s
-  }, s))))), React.createElement("div", {
-    className: "grid grid-cols-2 gap-4"
-  }, React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Date of Birth"), React.createElement("input", {
-    type: "date",
-    value: form.dob,
-    onChange: e => setForm({
-      ...form,
-      dob: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Joining Date"), React.createElement("input", {
-    type: "date",
-    value: form.joiningDate,
-    onChange: e => setForm({
-      ...form,
-      joiningDate: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  }))), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Phone"), React.createElement("input", {
-    type: "text",
-    value: form.phone,
-    onChange: e => setForm({
-      ...form,
-      phone: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  })), React.createElement("div", null, React.createElement("label", {
-    className: "block text-sm font-bold mb-1"
-  }, "Role *"), React.createElement("select", {
-    value: form.role || 'teacher',
-    onChange: e => setForm({
-      ...form,
-      role: e.target.value
-    }),
-    className: "w-full border-2 px-3 py-2 rounded-lg"
-  }, React.createElement("option", {
-    value: "teacher"
-  }, "\uD83D\uDC68\u200D\uD83C\uDFEB Teacher"), React.createElement("option", {
-    value: "apc"
-  }, "\uD83D\uDCCB APC (Academic Program Coordinator)")), form.role === 'apc' && React.createElement("p", {
-    className: "text-xs text-teal-600 mt-1"
-  }, "\u2139\uFE0F APC can view all subjects, mark student attendance, view teacher attendance, but cannot edit curriculum.")), React.createElement("div", {
-    className: "flex gap-3"
-  }, React.createElement("button", {
-    onClick: handleSave,
-    className: "flex-1 avanti-gradient text-white py-3 rounded-xl font-semibold"
-  }, "Save"), React.createElement("button", {
-    onClick: () => setShowModal(false),
-    className: "flex-1 bg-gray-300 py-3 rounded-xl font-semibold"
-  }, "Cancel"))))));
-}
 function AdminAssetManagement({
   accessibleSchools = [],
   isSuperAdmin = false,
@@ -9352,23 +8078,22 @@ function AdminAssetManagement({
   useEffect(() => {
     const fetchData = async () => {
       try {
-        let allAssets = [];
-        let allAssignments = [];
         const schoolsToFetch = hasFullDataAccess ? SCHOOLS : accessibleSchools;
-        for (const school of schoolsToFetch) {
-          const assetsSnap = await db.collection('assets').where('school', '==', school).get();
-          allAssets = [...allAssets, ...assetsSnap.docs.map(d => ({
-            ...d.data(),
-            docId: d.id
-          }))];
-          const assignmentsSnap = await db.collection('assetAssignments').where('school', '==', school).get();
-          allAssignments = [...allAssignments, ...assignmentsSnap.docs.map(d => ({
-            ...d.data(),
-            docId: d.id
-          }))];
-        }
-        setAssets(allAssets);
-        setAssignments(allAssignments);
+        const perSchool = await Promise.all(schoolsToFetch.map(async school => {
+          const [assetsSnap, assignmentsSnap] = await Promise.all([db.collection('assets').where('school', '==', school).get(), db.collection('assetAssignments').where('school', '==', school).get()]);
+          return {
+            assets: assetsSnap.docs.map(d => ({
+              ...d.data(),
+              docId: d.id
+            })),
+            assignments: assignmentsSnap.docs.map(d => ({
+              ...d.data(),
+              docId: d.id
+            }))
+          };
+        }));
+        setAssets(perSchool.flatMap(r => r.assets));
+        setAssignments(perSchool.flatMap(r => r.assignments));
         setLoading(false);
       } catch (error) {
         console.error('Error fetching assets:', error);
@@ -9415,6 +8140,19 @@ function AdminAssetManagement({
       };
     });
   }, [assets, accessibleSchools, isSuperAdmin]);
+  const handleDeleteAsset = async asset => {
+    const isAssigned = asset.status === 'assigned';
+    const confirmMsg = isAssigned ? `\u26A0\uFE0F WARNING: This asset is currently assigned to ${asset.currentAssignee?.studentName}.\n\nAre you sure you want to permanently delete "${asset.title}" (Copy #${asset.copyNumber || 1})?\n\nThis action cannot be undone.` : `Are you sure you want to permanently delete "${asset.title}" (Copy #${asset.copyNumber || 1})?\n\nThis action cannot be undone.`;
+    if (!confirm(confirmMsg)) return;
+    try {
+      await db.collection('assets').doc(asset.docId).delete();
+      setAssets(prev => prev.filter(a => a.docId !== asset.docId));
+      alert('Asset deleted successfully.');
+    } catch (error) {
+      console.error('Error deleting asset:', error);
+      alert('Failed to delete asset: ' + error.message);
+    }
+  };
   if (loading) return React.createElement("div", {
     className: "text-center py-8"
   }, "Loading assets...");
@@ -9547,8 +8285,10 @@ function AdminAssetManagement({
     className: "p-3 text-left"
   }, "Assigned To"), React.createElement("th", {
     className: "p-3 text-left"
-  }, "Copy #"))), React.createElement("tbody", null, filteredAssets.length === 0 ? React.createElement("tr", null, React.createElement("td", {
-    colSpan: "6",
+  }, "Copy #"), React.createElement("th", {
+    className: "p-3 text-left"
+  }, "Actions"))), React.createElement("tbody", null, filteredAssets.length === 0 ? React.createElement("tr", null, React.createElement("td", {
+    colSpan: "7",
     className: "p-8 text-center text-gray-500"
   }, "No assets found")) : filteredAssets.slice(0, 100).map(asset => React.createElement("tr", {
     key: asset.docId,
@@ -9571,7 +8311,13 @@ function AdminAssetManagement({
     className: "p-3 text-sm"
   }, asset.currentAssignee?.studentName || '-'), React.createElement("td", {
     className: "p-3 text-sm"
-  }, asset.copyNumber || 1))))), filteredAssets.length > 100 && React.createElement("p", {
+  }, asset.copyNumber || 1), React.createElement("td", {
+    className: "p-3"
+  }, React.createElement("button", {
+    onClick: () => handleDeleteAsset(asset),
+    className: "px-3 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-sm font-medium transition-colors",
+    title: "Delete this asset"
+  }, "🗑️ Delete")))))), filteredAssets.length > 100 && React.createElement("p", {
     className: "text-center text-gray-500 mt-4"
   }, "Showing first 100 of ", filteredAssets.length, " assets")), activeSubTab === 'history' && React.createElement("div", {
     className: "bg-white p-6 rounded-xl shadow-lg"
@@ -9777,7 +8523,8 @@ function StudentManagement({
   students,
   isSuperAdmin = true,
   isDirector = false,
-  accessibleSchools = SCHOOLS
+  accessibleSchools = SCHOOLS,
+  canEdit = isSuperAdmin
 }) {
   const [showModal, setShowModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -9872,7 +8619,7 @@ function StudentManagement({
   const openAddModal = () => {
     setEditingStudent(null);
     setForm({
-      school: '',
+      school: hasFullDataAccess ? '' : availableSchools[0] || '',
       grade: '',
       name: '',
       gender: '',
@@ -10149,20 +8896,21 @@ function StudentManagement({
     }));
     exportToExcel(exportData, 'students_list');
   };
+  const colCount = 5 + (isSuperAdmin ? 1 : 0) + (canEdit ? 1 : 0);
   return React.createElement("div", {
     className: "space-y-6"
   }, React.createElement("div", {
     className: "flex justify-between items-center flex-wrap gap-4"
   }, React.createElement("div", null, React.createElement("h2", {
     className: "text-3xl font-bold"
-  }, "Student Management"), !isSuperAdmin && React.createElement("p", {
+  }, "Student Management"), !canEdit && React.createElement("p", {
     className: "text-sm text-gray-500 mt-1"
   }, "\uD83D\uDC41\uFE0F View Only Mode - Contact Super Admin for modifications")), React.createElement("div", {
     className: "flex gap-3 flex-wrap"
-  }, isSuperAdmin && React.createElement(React.Fragment, null, React.createElement("button", {
+  }, canEdit && React.createElement("button", {
     onClick: openAddModal,
     className: "px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold"
-  }, "+ Add Student"), React.createElement("label", {
+  }, "+ Add Student"), isSuperAdmin && React.createElement(React.Fragment, null, React.createElement("label", {
     className: "px-6 py-3 bg-green-600 text-white rounded-xl font-semibold cursor-pointer"
   }, "\uD83D\uDCE4 Import CSV", React.createElement("input", {
     ref: fileInputRef,
@@ -10310,10 +9058,10 @@ function StudentManagement({
     className: "p-3 text-left"
   }, "Name"), React.createElement("th", {
     className: "p-3 text-left"
-  }, "Gender"), isSuperAdmin && React.createElement("th", {
+  }, "Gender"), canEdit && React.createElement("th", {
     className: "p-3 text-left"
   }, "Actions"))), React.createElement("tbody", null, filteredStudents.length === 0 ? React.createElement("tr", null, React.createElement("td", {
-    colSpan: isSuperAdmin ? "7" : "5",
+    colSpan: colCount,
     className: "p-8 text-center text-gray-500"
   }, "No students found")) : filteredStudents.map(s => React.createElement("tr", {
     key: s.docId,
@@ -10337,7 +9085,7 @@ function StudentManagement({
     className: "p-3 font-semibold"
   }, s.name), React.createElement("td", {
     className: "p-3"
-  }, s.gender), isSuperAdmin && React.createElement("td", {
+  }, s.gender), canEdit && React.createElement("td", {
     className: "p-3"
   }, React.createElement("div", {
     className: "flex gap-2"
@@ -10347,7 +9095,7 @@ function StudentManagement({
   }, "Edit"), React.createElement("button", {
     onClick: () => handleDelete(s),
     className: "px-3 py-1 bg-red-500 text-white rounded-lg font-semibold"
-  }, "Delete")))))))), isSuperAdmin && showModal && React.createElement("div", {
+  }, "Delete")))))))), canEdit && showModal && React.createElement("div", {
     className: "modal-overlay",
     onClick: () => {
       setShowModal(false);
@@ -10371,7 +9119,7 @@ function StudentManagement({
     className: "w-full border-2 px-3 py-2 rounded-lg"
   }, React.createElement("option", {
     value: ""
-  }, "Select"), SCHOOLS.map(s => React.createElement("option", {
+  }, "Select"), availableSchools.map(s => React.createElement("option", {
     key: s,
     value: s
   }, s)))), React.createElement("div", null, React.createElement("label", {
@@ -10458,8 +9206,7 @@ function TeacherAttendanceDashboard({
   currentUser,
   students,
   teachers,
-  studentAttendance,
-  teacherAttendance
+  studentAttendance
 }) {
   const [filterGrade, setFilterGrade] = useState('All');
   const today = getTodayDate();
@@ -10618,8 +9365,17 @@ function TeacherAttendanceDashboard({
   const handleExportStudents = async () => {
     setExportingStudents(true);
     try {
-      const snap = await db.collection('studentAttendance').where('school', '==', mySchool).where('date', '>=', startDate).where('date', '<=', endDate).get();
-      let records = snap.docs.map(d => d.data());
+      // Query Firestore for the full chosen period (the in-memory list only holds the last 30 days).
+      // school + date range needs a composite index; if it is missing, fall back to a date-only query.
+      let records;
+      try {
+        const snap = await db.collection('studentAttendance').where('school', '==', mySchool).where('date', '>=', startDate).where('date', '<=', endDate).get();
+        records = snap.docs.map(d => d.data());
+      } catch (indexErr) {
+        if (!(indexErr.message || '').toLowerCase().includes('index')) throw indexErr;
+        const snap = await db.collection('studentAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get();
+        records = snap.docs.map(d => d.data()).filter(a => a.school === mySchool);
+      }
       if (filterGrade !== 'All') records = records.filter(a => a.grade === filterGrade);
       records.sort((a, b) => a.date.localeCompare(b.date));
       if (!records.length) { alert('No student records found for this period.'); setExportingStudents(false); return; }
@@ -10737,6 +9493,186 @@ function TeacherAttendanceDashboard({
   }, a.status)))))))));
 }
 
+async function reverseGeocodeCoords(latitude, longitude) {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=18`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data && data.display_name ? data.display_name : null;
+  } catch (e) {
+    console.warn('Reverse geocode failed:', e.message);
+    return null;
+  }
+}
+
+function detectCurrentLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Location detection is not supported on this device/browser.'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(pos => resolve(pos.coords), err => reject(err), {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0
+    });
+  });
+}
+
+function geolocationErrorMessage(err) {
+  if (err.code === 1) return '❌ Location permission denied. Please allow location access in your browser settings to mark attendance.';
+  if (err.code === 2) return '❌ Could not detect your location. Please check your device GPS/network and try again.';
+  if (err.code === 3) return '❌ Location request timed out. Please try again in an area with better signal.';
+  return '❌ ' + (err.message || 'Failed to detect location. Please try again.');
+}
+
+function TeacherSelfAttendanceView({
+  currentUser
+}) {
+  const today = getTodayDate();
+  const mySchool = currentUser.school;
+  const docId = `${mySchool}_${currentUser.afid}_${today}`;
+  const [isLoading, setIsLoading] = useState(true);
+  const [todayRecord, setTodayRecord] = useState(null);
+  const [isMarking, setIsMarking] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [history, setHistory] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const loadTodayStatus = async () => {
+    setIsLoading(true);
+    try {
+      const doc = await db.collection('teacherAttendance').doc(docId).get();
+      setTodayRecord(doc.exists ? doc.data() : null);
+    } catch (e) {
+      console.error('Error checking today\'s attendance:', e);
+    }
+    setIsLoading(false);
+  };
+  const loadHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const snap = await db.collection('teacherAttendance').where('teacherId', '==', currentUser.afid).get();
+      const sorted = snap.docs.map(d => d.data()).sort((a, b) => b.date.localeCompare(a.date));
+      setHistory(sorted.slice(0, 14));
+    } catch (e) {
+      console.error('Error loading attendance history:', e);
+    }
+    setIsLoadingHistory(false);
+  };
+  useEffect(() => {
+    loadTodayStatus();
+    loadHistory();
+  }, []);
+  const handleMarkAttendance = async () => {
+    if (todayRecord) {
+      alert('You have already marked your attendance for today.');
+      return;
+    }
+    setIsMarking(true);
+    setStatusMessage('📍 Detecting your location...');
+    try {
+      const coords = await detectCurrentLocation();
+      setStatusMessage('🔎 Looking up your address...');
+      const address = await reverseGeocodeCoords(coords.latitude, coords.longitude);
+      setStatusMessage('💾 Saving attendance...');
+      const existing = await db.collection('teacherAttendance').doc(docId).get();
+      if (existing.exists) {
+        setTodayRecord(existing.data());
+        alert('You have already marked your attendance for today.');
+        return;
+      }
+      const attendanceData = {
+        school: mySchool,
+        teacherId: currentUser.afid,
+        teacherName: currentUser.name || currentUser.afid,
+        date: today,
+        status: 'Present',
+        markedAt: new Date().toISOString(),
+        location: {
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy: coords.accuracy || null,
+          address: address || null
+        },
+        docId
+      };
+      await db.collection('teacherAttendance').doc(docId).set(attendanceData);
+      setTodayRecord(attendanceData);
+      showAttendanceSavedToast('✅ Attendance marked!', 'success');
+      loadHistory();
+    } catch (e) {
+      alert(e && e.code ? geolocationErrorMessage(e) : '❌ Failed to mark attendance: ' + e.message);
+    } finally {
+      setStatusMessage('');
+      setIsMarking(false);
+    }
+  };
+  const formatLocation = loc => loc ? loc.address || `${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)}` : '-';
+  let statusCardContent;
+  if (isLoading) {
+    statusCardContent = React.createElement("p", { className: "text-gray-500" }, "Checking today's status...");
+  } else if (todayRecord) {
+    statusCardContent = React.createElement("div", {
+      className: "flex items-start gap-4"
+    }, React.createElement("div", { className: "text-4xl" }, "✅"), React.createElement("div", null,
+      React.createElement("p", { className: "text-xl font-bold text-green-700" }, "Attendance marked for today (", today, ")"),
+      React.createElement("p", { className: "text-gray-600 mt-1" }, "Marked at: ", new Date(todayRecord.markedAt).toLocaleTimeString()),
+      todayRecord.location && React.createElement("p", { className: "text-gray-600 mt-1" }, "📍 ", formatLocation(todayRecord.location)),
+      todayRecord.location && React.createElement("a", {
+        href: `https://www.google.com/maps?q=${todayRecord.location.latitude},${todayRecord.location.longitude}`,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        className: "text-blue-600 text-sm underline mt-1 inline-block"
+      }, "View on map")
+    ));
+  } else {
+    statusCardContent = React.createElement("div", null,
+      React.createElement("p", { className: "text-gray-600 mb-4" }, "Mark your attendance for today (", today, "). Your current location will be detected automatically. Attendance can only be marked once per day."),
+      React.createElement("button", {
+        onClick: handleMarkAttendance,
+        disabled: isMarking,
+        className: "avanti-gradient text-white px-6 py-3 rounded-xl font-semibold disabled:opacity-60"
+      }, isMarking ? statusMessage || 'Working...' : '📍 Mark My Attendance Now')
+    );
+  }
+  let historyContent;
+  if (isLoadingHistory) {
+    historyContent = React.createElement("p", { className: "text-gray-500" }, "Loading history...");
+  } else if (history.length === 0) {
+    historyContent = React.createElement("p", { className: "text-gray-500" }, "No attendance records yet.");
+  } else {
+    const headerRow = React.createElement("tr", null,
+      React.createElement("th", { className: "p-3 text-left" }, "Date"),
+      React.createElement("th", { className: "p-3 text-left" }, "Time"),
+      React.createElement("th", { className: "p-3 text-left" }, "Location")
+    );
+    const bodyRows = history.map((h, idx) => React.createElement("tr", {
+      key: idx,
+      className: "border-b hover:bg-gray-50"
+    },
+      React.createElement("td", { className: "p-3 text-sm" }, h.date),
+      React.createElement("td", { className: "p-3 text-sm" }, h.markedAt ? new Date(h.markedAt).toLocaleTimeString() : '-'),
+      React.createElement("td", { className: "p-3 text-sm" }, formatLocation(h.location))
+    ));
+    historyContent = React.createElement("div", { className: "overflow-x-auto" },
+      React.createElement("table", { className: "w-full" },
+        React.createElement("thead", { className: "avanti-gradient-light" }, headerRow),
+        React.createElement("tbody", null, bodyRows)
+      )
+    );
+  }
+  return React.createElement("div", { className: "space-y-6" },
+    React.createElement("h2", { className: "text-3xl font-bold" }, "📍 My Attendance"),
+    React.createElement("div", { className: "bg-white p-6 rounded-2xl shadow-lg" }, statusCardContent),
+    React.createElement("div", { className: "bg-white p-6 rounded-2xl shadow-lg" },
+      React.createElement("h3", { className: "text-xl font-bold mb-4" }, "📋 Recent Attendance"),
+      historyContent
+    )
+  );
+}
+
 function RemarksModal({
   student,
   onSave,
@@ -10811,7 +9747,9 @@ function showAttendanceSavedToast(message, type) {
 function StudentAttendanceView({
   currentUser,
   students,
-  studentAttendance
+  studentAttendance,
+  studentsStatus = 'ready',
+  onReloadStudents
 }) {
   const [selectedGrade, setSelectedGrade] = useState('11');
   const [selectedDate, setSelectedDate] = useState(getTodayDate());
@@ -10839,7 +9777,8 @@ function StudentAttendanceView({
   const mySchoolNormalized = normalizeSchool(mySchool);
   const filteredStudents = students.filter(s => {
     const studentSchoolNormalized = normalizeSchool(s.school);
-    const gradeMatches = String(s.grade) === String(selectedGrade);
+    // grade is stored as "11", "Class 11" or "Grade 11" depending on how the student was added
+    const gradeMatches = (String(s.grade ?? '').match(/\d+/) || [''])[0] === String(selectedGrade);
     const schoolMatches = studentSchoolNormalized === mySchoolNormalized;
     return schoolMatches && gradeMatches;
   }).sort((a, b) => a.name.localeCompare(b.name));
@@ -11275,7 +10214,20 @@ function StudentAttendanceView({
     className: "bg-white p-6 rounded-2xl shadow-lg"
   }, React.createElement("h3", {
     className: "font-bold mb-4"
-  }, "Students (", filteredStudents.length, ")"), filteredStudents.length === 0 ? React.createElement("div", {
+  }, "Students (", filteredStudents.length, ")"), students.length === 0 && studentsStatus === 'loading' ? React.createElement("div", {
+    className: "text-center py-8"
+  }, React.createElement("p", {
+    className: "text-gray-500"
+  }, "\u23F3 Loading students...")) : students.length === 0 && studentsStatus === 'error' ? React.createElement("div", {
+    className: "text-center py-8"
+  }, React.createElement("p", {
+    className: "text-red-600 font-semibold mb-2"
+  }, "Couldn't load students"), React.createElement("p", {
+    className: "text-gray-500 text-sm mb-4"
+  }, "Please check your internet connection and try again."), onReloadStudents && React.createElement("button", {
+    onClick: onReloadStudents,
+    className: "px-6 py-2 bg-blue-600 text-white rounded-xl font-semibold"
+  }, "\uD83D\uDD04 Retry")) : filteredStudents.length === 0 ? React.createElement("div", {
     className: "text-center py-8"
   }, React.createElement("p", {
     className: "text-gray-500 mb-4"
@@ -11720,7 +10672,6 @@ function AdminAttendanceAnalytics({
   students,
   teachers,
   studentAttendance,
-  teacherAttendance,
   accessibleSchools = [],
   isSuperAdmin = false,
   isDirector = false
@@ -11745,7 +10696,6 @@ function AdminAttendanceAnalytics({
   const [lockFilterDate, setLockFilterDate] = useState(getTodayDate());
   const chart1Ref = useRef(null);
   const chart2Ref = useRef(null);
-  const chart3Ref = useRef(null);
   const chart4Ref = useRef(null);
   const chartInstances = useRef({});
   const loadAttendanceLocks = async () => {
@@ -11786,83 +10736,23 @@ function AdminAttendanceAnalytics({
     return true;
   });
   const [rangeStudentData, setRangeStudentData] = React.useState(null);
-  const [rangeTeacherData, setRangeTeacherData] = React.useState(null);
   const [loadingRange, setLoadingRange] = React.useState(false);
-  const [editSchool, setEditSchool] = React.useState('');
-  const [editDate, setEditDate] = React.useState(getTodayDate());
-  const [editTeachers, setEditTeachers] = React.useState([]);
-  const [editAttendanceMap, setEditAttendanceMap] = React.useState({});
-  const [editLoadingData, setEditLoadingData] = React.useState(false);
-  const [editModal, setEditModal] = React.useState(null);
-  const [editSaving, setEditSaving] = React.useState(false);
   const handleLoadRange = async () => {
     setLoadingRange(true);
     setRangeStudentData(null);
-    setRangeTeacherData(null);
     try {
-      const [stuSnap, tchSnap] = await Promise.all([
-        db.collection('studentAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get(),
-        db.collection('teacherAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get()
-      ]);
+      const stuSnap = await db.collection('studentAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get();
       let stuRecords = stuSnap.docs.map(d => d.data());
-      let tchRecords = tchSnap.docs.map(d => d.data());
       if (!hasFullDataAccess && accessibleSchools.length > 0) {
         stuRecords = stuRecords.filter(a => schoolMatchesFilter(a.school, accessibleSchools));
-        tchRecords = tchRecords.filter(a => schoolMatchesFilter(a.school, accessibleSchools));
       }
       setRangeStudentData(stuRecords);
-      setRangeTeacherData(tchRecords);
     } catch (err) { alert('Failed to load data: ' + err.message); }
     setLoadingRange(false);
   };
   React.useEffect(() => {
     setRangeStudentData(null);
-    setRangeTeacherData(null);
   }, [startDate, endDate, filterSchools]);
-  React.useEffect(() => {
-    if (!editSchool) { setEditTeachers([]); setEditAttendanceMap({}); return; }
-    setEditLoadingData(true);
-    let teacherList = [];
-    db.collection('teachers').where('school', '==', editSchool).get()
-      .then(snap => {
-        teacherList = snap.docs.map(d => ({ ...d.data(), docId: d.id })).filter(t => t.isArchived !== true);
-        setEditTeachers(teacherList);
-        return db.collection('teacherAttendance').where('school', '==', editSchool).where('date', '==', editDate).get();
-      })
-      .then(snap => {
-        const map = {};
-        snap.docs.forEach(d => { map[d.data().teacherId] = { ...d.data(), docId: d.id }; });
-        setEditAttendanceMap(map);
-        setEditLoadingData(false);
-      })
-      .catch(() => setEditLoadingData(false));
-  }, [editSchool, editDate]);
-  const saveTeacherAttendanceEdit = async () => {
-    if (!editModal) return;
-    setEditSaving(true);
-    const { teacher, existing, status, reason } = editModal;
-    const docId = `${teacher.afid}_${editDate}`;
-    const record = {
-      teacherId: teacher.afid,
-      teacherName: teacher.name,
-      school: teacher.school,
-      date: editDate,
-      status,
-      reason,
-      location: 'Marked by Admin',
-      punchInTime: status === 'Present' ? (existing && existing.status === 'Present' && existing.punchInTime ? existing.punchInTime : new Date().toISOString()) : 'Leave applied',
-      markedAt: new Date().toISOString(),
-      markedByAdmin: true,
-      adminOverride: true,
-    };
-    if (existing && existing.status !== status) record.originalStatus = existing.status;
-    try {
-      await db.collection('teacherAttendance').doc(docId).set(record);
-      setEditAttendanceMap(prev => ({ ...prev, [teacher.afid]: { ...record, docId } }));
-      setEditModal(null);
-    } catch (e) { alert('Error saving: ' + e.message); }
-    setEditSaving(false);
-  };
   const filteredStudentAttendance = useMemo(() => {
     const source = rangeStudentData !== null ? rangeStudentData : studentAttendance.filter(a => a.date >= startDate && a.date <= endDate);
     return source.filter(a => {
@@ -11871,13 +10761,6 @@ function AdminAttendanceAnalytics({
       return true;
     });
   }, [rangeStudentData, studentAttendance, filterSchools, filterGrade, startDate, endDate]);
-  const filteredTeacherAttendance = useMemo(() => {
-    const source = rangeTeacherData !== null ? rangeTeacherData : teacherAttendance.filter(a => a.date >= startDate && a.date <= endDate);
-    return source.filter(a => {
-      if (!schoolMatchesFilter(a.school, filterSchools)) return false;
-      return true;
-    });
-  }, [rangeTeacherData, teacherAttendance, filterSchools, startDate, endDate]);
   const todayStats = useMemo(() => {
     const studentRecords = studentAttendance.filter(a => {
       if (a.date !== selectedDate) return false;
@@ -11885,18 +10768,11 @@ function AdminAttendanceAnalytics({
       if (filterGrade !== 'All' && a.grade !== filterGrade) return false;
       return true;
     });
-    const teacherRecords = teacherAttendance.filter(a => {
-      if (a.date !== selectedDate) return false;
-      if (!schoolMatchesFilter(a.school, filterSchools)) return false;
-      return true;
-    });
     return {
       studentPresent: studentRecords.filter(r => r.status === 'Present').length,
-      studentAbsent: studentRecords.filter(r => r.status === 'Absent').length,
-      teacherPresent: teacherRecords.filter(r => r.status === 'Present').length,
-      teacherAbsent: teacherRecords.filter(r => r.status === 'On Leave').length
+      studentAbsent: studentRecords.filter(r => r.status === 'Absent').length
     };
-  }, [studentAttendance, teacherAttendance, selectedDate, filterSchools, filterGrade]);
+  }, [studentAttendance, selectedDate, filterSchools, filterGrade]);
   const genderStats = useMemo(() => {
     const stats = {
       Male: {
@@ -12034,40 +10910,6 @@ function AdminAttendanceAnalytics({
         }
       });
     }
-    if (chart3Ref.current) {
-      const ctx = chart3Ref.current.getContext('2d');
-      const present = filteredTeacherAttendance.filter(a => a.status === 'Present').length;
-      const onLeave = filteredTeacherAttendance.filter(a => a.status === 'On Leave').length;
-      chartInstances.current.chart3 = new Chart(ctx, {
-        type: 'pie',
-        data: {
-          labels: ['Present', 'On Leave'],
-          datasets: [{
-            data: [present, onLeave],
-            backgroundColor: ['#5B8A8A', '#D4A574'],
-            borderWidth: 2,
-            borderColor: '#fff'
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            title: {
-              display: true,
-              text: 'Teacher Attendance Status (Month)',
-              font: {
-                size: 16,
-                weight: 'bold'
-              }
-            },
-            legend: {
-              position: 'bottom'
-            }
-          }
-        }
-      });
-    }
     if (chart4Ref.current) {
       const ctx = chart4Ref.current.getContext('2d');
       const present = filteredStudentAttendance.filter(a => a.status === 'Present').length;
@@ -12107,9 +10949,8 @@ function AdminAttendanceAnalytics({
         if (chart) chart.destroy();
       });
     };
-  }, [monthlyDayStats, genderStats, filteredTeacherAttendance, filteredStudentAttendance]);
+  }, [monthlyDayStats, genderStats, filteredStudentAttendance]);
   const [exportingStudents, setExportingStudents] = React.useState(false);
-  const [exportingTeachers, setExportingTeachers] = React.useState(false);
   const handleExportStudents = async () => {
     setExportingStudents(true);
     try {
@@ -12123,19 +10964,6 @@ function AdminAttendanceAnalytics({
       exportToExcel(records.map(a => ({ Date: a.date, School: a.school, Grade: a.grade, 'Student Name': a.studentName, Status: a.status, Remarks: a.remarks || '', 'Marked By': a.markedBy })), `student_attendance_${startDate}_to_${endDate}`);
     } catch (err) { alert('Export failed: ' + err.message); }
     setExportingStudents(false);
-  };
-  const handleExportTeachers = async () => {
-    setExportingTeachers(true);
-    try {
-      const snap = await db.collection('teacherAttendance').where('date', '>=', startDate).where('date', '<=', endDate).get();
-      let records = snap.docs.map(d => d.data());
-      if (!hasFullDataAccess && accessibleSchools.length > 0) records = records.filter(a => schoolMatchesFilter(a.school, accessibleSchools));
-      if (filterSchools.length > 0) records = records.filter(a => schoolMatchesFilter(a.school, filterSchools));
-      records.sort((a, b) => a.date.localeCompare(b.date));
-      if (!records.length) { alert('No teacher records found for this period.'); setExportingTeachers(false); return; }
-      exportToExcel(records.map(a => ({ Date: a.date, 'Teacher Name': a.teacherName, School: a.school, 'Punch-In Time': a.punchInTime || 'Not recorded', Status: a.status, Reason: a.reason || '', Location: a.location || '' })), `teacher_attendance_${startDate}_to_${endDate}`);
-    } catch (err) { alert('Export failed: ' + err.message); }
-    setExportingTeachers(false);
   };
   return React.createElement("div", {
     className: "space-y-6"
@@ -12152,11 +10980,7 @@ function AdminAttendanceAnalytics({
     onClick: handleExportStudents,
     disabled: exportingStudents,
     className: `px-4 py-2 rounded-xl font-semibold text-white ${exportingStudents ? 'bg-green-300 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`
-  }, exportingStudents ? "\u23F3 Fetching..." : "\uD83D\uDCE5 Export Students"), React.createElement("button", {
-    onClick: handleExportTeachers,
-    disabled: exportingTeachers,
-    className: `px-4 py-2 rounded-xl font-semibold text-white ${exportingTeachers ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`
-  }, exportingTeachers ? "\u23F3 Fetching..." : "\uD83D\uDCE5 Export Teachers"))), showLockManagement && React.createElement("div", {
+  }, exportingStudents ? "\u23F3 Fetching..." : "\uD83D\uDCE5 Export Students"))), showLockManagement && React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg border-2 border-yellow-300"
   }, React.createElement("div", {
     className: "flex justify-between items-center mb-4"
@@ -12294,7 +11118,7 @@ function AdminAttendanceAnalytics({
     onChange: e => setSelectedDate(e.target.value),
     className: "w-full border-2 px-4 py-3 rounded-xl"
   })))), React.createElement("div", {
-    className: "grid grid-cols-2 md:grid-cols-4 gap-4"
+    className: "grid grid-cols-2 gap-4"
   }, React.createElement("div", {
     className: "stat-card bg-green-500 text-white"
   }, React.createElement("div", {
@@ -12307,19 +11131,7 @@ function AdminAttendanceAnalytics({
     className: "text-sm opacity-90"
   }, "Students Absent Today"), React.createElement("div", {
     className: "text-4xl font-bold"
-  }, todayStats.studentAbsent)), React.createElement("div", {
-    className: "stat-card bg-blue-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Teachers Present Today"), React.createElement("div", {
-    className: "text-4xl font-bold"
-  }, todayStats.teacherPresent)), React.createElement("div", {
-    className: "stat-card bg-orange-500 text-white"
-  }, React.createElement("div", {
-    className: "text-sm opacity-90"
-  }, "Teachers on Leave Today"), React.createElement("div", {
-    className: "text-4xl font-bold"
-  }, todayStats.teacherAbsent))), React.createElement("div", {
+  }, todayStats.studentAbsent))), React.createElement("div", {
     className: "grid md:grid-cols-2 gap-6"
   }, React.createElement("div", {
     className: "bg-white p-6 rounded-2xl shadow-lg",
@@ -12341,189 +11153,8 @@ function AdminAttendanceAnalytics({
       height: '350px'
     }
   }, React.createElement("canvas", {
-    ref: chart3Ref
-  })), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg",
-    style: {
-      height: '350px'
-    }
-  }, React.createElement("canvas", {
     ref: chart4Ref
-  }))), React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-4"
-  }, "\uD83D\uDCCB Detailed Teacher Attendance"), React.createElement("div", {
-    className: "overflow-x-auto"
-  }, React.createElement("table", {
-    className: "w-full"
-  }, React.createElement("thead", {
-    className: "avanti-gradient-light"
-  }, React.createElement("tr", null, React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Date"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Teacher"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "School"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Punch-In Time"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Status"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Reason"), React.createElement("th", {
-    className: "p-3 text-left"
-  }, "Location"))), React.createElement("tbody", null, filteredTeacherAttendance.length === 0 ? React.createElement("tr", null, React.createElement("td", {
-    colSpan: "7",
-    className: "p-8 text-center text-gray-500"
-  }, rangeTeacherData === null ? "\u26A0\uFE0F Select dates above and click Load Data to view records" : "No records found for selected filters.")) : filteredTeacherAttendance.slice(0, 50).map((a, idx) => React.createElement("tr", {
-    key: idx,
-    className: "border-b hover:bg-gray-50"
-  }, React.createElement("td", {
-    className: "p-3 text-sm"
-  }, a.date), React.createElement("td", {
-    className: "p-3 font-semibold"
-  }, a.teacherName), React.createElement("td", {
-    className: "p-3"
-  }, a.school), React.createElement("td", {
-    className: "p-3"
-  }, React.createElement("span", {
-    className: "font-mono font-bold text-blue-600 text-lg"
-  }, "\u23F0 ", a.punchInTime || '--:--')), React.createElement("td", {
-    className: "p-3"
-  }, React.createElement("span", {
-    className: `px-2 py-1 rounded-full text-xs font-bold ${a.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`
-  }, a.status)), React.createElement("td", {
-    className: "p-3 text-sm"
-  }, a.reason), React.createElement("td", {
-    className: "p-3 text-sm"
-  }, "\uD83D\uDCCD ", a.location)))))))
-  , React.createElement("div", {className: "bg-white p-6 rounded-2xl shadow-lg"},
-    React.createElement("h3", {className: "text-xl font-bold mb-4"}, "\u270F\uFE0F Edit Teacher Attendance"),
-    React.createElement("div", {className: "flex gap-4 flex-wrap mb-4"},
-      React.createElement("div", {style: {flex: '1', minWidth: '200px'}},
-        React.createElement("label", {className: "block text-sm font-bold mb-2"}, "School"),
-        React.createElement("select", {
-          value: editSchool,
-          onChange: e => setEditSchool(e.target.value),
-          className: "w-full border-2 px-4 py-2 rounded-xl"
-        },
-          React.createElement("option", {value: ""}, "-- Select School --"),
-          schoolOptions.map(s => React.createElement("option", {key: s, value: s}, s))
-        )
-      ),
-      React.createElement("div", {style: {flex: '1', minWidth: '200px'}},
-        React.createElement("label", {className: "block text-sm font-bold mb-2"}, "Date"),
-        React.createElement("input", {
-          type: "date",
-          value: editDate,
-          onChange: e => setEditDate(e.target.value),
-          className: "w-full border-2 px-4 py-2 rounded-xl"
-        })
-      )
-    ),
-    !editSchool
-      ? React.createElement("div", {className: "text-center py-8 text-gray-400"}, "Select a school and date to edit teacher attendance")
-      : editLoadingData
-        ? React.createElement("div", {className: "text-center py-8 text-gray-500"}, "\u23F3 Loading...")
-        : editTeachers.length === 0
-          ? React.createElement("div", {className: "text-center py-8 text-gray-400"}, "No active teachers found for this school.")
-          : React.createElement("div", {className: "overflow-x-auto"},
-              React.createElement("div", {className: "py-2 mb-2 flex justify-between items-center"},
-                React.createElement("span", {className: "font-semibold text-gray-700"}, editSchool + " \u2014 " + editDate),
-                React.createElement("span", {className: "text-sm text-gray-500"}, editTeachers.length + " teachers, " + Object.keys(editAttendanceMap).length + " marked")
-              ),
-              React.createElement("table", {className: "w-full"},
-                React.createElement("thead", {className: "avanti-gradient-light"},
-                  React.createElement("tr", null,
-                    React.createElement("th", {className: "p-3 text-left"}, "Teacher"),
-                    React.createElement("th", {className: "p-3 text-left"}, "Status"),
-                    React.createElement("th", {className: "p-3 text-left"}, "Reason"),
-                    React.createElement("th", {className: "p-3 text-left"}, "Punch-In Time"),
-                    React.createElement("th", {className: "p-3 text-center"}, "Action")
-                  )
-                ),
-                React.createElement("tbody", null,
-                  editTeachers.map(t => {
-                    const rec = editAttendanceMap[t.afid];
-                    return React.createElement("tr", {key: t.afid, className: "border-b hover:bg-gray-50"},
-                      React.createElement("td", {className: "p-3"},
-                        React.createElement("div", {className: "font-semibold"}, t.name),
-                        rec && rec.markedByAdmin && React.createElement("span", {className: "text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold ml-1"}, "Admin Override")
-                      ),
-                      React.createElement("td", {className: "p-3"},
-                        rec
-                          ? React.createElement("span", {className: `px-2 py-1 rounded-full text-xs font-bold ${rec.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}, rec.status)
-                          : React.createElement("span", {className: "px-2 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500"}, "Not Marked")
-                      ),
-                      React.createElement("td", {className: "p-3 text-sm text-gray-600"}, rec ? rec.reason : "\u2014"),
-                      React.createElement("td", {className: "p-3 text-sm font-mono text-blue-600"}, rec && rec.punchInTime ? "\u23F0 " + rec.punchInTime : "\u2014"),
-                      React.createElement("td", {className: "p-3 text-center"},
-                        React.createElement("button", {
-                          onClick: () => setEditModal({teacher: t, existing: rec || null, status: rec ? rec.status : 'Present', reason: rec ? rec.reason : 'Present'}),
-                          className: `px-3 py-1 rounded-lg text-sm font-semibold transition-colors ${rec ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-green-100 text-green-700 hover:bg-green-200'}`
-                        }, rec ? "\u270F\uFE0F Edit" : "+ Mark")
-                      )
-                    );
-                  })
-                )
-              )
-            ),
-    editModal && React.createElement("div", {
-      className: "fixed inset-0 flex items-center justify-center z-50",
-      style: {background: 'rgba(0,0,0,0.55)'},
-      onClick: e => { if (e.target === e.currentTarget) setEditModal(null); }
-    },
-      React.createElement("div", {className: "bg-white rounded-2xl p-6 shadow-2xl w-full max-w-md mx-4"},
-        React.createElement("h3", {className: "text-xl font-bold mb-1"}, (editModal.existing ? "\u270F\uFE0F Edit" : "\u2795 Mark") + " Attendance"),
-        React.createElement("p", {className: "text-gray-500 text-sm mb-4"}, editModal.teacher.name + " \u2014 " + editDate),
-        React.createElement("div", {className: "space-y-4"},
-          React.createElement("div", null,
-            React.createElement("label", {className: "block text-sm font-semibold text-gray-700 mb-2"}, "Status"),
-            React.createElement("div", {className: "flex gap-3"},
-              ['Present', 'On Leave'].map(s =>
-                React.createElement("button", {
-                  key: s,
-                  onClick: () => setEditModal(prev => ({...prev, status: s, reason: s === 'Present' ? 'Present' : 'Personal Leave'})),
-                  className: `flex-1 py-2 rounded-lg font-semibold border-2 transition-colors ${editModal.status === s ? (s === 'Present' ? 'bg-green-500 text-white border-green-500' : 'bg-orange-500 text-white border-orange-500') : 'border-gray-300 text-gray-600 hover:border-gray-400'}`
-                }, s)
-              )
-            )
-          ),
-          React.createElement("div", null,
-            React.createElement("label", {className: "block text-sm font-semibold text-gray-700 mb-2"}, "Reason"),
-            React.createElement("select", {
-              value: editModal.reason,
-              onChange: e => setEditModal(prev => ({...prev, reason: e.target.value})),
-              className: "w-full border border-gray-300 rounded-lg p-2 focus:border-blue-400 focus:outline-none"
-            },
-              (editModal.status === 'Present' ? ['Present'] : ['Personal Leave', 'Sick Leave', 'Weekly Off', 'Public Holiday', 'Organization Holiday', 'School Holiday', 'Emergency Leave', 'Maternity Leave', 'Paternity Leave', 'Comp Off']).map(r =>
-                React.createElement("option", {key: r, value: r}, r)
-              )
-            )
-          ),
-          editModal.existing && React.createElement("div", {className: "text-xs bg-blue-50 text-blue-700 rounded-lg p-3 border border-blue-200"},
-            "Current: ", React.createElement("strong", null, editModal.existing.status), " \u2014 ", editModal.existing.reason,
-            editModal.existing.markedByAdmin ? " (previously admin-marked)" : " (teacher-submitted)"
-          ),
-          React.createElement("div", {className: "text-xs bg-yellow-50 text-yellow-700 rounded-lg p-3 border border-yellow-200"},
-            "\u26A0\uFE0F This will be saved as an admin override and will overwrite any existing record."
-          )
-        ),
-        React.createElement("div", {className: "flex gap-3 mt-6"},
-          React.createElement("button", {
-            onClick: () => setEditModal(null),
-            className: "flex-1 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium"
-          }, "Cancel"),
-          React.createElement("button", {
-            onClick: saveTeacherAttendanceEdit,
-            disabled: editSaving,
-            className: "flex-1 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
-          }, editSaving ? "Saving..." : "Save")
-        )
-      )
-    )
-  )
+  })))
   );
 }
 function TimetableAdminSection({ currentUser, availableSchools }) {
@@ -12571,11 +11202,13 @@ function TimetablePage({ currentUser, mySchool }) {
   var [isSaving, setIsSaving] = useState(false);
   var [isLoading, setIsLoading] = useState(true);
   var [saveMsg, setSaveMsg] = useState('');
-  var [conflicts, setConflicts] = useState([]);
   var [teacherFilter, setTeacherFilter] = useState('');
   var [lastSaved, setLastSaved] = useState(null);
   var [numPeriods, setNumPeriods] = useState(8);
-  var [periodTimes, setPeriodTimes] = useState(['6:00–7:00','7:30–9:00','9:30–10:30','10:30–12:00','12:00–1:30','3:00–4:30','5:00–8:00','9:00–10:30']);
+  var DEFAULT_PERIOD_TIMES = ['6:00–7:00','7:30–9:00','9:30–10:30','10:30–12:00','12:00–1:30','3:00–4:30','5:00–8:00','9:00–10:30'];
+  var [periodTimes11, setPeriodTimes11] = useState(DEFAULT_PERIOD_TIMES);
+  var [periodTimes12, setPeriodTimes12] = useState(DEFAULT_PERIOD_TIMES);
+  var periodTimes = activeClass==='11'?periodTimes11:periodTimes12;
   var [breakTimes, setBreakTimes] = useState({});
   var [editingTime, setEditingTime] = useState(null);
   var [periodLabels, setPeriodLabels] = useState({});
@@ -12608,16 +11241,19 @@ function TimetablePage({ currentUser, mySchool }) {
   function addPeriod(){
     var n=numPeriods+1;
     setNumPeriods(n);
-    setPeriodTimes(function(prev){ var next=prev.slice(); next.push(''); return next; });
+    setPeriodTimes11(function(prev){ var next=prev.slice(); next.push(''); return next; });
+    setPeriodTimes12(function(prev){ var next=prev.slice(); next.push(''); return next; });
   }
   function removePeriod(){
     if(numPeriods<=1) return;
     var n=numPeriods-1;
     setNumPeriods(n);
-    setPeriodTimes(function(prev){ return prev.slice(0,n); });
+    setPeriodTimes11(function(prev){ return prev.slice(0,n); });
+    setPeriodTimes12(function(prev){ return prev.slice(0,n); });
   }
   function updatePeriodTime(idx,val){
-    setPeriodTimes(function(prev){ var next=prev.slice(); next[idx]=val; return next; });
+    var setter=activeClass==='11'?setPeriodTimes11:setPeriodTimes12;
+    setter(function(prev){ var next=prev.slice(); next[idx]=val; return next; });
   }
   // Placeholder "teacher" available for any subject that has no dedicated
   // teacher assigned yet, e.g. "IT CBSE Teacher". Named per-subject (not one
@@ -12629,6 +11265,36 @@ function TimetablePage({ currentUser, mySchool }) {
   // Subjects that are always taught by CBSE Teacher (language / PT)
   var CBSE_SUBJECTS = ['English','Hindi','Sanskrit','Marathi','Gujarati','PT','Physical Education','Sports','Language'];
   function isCbseSubject(sub){ return sub && CBSE_SUBJECTS.some(function(cs){ return sub.toLowerCase().includes(cs.toLowerCase()); }); }
+  // Centres that also run a NEET section. When Maths runs there the class
+  // splits: JEE students go to Maths and NEET students to Biology at the same
+  // time. Such a slot holds two teachers (teacherId = Maths, teacherId2 =
+  // Biology), shown merged as "Maths teacher/Biology teacher".
+  var SPLIT_SUBJECT = 'Maths/Biology';
+  var SPLIT_PARTS = SPLIT_SUBJECT.split('/');
+  var NEET_SPLIT_SCHOOLS = ['EMRS Bhopal','EMRS Kundra','JNV Bharuch'];
+  var PAIR_SEP = '||';
+  function normSchool(s){ return (s||'').toLowerCase().replace(/_neet$/,'').replace(/[^a-z]/g,''); }
+  var hasNeetSplit = NEET_SPLIT_SCHOOLS.some(function(s){ return normSchool(s)===normSchool(mySchool); });
+  function isSplitSlot(s){ return !!s && s.subject===SPLIT_SUBJECT; }
+  function slotTeacherIds(s){ return s ? [s.teacherId,s.teacherId2].filter(Boolean) : []; }
+  function slotTeacherNames(s){
+    if(!s) return '';
+    if(isSplitSlot(s)&&(s.teacherName||s.teacherName2)) return (s.teacherName||'—')+'/'+(s.teacherName2||'—');
+    return s.teacherName||'';
+  }
+  // The subject a given teacher actually teaches in a slot (their half of a split slot).
+  function slotSubjectFor(s,tid){ return isSplitSlot(s) ? SPLIT_PARTS[tid===s.teacherId2?1:0] : (s.subject||''); }
+  function subjectKey(sub){ var k=(sub||'').toLowerCase().replace(/[^a-z]/g,''); return (k==='math'||k==='mathematics')?'maths':k==='bio'?'biology':k; }
+  function getSplitTeachers(part){ return teachers.filter(function(t){ return subjectKey(t.subject)===subjectKey(part); }); }
+  // Every Maths x Biology teacher pairing for a split slot: real teachers
+  // first, then pairings that use a per-subject placeholder.
+  function getSplitPairs(){
+    var a=getSplitTeachers(SPLIT_PARTS[0]).concat([getCbseTeacher(SPLIT_PARTS[0])]);
+    var b=getSplitTeachers(SPLIT_PARTS[1]).concat([getCbseTeacher(SPLIT_PARTS[1])]);
+    var pairs=[];
+    a.forEach(function(x){ b.forEach(function(y){ pairs.push({value:getTId(x)+PAIR_SEP+getTId(y),a:x,b:y,rank:(x.isCbse?1:0)+(y.isCbse?1:0)}); }); });
+    return pairs.sort(function(p,q){ return p.rank-q.rank; });
+  }
   // All subjects = teacher subjects + always-show language subjects
   function getAllSubjects(){
     var seen={}; var s=[];
@@ -12640,13 +11306,26 @@ function TimetablePage({ currentUser, mySchool }) {
   useEffect(function() {
     if (!mySchool) return;
     var db = getFirestore();
+    initialLoadDone.current=false;
     setIsLoading(true); setTeachers([]); setTimetable11({}); setTimetable12({}); setLastSaved(null);
+    // Reset per-school settings so switching schools doesn't carry the previous
+    // school's labels/times/off-days into one that hasn't customised them.
+    setNumPeriods(8); setPeriodTimes11(DEFAULT_PERIOD_TIMES); setPeriodTimes12(DEFAULT_PERIOD_TIMES);
+    setPeriodLabels({}); setColTypes({}); setBreakTimes({}); setWeeklyOffDays({Sunday:true});
+    // NEET-section teachers may be registered under "<school>_NEET"; load
+    // them too so they can be picked for the Maths/Biology split.
+    var neetSchool = hasNeetSplit && !/_neet$/i.test(mySchool) ? mySchool+'_NEET' : null;
     Promise.all([
       db.collection('teachers').where('school','==',mySchool).get(),
       db.collection('timetables').doc(mySchool+'_class11').get(),
-      db.collection('timetables').doc(mySchool+'_class12').get()
+      db.collection('timetables').doc(mySchool+'_class12').get(),
+      neetSchool ? db.collection('teachers').where('school','==',neetSchool).get().catch(function(){ return null; }) : Promise.resolve(null),
+      // Teachers from other centres who also work here (additionalSchools)
+      db.collection('teachers').where('additionalSchools','array-contains',mySchool).get().catch(function(){ return null; })
     ]).then(function(r) {
-      var tList = r[0].docs.map(function(d){ return Object.assign({},d.data(),{docId:d.id}); })
+      var tDocs = r[0].docs.concat(r[3] ? r[3].docs : []);
+      if (r[4]) r[4].docs.forEach(function(d){ if (!tDocs.some(function(x){ return x.id===d.id; })) tDocs.push(d); });
+      var tList = tDocs.map(function(d){ return Object.assign({},d.data(),{docId:d.id}); })
         .filter(function(t){ return !t.isArchived; })
         .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
       setTeachers(tList);
@@ -12655,9 +11334,9 @@ function TimetablePage({ currentUser, mySchool }) {
         var d1=r[1].data();
         setTimetable11(d1.slots||{});
         setLastSaved(d1.updatedAt||null);
+        if(d1.periodTimes) setPeriodTimes11(d1.periodTimes);
         if(d1.periodLabels){setPeriodLabels(d1.periodLabels);metaLoaded=true;}
         if(d1.colTypes){setColTypes(d1.colTypes);metaLoaded=true;}
-        if(d1.periodTimes){setPeriodTimes(d1.periodTimes);metaLoaded=true;}
         if(d1.numPeriods){setNumPeriods(d1.numPeriods);}else if(d1.periodTimes){setNumPeriods(d1.periodTimes.length);}
         if(d1.breakTimes){setBreakTimes(d1.breakTimes);}
         if(d1.weeklyOffDays){setWeeklyOffDays(d1.weeklyOffDays);}
@@ -12665,10 +11344,10 @@ function TimetablePage({ currentUser, mySchool }) {
       if (r[2].exists) {
         var d2=r[2].data();
         setTimetable12(d2.slots||{});
+        if(d2.periodTimes) setPeriodTimes12(d2.periodTimes);
         if(!metaLoaded){
           if(d2.periodLabels)setPeriodLabels(d2.periodLabels);
           if(d2.colTypes)setColTypes(d2.colTypes);
-          if(d2.periodTimes)setPeriodTimes(d2.periodTimes);
           if(d2.numPeriods){setNumPeriods(d2.numPeriods);}else if(d2.periodTimes){setNumPeriods(d2.periodTimes.length);}
           if(d2.breakTimes)setBreakTimes(d2.breakTimes);
         }
@@ -12676,25 +11355,32 @@ function TimetablePage({ currentUser, mySchool }) {
     }).catch(function(e){ console.error('Timetable load error:',e); })
     .finally(function(){ setIsLoading(false); setTimeout(function(){initialLoadDone.current=true;},800); });
   }, [mySchool]);
-  useEffect(function() {
+  // Same teacher in Class 11 and Class 12 at the same time. Derived on every
+  // render (not kept in state) so auto-save always checks the exact data it is
+  // about to save, instead of the conflicts from the previous edit.
+  function findConflicts(tt11,tt12) {
     var found = [];
     DAYS.forEach(function(day) {
       PERIODS.forEach(function(period) {
         var key = day+'_'+period;
-        var s11 = timetable11[key]||{}; var s12 = timetable12[key]||{};
-        if (s11.teacherId && s12.teacherId && s11.teacherId===s12.teacherId)
-          found.push({day:day,period:period,teacherName:s11.teacherName||'Unknown'});
+        var s11 = tt11[key]||{}; var s12 = tt12[key]||{};
+        var ids12 = slotTeacherIds(s12);
+        slotTeacherIds(s11).forEach(function(tid) {
+          if (ids12.indexOf(tid)!==-1)
+            found.push({day:day,period:period,teacherName:(tid===s11.teacherId2?s11.teacherName2:s11.teacherName)||'Unknown'});
+        });
       });
     });
-    setConflicts(found);
-  }, [timetable11,timetable12]);
+    return found;
+  }
+  var conflicts = findConflicts(timetable11,timetable12);
   // Auto-save: debounce 3s after any data change
   useEffect(function(){
     if(!initialLoadDone.current||isLoading||!canEdit()) return;
     if(autoSaveRef.current) clearTimeout(autoSaveRef.current);
     autoSaveRef.current=setTimeout(function(){saveTimetable(true);},3000);
     return function(){if(autoSaveRef.current)clearTimeout(autoSaveRef.current);};
-  },[timetable11,timetable12,periodLabels,colTypes,periodTimes,breakTimes]);
+  },[timetable11,timetable12,periodLabels,colTypes,periodTimes11,periodTimes12,breakTimes,weeklyOffDays,numPeriods]);
   function canEdit() {
     if (!currentUser) return false;
     var utype = (currentUser.userType||'').toLowerCase();
@@ -12711,13 +11397,21 @@ function TimetablePage({ currentUser, mySchool }) {
     return filtered.concat([getCbseTeacher(sub)]);
   }
   function getSlot(grade,day,period){ var key=day+'_'+period; return grade==='11'?(timetable11[key]||{}):(timetable12[key]||{}); }
-  function updateSlot(grade,day,period,updates){ var key=day+'_'+period; var setter=grade==='11'?setTimetable11:setTimetable12; setter(function(prev){ return Object.assign({},prev,{[key]:Object.assign({},prev[key]||{},updates)}); }); }
+  // A null value in `updates` removes that field from the slot.
+  function updateSlot(grade,day,period,updates){ var key=day+'_'+period; var setter=grade==='11'?setTimetable11:setTimetable12; setter(function(prev){ var next=Object.assign({},prev[key]||{},updates); Object.keys(next).forEach(function(k){ if(next[k]===null) delete next[k]; }); return Object.assign({},prev,{[key]:next}); }); }
   function clearSlot(grade,day,period){ var key=day+'_'+period; var setter=grade==='11'?setTimetable11:setTimetable12; setter(function(prev){ var n=Object.assign({},prev); delete n[key]; return n; }); }
   function isConflict(day,period){ return conflicts.some(function(c){ return c.day===day&&c.period===period; }); }
   function handleSubjectChange(grade,day,period,subject){
     var cur=getSlot(grade,day,period);
     var upd={subject:subject};
+    if(subject!==SPLIT_SUBJECT){ upd.teacherId2=null; upd.teacherName2=null; }
     if(!subject){ upd.teacherId=''; upd.teacherName=''; }
+    else if(subject===SPLIT_SUBJECT){
+      // Auto-select the pair when the centre has exactly one Maths and one Biology teacher
+      var ma=getSplitTeachers(SPLIT_PARTS[0]); var bi=getSplitTeachers(SPLIT_PARTS[1]);
+      if(ma.length===1&&bi.length===1){ upd.teacherId=getTId(ma[0]); upd.teacherName=ma[0].name||''; upd.teacherId2=getTId(bi[0]); upd.teacherName2=bi[0].name||''; }
+      else { upd.teacherId=''; upd.teacherName=''; upd.teacherId2=null; upd.teacherName2=null; }
+    }
     else if(isCbseSubject(subject)){
       // Language/PT → auto-select this subject's CBSE Teacher placeholder
       var cbseT=getCbseTeacher(subject); upd.teacherId=cbseT.docId; upd.teacherName=cbseT.name;
@@ -12726,24 +11420,34 @@ function TimetablePage({ currentUser, mySchool }) {
       var matching=teachers.filter(function(t){ return t.subject===subject; });
       if(matching.length===1){ upd.teacherId=getTId(matching[0]); upd.teacherName=matching[0].name||''; }
       else if(cur.teacherId){
+        // Drop a teacher (or another subject's placeholder) that doesn't teach the new subject
         var t=teachers.find(function(x){ return getTId(x)===cur.teacherId; });
-        if(t&&t.subject!==subject){ upd.teacherId=''; upd.teacherName=''; }
+        if(t?t.subject!==subject:cur.teacherId!==getCbseTeacher(subject).docId){ upd.teacherId=''; upd.teacherName=''; }
       }
     }
     updateSlot(grade,day,period,upd);
   }
-  function handleTeacherChange(grade,day,period,teacherId){ var cur=getSlot(grade,day,period); var t=getTeachersForSubject(cur.subject).find(function(x){ return getTId(x)===teacherId; })||teachers.find(function(x){ return getTId(x)===teacherId; }); updateSlot(grade,day,period,{teacherId:teacherId,teacherName:t?(t.name||''):'',subject:t?(t.subject||cur.subject||''):(cur.subject||'')}); }
+  function handleTeacherChange(grade,day,period,teacherId){
+    var cur=getSlot(grade,day,period);
+    if(isSplitSlot(cur)){
+      var p=getSplitPairs().find(function(x){ return x.value===teacherId; });
+      updateSlot(grade,day,period,p?{teacherId:getTId(p.a),teacherName:p.a.name||'',teacherId2:getTId(p.b),teacherName2:p.b.name||''}:{teacherId:'',teacherName:'',teacherId2:null,teacherName2:null});
+      return;
+    }
+    var t=getTeachersForSubject(cur.subject).find(function(x){ return getTId(x)===teacherId; })||teachers.find(function(x){ return getTId(x)===teacherId; });
+    updateSlot(grade,day,period,{teacherId:teacherId,teacherName:t?(t.name||''):'',subject:t?(t.subject||cur.subject||''):(cur.subject||'')});
+  }
   async function saveTimetable(isAutoSave){
     if(conflicts.length>0){if(!isAutoSave)setSaveMsg('❌ Fix all conflicts before saving!'); if(!isAutoSave)setTimeout(function(){setSaveMsg('');},4000); return;}
     setIsSaving(true); if(!isAutoSave)setSaveMsg('');
     if(isAutoSave)setSaveMsg('Auto-saving...');
     try{
       var db=getFirestore(); var now=new Date().toISOString();
-      var meta={periodLabels:periodLabels,colTypes:colTypes,periodTimes:periodTimes,breakTimes:breakTimes,weeklyOffDays:weeklyOffDays,numPeriods:numPeriods};
+      var meta={periodLabels:periodLabels,colTypes:colTypes,breakTimes:breakTimes,weeklyOffDays:weeklyOffDays,numPeriods:numPeriods};
       var base=Object.assign({school:mySchool,updatedAt:now,updatedBy:(currentUser&&(currentUser.afid||currentUser.email))||'',updatedByName:(currentUser&&currentUser.name)||''},meta);
       await Promise.all([
-        db.collection('timetables').doc(mySchool+'_class11').set(Object.assign({},base,{grade:'11',slots:timetable11})),
-        db.collection('timetables').doc(mySchool+'_class12').set(Object.assign({},base,{grade:'12',slots:timetable12}))
+        db.collection('timetables').doc(mySchool+'_class11').set(Object.assign({},base,{grade:'11',slots:timetable11,periodTimes:periodTimes11})),
+        db.collection('timetables').doc(mySchool+'_class12').set(Object.assign({},base,{grade:'12',slots:timetable12,periodTimes:periodTimes12}))
       ]);
       setLastSaved(now); setSaveMsg(isAutoSave?'✅ Auto-saved':'✅ Saved successfully!');
       // Schedule exam notifications for non-CBSE teachers
@@ -12758,51 +11462,122 @@ function TimetablePage({ currentUser, mySchool }) {
     var now=new Date();
     [timetable11,timetable12].forEach(function(tt,gi){
       var grade=gi===0?'11':'12';
+      var gradePeriodTimes=gi===0?periodTimes11:periodTimes12;
       DAYS.forEach(function(day){
         PERIODS.forEach(function(p,pi){
-          var slot=tt[day+'_'+p]; if(!slot||!slot.teacherId||!slot.subject) return;
-          if(isCbseTeacherId(slot.teacherId)) return; // Skip CBSE teachers
-          var teacher=teachers.find(function(t){return getTId(t)===slot.teacherId;});
-          if(!teacher) return;
-          var targetDay=dayMap[day]; var timeStr=periodTimes[pi]||'';
-          var timeParts=timeStr.split(/[–\-]/); if(timeParts.length<1) return;
-          var startRaw=timeParts[0].trim();
-          // Determine AM/PM: prefer explicit AM/PM in the stored time,
-          // fall back to the FULL_SCHEDULE reference time for this period
-          var fsEntry=FULL_SCHEDULE.find(function(fs){return fs.key===PERIODS[pi];});
-          var refTime=fsEntry?fsEntry.time:'';
-          var hasPM=/pm/i.test(startRaw)||(!(/am/i.test(startRaw))&&/pm/i.test(refTime));
-          startRaw=startRaw.replace(/\s*(AM|PM)/i,'');
-          var hm=startRaw.split(':'); if(hm.length<2) return;
-          var h=parseInt(hm[0])||0; var m=parseInt(hm[1])||0;
-          if(hasPM&&h!==12) h+=12; else if(!hasPM&&h===12) h=0;
-          var next=new Date(); next.setHours(h,m,0,0);
-          var diff=targetDay-now.getDay(); if(diff<0||(diff===0&&next<=now)) diff+=7;
-          next.setDate(next.getDate()+diff);
-          var delay=next.getTime()-Date.now()-5*60*1000;
-          if(delay>0&&delay<7*24*60*60*1000){
-            setTimeout(function(){
-              if(Notification.permission==='granted'){
-                new Notification('📚 Class Reminder - Avanti',{body:'Class '+grade+' | '+slot.subject+' with '+teacher.name+' starting at '+timeStr,icon:'/icon-192.png'});
-              }
-            },delay);
-          }
+          var slot=tt[day+'_'+p]; if(!slot||!slot.subject) return;
+          // A Maths/Biology split slot has two teachers; remind each about their own half
+          slotTeacherIds(slot).forEach(function(tid){
+            if(isCbseTeacherId(tid)) return; // Skip CBSE teachers
+            var teacher=teachers.find(function(t){return getTId(t)===tid;});
+            if(!teacher) return;
+            var subject=slotSubjectFor(slot,tid);
+            var targetDay=dayMap[day]; var timeStr=gradePeriodTimes[pi]||'';
+            var timeParts=timeStr.split(/[–\-]/); if(timeParts.length<1) return;
+            var startRaw=timeParts[0].trim();
+            // Determine AM/PM: prefer explicit AM/PM in the stored time,
+            // fall back to the FULL_SCHEDULE reference time for this period
+            var fsEntry=FULL_SCHEDULE.find(function(fs){return fs.key===PERIODS[pi];});
+            var refTime=fsEntry?fsEntry.time:'';
+            var hasPM=/pm/i.test(startRaw)||(!(/am/i.test(startRaw))&&/pm/i.test(refTime));
+            startRaw=startRaw.replace(/\s*(AM|PM)/i,'');
+            var hm=startRaw.split(':'); if(hm.length<2) return;
+            var h=parseInt(hm[0])||0; var m=parseInt(hm[1])||0;
+            if(hasPM&&h!==12) h+=12; else if(!hasPM&&h===12) h=0;
+            var next=new Date(); next.setHours(h,m,0,0);
+            var diff=targetDay-now.getDay(); if(diff<0||(diff===0&&next<=now)) diff+=7;
+            next.setDate(next.getDate()+diff);
+            var delay=next.getTime()-Date.now()-5*60*1000;
+            if(delay>0&&delay<7*24*60*60*1000){
+              setTimeout(function(){
+                if(Notification.permission==='granted'){
+                  new Notification('📚 Class Reminder - Avanti',{body:'Class '+grade+' | '+subject+' with '+teacher.name+' starting at '+timeStr,icon:'/icon-192.png'});
+                }
+              },delay);
+            }
+          });
         });
       });
     });
   }
+  // Parses a clock time like "8:15 AM" / "8:15" into minutes-since-midnight.
+  // refHasPM is used when the string itself has no AM/PM marker.
+  function parseClockToMinutes(raw,refHasPM){
+    raw=(raw||'').trim(); if(!raw) return null;
+    var hasPM=/pm/i.test(raw); var hasAM=/am/i.test(raw);
+    raw=raw.replace(/\s*(AM|PM)/i,'').trim();
+    var hm=raw.split(':'); if(hm.length<2) return null;
+    var h=parseInt(hm[0],10); var m=parseInt(hm[1],10);
+    if(isNaN(h)||isNaN(m)) return null;
+    var pm=hasPM||(!hasAM&&!!refHasPM);
+    if(pm&&h!==12) h+=12; else if(!pm&&h===12) h=0;
+    return h*60+m;
+  }
+  // Duration in minutes for a period's stored time-range string, e.g. "10:25 – 11:45 AM".
+  function getPeriodDurationMinutes(timeStr,periodIdx){
+    if(!timeStr) return 0;
+    var parts=timeStr.split(/[–\-]/); if(parts.length<2) return 0;
+    var fsEntry=FULL_SCHEDULE.find(function(fs){return fs.key===PERIODS[periodIdx];});
+    var refHasPM=/pm/i.test(fsEntry?fsEntry.time:'');
+    var endRaw=parts[1].trim();
+    var endHasPM=/pm/i.test(endRaw)||(!(/am/i.test(endRaw))&&refHasPM);
+    var endMin=parseClockToMinutes(endRaw,endHasPM);
+    var startMin=parseClockToMinutes(parts[0].trim(),endHasPM);
+    if(endMin===null||startMin===null) return 0;
+    var diff=endMin-startMin;
+    return diff>0?diff:0;
+  }
+  // Total weekly minutes a teacher is scheduled for, across both classes.
+  function getTeacherWeeklyMinutes(tid){
+    var total=0;
+    [{tt:timetable11,times:periodTimes11},{tt:timetable12,times:periodTimes12}].forEach(function(cls){
+      DAYS.forEach(function(day){
+        PERIODS.forEach(function(p,pi){
+          var slot=cls.tt[day+'_'+p];
+          if(slotTeacherIds(slot).indexOf(tid)!==-1) total+=getPeriodDurationMinutes(cls.times[pi],pi);
+        });
+      });
+    });
+    return total;
+  }
+  function formatHours(minutes){ return (Math.round((minutes/60)*10)/10)+'h'; }
+  function getTeacherSchedule(tid){ var sch={}; DAYS.forEach(function(day){ PERIODS.forEach(function(p){ var key=day+'_'+p; var s11=timetable11[key]||{}; var s12=timetable12[key]||{}; if(slotTeacherIds(s11).indexOf(tid)!==-1) sch[key]={grade:'11',subject:slotSubjectFor(s11,tid)}; else if(slotTeacherIds(s12).indexOf(tid)!==-1) sch[key]={grade:'12',subject:slotSubjectFor(s12,tid)}; }); }); return sch; }
+  // Builds the Day x column grid for one class, matching exactly what's
+  // rendered on screen (column labels/times/order, break columns, weekly-off rows).
+  function buildClassRows(grade,gradePeriodTimes){
+    var rows=[['Day'].concat(visibleSchedule.map(function(col){
+      var displayLabel=periodLabels[col.key]||col.label;
+      var pidx=PERIODS.indexOf(col.key);
+      var dispTime=col.type==='break'?(breakTimes[col.key]||col.time):(pidx>=0&&gradePeriodTimes[pidx]?gradePeriodTimes[pidx]:col.time);
+      return displayLabel+(dispTime?' ('+dispTime+')':'');
+    }))];
+    DAYS.forEach(function(day){
+      var row=[day];
+      visibleSchedule.forEach(function(col){
+        if(weeklyOffDays[day]){ row.push('Weekly Off'); return; }
+        var slot=getSlot(grade,day,col.key);
+        var names=slotTeacherNames(slot);
+        row.push(slot.subject?slot.subject+(names?' ('+names+')':''):'');
+      });
+      rows.push(row);
+    });
+    return rows;
+  }
   function exportCSV(){
-    var tt=activeClass==='11'?timetable11:timetable12;
-    var rows=[['Day'].concat(PLABELS.map(function(p,i){ return p+(periodTimes[i]?' ('+periodTimes[i]+')':''); }))];
-    DAYS.forEach(function(day){ var row=[day]; PERIODS.forEach(function(p){ var slot=tt[day+'_'+p]||{}; row.push(slot.subject?slot.subject+(slot.teacherName?' ('+slot.teacherName+')':''):''); }); rows.push(row); });
+    var rows=[['Class 11']].concat(buildClassRows('11',periodTimes11));
+    rows.push([]); rows.push(['Class 12']); rows=rows.concat(buildClassRows('12',periodTimes12));
+    rows.push([]); rows.push(['Teacher','Periods Assigned (Wk)','Weekly Hours']);
+    teachers.forEach(function(t){
+      var tid=getTId(t); var cnt=Object.keys(getTeacherSchedule(tid)).length;
+      if(cnt>0) rows.push([t.name,cnt,formatHours(getTeacherWeeklyMinutes(tid))]);
+    });
     var csv=rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
     var blob=new Blob([csv],{type:'text/csv'}); var url=URL.createObjectURL(blob);
-    var a=document.createElement('a'); a.href=url; a.download='Timetable_Class'+activeClass+'_'+(mySchool||'').replace(/\s+/g,'_')+'.csv';
+    var a=document.createElement('a'); a.href=url; a.download='Timetable_'+(mySchool||'').replace(/\s+/g,'_')+'.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }
   if(isLoading) return React.createElement('div',{className:'text-center py-16 text-gray-500'},React.createElement('div',{className:'text-4xl mb-3'},'⏳'),React.createElement('p',null,'Loading timetable...'));
   if(activeView==='teacher'){
-    function getTeacherSchedule(tid){ var sch={}; DAYS.forEach(function(day){ PERIODS.forEach(function(p){ var key=day+'_'+p; var s11=timetable11[key]||{}; var s12=timetable12[key]||{}; if(s11.teacherId===tid) sch[key]={grade:'11',subject:s11.subject||''}; else if(s12.teacherId===tid) sch[key]={grade:'12',subject:s12.subject||''}; }); }); return sch; }
     var selT=teacherFilter?teachers.find(function(t){ return getTId(t)===teacherFilter; }):null;
     return React.createElement('div',{className:'space-y-4'},
       React.createElement('div',{className:'flex flex-wrap gap-2 items-center justify-between'},
@@ -12818,7 +11593,7 @@ function TimetablePage({ currentUser, mySchool }) {
       selT?React.createElement('div',{className:'space-y-3'},
         React.createElement('div',{className:'bg-purple-50 border border-purple-200 rounded-2xl p-4'},
           React.createElement('h4',{className:'font-bold text-purple-800 text-lg'},selT.name+' — '+(selT.subject||'N/A')),
-          React.createElement('p',{className:'text-sm text-purple-600 mt-1'},Object.keys(getTeacherSchedule(getTId(selT))).length+' periods assigned this week')
+          React.createElement('p',{className:'text-sm text-purple-600 mt-1'},Object.keys(getTeacherSchedule(getTId(selT))).length+' periods assigned this week · '+formatHours(getTeacherWeeklyMinutes(getTId(selT)))+' / week')
         ),
         React.createElement('div',{className:'overflow-x-auto'},
           React.createElement('table',{className:'w-full min-w-[600px] border-collapse text-xs'},
@@ -12826,7 +11601,7 @@ function TimetablePage({ currentUser, mySchool }) {
             React.createElement('tbody',null,DAYS.map(function(day){ return React.createElement('tr',{key:day,className:'odd:bg-white even:bg-gray-50'},React.createElement('td',{className:'border p-2 font-semibold whitespace-nowrap'},day),PERIODS.map(function(period,i){ var slot=getTeacherSchedule(getTId(selT))[day+'_'+period]; return React.createElement('td',{key:i,className:'border p-1 text-center '+(slot?'bg-green-50':'')},slot?React.createElement('div',null,React.createElement('div',{className:'font-bold text-green-700'},slot.subject),React.createElement('div',{className:'text-gray-500'},'Cl '+slot.grade)):React.createElement('span',{className:'text-gray-300'},'—')); })); }))
           )
         )
-      ):React.createElement('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-4'},teachers.map(function(t){ var cnt=Object.keys(getTeacherSchedule(getTId(t))).length; return React.createElement('div',{key:getTId(t),className:'bg-white rounded-2xl shadow p-4 border-l-4 border-purple-400 cursor-pointer hover:shadow-md',onClick:function(){setTeacherFilter(getTId(t));}},React.createElement('div',{className:'font-bold text-gray-800'},t.name),React.createElement('div',{className:'text-sm text-gray-500 mb-2'},t.subject||'—'),React.createElement('span',{className:'px-3 py-1 rounded-full text-xs font-semibold '+(cnt>0?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500')},cnt+' period'+(cnt!==1?'s':'')+' assigned')); }))
+      ):React.createElement('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-4'},teachers.map(function(t){ var tid=getTId(t); var cnt=Object.keys(getTeacherSchedule(tid)).length; return React.createElement('div',{key:tid,className:'bg-white rounded-2xl shadow p-4 border-l-4 border-purple-400 cursor-pointer hover:shadow-md',onClick:function(){setTeacherFilter(tid);}},React.createElement('div',{className:'font-bold text-gray-800'},t.name),React.createElement('div',{className:'text-sm text-gray-500 mb-2'},t.subject||'—'),React.createElement('div',{className:'flex flex-wrap gap-2'},React.createElement('span',{className:'px-3 py-1 rounded-full text-xs font-semibold '+(cnt>0?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500')},cnt+' period'+(cnt!==1?'s':'')+' assigned'),cnt>0&&React.createElement('span',{className:'px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700'},formatHours(getTeacherWeeklyMinutes(tid))+'/wk'))); }))
     );
   }
   var currentTT=activeClass==='11'?timetable11:timetable12;
@@ -12842,7 +11617,7 @@ function TimetablePage({ currentUser, mySchool }) {
         React.createElement('div',{className:'flex flex-wrap gap-2 items-center'},
           React.createElement('button',{onClick:function(){setActiveView('teacher');},className:'px-3 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-xl font-semibold text-xs border border-white border-opacity-30'},'👩‍🏫 Teacher View'),
           React.createElement('button',{onClick:exportCSV,className:'px-3 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-xl font-semibold text-xs border border-white border-opacity-30'},'📤 Export'),
-          editable&&React.createElement('button',{onClick:saveTimetable,disabled:isSaving,className:'px-4 py-2 rounded-xl font-semibold text-sm bg-white text-yellow-700 hover:bg-yellow-50 disabled:opacity-60 disabled:cursor-not-allowed shadow'},isSaving?'⏳ Saving...':'💾 Save'),
+          editable&&React.createElement('button',{onClick:function(){saveTimetable(false);},disabled:isSaving,className:'px-4 py-2 rounded-xl font-semibold text-sm bg-white text-yellow-700 hover:bg-yellow-50 disabled:opacity-60 disabled:cursor-not-allowed shadow'},isSaving?'⏳ Saving...':'💾 Save'),
           !editable&&React.createElement('span',{className:'px-3 py-1 bg-white bg-opacity-20 rounded-full text-xs border border-white border-opacity-30'},'👁️ View only')
         )
       )
@@ -12923,6 +11698,7 @@ function TimetablePage({ currentUser, mySchool }) {
                 },
                   React.createElement('option',{value:'Class'},'Class'),
                   React.createElement('option',{value:'Assembly'},'Assembly'),
+                  React.createElement('option',{value:'Break'},'Break'),
                   React.createElement('option',{value:'Lunch'},'Lunch'),
                   React.createElement('option',{value:'Breakfast'},'Breakfast'),
                   React.createElement('option',{value:'Snack'},'Snack'),
@@ -12997,7 +11773,9 @@ function TimetablePage({ currentUser, mySchool }) {
               var period=col.key;
               var s=getSlot(activeClass,day,period);
               var conf=isConflict(day,period);
-              var tfs=getTeachersForSubject(s.subject);
+              var isSplit=isSplitSlot(s);
+              var tfs=isSplit?[]:getTeachersForSubject(s.subject);
+              var splitPairs=isSplit?getSplitPairs():[];
               var cellBg=conf?'#fef2f2':(s.subject||s.teacherName)?'#faf5ff':rowBg;
               return React.createElement('div',{key:period,className:'flex flex-col justify-start',style:{width:'160px',minHeight:'90px',background:cellBg,borderLeft:'1px solid #e5e7eb',padding:'8px 8px',flexShrink:0}},
                 conf&&React.createElement('div',{className:'text-xs font-bold text-red-500 text-center leading-none mb-1'},'⚠️ Conflict'),
@@ -13005,12 +11783,15 @@ function TimetablePage({ currentUser, mySchool }) {
                   ?React.createElement('div',{className:'space-y-1.5 w-full'},
                       React.createElement('select',{value:s.subject||'',onChange:function(e){handleSubjectChange(activeClass,day,period,e.target.value);},className:'w-full border border-gray-300 rounded text-xs py-1.5 px-2 bg-white focus:border-yellow-400 focus:outline-none'},
                         React.createElement('option',{value:''},'— Sub —'),
+                        (hasNeetSplit||isSplit)&&React.createElement('optgroup',{label:'JEE + NEET split'},React.createElement('option',{value:SPLIT_SUBJECT},SPLIT_SUBJECT)),
                         React.createElement('optgroup',{label:'Subjects'},subjects.filter(function(sub){return !isCbseSubject(sub);}).map(function(sub){return React.createElement('option',{key:sub,value:sub},sub);})),
                         React.createElement('optgroup',{label:'Language / PT'},subjects.filter(function(sub){return isCbseSubject(sub);}).map(function(sub){return React.createElement('option',{key:sub,value:sub},sub);}))
                       ),
-                      React.createElement('select',{value:s.teacherId||'',onChange:function(e){handleTeacherChange(activeClass,day,period,e.target.value);},className:'w-full border rounded text-xs py-1.5 px-2 bg-white focus:border-yellow-400 focus:outline-none '+(conf?'border-red-400':isCbseTeacherId(s.teacherId)?'border-blue-300':'border-gray-300')},
-                        React.createElement('option',{value:''},'— Teacher —'),
-                        tfs.map(function(t){return React.createElement('option',{key:getTId(t),value:getTId(t)},t.name);})
+                      React.createElement('select',{value:isSplit?(s.teacherId&&s.teacherId2?s.teacherId+PAIR_SEP+s.teacherId2:''):(s.teacherId||''),onChange:function(e){handleTeacherChange(activeClass,day,period,e.target.value);},className:'w-full border rounded text-xs py-1.5 px-2 bg-white focus:border-yellow-400 focus:outline-none '+(conf?'border-red-400':(isCbseTeacherId(s.teacherId)||isCbseTeacherId(s.teacherId2))?'border-blue-300':'border-gray-300')},
+                        React.createElement('option',{value:''},isSplit?'— Maths/Bio Teachers —':'— Teacher —'),
+                        isSplit
+                          ?splitPairs.map(function(pr){return React.createElement('option',{key:pr.value,value:pr.value},pr.a.name+'/'+pr.b.name);})
+                          :tfs.map(function(t){return React.createElement('option',{key:getTId(t),value:getTId(t)},t.name);})
                       ),
                       (s.subject||s.teacherId)&&React.createElement('button',{onClick:function(){clearSlot(activeClass,day,period);},className:'text-xs text-gray-400 hover:text-red-500 self-end leading-none'},'✕ clear')
                     )
@@ -13018,7 +11799,7 @@ function TimetablePage({ currentUser, mySchool }) {
                       s.subject
                         ?React.createElement('div',null,
                             React.createElement('div',{className:'text-xs font-bold '+(isCbseSubject(s.subject)?'text-blue-700':'text-purple-700')},s.subject),
-                            React.createElement('div',{className:'text-xs text-gray-600 mt-0.5'},s.teacherName||'—')
+                            React.createElement('div',{className:'text-xs text-gray-600 mt-0.5'},slotTeacherNames(s)||'—')
                           )
                         :React.createElement('span',{className:'text-gray-300 text-xs'},'—')
                     )
@@ -13044,11 +11825,11 @@ function TeacherDirectory({
   const [filterSchool, setFilterSchool] = useState('All');
   const [filterSubject, setFilterSubject] = useState('All');
   const [selectedTeacher, setSelectedTeacher] = useState(null);
-  const schools = ['All', ...new Set(teachers.filter(t => !t.isArchived).map(t => t.school))];
+  const schools = ['All', ...new Set(teachers.filter(t => !t.isArchived).flatMap(getTeacherSchools))];
   const filteredTeachers = teachers.filter(teacher => {
     if (teacher.isArchived) return false;
     const matchesSearch = teacher.name?.toLowerCase().includes(searchTerm.toLowerCase()) || teacher.email?.toLowerCase().includes(searchTerm.toLowerCase()) || teacher.phone?.includes(searchTerm);
-    const matchesSchool = filterSchool === 'All' || teacher.school === filterSchool;
+    const matchesSchool = filterSchool === 'All' || getTeacherSchools(teacher).includes(filterSchool);
     const matchesSubject = filterSubject === 'All' || teacher.subject === filterSubject;
     return matchesSearch && matchesSchool && matchesSubject;
   });
@@ -13443,6 +12224,7 @@ function OrgChartDirectory({
     allMembers.forEach(m => {
       if (m.school) schools.add(m.school);
       if (m.directSchools) m.directSchools.forEach(s => schools.add(s));
+      if (m.additionalSchools) m.additionalSchools.forEach(s => schools.add(s));
       if (m.subject) subjects.add(m.subject);
     });
     return {
@@ -13470,6 +12252,7 @@ function OrgChartDirectory({
       if (!matchesSchool) {
         if (m.school === filterSchool) matchesSchool = true;
         if (m.directSchools?.includes(filterSchool)) matchesSchool = true;
+        if (m.additionalSchools?.includes(filterSchool)) matchesSchool = true;
       }
       const matchesSubject = filterSubject === 'all' || m.subject === filterSubject;
       let matchesManager = filterManager === 'all';
@@ -13479,6 +12262,7 @@ function OrgChartDirectory({
         if (m.id === filterManager) matchesManager = true;
         const selectedManager = managers.find(mgr => mgr.id === filterManager);
         if (selectedManager?.directSchools?.includes(m.school)) matchesManager = true;
+        if (m.additionalSchools?.some(s => selectedManager?.directSchools?.includes(s))) matchesManager = true;
       }
       return matchesSearch && matchesRole && matchesSchool && matchesSubject && matchesManager;
     });
@@ -13685,7 +12469,7 @@ function OrgChartDirectory({
       className: `text-xs px-2 py-0.5 rounded-full inline-block ${roleColor.bg} ${roleColor.text} font-medium mt-1`
     }, member.displayRole), member.school && React.createElement("div", {
       className: "text-sm text-gray-500 mt-1 truncate flex items-center gap-1"
-    }, React.createElement("span", null, "\uD83C\uDFEB"), " ", member.school), member.directSchools?.length > 0 && React.createElement("div", {
+    }, React.createElement("span", null, "\uD83C\uDFEB"), " ", member.school, member.additionalSchools?.length > 0 && ` + ${member.additionalSchools.join(', ')}`), member.directSchools?.length > 0 && React.createElement("div", {
       className: "text-xs text-gray-400 mt-1 truncate"
     }, "Manages: ", member.directSchools.slice(0, 2).join(', '), member.directSchools.length > 2 ? ` +${member.directSchools.length - 2}` : ''), member.subject && React.createElement("span", {
       className: "inline-block mt-1 text-xs px-2 py-0.5 rounded-full text-white font-medium",
@@ -13890,7 +12674,6 @@ function SocialWall({
   teachers,
   currentUser
 }) {
-  const [posts, setPosts] = useState([]);
   const [birthdays, setBirthdays] = useState([]);
   const [upcomingBirthdays, setUpcomingBirthdays] = useState([]);
   const [weekBirthdays, setWeekBirthdays] = useState([]);
@@ -13898,9 +12681,6 @@ function SocialWall({
   const [anniversaries, setAnniversaries] = useState([]);
   const [weekAnniversaries, setWeekAnniversaries] = useState([]);
   const [monthAnniversaries, setMonthAnniversaries] = useState([]);
-  const [showNewPost, setShowNewPost] = useState(false);
-  const [newPostContent, setNewPostContent] = useState('');
-  const [posting, setPosting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showBirthdayPopup, setShowBirthdayPopup] = useState(null);
   // ✅ FIX: Safety timeout - if loading takes >10s, stop spinner and show empty state
@@ -13909,197 +12689,9 @@ function SocialWall({
     return () => clearTimeout(timer);
   }, []);
   const [allMembers, setAllMembers] = useState([]);
-  const [activeTab, setActiveTab] = useState('feed');
   const [celebrationReactions, setCelebrationReactions] = useState({});
   const [wishMessage, setWishMessage] = useState('');
   const [showWishInput, setShowWishInput] = useState(null);
-  const [topPerformers, setTopPerformers] = useState([]);
-  const [previousMonthWinners, setPreviousMonthWinners] = useState([]);
-  const [recognitionLoading, setRecognitionLoading] = useState(false);
-  const [postImage, setPostImage] = useState(null);
-  const [postImagePreview, setPostImagePreview] = useState(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [replyingTo, setReplyingTo] = useState(null);
-  const [replyContent, setReplyContent] = useState('');
-  const [replyImage, setReplyImage] = useState(null);
-  const [replyImagePreview, setReplyImagePreview] = useState(null);
-  const [showGifPicker, setShowGifPicker] = useState(null);
-  const [expandedReplies, setExpandedReplies] = useState({});
-  const [editingPost, setEditingPost] = useState(null);
-  const [editPostContent, setEditPostContent] = useState('');
-  const [editingComment, setEditingComment] = useState(null);
-  const [editCommentContent, setEditCommentContent] = useState('');
-  const isAdminOrModerator = currentUser?.role === 'super_admin' || currentUser?.role === 'aph' || currentUser?.role === 'senior_pm' || currentUser?.role === 'pm' || currentUser?.isSuperAdmin === true;
-  const compressImage = (file, maxWidth = 1200, quality = 0.7) => {
-    return new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        console.warn('[compressImage] Timeout - returning original file');
-        resolve(file);
-      }, 10000);
-      if (file.size < 200 * 1024) {
-        clearTimeout(timeoutId);
-        resolve(file);
-        return;
-      }
-      try {
-        const reader = new FileReader();
-        reader.onerror = () => {
-          clearTimeout(timeoutId);
-          console.warn('[compressImage] FileReader error - returning original file');
-          resolve(file);
-        };
-        reader.onload = e => {
-          const img = new Image();
-          img.onerror = () => {
-            clearTimeout(timeoutId);
-            console.warn('[compressImage] Image load error - returning original file');
-            resolve(file);
-          };
-          img.onload = () => {
-            try {
-              const canvas = document.createElement('canvas');
-              let width = img.width;
-              let height = img.height;
-              if (width > maxWidth) {
-                height = height * maxWidth / width;
-                width = maxWidth;
-              }
-              canvas.width = width;
-              canvas.height = height;
-              const ctx = canvas.getContext('2d');
-              if (!ctx) {
-                clearTimeout(timeoutId);
-                console.warn('[compressImage] Canvas context error - returning original file');
-                resolve(file);
-                return;
-              }
-              ctx.drawImage(img, 0, 0, width, height);
-              canvas.toBlob(blob => {
-                clearTimeout(timeoutId);
-                if (!blob) {
-                  console.warn('[compressImage] toBlob returned null - returning original file');
-                  resolve(file);
-                  return;
-                }
-                const compressedFile = new File([blob], file.name, {
-                  type: 'image/jpeg',
-                  lastModified: Date.now()
-                });
-                console.log(`Compressed: ${(file.size / 1024).toFixed(1)}KB → ${(compressedFile.size / 1024).toFixed(1)}KB`);
-                resolve(compressedFile);
-              }, 'image/jpeg', quality);
-            } catch (canvasError) {
-              clearTimeout(timeoutId);
-              console.warn('[compressImage] Canvas error:', canvasError);
-              resolve(file);
-            }
-          };
-          img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-      } catch (error) {
-        clearTimeout(timeoutId);
-        console.warn('[compressImage] Unexpected error:', error);
-        resolve(file);
-      }
-    });
-  };
-  const handlePostImageSelect = async e => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Image size should be less than 10MB');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => setPostImagePreview(reader.result);
-      reader.readAsDataURL(file);
-      const compressed = await compressImage(file);
-      setPostImage(compressed);
-    }
-  };
-  const handleReplyImageSelect = async e => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Image size should be less than 10MB');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => setReplyImagePreview(reader.result);
-      reader.readAsDataURL(file);
-      const compressed = await compressImage(file);
-      setReplyImage(compressed);
-    }
-  };
-  const uploadImage = async (file, path) => {
-    if (!file || typeof firebase === 'undefined') return null;
-    try {
-      const storageRef = firebase.storage().ref();
-      const fileRef = storageRef.child(path + '/' + Date.now() + '_' + file.name);
-      await fileRef.put(file);
-      const url = await fileRef.getDownloadURL();
-      console.log('[SocialWall] Image uploaded to Storage successfully');
-      return url;
-    } catch (e) {
-      console.warn('[SocialWall] Storage upload failed (CORS?), trying base64 fallback:', e.message);
-      try {
-        const compressedFile = await compressImageForBase64(file);
-        const base64 = await fileToBase64(compressedFile);
-        if (base64.length > 750000) {
-          throw new Error('Image too large even after compression');
-        }
-        console.log('[SocialWall] Using base64 fallback, size:', Math.round(base64.length / 1024) + 'KB');
-        return base64;
-      } catch (fallbackError) {
-        console.error('[SocialWall] Base64 fallback also failed:', fallbackError);
-        alert('⚠️ Image upload failed. Please try:\\n\\n1. Use a smaller image\\n2. Check your internet connection\\n3. Try again');
-        return null;
-      }
-    }
-  };
-  const compressImageForBase64 = async file => {
-    return new Promise(resolve => {
-      const reader = new FileReader();
-      reader.onload = e => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const maxSize = 600;
-          let {
-            width,
-            height
-          } = img;
-          if (width > maxSize || height > maxSize) {
-            if (width > height) {
-              height = height / width * maxSize;
-              width = maxSize;
-            } else {
-              width = width / height * maxSize;
-              height = maxSize;
-            }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob(resolve, 'image/jpeg', 0.5);
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-  const fileToBase64 = file => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-  const popularGifs = ['https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif', 'https://media.giphy.com/media/3oz8xIsloV7zOmt81G/giphy.gif', 'https://media.giphy.com/media/BPJmthQ3YRwD6QqcVD/giphy.gif', 'https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif', 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif', 'https://media.giphy.com/media/KJ1f5iTl4Oo7u/giphy.gif', 'https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif', 'https://media.giphy.com/media/l3q2K5jinAlChoCLS/giphy.gif'];
-  const celebrationEmojis = ['🎉', '🎂', '🥳', '❤️', '👏', '🎊'];
   const loadCelebrationReactions = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -14218,26 +12810,21 @@ function SocialWall({
     const fetchData = async () => {
       try {
         setLoading(true);
-        // ✅ FIX: Use the teachers prop already loaded in App - avoid 3 redundant Firebase reads
-        // Also fetch managers/apcs for birthday data, but use Promise.allSettled so 
-        // partial failures don't block posts from loading
         const [managersResult, apcsResult] = await Promise.allSettled([
           db.collection('managers').get(),
           db.collection('apcs').get()
         ]);
-        const managers = managersResult.status === 'fulfilled' 
+        const managers = managersResult.status === 'fulfilled'
           ? managersResult.value.docs.map(doc => ({id: doc.id, ...doc.data(), role: 'Manager'}))
           : [];
         const apcs = apcsResult.status === 'fulfilled'
           ? apcsResult.value.docs.map(doc => ({id: doc.id, ...doc.data(), role: 'APC'}))
           : [];
+        setLoading(false);
         // Use prop teachers (already loaded) instead of re-fetching
         const allTeachers = (teachers || []).map(t => ({...t, role: 'Teacher'}));
         const combined = [...managers, ...apcs, ...allTeachers].filter(m => m.name && m.name.toLowerCase() !== 'vacant' && !m.isArchived);
         setAllMembers(combined);
-        console.log('[SocialWall] Total members loaded:', combined.length);
-        console.log('[SocialWall] Members with DOB:', combined.filter(m => m.dateOfBirth || m.dob).length);
-        console.log('[SocialWall] Members with joiningDate:', combined.filter(m => m.joiningDate).length);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayMonth = today.getMonth();
@@ -14258,7 +12845,6 @@ function SocialWall({
           return dob.getMonth() === todayMonth && dob.getDate() === todayDate;
         });
         setBirthdays(todayBirthdays);
-        console.log('[SocialWall] Today birthdays:', todayBirthdays.length);
         const thisWeekBdays = combined.filter(m => {
           const dobField = m.dateOfBirth || m.dob;
           if (!dobField) return false;
@@ -14266,7 +12852,6 @@ function SocialWall({
           return days >= 0 && days <= 7;
         }).sort((a, b) => getDaysUntilBday(a.dateOfBirth || a.dob) - getDaysUntilBday(b.dateOfBirth || b.dob));
         setWeekBirthdays(thisWeekBdays);
-        console.log('[SocialWall] This week birthdays:', thisWeekBdays.length);
         const thisMonthBdays = combined.filter(m => {
           const dobField = m.dateOfBirth || m.dob;
           if (!dobField) return false;
@@ -14278,7 +12863,6 @@ function SocialWall({
           return aDay - bDay;
         });
         setMonthBirthdays(thisMonthBdays);
-        console.log('[SocialWall] This month birthdays:', thisMonthBdays.length);
         const upcoming = combined.filter(m => {
           const dobField = m.dateOfBirth || m.dob;
           if (!dobField) return false;
@@ -14286,7 +12870,6 @@ function SocialWall({
           return days > 0 && days <= 30;
         }).sort((a, b) => getDaysUntilBday(a.dateOfBirth || a.dob) - getDaysUntilBday(b.dateOfBirth || b.dob)).slice(0, 15);
         setUpcomingBirthdays(upcoming);
-        console.log('[SocialWall] Upcoming birthdays (30 days):', upcoming.length);
         const getDaysUntilAnniv = joinDateString => {
           if (!joinDateString) return 999;
           const jDate = new Date(joinDateString);
@@ -14304,7 +12887,6 @@ function SocialWall({
           return j.getMonth() === todayMonth && j.getDate() === todayDate;
         });
         setAnniversaries(todayAnniversaries);
-        console.log('[SocialWall] Today anniversaries:', todayAnniversaries.length);
         const weekAnn = combined.filter(m => {
           if (!m.joiningDate) return false;
           const j = new Date(m.joiningDate);
@@ -14313,7 +12895,6 @@ function SocialWall({
           return days >= 0 && days <= 7;
         }).sort((a, b) => getDaysUntilAnniv(a.joiningDate) - getDaysUntilAnniv(b.joiningDate));
         setWeekAnniversaries(weekAnn);
-        console.log('[SocialWall] This week anniversaries:', weekAnn.length);
         const monthAnn = combined.filter(m => {
           if (!m.joiningDate) return false;
           const j = new Date(m.joiningDate);
@@ -14325,413 +12906,119 @@ function SocialWall({
           return aDay - bDay;
         });
         setMonthAnniversaries(monthAnn);
-        console.log('[SocialWall] This month anniversaries:', monthAnn.length);
         if (todayBirthdays.length > 0) {
           const dismissedToday = localStorage.getItem('birthdayDismissed_' + today.toDateString());
           if (!dismissedToday) {
             setShowBirthdayPopup(todayBirthdays[0]);
           }
         }
-        // ✅ FIX: Try ordered query first; fall back to unordered if index missing
-        let postsSnap;
-        try {
-          postsSnap = await db.collection('socialPosts').orderBy('createdAt', 'desc').limit(50).get();
-        } catch (indexErr) {
-          console.warn('[SocialWall] orderBy index not ready, fetching without sort:', indexErr.message);
-          postsSnap = await db.collection('socialPosts').limit(50).get();
-        }
-        const postsData = postsSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        // Sort client-side as fallback
-        postsData.sort((a, b) => {
-          const aTime = a.createdAt?.toDate?.()?.getTime() || new Date(a.createdAt || 0).getTime();
-          const bTime = b.createdAt?.toDate?.()?.getTime() || new Date(b.createdAt || 0).getTime();
-          return bTime - aTime;
-        });
-        setPosts(postsData);
       } catch (error) {
-        console.error('[SocialWall] Error loading posts:', error);
-        // ✅ FIX: Set empty posts so loading spinner stops - show empty state
-        setPosts([]);
-      } finally {
+        console.error('[SocialWall] Error loading member/celebration data:', error);
         setLoading(false);
       }
     };
     fetchData();
     loadCelebrationReactions();
   }, [teachers]);
-  useEffect(() => {
-    const fetchRecognitionData = async () => {
-      if (activeTab !== 'recognition') return;
-      setRecognitionLoading(true);
-      try {
-        const now = new Date();
-        const currentMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 7); // last completed month
-        const currentStartDate = currentMonth + '-01';
-        const currentEndDate = currentMonth + '-31';
-        const prevMonth = new Date(now.getFullYear(), now.getMonth() - 2, 1); // two months ago
-        const prevMonthStr = prevMonth.toISOString().slice(0, 7);
-        const prevStartDate = prevMonthStr + '-01';
-        const prevEndDate = prevMonthStr + '-31';
-        const currentMonthSnap = await db.collection('timesheetEntries').where('date', '>=', currentStartDate).where('date', '<=', currentEndDate).where('status', '==', 'approved').get();
-        const currentTeacherHours = {};
-        currentMonthSnap.docs.forEach(doc => {
-          const data = doc.data();
-          const key = data.teacherAfid;
-          if (!currentTeacherHours[key]) {
-            currentTeacherHours[key] = {
-              afid: data.teacherAfid,
-              name: data.teacherName,
-              school: data.school,
-              subject: data.subject,
-              totalHours: 0,
-              entries: 0
-            };
-          }
-          currentTeacherHours[key].totalHours += parseFloat(data.hours) || 0;
-          currentTeacherHours[key].entries += 1;
-        });
-        const sortedCurrent = Object.values(currentTeacherHours).sort((a, b) => b.totalHours - a.totalHours).slice(0, 2);
-        setTopPerformers(sortedCurrent);
-        const prevMonthSnap = await db.collection('timesheetEntries').where('date', '>=', prevStartDate).where('date', '<=', prevEndDate).where('status', '==', 'approved').get();
-        const prevTeacherHours = {};
-        prevMonthSnap.docs.forEach(doc => {
-          const data = doc.data();
-          const key = data.teacherAfid;
-          if (!prevTeacherHours[key]) {
-            prevTeacherHours[key] = {
-              afid: data.teacherAfid,
-              name: data.teacherName,
-              school: data.school,
-              subject: data.subject,
-              totalHours: 0,
-              entries: 0,
-              month: prevMonthStr
-            };
-          }
-          prevTeacherHours[key].totalHours += parseFloat(data.hours) || 0;
-          prevTeacherHours[key].entries += 1;
-        });
-        const sortedPrev = Object.values(prevTeacherHours).sort((a, b) => b.totalHours - a.totalHours).slice(0, 2);
-        setPreviousMonthWinners(sortedPrev);
-      } catch (error) {
-        console.error('Error fetching recognition data:', error);
-      } finally {
-        setRecognitionLoading(false);
-      }
-    };
-    fetchRecognitionData();
-  }, [activeTab]);
-  const handleCreatePost = async () => {
-    if (!newPostContent.trim() && !postImage) return;
-    setPosting(true);
-    setUploadingImage(true);
-    try {
-      let imageUrl = null;
-      if (postImage) {
-        imageUrl = await uploadImage(postImage, 'social_posts');
-        if (!imageUrl) {
-          const continueWithoutImage = confirm('⚠️ Could not upload image.\\n\\nWould you like to post without the image?');
-          if (!continueWithoutImage) {
-            setPosting(false);
-            setUploadingImage(false);
-            return;
-          }
-        }
-      }
-      const postData = {
-        content: newPostContent.trim(),
-        authorId: currentUser.afid || currentUser.uid,
-        authorName: currentUser.name,
-        authorPhoto: currentUser.profilePhoto || '',
-        authorSchool: currentUser.school,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        reactions: {},
-        comments: [],
-        imageUrl: imageUrl || null,
-        imageType: imageUrl?.startsWith('data:') ? 'base64' : 'url'
-      };
-      const docRef = await db.collection('socialPosts').add(postData);
-      setPosts([{
-        id: docRef.id,
-        ...postData,
-        createdAt: new Date()
-      }, ...posts]);
-      const postContent = newPostContent.trim();
-      const mentionRegex = /@(\w+(?:\s\w+)?)/g;
-      let match;
-      if (postContent.toLowerCase().includes('@everyone')) {
-        MentionNotificationSystem.sendEveryoneNotification(postContent, currentUser.name, currentUser.afid || currentUser.uid);
-      } else {
-        while ((match = mentionRegex.exec(postContent)) !== null) {
-          const mentionedName = match[1];
-          const mentionedMember = allMembers.find(m => m.name?.toLowerCase() === mentionedName.toLowerCase());
-          if (mentionedMember) {
-            const mentionedUserId = mentionedMember.afid || mentionedMember.uid || mentionedMember.id;
-            MentionNotificationSystem.sendMentionNotification(mentionedUserId, mentionedMember.name, postContent, currentUser.name, currentUser.afid || currentUser.uid);
-          }
-        }
-      }
-      setNewPostContent('');
-      setPostImage(null);
-      setPostImagePreview(null);
-      setShowNewPost(false);
-    } catch (error) {
-      console.error('[SocialWall] Failed to create post:', error);
-      alert('❌ Failed to create post. Please check your connection and try again.');
-    } finally {
-      setPosting(false);
-      setUploadingImage(false);
-    }
-  };
-  const handleReply = async postId => {
-    if (!replyContent.trim() && !replyImage && !replyImagePreview) return;
-    try {
-      const post = posts.find(p => p.id === postId);
-      if (!post) return;
-      let replyImageUrl = null;
-      if (replyImage) {
-        replyImageUrl = await uploadImage(replyImage, 'social_replies');
-      } else if (replyImagePreview && replyImagePreview.startsWith('http')) {
-        replyImageUrl = replyImagePreview;
-      }
-      const newReply = {
-        id: Date.now().toString(),
-        authorId: currentUser.afid || currentUser.uid,
-        authorName: currentUser.name,
-        authorPhoto: currentUser.profilePhoto || '',
-        content: replyContent.trim(),
-        imageUrl: replyImageUrl,
-        reactions: {},
-        createdAt: new Date().toISOString()
-      };
-      const updatedComments = [...(post.comments || []), newReply];
-      await db.collection('socialPosts').doc(postId).update({
-        comments: updatedComments
-      });
-      const commentContent = replyContent.trim();
-      const mentionRegex = /@(\w+(?:\s\w+)?)/g;
-      let match;
-      if (commentContent.toLowerCase().includes('@everyone')) {
-        MentionNotificationSystem.sendEveryoneNotification(commentContent, currentUser.name, currentUser.afid || currentUser.uid);
-      } else {
-        while ((match = mentionRegex.exec(commentContent)) !== null) {
-          const mentionedName = match[1];
-          const mentionedMember = allMembers.find(m => m.name?.toLowerCase() === mentionedName.toLowerCase());
-          if (mentionedMember) {
-            const mentionedUserId = mentionedMember.afid || mentionedMember.uid || mentionedMember.id;
-            MentionNotificationSystem.sendMentionNotification(mentionedUserId, mentionedMember.name, commentContent, currentUser.name, currentUser.afid || currentUser.uid);
-          }
-        }
-      }
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        comments: updatedComments
-      } : p));
-      setReplyContent('');
-      setReplyImage(null);
-      setReplyImagePreview(null);
-      setReplyingTo(null);
-      setShowGifPicker(null);
-    } catch (error) {
-      console.error('Reply error:', error);
-      alert('Failed to post reply');
-    }
-  };
-  const selectGif = gifUrl => {
-    setReplyImagePreview(gifUrl);
-    setReplyImage(null);
-    setShowGifPicker(null);
-  };
-  const handleReaction = async (postId, emoji) => {
-    const userId = currentUser.afid || currentUser.uid;
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-    let newReactions = {
-      ...(post.reactions || {})
-    };
-    if (newReactions[userId] === emoji) {
-      delete newReactions[userId];
-    } else {
-      newReactions[userId] = emoji;
-    }
-    try {
-      await db.collection('socialPosts').doc(postId).update({
-        reactions: newReactions
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        reactions: newReactions
-      } : p));
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  };
-  const handleCommentReaction = async (postId, commentId, emoji) => {
-    const userId = currentUser.afid || currentUser.uid;
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-    const comments = [...(post.comments || [])];
-    const commentIndex = comments.findIndex(c => c.id === commentId);
-    if (commentIndex === -1) return;
-    const comment = comments[commentIndex];
-    let newReactions = {
-      ...(comment.reactions || {})
-    };
-    if (newReactions[userId] === emoji) {
-      delete newReactions[userId];
-    } else {
-      newReactions[userId] = emoji;
-    }
-    comments[commentIndex] = {
-      ...comment,
-      reactions: newReactions
-    };
-    try {
-      await db.collection('socialPosts').doc(postId).update({
-        comments: comments
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        comments: comments
-      } : p));
-    } catch (error) {
-      console.error('Comment reaction error:', error);
-    }
-  };
-  const handleNestedReply = async (postId, parentCommentId, replyText) => {
-    if (!replyText.trim()) return;
-    const post = posts.find(p => p.id === postId);
-    if (!post) return;
-    const comments = [...(post.comments || [])];
-    const commentIndex = comments.findIndex(c => c.id === parentCommentId);
-    if (commentIndex === -1) return;
-    const parentComment = comments[commentIndex];
-    const newNestedReply = {
-      id: Date.now().toString(),
-      authorId: currentUser.afid || currentUser.uid,
-      authorName: currentUser.name,
-      authorPhoto: currentUser.profilePhoto || '',
-      content: replyText.trim(),
-      reactions: {},
-      createdAt: new Date().toISOString()
-    };
-    const updatedReplies = [...(parentComment.replies || []), newNestedReply];
-    comments[commentIndex] = {
-      ...parentComment,
-      replies: updatedReplies
-    };
-    try {
-      await db.collection('socialPosts').doc(postId).update({
-        comments: comments
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        comments: comments
-      } : p));
-      const mentionRegex = /@(\w+(?:\s\w+)?)/g;
-      let match;
-      while ((match = mentionRegex.exec(replyText)) !== null) {
-        const mentionedName = match[1];
-        const mentionedMember = allMembers.find(m => m.name?.toLowerCase() === mentionedName.toLowerCase());
-        if (mentionedMember) {
-          const mentionedUserId = mentionedMember.afid || mentionedMember.uid || mentionedMember.id;
-          MentionNotificationSystem.sendMentionNotification(mentionedUserId, mentionedMember.name, replyText, currentUser.name, currentUser.afid || currentUser.uid);
-        }
-      }
-    } catch (error) {
-      console.error('Nested reply error:', error);
-      alert('Failed to post reply');
-    }
-  };
-  const handleEditPost = async postId => {
-    if (!editPostContent.trim()) return;
-    try {
-      await db.collection('socialPosts').doc(postId).update({
-        content: editPostContent.trim(),
-        editedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        content: editPostContent.trim(),
-        editedAt: new Date()
-      } : p));
-      setEditingPost(null);
-      setEditPostContent('');
-    } catch (error) {
-      console.error('Edit post error:', error);
-      alert('Failed to edit post');
-    }
-  };
-  const handleDeletePost = async postId => {
-    if (!confirm('Are you sure you want to delete this post?')) return;
-    try {
-      await db.collection('socialPosts').doc(postId).delete();
-      setPosts(posts.filter(p => p.id !== postId));
-    } catch (error) {
-      console.error('Delete post error:', error);
-      alert('Failed to delete post');
-    }
-  };
-  const handleEditComment = async (postId, commentId) => {
-    if (!editCommentContent.trim()) return;
-    try {
-      const post = posts.find(p => p.id === postId);
-      if (!post) return;
-      const updatedComments = post.comments.map(c => c.id === commentId ? {
-        ...c,
-        content: editCommentContent.trim(),
-        editedAt: new Date().toISOString()
-      } : c);
-      await db.collection('socialPosts').doc(postId).update({
-        comments: updatedComments
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        comments: updatedComments
-      } : p));
-      setEditingComment(null);
-      setEditCommentContent('');
-    } catch (error) {
-      console.error('Edit comment error:', error);
-      alert('Failed to edit comment');
-    }
-  };
-  const handleDeleteComment = async (postId, commentId) => {
-    if (!confirm('Are you sure you want to delete this comment?')) return;
-    try {
-      const post = posts.find(p => p.id === postId);
-      if (!post) return;
-      const updatedComments = post.comments.filter(c => c.id !== commentId);
-      await db.collection('socialPosts').doc(postId).update({
-        comments: updatedComments
-      });
-      setPosts(posts.map(p => p.id === postId ? {
-        ...p,
-        comments: updatedComments
-      } : p));
-    } catch (error) {
-      console.error('Delete comment error:', error);
-      alert('Failed to delete comment');
-    }
-  };
-  const canModify = authorId => {
-    const currentUserId = currentUser.afid || currentUser.uid;
-    return authorId === currentUserId || isAdminOrModerator;
-  };
   const dismissBirthdayPopup = () => {
     localStorage.setItem('birthdayDismissed_' + new Date().toDateString(), 'true');
     setShowBirthdayPopup(null);
   };
-  const emojis = ['👍', '❤️', '😊', '🎉', '👏', '🙌'];
   const getDaysUntilBirthday = dob => {
     const today = new Date();
     const bday = new Date(dob);
     const thisYearBday = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
     if (thisYearBday < today) thisYearBday.setFullYear(today.getFullYear() + 1);
     return Math.ceil((thisYearBday - today) / (1000 * 60 * 60 * 24));
+  };
+  const celebrationColorClasses = {
+    pink: {
+      likeActive: 'text-pink-600',
+      border: 'border-pink-200',
+      focusBorder: 'focus:border-pink-400',
+      wishBg: 'bg-pink-50',
+      wishText: 'text-pink-700',
+      wishAvatar: 'bg-pink-300',
+      send: 'bg-pink-500 hover:bg-pink-600'
+    },
+    amber: {
+      likeActive: 'text-amber-600',
+      border: 'border-amber-200',
+      focusBorder: 'focus:border-amber-400',
+      wishBg: 'bg-amber-50',
+      wishText: 'text-amber-700',
+      wishAvatar: 'bg-amber-300',
+      send: 'bg-amber-500 hover:bg-amber-600'
+    },
+    green: {
+      likeActive: 'text-green-600',
+      border: 'border-green-200',
+      focusBorder: 'focus:border-green-400',
+      wishBg: 'bg-green-50',
+      wishText: 'text-green-700',
+      wishAvatar: 'bg-green-300',
+      send: 'bg-green-500 hover:bg-green-600'
+    }
+  };
+  // Facebook-style Like/Comment action bar, reused by the Today/Week/Month
+  // birthday and anniversary cards.
+  const renderCelebrationPanel = (person, personId, color) => {
+    const c = celebrationColorClasses[color];
+    const reactionCounts = getReactionCounts(personId);
+    const totalReactions = Object.values(reactionCounts).reduce((sum, n) => sum + n, 0);
+    const topEmojis = Object.keys(reactionCounts).sort((a, b) => reactionCounts[b] - reactionCounts[a]).slice(0, 3);
+    const myReaction = getUserReaction(personId);
+    const wishes = celebrationReactions[personId]?.wishes || [];
+    const commentsOpen = showWishInput === personId;
+    return React.createElement("div", {
+      className: "mt-3",
+      onClick: e => e.stopPropagation()
+    }, (totalReactions > 0 || wishes.length > 0) && React.createElement("div", {
+      className: "flex items-center justify-between text-sm text-gray-500 pb-2"
+    }, totalReactions > 0 ? React.createElement("span", {
+      className: "flex items-center gap-1"
+    }, topEmojis.join(''), " ", totalReactions) : React.createElement("span", null), wishes.length > 0 && React.createElement("button", {
+      onClick: () => setShowWishInput(commentsOpen ? null : personId),
+      className: "hover:underline"
+    }, wishes.length, " comment", wishes.length > 1 ? 's' : '')), React.createElement("div", {
+      className: "flex items-stretch border-t border-gray-200 pt-1 -mx-1"
+    }, React.createElement("button", {
+      onClick: () => handleCelebrationReaction(person, '👍'),
+      className: `flex-1 flex items-center justify-center gap-2 py-2 mx-1 rounded-lg font-semibold text-sm transition-colors ${myReaction ? `${c.likeActive} bg-gray-50` : 'text-gray-600 hover:bg-gray-100'}`
+    }, myReaction || '👍', React.createElement("span", null, myReaction ? 'Liked' : 'Like')), React.createElement("button", {
+      onClick: () => setShowWishInput(commentsOpen ? null : personId),
+      className: "flex-1 flex items-center justify-center gap-2 py-2 mx-1 rounded-lg font-semibold text-sm text-gray-600 hover:bg-gray-100 transition-colors"
+    }, "💬", React.createElement("span", null, "Comment"))), commentsOpen && React.createElement("div", {
+      className: "pt-3"
+    }, wishes.length > 0 && React.createElement("div", {
+      className: "mb-3 max-h-40 overflow-y-auto space-y-1"
+    }, wishes.map((wish, widx) => React.createElement("div", {
+      key: widx,
+      className: `flex items-start gap-2 p-2 ${c.wishBg} rounded-lg`
+    }, React.createElement("div", {
+      className: `w-6 h-6 rounded-full ${c.wishAvatar} flex items-center justify-center text-xs text-white font-bold flex-shrink-0`
+    }, wish.userName?.charAt(0)), React.createElement("div", {
+      className: "flex-1"
+    }, React.createElement("div", {
+      className: `text-xs font-semibold ${c.wishText}`
+    }, wish.userName), React.createElement("div", {
+      className: "text-sm text-gray-700"
+    }, wish.message))))), React.createElement("div", {
+      className: "flex gap-2"
+    }, React.createElement("input", {
+      type: "text",
+      value: wishMessage,
+      onChange: e => setWishMessage(e.target.value),
+      onKeyDown: e => {
+        if (e.key === 'Enter') sendWish(person);
+      },
+      placeholder: "Write a comment...",
+      className: `flex-1 border-2 ${c.border} px-3 py-2 rounded-lg text-sm ${c.focusBorder} focus:ring-0`,
+      autoFocus: true
+    }), React.createElement("button", {
+      onClick: () => sendWish(person),
+      className: `px-4 py-2 ${c.send} text-white rounded-lg font-semibold`
+    }, "Send"))));
   };
   if (loading) {
     return React.createElement("div", {
@@ -14785,40 +13072,6 @@ function SocialWall({
           50% { box-shadow: 0 0 0 10px rgba(236, 72, 153, 0); }
         }
         
-        .tab-btn {
-          padding: 12px 24px;
-          border-radius: 12px;
-          font-weight: 600;
-          transition: all 0.3s;
-        }
-        
-        .tab-active {
-          background: linear-gradient(135deg, #ec4899, #8b5cf6);
-          color: white;
-          box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
-        }
-        
-        .tab-inactive {
-          background: white;
-          color: #6b7280;
-        }
-        
-        .tab-inactive:hover {
-          background: #fdf2f8;
-        }
-        
-        .post-card {
-          background: white;
-          border-radius: 20px;
-          border: 1px solid #f3e8ff;
-          transition: all 0.3s;
-        }
-        
-        .post-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 30px rgba(139, 92, 246, 0.1);
-        }
-        
         .emoji-btn {
           padding: 6px 10px;
           border-radius: 20px;
@@ -14835,32 +13088,12 @@ function SocialWall({
           background: linear-gradient(135deg, #fce7f3, #ede9fe);
         }
       `), React.createElement("div", {
-    className: "text-center"
-  }, React.createElement("div", {
-    className: "inline-flex items-center gap-3 bg-gradient-to-r from-pink-100 via-purple-100 to-indigo-100 px-8 py-4 rounded-2xl shadow-lg"
-  }, React.createElement("span", {
-    className: "text-4xl animate-bounce"
-  }, "\uD83C\uDF89"), React.createElement("h2", {
-    className: "text-3xl font-bold bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent"
-  }, "Social Wall"), React.createElement("span", {
-    className: "text-4xl animate-bounce",
-    style: {
-      animationDelay: '0.5s'
-    }
-  }, "\uD83C\uDF8A"))), React.createElement("div", {
-    className: "flex justify-center gap-4 flex-wrap"
-  }, React.createElement("button", {
-    onClick: () => setActiveTab('feed'),
-    className: `tab-btn ${activeTab === 'feed' ? 'tab-active' : 'tab-inactive'}`
-  }, "\uD83D\uDCDD Feed"), React.createElement("button", {
-    onClick: () => setActiveTab('celebrations'),
-    className: `tab-btn ${activeTab === 'celebrations' ? 'tab-active' : 'tab-inactive'}`
-  }, "\uD83C\uDF82 Celebrations ", birthdays.length > 0 && React.createElement("span", {
-    className: "ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full"
-  }, birthdays.length)), React.createElement("button", {
-    onClick: () => setActiveTab('recognition'),
-    className: `tab-btn ${activeTab === 'recognition' ? 'tab-active' : 'tab-inactive'}`
-  }, "\uD83C\uDFC6 Recognition")), activeTab === 'celebrations' && React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, React.createElement("h2", {
+    className: "text-2xl font-extrabold text-gray-900 flex items-center gap-2"
+  }, React.createElement("span", null, "\ud83c\udf89"), "Celebrations"), birthdays.length > 0 && React.createElement("span", {
+    className: "bg-pink-500 text-white text-xs font-bold px-2 py-0.5 rounded-full"
+  }, birthdays.length, " today")), React.createElement("div", {
     className: "space-y-6"
   }, birthdays.length > 0 && React.createElement("div", {
     className: "celebration-card rounded-3xl p-6"
@@ -14872,14 +13105,11 @@ function SocialWall({
     className: "grid md:grid-cols-2 gap-4"
   }, birthdays.map((person, idx) => {
     const personId = person.afid || person.id || person.email;
-    const reactionCounts = getReactionCounts(personId);
-    const myReaction = getUserReaction(personId);
-    const wishes = celebrationReactions[personId]?.wishes || [];
     return React.createElement("div", {
       key: idx,
       className: "bg-white rounded-2xl p-4 shadow-lg border-2 border-pink-200"
     }, React.createElement("div", {
-      className: "flex items-center gap-4 mb-4"
+      className: "flex items-center gap-4 mb-2"
     }, person.profilePhoto ? React.createElement("img", {
       src: person.profilePhoto,
       alt: "",
@@ -14896,49 +13126,7 @@ function SocialWall({
       className: "text-xs text-gray-400"
     }, person.school), React.createElement("div", {
       className: "text-sm text-pink-600 font-medium mt-1"
-    }, "\uD83C\uDF88 Happy Birthday!"))), React.createElement("div", {
-      className: "flex items-center gap-2 flex-wrap mb-3"
-    }, celebrationEmojis.map(emoji => React.createElement("button", {
-      key: emoji,
-      onClick: () => handleCelebrationReaction(person, emoji),
-      className: `px-3 py-1.5 rounded-full text-lg transition-all ${myReaction === emoji ? 'bg-pink-100 scale-110 ring-2 ring-pink-400' : 'bg-gray-100 hover:bg-pink-50 hover:scale-105'}`
-    }, emoji, " ", reactionCounts[emoji] ? React.createElement("span", {
-      className: "text-xs font-bold"
-    }, reactionCounts[emoji]) : ''))), wishes.length > 0 && React.createElement("div", {
-      className: "mb-3 max-h-32 overflow-y-auto"
-    }, wishes.map((wish, widx) => React.createElement("div", {
-      key: widx,
-      className: "flex items-start gap-2 p-2 bg-pink-50 rounded-lg mb-1"
-    }, React.createElement("div", {
-      className: "w-6 h-6 rounded-full bg-pink-300 flex items-center justify-center text-xs text-white font-bold"
-    }, wish.userName?.charAt(0)), React.createElement("div", {
-      className: "flex-1"
-    }, React.createElement("div", {
-      className: "text-xs font-semibold text-pink-700"
-    }, wish.userName), React.createElement("div", {
-      className: "text-sm text-gray-700"
-    }, wish.message))))), showWishInput === personId ? React.createElement("div", {
-      className: "flex gap-2"
-    }, React.createElement("input", {
-      type: "text",
-      value: wishMessage,
-      onChange: e => setWishMessage(e.target.value),
-      placeholder: "Send your wishes...",
-      className: "flex-1 border-2 border-pink-200 px-3 py-2 rounded-lg text-sm focus:border-pink-400 focus:ring-0",
-      autoFocus: true
-    }), React.createElement("button", {
-      onClick: () => sendWish(person),
-      className: "px-4 py-2 bg-pink-500 text-white rounded-lg font-semibold hover:bg-pink-600"
-    }, "Send"), React.createElement("button", {
-      onClick: () => {
-        setShowWishInput(null);
-        setWishMessage('');
-      },
-      className: "px-3 py-2 bg-gray-200 rounded-lg"
-    }, "\u2715")) : React.createElement("button", {
-      onClick: () => setShowWishInput(personId),
-      className: "w-full py-2 bg-gradient-to-r from-pink-400 to-purple-500 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
-    }, "\uD83C\uDF81 Send Birthday Wishes"));
+    }, "\uD83C\uDF88 Happy Birthday!"))), renderCelebrationPanel(person, personId, 'pink'));
   }))), anniversaries.length > 0 && React.createElement("div", {
     className: "bg-gradient-to-r from-amber-50 to-orange-50 rounded-3xl p-6 border-2 border-amber-200"
   }, React.createElement("h3", {
@@ -14949,15 +13137,12 @@ function SocialWall({
     className: "grid md:grid-cols-2 gap-4"
   }, anniversaries.map((person, idx) => {
     const personId = person.afid || person.id || person.email;
-    const reactionCounts = getReactionCounts(personId);
-    const myReaction = getUserReaction(personId);
-    const wishes = celebrationReactions[personId]?.wishes || [];
     const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
     return React.createElement("div", {
       key: idx,
       className: "bg-white rounded-2xl p-4 shadow-lg border-2 border-amber-200"
     }, React.createElement("div", {
-      className: "flex items-center gap-4 mb-4"
+      className: "flex items-center gap-4 mb-2"
     }, person.profilePhoto ? React.createElement("img", {
       src: person.profilePhoto,
       alt: "",
@@ -14974,49 +13159,7 @@ function SocialWall({
       className: "text-xs text-gray-400"
     }, person.school), React.createElement("div", {
       className: "text-sm text-amber-600 font-medium mt-1"
-    }, "\uD83C\uDF8A ", years, " Year", years > 1 ? 's' : '', " at Avanti!"))), React.createElement("div", {
-      className: "flex items-center gap-2 flex-wrap mb-3"
-    }, celebrationEmojis.map(emoji => React.createElement("button", {
-      key: emoji,
-      onClick: () => handleCelebrationReaction(person, emoji),
-      className: `px-3 py-1.5 rounded-full text-lg transition-all ${myReaction === emoji ? 'bg-amber-100 scale-110 ring-2 ring-amber-400' : 'bg-gray-100 hover:bg-amber-50 hover:scale-105'}`
-    }, emoji, " ", reactionCounts[emoji] ? React.createElement("span", {
-      className: "text-xs font-bold"
-    }, reactionCounts[emoji]) : ''))), wishes.length > 0 && React.createElement("div", {
-      className: "mb-3 max-h-32 overflow-y-auto"
-    }, wishes.map((wish, widx) => React.createElement("div", {
-      key: widx,
-      className: "flex items-start gap-2 p-2 bg-amber-50 rounded-lg mb-1"
-    }, React.createElement("div", {
-      className: "w-6 h-6 rounded-full bg-amber-300 flex items-center justify-center text-xs text-white font-bold"
-    }, wish.userName?.charAt(0)), React.createElement("div", {
-      className: "flex-1"
-    }, React.createElement("div", {
-      className: "text-xs font-semibold text-amber-700"
-    }, wish.userName), React.createElement("div", {
-      className: "text-sm text-gray-700"
-    }, wish.message))))), showWishInput === personId ? React.createElement("div", {
-      className: "flex gap-2"
-    }, React.createElement("input", {
-      type: "text",
-      value: wishMessage,
-      onChange: e => setWishMessage(e.target.value),
-      placeholder: "Send congratulations...",
-      className: "flex-1 border-2 border-amber-200 px-3 py-2 rounded-lg text-sm focus:border-amber-400 focus:ring-0",
-      autoFocus: true
-    }), React.createElement("button", {
-      onClick: () => sendWish(person),
-      className: "px-4 py-2 bg-amber-500 text-white rounded-lg font-semibold hover:bg-amber-600"
-    }, "Send"), React.createElement("button", {
-      onClick: () => {
-        setShowWishInput(null);
-        setWishMessage('');
-      },
-      className: "px-3 py-2 bg-gray-200 rounded-lg"
-    }, "\u2715")) : React.createElement("button", {
-      onClick: () => setShowWishInput(personId),
-      className: "w-full py-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
-    }, "\uD83C\uDF89 Send Congratulations"));
+    }, "🎊 ", years, " Year", years > 1 ? 's' : '', " at Avanti!"))), renderCelebrationPanel(person, personId, 'amber'));
   }))), React.createElement("div", {
     className: "bg-white rounded-3xl p-6 shadow-lg"
   }, React.createElement("h3", {
@@ -15032,9 +13175,12 @@ function SocialWall({
     const daysLeft = getDaysUntilBirthday(dobField);
     const dob = new Date(dobField);
     const isToday = daysLeft === 0;
+    const personId = person.afid || person.id || person.email;
     return React.createElement("div", {
       key: idx,
-      className: `flex items-center justify-between p-3 rounded-xl transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : 'bg-gray-50 hover:bg-pink-50'}`
+      className: "rounded-xl overflow-hidden bg-gray-50"
+    }, React.createElement("div", {
+      className: `flex items-center justify-between p-3 ${isToday ? 'bg-pink-100 border-2 border-pink-300' : 'bg-gray-50'}`
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -15056,7 +13202,9 @@ function SocialWall({
       month: 'short'
     })), React.createElement("div", {
       className: "text-xs text-gray-500"
-    }, isToday ? '🎉 Today!' : daysLeft === 1 ? 'Tomorrow!' : `in ${daysLeft} days`)));
+    }, isToday ? '🎉 Today!' : daysLeft === 1 ? 'Tomorrow!' : `in ${daysLeft} days`))), React.createElement("div", {
+      className: "px-3 pb-3"
+    }, renderCelebrationPanel(person, personId, 'pink')));
   }))), React.createElement("div", {
     className: "bg-white rounded-3xl p-6 shadow-lg"
   }, React.createElement("h3", {
@@ -15075,9 +13223,12 @@ function SocialWall({
     const daysLeft = getDaysUntilBirthday(dobField);
     const isPast = dob.getDate() < new Date().getDate();
     const isToday = daysLeft === 0;
+    const personId = person.afid || person.id || person.email;
     return React.createElement("div", {
       key: idx,
-      className: `flex items-center justify-between p-3 rounded-xl transition-colors ${isToday ? 'bg-pink-100 border-2 border-pink-300' : isPast ? 'bg-gray-100 opacity-60' : 'bg-gray-50 hover:bg-pink-50'}`
+      className: "rounded-xl overflow-hidden bg-gray-50"
+    }, React.createElement("div", {
+      className: `flex items-center justify-between p-3 ${isToday ? 'bg-pink-100 border-2 border-pink-300' : isPast ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -15098,7 +13249,9 @@ function SocialWall({
       month: 'short'
     })), React.createElement("div", {
       className: "text-xs text-gray-500"
-    }, isToday ? '🎉 Today!' : isPast ? 'Passed' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`)));
+    }, isToday ? '🎉 Today!' : isPast ? 'Passed' : daysLeft === 1 ? 'Tomorrow' : `${daysLeft}d`))), React.createElement("div", {
+      className: "px-3 pb-3"
+    }, renderCelebrationPanel(person, personId, 'pink')));
   }))), React.createElement("div", {
     className: "bg-white rounded-3xl p-6 shadow-lg"
   }, React.createElement("h3", {
@@ -15112,9 +13265,12 @@ function SocialWall({
   }, weekAnniversaries.map((person, idx) => {
     const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
     const jDate = new Date(person.joiningDate);
+    const personId = person.afid || person.id || person.email;
     return React.createElement("div", {
       key: idx,
-      className: "flex items-center justify-between p-3 bg-amber-50 rounded-xl hover:bg-amber-100 transition-colors"
+      className: "rounded-xl overflow-hidden bg-amber-50"
+    }, React.createElement("div", {
+      className: "flex items-center justify-between p-3"
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -15136,7 +13292,9 @@ function SocialWall({
     }, jDate.toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short'
-    }))));
+    })))), React.createElement("div", {
+      className: "px-3 pb-3"
+    }, renderCelebrationPanel(person, personId, 'amber')));
   }))), React.createElement("div", {
     className: "bg-white rounded-3xl p-6 shadow-lg"
   }, React.createElement("h3", {
@@ -15150,9 +13308,12 @@ function SocialWall({
   }, monthAnniversaries.map((person, idx) => {
     const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
     const jDate = new Date(person.joiningDate);
+    const personId = person.afid || person.id || person.email;
     return React.createElement("div", {
       key: idx,
-      className: "flex items-center justify-between p-3 bg-green-50 rounded-xl hover:bg-green-100 transition-colors"
+      className: "rounded-xl overflow-hidden bg-green-50"
+    }, React.createElement("div", {
+      className: "flex items-center justify-between p-3"
     }, React.createElement("div", {
       className: "flex items-center gap-3"
     }, person.profilePhoto ? React.createElement("img", {
@@ -15174,540 +13335,16 @@ function SocialWall({
     }, jDate.toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short'
-    }))));
+    })))), React.createElement("div", {
+      className: "px-3 pb-3"
+    }, renderCelebrationPanel(person, personId, 'green')));
   }))), birthdays.length === 0 && anniversaries.length === 0 && upcomingBirthdays.length === 0 && weekAnniversaries.length === 0 && monthAnniversaries.length === 0 && React.createElement("div", {
     className: "text-center py-12"
   }, React.createElement("div", {
     className: "text-6xl mb-4"
   }, "\uD83C\uDF88"), React.createElement("p", {
     className: "text-gray-500"
-  }, "No celebrations today. Check back soon!"))), activeTab === 'feed' && React.createElement("div", {
-    className: "space-y-6"
-  }, (birthdays.length > 0 || anniversaries.length > 0) && React.createElement("div", {
-    onClick: () => setActiveTab('celebrations'),
-    className: "celebration-card rounded-2xl p-4 cursor-pointer hover:shadow-lg transition-all"
-  }, React.createElement("div", {
-    className: "flex items-center justify-between"
-  }, React.createElement("div", {
-    className: "flex items-center gap-3"
-  }, React.createElement("span", {
-    className: "text-3xl"
-  }, "\uD83C\uDF89"), React.createElement("div", null, React.createElement("div", {
-    className: "font-bold text-pink-700"
-  }, birthdays.length > 0 && `${birthdays.length} Birthday${birthdays.length > 1 ? 's' : ''} Today!`, birthdays.length > 0 && anniversaries.length > 0 && ' + ', anniversaries.length > 0 && `${anniversaries.length} Anniversary`), React.createElement("div", {
-    className: "text-sm text-pink-600"
-  }, "Click to view celebrations \u2192"))), React.createElement("div", {
-    className: "flex -space-x-2"
-  }, [...birthdays, ...anniversaries].slice(0, 3).map((p, i) => p.profilePhoto ? React.createElement("img", {
-    key: i,
-    src: p.profilePhoto,
-    alt: "",
-    className: "w-10 h-10 rounded-full border-2 border-white object-cover"
-  }) : React.createElement("div", {
-    key: i,
-    className: "w-10 h-10 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 border-2 border-white flex items-center justify-center text-white font-bold text-sm"
-  }, p.name?.charAt(0)))))), React.createElement("div", {
-    className: "bg-white rounded-2xl p-4 shadow-lg border border-purple-100"
-  }, showNewPost ? React.createElement("div", {
-    className: "space-y-3"
-  }, React.createElement("div", {
-    className: "relative mention-input-container"
-  }, React.createElement(MentionTextarea, {
-    value: newPostContent,
-    onChange: setNewPostContent,
-    placeholder: "What's on your mind? Type @ to mention someone \uD83D\uDC4B",
-    allMembers: allMembers,
-    className: "w-full p-4 pr-12 border-2 border-purple-200 rounded-2xl focus:border-purple-400 focus:ring-0 resize-none",
-    rows: 3
-  }), React.createElement("label", {
-    className: "absolute bottom-3 right-3 cursor-pointer text-gray-400 hover:text-purple-600 transition-colors"
-  }, React.createElement("span", {
-    className: "text-xl"
-  }, "\uD83D\uDCCE"), React.createElement("input", {
-    type: "file",
-    accept: "image/*,video/*",
-    onChange: handlePostImageSelect,
-    className: "hidden"
-  }))), React.createElement("div", {
-    className: "text-xs text-gray-400 flex items-center gap-2"
-  }, React.createElement("span", null, "\uD83D\uDCA1 Tip: Type ", React.createElement("span", {
-    className: "mention-tag"
-  }, "@name"), " to mention someone or ", React.createElement("span", {
-    className: "mention-tag mention-everyone"
-  }, "@everyone"), " to notify all")), postImagePreview && React.createElement("div", {
-    className: "relative inline-block"
-  }, React.createElement("img", {
-    src: postImagePreview,
-    alt: "Preview",
-    className: "max-h-40 rounded-xl border-2 border-purple-200"
-  }), React.createElement("button", {
-    onClick: () => {
-      setPostImage(null);
-      setPostImagePreview(null);
-    },
-    className: "absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full text-sm font-bold hover:bg-red-600"
-  }, "\u2715")), React.createElement("div", {
-    className: "flex justify-end items-center gap-3"
-  }, React.createElement("button", {
-    onClick: () => {
-      setShowNewPost(false);
-      setNewPostContent('');
-      setPostImage(null);
-      setPostImagePreview(null);
-    },
-    className: "px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl"
-  }, "Cancel"), React.createElement("button", {
-    onClick: handleCreatePost,
-    disabled: !newPostContent.trim() && !postImage || posting,
-    className: "px-6 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-xl font-semibold disabled:opacity-50 hover:shadow-lg transition-all"
-  }, uploadingImage ? '📤 Uploading...' : posting ? 'Posting...' : '✨ Post'))) : React.createElement("div", {
-    onClick: () => setShowNewPost(true),
-    className: "flex items-center gap-4 cursor-pointer p-2 hover:bg-purple-50 rounded-xl transition-colors"
-  }, currentUser.profilePhoto ? React.createElement("img", {
-    src: currentUser.profilePhoto,
-    alt: "",
-    className: "w-11 h-11 rounded-full object-cover"
-  }) : React.createElement("div", {
-    className: "w-11 h-11 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg"
-  }, currentUser.name?.charAt(0)), React.createElement("div", {
-    className: "flex-1 text-gray-400 bg-gray-100 rounded-full py-3 px-4"
-  }, "What's on your mind?"))), posts.length === 0 ? React.createElement("div", {
-    className: "text-center py-12 bg-white rounded-2xl"
-  }, React.createElement("div", {
-    className: "text-6xl mb-4"
-  }, "\uD83D\uDCDD"), React.createElement("p", {
-    className: "text-gray-500"
-  }, "No posts yet. Be the first to share something!")) : React.createElement("div", {
-    className: "space-y-4"
-  }, posts.map(post => {
-    const reactionCounts = {};
-    Object.values(post.reactions || {}).forEach(emoji => {
-      reactionCounts[emoji] = (reactionCounts[emoji] || 0) + 1;
-    });
-    const myReaction = post.reactions?.[currentUser.afid || currentUser.uid];
-    return React.createElement("div", {
-      key: post.id,
-      className: "post-card p-5"
-    }, React.createElement("div", {
-      className: "flex items-start justify-between mb-4"
-    }, React.createElement("div", {
-      className: "flex items-center gap-3"
-    }, post.authorPhoto ? React.createElement("img", {
-      src: post.authorPhoto,
-      alt: "",
-      className: "w-12 h-12 rounded-full object-cover"
-    }) : React.createElement("div", {
-      className: "w-12 h-12 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg"
-    }, post.authorName?.charAt(0)), React.createElement("div", null, React.createElement("div", {
-      className: "font-bold text-gray-800"
-    }, post.authorName), React.createElement("div", {
-      className: "text-xs text-gray-500"
-    }, post.authorSchool, " \u2022 ", post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short'
-    }) : 'Just now', post.editedAt && React.createElement("span", {
-      className: "ml-1 text-gray-400"
-    }, "(edited)")))), canModify(post.authorId) && React.createElement("div", {
-      className: "flex items-center gap-1"
-    }, React.createElement("button", {
-      onClick: () => {
-        setEditingPost(post.id);
-        setEditPostContent(post.content);
-      },
-      className: "p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all",
-      title: "Edit post"
-    }, "\u270F\uFE0F"), React.createElement("button", {
-      onClick: () => handleDeletePost(post.id),
-      className: "p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all",
-      title: isAdminOrModerator && post.authorId !== (currentUser.afid || currentUser.uid) ? 'Delete as moderator' : 'Delete post'
-    }, "\uD83D\uDDD1\uFE0F"))), editingPost === post.id ? React.createElement("div", {
-      className: "mb-4"
-    }, React.createElement("textarea", {
-      value: editPostContent,
-      onChange: e => setEditPostContent(e.target.value),
-      className: "w-full p-3 border-2 border-purple-200 rounded-xl focus:border-purple-400 focus:ring-0 resize-none",
-      rows: 3,
-      autoFocus: true
-    }), React.createElement("div", {
-      className: "flex gap-2 mt-2"
-    }, React.createElement("button", {
-      onClick: () => handleEditPost(post.id),
-      className: "px-4 py-2 bg-purple-500 text-white rounded-lg font-semibold hover:bg-purple-600"
-    }, "Save"), React.createElement("button", {
-      onClick: () => {
-        setEditingPost(null);
-        setEditPostContent('');
-      },
-      className: "px-4 py-2 bg-gray-200 rounded-lg font-semibold hover:bg-gray-300"
-    }, "Cancel"))) : React.createElement("p", {
-      className: "text-gray-700 mb-4 whitespace-pre-wrap"
-    }, post.content), post.imageUrl && React.createElement("div", {
-      className: "mb-4"
-    }, React.createElement("img", {
-      src: post.imageUrl,
-      alt: "Post attachment",
-      className: "max-w-full rounded-xl border border-purple-100 max-h-96 object-contain"
-    })), React.createElement("div", {
-      className: "flex items-center gap-2 flex-wrap mb-3"
-    }, emojis.map(emoji => {
-      const reactedBy = Object.entries(post.reactions || {}).filter(([userId, reaction]) => reaction === emoji).map(([userId]) => userId);
-      return React.createElement(ReactionButton, {
-        key: emoji,
-        emoji: emoji,
-        count: reactionCounts[emoji],
-        isActive: myReaction === emoji,
-        onClick: () => handleReaction(post.id, emoji),
-        reactedBy: reactedBy,
-        allMembers: allMembers
-      });
-    }), post.comments?.length > 0 && React.createElement("span", {
-      className: "text-gray-400 text-sm ml-2"
-    }, "\uD83D\uDCAC ", post.comments.length, " ", post.comments.length === 1 ? 'comment' : 'comments')), post.comments?.length > 0 && React.createElement("div", {
-      className: "space-y-2 mb-3"
-    }, post.comments.slice(0, expandedReplies[post.id] ? post.comments.length : 2).map((reply, idx) => {
-      const commentReactionCounts = {};
-      Object.values(reply.reactions || {}).forEach(e => {
-        commentReactionCounts[e] = (commentReactionCounts[e] || 0) + 1;
-      });
-      const myCommentReaction = reply.reactions?.[currentUser.afid || currentUser.uid];
-      const commentEmojis = ['👍', '❤️', '😊'];
-      const isCollapsed = expandedReplies[`collapse_${post.id}_${reply.id}`];
-      const showEmojiPicker = expandedReplies[`emoji_${post.id}_${reply.id}`];
-      const hasAnyReactions = Object.keys(reply.reactions || {}).length > 0;
-      return React.createElement("div", {
-        key: reply.id || idx,
-        className: "reddit-comment-thread"
-      }, reply.replies?.length > 0 && React.createElement("button", {
-        className: "reddit-collapse-btn",
-        onClick: () => setExpandedReplies({
-          ...expandedReplies,
-          [`collapse_${post.id}_${reply.id}`]: !isCollapsed
-        }),
-        title: isCollapsed ? 'Expand' : 'Collapse'
-      }, isCollapsed ? '+' : '−'), React.createElement("div", {
-        className: "comment-wrapper flex gap-2 ml-0"
-      }, reply.authorPhoto ? React.createElement("img", {
-        src: reply.authorPhoto,
-        alt: "",
-        className: "w-8 h-8 rounded-full object-cover flex-shrink-0 border-0",
-        style: {
-          border: 'none'
-        }
-      }) : React.createElement("div", {
-        className: "w-8 h-8 rounded-full bg-gradient-to-br from-pink-300 to-purple-400 flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-      }, reply.authorName?.charAt(0)), React.createElement("div", {
-        className: "flex-1"
-      }, editingComment?.postId === post.id && editingComment?.commentId === reply.id ? React.createElement("div", {
-        className: "mb-2"
-      }, React.createElement("textarea", {
-        value: editCommentContent,
-        onChange: e => setEditCommentContent(e.target.value),
-        className: "w-full p-2 border-2 border-purple-200 rounded-xl focus:border-purple-400 focus:ring-0 resize-none text-sm",
-        rows: 2,
-        autoFocus: true
-      }), React.createElement("div", {
-        className: "flex gap-2 mt-1"
-      }, React.createElement("button", {
-        onClick: () => handleEditComment(post.id, reply.id),
-        className: "px-3 py-1 bg-purple-500 text-white rounded-lg text-xs font-semibold hover:bg-purple-600"
-      }, "Save"), React.createElement("button", {
-        onClick: () => {
-          setEditingComment(null);
-          setEditCommentContent('');
-        },
-        className: "px-3 py-1 bg-gray-200 rounded-lg text-xs font-semibold hover:bg-gray-300"
-      }, "Cancel"))) : React.createElement("div", {
-        className: "bg-gray-50 rounded-2xl px-3 py-2"
-      }, React.createElement("span", {
-        className: "font-semibold text-sm"
-      }, reply.authorName), reply.editedAt && React.createElement("span", {
-        className: "text-xs text-gray-400 ml-1"
-      }, "(edited)"), React.createElement("span", {
-        className: "text-gray-700 text-sm ml-1"
-      }, reply.content?.split(/(@\w+(?:\s\w+)?)/g).map((part, i) => part.startsWith('@') ? React.createElement("span", {
-        key: i,
-        className: "mention-tag"
-      }, part) : part)), reply.imageUrl && React.createElement("img", {
-        src: reply.imageUrl,
-        alt: "",
-        className: "mt-2 max-h-32 rounded-lg"
-      })), React.createElement("div", {
-        className: "reddit-action-row"
-      }, React.createElement("span", {
-        className: "reddit-timestamp"
-      }, reply.createdAt ? new Date(reply.createdAt).toLocaleDateString('en-IN', {
-        day: 'numeric',
-        month: 'short'
-      }) : ''), React.createElement("button", {
-        className: "reddit-action-btn",
-        onClick: () => setExpandedReplies({
-          ...expandedReplies,
-          [`reply_${post.id}_${reply.id}`]: !expandedReplies[`reply_${post.id}_${reply.id}`]
-        })
-      }, React.createElement("span", {
-        className: "icon"
-      }, "\uD83D\uDCAC"), React.createElement("span", null, "Reply")), canModify(reply.authorId) && React.createElement(React.Fragment, null, React.createElement("button", {
-        className: "reddit-action-btn",
-        onClick: () => {
-          setEditingComment({
-            postId: post.id,
-            commentId: reply.id
-          });
-          setEditCommentContent(reply.content);
-        }
-      }, React.createElement("span", {
-        className: "icon"
-      }, "\u270F\uFE0F"), React.createElement("span", null, "Edit")), React.createElement("button", {
-        className: "reddit-action-btn text-red-500",
-        onClick: () => handleDeleteComment(post.id, reply.id)
-      }, React.createElement("span", {
-        className: "icon"
-      }, "\uD83D\uDDD1\uFE0F"), React.createElement("span", null, "Delete"))), React.createElement("div", {
-        className: "reddit-reactions"
-      }, commentEmojis.map(emoji => {
-        const count = commentReactionCounts[emoji] || 0;
-        const reactedBy = Object.entries(reply.reactions || {}).filter(([uid, reaction]) => reaction === emoji).map(([uid]) => uid);
-        return React.createElement("button", {
-          key: emoji,
-          className: `emoji-btn ${myCommentReaction === emoji ? 'active' : ''}`,
-          onClick: () => handleCommentReaction(post.id, reply.id, emoji),
-          title: reactedBy.length > 0 ? `${reactedBy.length} reaction${reactedBy.length > 1 ? 's' : ''}` : 'React'
-        }, emoji, count > 0 && React.createElement("span", {
-          style: {
-            fontSize: '10px',
-            marginLeft: '2px'
-          }
-        }, count));
-      })), reply.replies?.length > 0 && React.createElement("span", {
-        className: "reddit-timestamp",
-        style: {
-          marginLeft: '4px'
-        }
-      }, "\u2022 ", reply.replies.length, " ", reply.replies.length === 1 ? 'reply' : 'replies')), expandedReplies[`reply_${post.id}_${reply.id}`] && React.createElement("div", {
-        className: "reddit-reply-input mt-2"
-      }, React.createElement("div", {
-        className: "flex items-center gap-2"
-      }, React.createElement(MentionInput, {
-        value: expandedReplies[`replyText_${post.id}_${reply.id}`] || '',
-        onChange: val => setExpandedReplies({
-          ...expandedReplies,
-          [`replyText_${post.id}_${reply.id}`]: val
-        }),
-        placeholder: `Reply to ${reply.authorName}...`,
-        allMembers: allMembers,
-        className: "flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-400",
-        onSubmit: () => {
-          const replyText = expandedReplies[`replyText_${post.id}_${reply.id}`];
-          if (replyText?.trim()) {
-            handleNestedReply(post.id, reply.id, replyText.trim());
-            setExpandedReplies({
-              ...expandedReplies,
-              [`replyText_${post.id}_${reply.id}`]: '',
-              [`reply_${post.id}_${reply.id}`]: false
-            });
-          }
-        }
-      }), React.createElement("button", {
-        onClick: () => {
-          const replyText = expandedReplies[`replyText_${post.id}_${reply.id}`];
-          if (replyText?.trim()) {
-            handleNestedReply(post.id, reply.id, replyText.trim());
-            setExpandedReplies({
-              ...expandedReplies,
-              [`replyText_${post.id}_${reply.id}`]: '',
-              [`reply_${post.id}_${reply.id}`]: false
-            });
-          }
-        },
-        className: "text-purple-600 font-semibold text-sm hover:text-purple-800 px-3 py-2"
-      }, "Post"))), !isCollapsed && reply.replies?.length > 0 && React.createElement("div", {
-        className: "mt-2 space-y-2 ml-4 pl-4 border-l-2 border-gray-200"
-      }, reply.replies.map((nestedReply, nidx) => {
-        const nestedReactionCounts = {};
-        Object.values(nestedReply.reactions || {}).forEach(e => {
-          nestedReactionCounts[e] = (nestedReactionCounts[e] || 0) + 1;
-        });
-        const myNestedReaction = nestedReply.reactions?.[currentUser.afid || currentUser.uid];
-        return React.createElement("div", {
-          key: nestedReply.id || nidx,
-          className: "comment-wrapper flex gap-2"
-        }, nestedReply.authorPhoto ? React.createElement("img", {
-          src: nestedReply.authorPhoto,
-          alt: "",
-          className: "w-6 h-6 rounded-full object-cover flex-shrink-0"
-        }) : React.createElement("div", {
-          className: "w-6 h-6 rounded-full bg-gradient-to-br from-blue-300 to-indigo-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-        }, nestedReply.authorName?.charAt(0)), React.createElement("div", {
-          className: "flex-1"
-        }, React.createElement("div", {
-          className: "bg-gray-50 rounded-xl px-3 py-1.5"
-        }, React.createElement("span", {
-          className: "font-semibold text-xs"
-        }, nestedReply.authorName), React.createElement("span", {
-          className: "text-gray-700 text-xs ml-1"
-        }, nestedReply.content?.split(/(@\w+(?:\s\w+)?)/g).map((part, i) => part.startsWith('@') ? React.createElement("span", {
-          key: i,
-          className: "mention-tag"
-        }, part) : part))), React.createElement("div", {
-          className: "flex items-center gap-1 mt-0.5 ml-2 text-xs text-gray-400"
-        }, nestedReply.createdAt && new Date(nestedReply.createdAt).toLocaleDateString('en-IN', {
-          day: 'numeric',
-          month: 'short'
-        }))));
-      })))));
-    }), post.comments.length > 2 && !expandedReplies[post.id] && React.createElement("button", {
-      onClick: () => setExpandedReplies({
-        ...expandedReplies,
-        [post.id]: true
-      }),
-      className: "text-sm text-gray-500 font-medium hover:text-gray-700 ml-10"
-    }, "View all ", post.comments.length, " comments")), React.createElement("div", {
-      className: "border-t border-gray-100 pt-3 mt-2"
-    }, React.createElement("div", {
-      className: "flex items-center gap-3"
-    }, currentUser.profilePhoto ? React.createElement("img", {
-      src: currentUser.profilePhoto,
-      alt: "",
-      className: "w-8 h-8 rounded-full object-cover flex-shrink-0"
-    }) : React.createElement("div", {
-      className: "w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-    }, currentUser.name?.charAt(0)), React.createElement("div", {
-      className: "flex-1 flex items-center bg-gray-100 rounded-full px-4 py-2 border border-gray-200 focus-within:border-purple-400 focus-within:bg-white transition-all"
-    }, React.createElement(MentionInput, {
-      value: replyingTo === post.id ? replyContent : '',
-      onChange: val => {
-        setReplyingTo(post.id);
-        setReplyContent(val);
-      },
-      placeholder: "Add a comment... (type @ to mention)",
-      allMembers: allMembers,
-      className: "flex-1 bg-transparent border-none outline-none text-sm",
-      onSubmit: () => {
-        if (replyContent.trim()) handleReply(post.id);
-      }
-    }), React.createElement("label", {
-      className: "cursor-pointer text-gray-400 hover:text-gray-600 p-1 ml-1"
-    }, React.createElement("span", {
-      className: "text-lg"
-    }, "\uD83D\uDCCE"), React.createElement("input", {
-      type: "file",
-      accept: "image/*,video/*",
-      onChange: e => {
-        setReplyingTo(post.id);
-        handleReplyImageSelect(e);
-      },
-      className: "hidden"
-    })), replyingTo === post.id && (replyContent.trim() || replyImagePreview) && React.createElement("button", {
-      onClick: () => handleReply(post.id),
-      className: "text-purple-600 font-semibold text-sm ml-2 hover:text-purple-800"
-    }, "Post"))), replyingTo === post.id && replyImagePreview && React.createElement("div", {
-      className: "relative inline-block ml-11 mt-2"
-    }, React.createElement("img", {
-      src: replyImagePreview,
-      alt: "Preview",
-      className: "max-h-20 rounded-lg"
-    }), React.createElement("button", {
-      onClick: () => {
-        setReplyImage(null);
-        setReplyImagePreview(null);
-      },
-      className: "absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-xs"
-    }, "\u2715"))));
-  }))), activeTab === 'recognition' && React.createElement("div", {
-    className: "space-y-6"
-  }, recognitionLoading ? React.createElement("div", {
-    className: "flex items-center justify-center h-64"
-  }, React.createElement("div", {
-    className: "text-center"
-  }, React.createElement("div", {
-    className: "w-12 h-12 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"
-  }), React.createElement("p", {
-    className: "text-gray-500"
-  }, "Loading recognition data..."))) : React.createElement(React.Fragment, null, React.createElement("div", {
-    className: "bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 p-1 rounded-2xl"
-  }, React.createElement("div", {
-    className: "bg-white p-6 rounded-2xl"
-  }, React.createElement("div", {
-    className: "text-center"
-  }, React.createElement("div", {
-    className: "text-5xl mb-4"
-  }, "\uD83C\uDFC6"), React.createElement("h2", {
-    className: "text-2xl font-bold mb-2"
-  }, "Educators of the Month"), React.createElement("p", {
-    className: "text-gray-500 mb-6"
-  }, new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleDateString('en-IN', {
-    month: 'long',
-    year: 'numeric'
-  })), topPerformers.length > 0 ? React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-6 max-w-2xl mx-auto"
-  }, topPerformers.map((educator, idx) => React.createElement("div", {
-    key: educator.afid,
-    className: `p-6 rounded-xl ${idx === 0 ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300' : 'bg-gradient-to-r from-gray-50 to-slate-50 border-2 border-gray-300'}`
-  }, React.createElement("div", {
-    className: "text-4xl mb-3"
-  }, idx === 0 ? '🥇' : '🥈'), React.createElement("div", {
-    className: `w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3 ${idx === 0 ? 'bg-gradient-to-br from-yellow-400 to-orange-500' : 'bg-gradient-to-br from-gray-400 to-slate-500'}`
-  }, educator.name?.charAt(0)), React.createElement("h3", {
-    className: "text-xl font-bold text-gray-800"
-  }, educator.name), React.createElement("p", {
-    className: "text-sm text-gray-600"
-  }, educator.subject), React.createElement("p", {
-    className: "text-xs text-gray-500"
-  }, educator.school), React.createElement("div", {
-    className: "mt-4 flex justify-center gap-3"
-  }, React.createElement("div", {
-    className: `px-3 py-2 rounded-lg ${idx === 0 ? 'bg-yellow-100' : 'bg-gray-100'}`
-  }, React.createElement("div", {
-    className: `text-xl font-bold ${idx === 0 ? 'text-yellow-600' : 'text-gray-600'}`
-  }, educator.totalHours?.toFixed(1), "h"), React.createElement("div", {
-    className: `text-xs ${idx === 0 ? 'text-yellow-700' : 'text-gray-500'}`
-  }, "Hours")), React.createElement("div", {
-    className: "bg-green-100 px-3 py-2 rounded-lg"
-  }, React.createElement("div", {
-    className: "text-xl font-bold text-green-600"
-  }, educator.entries), React.createElement("div", {
-    className: "text-xs text-green-700"
-  }, "Entries")))))) : React.createElement("div", {
-    className: "text-gray-500 py-8"
-  }, React.createElement("div", {
-    className: "text-4xl mb-2"
-  }, "\uD83D\uDCCA"), React.createElement("p", null, "Not enough data yet this month"), React.createElement("p", {
-    className: "text-sm"
-  }, "Keep logging your activities!"))))), previousMonthWinners.length > 0 && React.createElement("div", {
-    className: "bg-white p-6 rounded-xl shadow-lg"
-  }, React.createElement("h3", {
-    className: "text-xl font-bold mb-6 flex items-center gap-2"
-  }, React.createElement("span", null, "\uD83C\uDF1F"), " Previous Month's Top Performers", React.createElement("span", {
-    className: "text-sm font-normal text-gray-500 ml-2"
-  }, "(", new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1).toLocaleDateString('en-IN', {
-    month: 'long',
-    year: 'numeric'
-  }), ")")), React.createElement("div", {
-    className: "grid md:grid-cols-2 gap-4"
-  }, previousMonthWinners.map((educator, idx) => React.createElement("div", {
-    key: educator.afid,
-    className: `p-4 rounded-xl border-2 flex items-center gap-4 ${idx === 0 ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 bg-gray-50'}`
-  }, React.createElement("div", {
-    className: `w-12 h-12 rounded-full flex items-center justify-center font-bold text-white ${idx === 0 ? 'bg-yellow-500' : 'bg-gray-400'}`
-  }, idx === 0 ? '🥇' : '🥈'), React.createElement("div", {
-    className: "flex-1"
-  }, React.createElement("div", {
-    className: "font-semibold"
-  }, educator.name), React.createElement("div", {
-    className: "text-xs text-gray-500"
-  }, educator.school, " \u2022 ", educator.subject)), React.createElement("div", {
-    className: "text-right"
-  }, React.createElement("span", {
-    className: "text-xl font-bold text-yellow-600"
-  }, educator.totalHours?.toFixed(1)), React.createElement("span", {
-    className: "text-gray-500 text-sm"
-  }, " hrs")))))), React.createElement("div", {
-    className: "bg-gradient-to-r from-purple-50 to-indigo-50 p-6 rounded-xl border-2 border-purple-200"
-  }, React.createElement("h4", {
-    className: "font-bold text-purple-800 mb-3 flex items-center gap-2"
-  }, React.createElement("span", null, "\uD83D\uDCA1"), " How Recognition Works"), React.createElement("ul", {
-    className: "text-sm text-purple-700 space-y-2"
-  }, React.createElement("li", null, "\u2022 Top 2 educators with most approved timesheet hours are recognized each month"), React.createElement("li", null, "\u2022 Make sure to log your daily activities in the Timesheet"), React.createElement("li", null, "\u2022 Get your entries approved by your line manager"), React.createElement("li", null, "\u2022 Previous month's winners are also displayed for motivation!"))))), showBirthdayPopup && React.createElement("div", {
+  }, "No celebrations today. Check back soon!"))), showBirthdayPopup && React.createElement("div", {
     className: "fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
   }, React.createElement("div", {
     className: "bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl animate-bounce-in"

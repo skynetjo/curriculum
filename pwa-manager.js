@@ -568,7 +568,7 @@
       
       const defaultOptions = {
         icon: '/icon-192.png',
-        badge: '/icon-72.png',
+        badge: '/Icon-72.png', // file is Icon-72.png - paths are case-sensitive on Vercel
         vibrate: [100, 50, 100],
         tag: 'curriculum-tracker'
       };

@@ -80,7 +80,10 @@
         studentSession: localStorage.getItem('studentSession'),
         authToken: localStorage.getItem('authToken'),
         avanti_device_id: localStorage.getItem('avanti_device_id'), // ✅ FIX: Preserve 2FA device trust
-        darkMode: localStorage.getItem('darkMode')
+        darkMode: localStorage.getItem('darkMode'),
+        // ✅ FIX: Preserve unsynced offline work (attendance + curriculum saves) across updates
+        offlineQueue: localStorage.getItem('offlineQueue'),
+        pendingDataSync: localStorage.getItem('pendingDataSync')
       };
 
       // Clear storage
@@ -99,6 +102,8 @@
         console.log('✅ Device ID preserved during update');
       }
       if (sessionData.darkMode) localStorage.setItem('darkMode', sessionData.darkMode);
+      if (sessionData.offlineQueue) localStorage.setItem('offlineQueue', sessionData.offlineQueue);
+      if (sessionData.pendingDataSync) localStorage.setItem('pendingDataSync', sessionData.pendingDataSync);
       
       // Set new version
       localStorage.setItem('appVersion', CURRENT_VERSION);
