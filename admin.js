@@ -69,6 +69,7 @@ function AdminView({
     schoolInfoSchools: schoolInfo.map(s => s.school)
   });
   const availableSchools = hasFullDataAccess ? SCHOOLS : accessibleSchools;
+  const onlineClassCentres = Array.from(new Set(filteredStudents.map(s => s.school))).filter(isOnlineClassCentre).sort();
   const adminTabs = [...(isSuperAdmin ? [{
     id: 'managers',
     label: 'Managers',
@@ -129,7 +130,13 @@ function AdminView({
     icon: React.createElement("i", {
       className: "fa-solid fa-calendar"
     })
-  }];
+  }, ...(onlineClassCentres.length > 0 ? [{
+    id: 'onlineattendance',
+    label: 'Online Class Attendance',
+    icon: React.createElement("i", {
+      className: "fa-solid fa-laptop"
+    })
+  }] : [])];
   const handleTabClick = tabId => {
     setActiveTab(tabId);
     if (window.innerWidth < 768) {
@@ -404,6 +411,11 @@ function AdminView({
   }), activeTab === 'timetable' && React.createElement(TimetableAdminSection, {
     currentUser: currentUser,
     availableSchools: availableSchools
+  }), activeTab === 'onlineattendance' && React.createElement(OnlineClassAttendance, {
+    currentUser: currentUser,
+    students: filteredStudents,
+    schools: onlineClassCentres,
+    canDeleteAnyLecture: true
   }))), React.createElement("footer", {
     className: "bg-gray-800 text-white text-center py-4"
   }, React.createElement("p", null, "Made by Anand with \u2764\uFE0F")));
