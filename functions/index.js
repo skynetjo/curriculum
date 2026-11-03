@@ -7,7 +7,7 @@ const logger = require('firebase-functions/logger');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 
-const { parseTimetableDocId, diffAffectedTeacherIds, slotTeacherIds, teacherRowsFromSlots, renderScheduleHtml, escapeHtml, DAY_ORDER } = require('./lib/timetable');
+const { parseTimetableDocId, timetableLabel, diffAffectedTeacherIds, slotTeacherIds, teacherRowsFromSlots, mergeTeacherRows, renderScheduleHtml, escapeHtml, DAY_ORDER } = require('./lib/timetable');
 const { sendMail } = require('./lib/mailer');
 
 initializeApp();
@@ -28,7 +28,7 @@ async function resolveTeacher(teacherId) {
   return null;
 }
 
-// Fires on every create/update/delete of a timetables/{school}_class{11|12}
+// Fires on every create/update/delete of a timetables/{school}_class{11|12}[_neet]
 // doc and emails only the teachers whose own slot actually changed.
 exports.onTimetableWrite = onDocumentWritten({
   document: 'timetables/{docId}',
@@ -37,7 +37,7 @@ exports.onTimetableWrite = onDocumentWritten({
   const docId = event.params.docId;
   const parsed = parseTimetableDocId(docId);
   if (!parsed) {
-    logger.info(`Skipping ${docId}: doesn't match {school}_class11/12`);
+    logger.info(`Skipping ${docId}: doesn't match {school}_class11/12[_neet]`);
     return;
   }
   const beforeData = event.data.before.exists ? event.data.before.data() : null;
@@ -52,19 +52,20 @@ exports.onTimetableWrite = onDocumentWritten({
 
   const user = GMAIL_USER.value();
   const pass = GMAIL_APP_PASSWORD.value();
+  const label = timetableLabel(parsed, afterData);
 
   for (const teacherId of affectedTeacherIds) {
     const teacher = await resolveTeacher(teacherId);
     if (!teacher || !teacher.email || teacher.isArchived) continue;
-    const rows = teacherRowsFromSlots(afterData.slots, teacherId, parsed.grade);
+    const rows = teacherRowsFromSlots(afterData.slots, teacherId, label);
     const html = `
       <p>Hi ${escapeHtml(teacher.name || '')},</p>
-      <p>Your Class ${parsed.grade} timetable at <strong>${escapeHtml(parsed.school)}</strong> was just updated. Here is your current schedule for this class:</p>
+      <p>Your ${escapeHtml(label)} timetable at <strong>${escapeHtml(parsed.school)}</strong> was just updated. Here is your current schedule for this class:</p>
       ${renderScheduleHtml(rows, afterData.periodLabels, afterData.periodTimes)}
       <p style="color:#888;font-size:12px;">Automated message from Curriculum Tracker.</p>
     `;
     try {
-      await sendMail({ user, pass, to: teacher.email, subject: `Timetable updated: Class ${parsed.grade} at ${parsed.school}`, html });
+      await sendMail({ user, pass, to: teacher.email, subject: `Timetable updated: ${label} at ${parsed.school}`, html });
       logger.info(`Sent update email to ${teacher.email} for ${docId}`);
     } catch (err) {
       logger.error(`Failed to email ${teacher.email} for ${docId}:`, err);
@@ -73,7 +74,7 @@ exports.onTimetableWrite = onDocumentWritten({
 });
 
 // Runs once a day and emails each teacher their schedule for that day only,
-// merging Class 11 + Class 12 slots at their school. Teachers with no
+// merging every batch's slots at their school. Teachers with no
 // periods that day (including school-wide weekly-off days) are skipped.
 exports.dailyScheduleDigest = onSchedule({
   schedule: '0 6 * * *',
@@ -115,11 +116,12 @@ exports.dailyScheduleDigest = onSchedule({
     Object.keys(data.slots || {}).forEach(key => {
       slotTeacherIds(data.slots[key]).forEach(id => teacherIdsToday.add(id));
     });
+    const label = timetableLabel(parsed, data);
     teacherIdsToday.forEach(teacherId => {
-      const rows = teacherRowsFromSlots(data.slots, teacherId, parsed.grade, today);
+      const rows = teacherRowsFromSlots(data.slots, teacherId, label, today);
       if (rows.length === 0) return;
       const existing = teacherRows.get(teacherId) || [];
-      teacherRows.set(teacherId, existing.concat(rows));
+      teacherRows.set(teacherId, mergeTeacherRows(existing, rows));
     });
   });
 

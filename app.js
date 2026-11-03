@@ -11210,8 +11210,8 @@ function TimetablePage({ currentUser, mySchool }) {
   var [activeClass, setActiveClass] = useState('11');
   var [activeView, setActiveView] = useState('grid');
   var [teachers, setTeachers] = useState([]);
-  var [timetable11, setTimetable11] = useState({});
-  var [timetable12, setTimetable12] = useState({});
+  // Slots per batch key ('11', '12', and at four-batch centres '11_neet', '12_neet')
+  var [timetables, setTimetables] = useState({});
   var [isSaving, setIsSaving] = useState(false);
   var [isLoading, setIsLoading] = useState(true);
   var [saveMsg, setSaveMsg] = useState('');
@@ -11219,9 +11219,9 @@ function TimetablePage({ currentUser, mySchool }) {
   var [lastSaved, setLastSaved] = useState(null);
   var [numPeriods, setNumPeriods] = useState(8);
   var DEFAULT_PERIOD_TIMES = ['6:00–7:00','7:30–9:00','9:30–10:30','10:30–12:00','12:00–1:30','3:00–4:30','5:00–8:00','9:00–10:30'];
-  var [periodTimes11, setPeriodTimes11] = useState(DEFAULT_PERIOD_TIMES);
-  var [periodTimes12, setPeriodTimes12] = useState(DEFAULT_PERIOD_TIMES);
-  var periodTimes = activeClass==='11'?periodTimes11:periodTimes12;
+  var [periodTimesByBatch, setPeriodTimesByBatch] = useState({});
+  function getPeriodTimes(batch){ return periodTimesByBatch[batch]||DEFAULT_PERIOD_TIMES; }
+  var periodTimes = getPeriodTimes(activeClass);
   var [breakTimes, setBreakTimes] = useState({});
   var [editingTime, setEditingTime] = useState(null);
   var [periodLabels, setPeriodLabels] = useState({});
@@ -11254,19 +11254,16 @@ function TimetablePage({ currentUser, mySchool }) {
   function addPeriod(){
     var n=numPeriods+1;
     setNumPeriods(n);
-    setPeriodTimes11(function(prev){ var next=prev.slice(); next.push(''); return next; });
-    setPeriodTimes12(function(prev){ var next=prev.slice(); next.push(''); return next; });
+    setPeriodTimesByBatch(function(prev){ var all={}; BATCHES.forEach(function(b){ var next=(prev[b.key]||DEFAULT_PERIOD_TIMES).slice(); next.push(''); all[b.key]=next; }); return all; });
   }
   function removePeriod(){
     if(numPeriods<=1) return;
     var n=numPeriods-1;
     setNumPeriods(n);
-    setPeriodTimes11(function(prev){ return prev.slice(0,n); });
-    setPeriodTimes12(function(prev){ return prev.slice(0,n); });
+    setPeriodTimesByBatch(function(prev){ var all={}; BATCHES.forEach(function(b){ all[b.key]=(prev[b.key]||DEFAULT_PERIOD_TIMES).slice(0,n); }); return all; });
   }
   function updatePeriodTime(idx,val){
-    var setter=activeClass==='11'?setPeriodTimes11:setPeriodTimes12;
-    setter(function(prev){ var next=prev.slice(); next[idx]=val; return next; });
+    setPeriodTimesByBatch(function(prev){ var next=(prev[activeClass]||DEFAULT_PERIOD_TIMES).slice(); next[idx]=val; return Object.assign({},prev,{[activeClass]:next}); });
   }
   // Placeholder "teacher" available for any subject that has no dedicated
   // teacher assigned yet, e.g. "IT CBSE Teacher". Named per-subject (not one
@@ -11288,6 +11285,17 @@ function TimetablePage({ currentUser, mySchool }) {
   var PAIR_SEP = '||';
   function normSchool(s){ return (s||'').toLowerCase().replace(/_neet$/,'').replace(/[^a-z]/g,''); }
   var hasNeetSplit = NEET_SPLIT_SCHOOLS.some(function(s){ return normSchool(s)===normSchool(mySchool); });
+  // These centres run JEE and NEET as separate batches, each with its own
+  // timetable, instead of sharing one and splitting only for Maths/Biology.
+  // JEE keeps the existing <school>_class11/12 docs; NEET is <school>_class11/12_neet.
+  var FOUR_BATCH_SCHOOLS = ['EMRS Bhopal','EMRS Kundra'];
+  var hasFourBatches = FOUR_BATCH_SCHOOLS.some(function(s){ return normSchool(s)===normSchool(mySchool); });
+  // Staff registered under "<school>_NEET" share the main centre's timetable there.
+  var ttSchool = hasFourBatches ? mySchool.replace(/_NEET$/i,'') : mySchool;
+  var BATCHES = hasFourBatches
+    ? [{key:'11',grade:'11',stream:'JEE',label:'JEE XI',icon:'📗'},{key:'11_neet',grade:'11',stream:'NEET',label:'NEET XI',icon:'🧬'},{key:'12',grade:'12',stream:'JEE',label:'JEE XII',icon:'📘'},{key:'12_neet',grade:'12',stream:'NEET',label:'NEET XII',icon:'🧬'}]
+    : [{key:'11',grade:'11',label:'Class 11',icon:'📗'},{key:'12',grade:'12',label:'Class 12',icon:'📘'}];
+  function batchDocId(b){ return ttSchool+'_class'+b.key; }
   function isSplitSlot(s){ return !!s && s.subject===SPLIT_SUBJECT; }
   function slotTeacherIds(s){ return s ? [s.teacherId,s.teacherId2].filter(Boolean) : []; }
   function slotTeacherNames(s){
@@ -11320,80 +11328,88 @@ function TimetablePage({ currentUser, mySchool }) {
     if (!mySchool) return;
     var db = getFirestore();
     initialLoadDone.current=false;
-    setIsLoading(true); setTeachers([]); setTimetable11({}); setTimetable12({}); setLastSaved(null);
+    setIsLoading(true); setTeachers([]); setTimetables({}); setLastSaved(null); setActiveClass('11');
     // Reset per-school settings so switching schools doesn't carry the previous
     // school's labels/times/off-days into one that hasn't customised them.
-    setNumPeriods(8); setPeriodTimes11(DEFAULT_PERIOD_TIMES); setPeriodTimes12(DEFAULT_PERIOD_TIMES);
+    setNumPeriods(8); setPeriodTimesByBatch({});
     setPeriodLabels({}); setColTypes({}); setBreakTimes({}); setWeeklyOffDays({Sunday:true});
     // NEET-section teachers may be registered under "<school>_NEET"; load
-    // them too so they can be picked for the Maths/Biology split.
-    var neetSchool = hasNeetSplit && !/_neet$/i.test(mySchool) ? mySchool+'_NEET' : null;
+    // them too so they can be picked for the Maths/Biology split / NEET batches.
+    var neetSchool = hasNeetSplit && !/_neet$/i.test(ttSchool) ? ttSchool+'_NEET' : null;
+    var batchReads = BATCHES.map(function(b){
+      var read = db.collection('timetables').doc(batchDocId(b)).get();
+      if (b.stream!=='NEET') return read;
+      // Before NEET had its own batches, its timetable may have been entered
+      // under the "<school>_NEET" centre; start from that if there's nothing newer.
+      return read.then(function(d){ return d.exists ? d : db.collection('timetables').doc(ttSchool+'_NEET_class'+b.grade).get(); });
+    });
     Promise.all([
-      db.collection('teachers').where('school','==',mySchool).get(),
-      db.collection('timetables').doc(mySchool+'_class11').get(),
-      db.collection('timetables').doc(mySchool+'_class12').get(),
+      db.collection('teachers').where('school','==',ttSchool).get(),
+      Promise.all(batchReads),
       neetSchool ? db.collection('teachers').where('school','==',neetSchool).get().catch(function(){ return null; }) : Promise.resolve(null),
       // Teachers from other centres who also work here (additionalSchools)
-      db.collection('teachers').where('additionalSchools','array-contains',mySchool).get().catch(function(){ return null; })
+      db.collection('teachers').where('additionalSchools','array-contains',ttSchool).get().catch(function(){ return null; })
     ]).then(function(r) {
-      var tDocs = r[0].docs.concat(r[3] ? r[3].docs : []);
-      if (r[4]) r[4].docs.forEach(function(d){ if (!tDocs.some(function(x){ return x.id===d.id; })) tDocs.push(d); });
+      var tDocs = r[0].docs.concat(r[2] ? r[2].docs : []);
+      if (r[3]) r[3].docs.forEach(function(d){ if (!tDocs.some(function(x){ return x.id===d.id; })) tDocs.push(d); });
       var tList = tDocs.map(function(d){ return Object.assign({},d.data(),{docId:d.id}); })
         .filter(function(t){ return !t.isArchived; })
         .sort(function(a,b){ return (a.name||'').localeCompare(b.name||''); });
       setTeachers(tList);
-      var metaLoaded=false;
-      if (r[1].exists) {
-        var d1=r[1].data();
-        setTimetable11(d1.slots||{});
-        setLastSaved(d1.updatedAt||null);
-        if(d1.periodTimes) setPeriodTimes11(d1.periodTimes);
-        if(d1.periodLabels){setPeriodLabels(d1.periodLabels);metaLoaded=true;}
-        if(d1.colTypes){setColTypes(d1.colTypes);metaLoaded=true;}
-        if(d1.numPeriods){setNumPeriods(d1.numPeriods);}else if(d1.periodTimes){setNumPeriods(d1.periodTimes.length);}
-        if(d1.breakTimes){setBreakTimes(d1.breakTimes);}
-        if(d1.weeklyOffDays){setWeeklyOffDays(d1.weeklyOffDays);}
-      }
-      if (r[2].exists) {
-        var d2=r[2].data();
-        setTimetable12(d2.slots||{});
-        if(d2.periodTimes) setPeriodTimes12(d2.periodTimes);
-        if(!metaLoaded){
-          if(d2.periodLabels)setPeriodLabels(d2.periodLabels);
-          if(d2.colTypes)setColTypes(d2.colTypes);
-          if(d2.numPeriods){setNumPeriods(d2.numPeriods);}else if(d2.periodTimes){setNumPeriods(d2.periodTimes.length);}
-          if(d2.breakTimes)setBreakTimes(d2.breakTimes);
-        }
+      var tts={}; var pts={}; var meta=null;
+      r[1].forEach(function(doc,i){
+        if (!doc || !doc.exists) return;
+        var d=doc.data(); var key=BATCHES[i].key;
+        tts[key]=d.slots||{};
+        if(d.periodTimes) pts[key]=d.periodTimes;
+        // Labels, column types, breaks and off-days are shared by every batch
+        if(!meta) meta=d;
+      });
+      setTimetables(tts); setPeriodTimesByBatch(pts);
+      if (meta) {
+        setLastSaved(meta.updatedAt||null);
+        if(meta.periodLabels) setPeriodLabels(meta.periodLabels);
+        if(meta.colTypes) setColTypes(meta.colTypes);
+        if(meta.numPeriods){setNumPeriods(meta.numPeriods);}else if(meta.periodTimes){setNumPeriods(meta.periodTimes.length);}
+        if(meta.breakTimes) setBreakTimes(meta.breakTimes);
+        if(meta.weeklyOffDays) setWeeklyOffDays(meta.weeklyOffDays);
       }
     }).catch(function(e){ console.error('Timetable load error:',e); })
     .finally(function(){ setIsLoading(false); setTimeout(function(){initialLoadDone.current=true;},800); });
   }, [mySchool]);
-  // Same teacher in Class 11 and Class 12 at the same time. Derived on every
-  // render (not kept in state) so auto-save always checks the exact data it is
-  // about to save, instead of the conflicts from the previous edit.
-  function findConflicts(tt11,tt12) {
+  // Same teacher in two batches at the same time. Derived on every render
+  // (not kept in state) so auto-save always checks the exact data it is about
+  // to save, instead of the conflicts from the previous edit. A teacher taking
+  // JEE and NEET of the same class together for the same subject is one
+  // combined class, not a clash.
+  function findConflicts(tts) {
     var found = [];
     DAYS.forEach(function(day) {
       PERIODS.forEach(function(period) {
         var key = day+'_'+period;
-        var s11 = tt11[key]||{}; var s12 = tt12[key]||{};
-        var ids12 = slotTeacherIds(s12);
-        slotTeacherIds(s11).forEach(function(tid) {
-          if (ids12.indexOf(tid)!==-1)
-            found.push({day:day,period:period,teacherName:(tid===s11.teacherId2?s11.teacherName2:s11.teacherName)||'Unknown'});
+        BATCHES.forEach(function(a,i) {
+          BATCHES.slice(i+1).forEach(function(b) {
+            var sa = (tts[a.key]||{})[key]||{}; var sb = (tts[b.key]||{})[key]||{};
+            var idsB = slotTeacherIds(sb);
+            slotTeacherIds(sa).forEach(function(tid) {
+              if (idsB.indexOf(tid)===-1) return;
+              if (a.grade===b.grade && subjectKey(slotSubjectFor(sa,tid))===subjectKey(slotSubjectFor(sb,tid))) return;
+              found.push({day:day,period:period,batchKeys:[a.key,b.key],batchLabels:[a.label,b.label],teacherName:(tid===sa.teacherId2?sa.teacherName2:sa.teacherName)||'Unknown'});
+            });
+          });
         });
       });
     });
     return found;
   }
-  var conflicts = findConflicts(timetable11,timetable12);
+  var conflicts = findConflicts(timetables);
   // Auto-save: debounce 3s after any data change
   useEffect(function(){
     if(!initialLoadDone.current||isLoading||!canEdit()) return;
     if(autoSaveRef.current) clearTimeout(autoSaveRef.current);
     autoSaveRef.current=setTimeout(function(){saveTimetable(true);},3000);
     return function(){if(autoSaveRef.current)clearTimeout(autoSaveRef.current);};
-  },[timetable11,timetable12,periodLabels,colTypes,periodTimes11,periodTimes12,breakTimes,weeklyOffDays,numPeriods]);
+  },[timetables,periodLabels,colTypes,periodTimesByBatch,breakTimes,weeklyOffDays,numPeriods]);
   function canEdit() {
     if (!currentUser) return false;
     var utype = (currentUser.userType||'').toLowerCase();
@@ -11409,11 +11425,11 @@ function TimetablePage({ currentUser, mySchool }) {
     var filtered=teachers.filter(function(t){ return t.subject===sub; });
     return filtered.concat([getCbseTeacher(sub)]);
   }
-  function getSlot(grade,day,period){ var key=day+'_'+period; return grade==='11'?(timetable11[key]||{}):(timetable12[key]||{}); }
+  function getSlot(batch,day,period){ return (timetables[batch]||{})[day+'_'+period]||{}; }
   // A null value in `updates` removes that field from the slot.
-  function updateSlot(grade,day,period,updates){ var key=day+'_'+period; var setter=grade==='11'?setTimetable11:setTimetable12; setter(function(prev){ var next=Object.assign({},prev[key]||{},updates); Object.keys(next).forEach(function(k){ if(next[k]===null) delete next[k]; }); return Object.assign({},prev,{[key]:next}); }); }
-  function clearSlot(grade,day,period){ var key=day+'_'+period; var setter=grade==='11'?setTimetable11:setTimetable12; setter(function(prev){ var n=Object.assign({},prev); delete n[key]; return n; }); }
-  function isConflict(day,period){ return conflicts.some(function(c){ return c.day===day&&c.period===period; }); }
+  function updateSlot(batch,day,period,updates){ var key=day+'_'+period; setTimetables(function(prev){ var tt=prev[batch]||{}; var next=Object.assign({},tt[key]||{},updates); Object.keys(next).forEach(function(k){ if(next[k]===null) delete next[k]; }); return Object.assign({},prev,{[batch]:Object.assign({},tt,{[key]:next})}); }); }
+  function clearSlot(batch,day,period){ var key=day+'_'+period; setTimetables(function(prev){ var tt=Object.assign({},prev[batch]||{}); delete tt[key]; return Object.assign({},prev,{[batch]:tt}); }); }
+  function isConflict(day,period){ return conflicts.some(function(c){ return c.day===day&&c.period===period&&c.batchKeys.indexOf(activeClass)!==-1; }); }
   function handleSubjectChange(grade,day,period,subject){
     var cur=getSlot(grade,day,period);
     var upd={subject:subject};
@@ -11457,11 +11473,13 @@ function TimetablePage({ currentUser, mySchool }) {
     try{
       var db=getFirestore(); var now=new Date().toISOString();
       var meta={periodLabels:periodLabels,colTypes:colTypes,breakTimes:breakTimes,weeklyOffDays:weeklyOffDays,numPeriods:numPeriods};
-      var base=Object.assign({school:mySchool,updatedAt:now,updatedBy:(currentUser&&(currentUser.afid||currentUser.email))||'',updatedByName:(currentUser&&currentUser.name)||''},meta);
-      await Promise.all([
-        db.collection('timetables').doc(mySchool+'_class11').set(Object.assign({},base,{grade:'11',slots:timetable11,periodTimes:periodTimes11})),
-        db.collection('timetables').doc(mySchool+'_class12').set(Object.assign({},base,{grade:'12',slots:timetable12,periodTimes:periodTimes12}))
-      ]);
+      var base=Object.assign({school:ttSchool,updatedAt:now,updatedBy:(currentUser&&(currentUser.afid||currentUser.email))||'',updatedByName:(currentUser&&currentUser.name)||''},meta);
+      await Promise.all(BATCHES.map(function(b){
+        var data=Object.assign({},base,{grade:b.grade,slots:timetables[b.key]||{},periodTimes:getPeriodTimes(b.key)});
+        // Read by the timetable emails (functions/lib/timetable.js)
+        if(b.stream){ data.stream=b.stream; data.batchLabel=b.stream+' Class '+b.grade; }
+        return db.collection('timetables').doc(batchDocId(b)).set(data);
+      }));
       setLastSaved(now); setSaveMsg(isAutoSave?'✅ Auto-saved':'✅ Saved successfully!');
       // Schedule exam notifications for non-CBSE teachers
       try{scheduleExamNotifications();}catch(ne){console.warn('Notification error:',ne);}
@@ -11473,15 +11491,18 @@ function TimetablePage({ currentUser, mySchool }) {
     if(Notification.permission==='default') Notification.requestPermission();
     var dayMap={Monday:1,Tuesday:2,Wednesday:3,Thursday:4,Friday:5,Saturday:6,Sunday:0};
     var now=new Date();
-    [timetable11,timetable12].forEach(function(tt,gi){
-      var grade=gi===0?'11':'12';
-      var gradePeriodTimes=gi===0?periodTimes11:periodTimes12;
+    var reminded={}; // a combined JEE+NEET class is one reminder, not two
+    BATCHES.forEach(function(b){
+      var tt=timetables[b.key]||{};
+      var gradePeriodTimes=getPeriodTimes(b.key);
       DAYS.forEach(function(day){
         PERIODS.forEach(function(p,pi){
           var slot=tt[day+'_'+p]; if(!slot||!slot.subject) return;
           // A Maths/Biology split slot has two teachers; remind each about their own half
           slotTeacherIds(slot).forEach(function(tid){
             if(isCbseTeacherId(tid)) return; // Skip CBSE teachers
+            if(reminded[tid+'_'+day+'_'+p]) return;
+            reminded[tid+'_'+day+'_'+p]=true;
             var teacher=teachers.find(function(t){return getTId(t)===tid;});
             if(!teacher) return;
             var subject=slotSubjectFor(slot,tid);
@@ -11504,7 +11525,7 @@ function TimetablePage({ currentUser, mySchool }) {
             if(delay>0&&delay<7*24*60*60*1000){
               setTimeout(function(){
                 if(Notification.permission==='granted'){
-                  new Notification('📚 Class Reminder - Avanti',{body:'Class '+grade+' | '+subject+' with '+teacher.name+' starting at '+timeStr,icon:'/icon-192.png'});
+                  new Notification('📚 Class Reminder - Avanti',{body:b.label+' | '+subject+' with '+teacher.name+' starting at '+timeStr,icon:'/icon-192.png'});
                 }
               },delay);
             }
@@ -11540,22 +11561,38 @@ function TimetablePage({ currentUser, mySchool }) {
     var diff=endMin-startMin;
     return diff>0?diff:0;
   }
-  // Total weekly minutes a teacher is scheduled for, across both classes.
+  // Total weekly minutes a teacher is scheduled for, across all batches. A
+  // combined JEE+NEET class counts once.
   function getTeacherWeeklyMinutes(tid){
-    var total=0;
-    [{tt:timetable11,times:periodTimes11},{tt:timetable12,times:periodTimes12}].forEach(function(cls){
+    var total=0; var counted={};
+    BATCHES.forEach(function(b){
+      var tt=timetables[b.key]||{}; var times=getPeriodTimes(b.key);
       DAYS.forEach(function(day){
         PERIODS.forEach(function(p,pi){
-          var slot=cls.tt[day+'_'+p];
-          if(slotTeacherIds(slot).indexOf(tid)!==-1) total+=getPeriodDurationMinutes(cls.times[pi],pi);
+          var key=day+'_'+p;
+          if(counted[key]||slotTeacherIds(tt[key]).indexOf(tid)===-1) return;
+          counted[key]=true; total+=getPeriodDurationMinutes(times[pi],pi);
         });
       });
     });
     return total;
   }
   function formatHours(minutes){ return (Math.round((minutes/60)*10)/10)+'h'; }
-  function getTeacherSchedule(tid){ var sch={}; DAYS.forEach(function(day){ PERIODS.forEach(function(p){ var key=day+'_'+p; var s11=timetable11[key]||{}; var s12=timetable12[key]||{}; if(slotTeacherIds(s11).indexOf(tid)!==-1) sch[key]={grade:'11',subject:slotSubjectFor(s11,tid)}; else if(slotTeacherIds(s12).indexOf(tid)!==-1) sch[key]={grade:'12',subject:slotSubjectFor(s12,tid)}; }); }); return sch; }
-  // Builds the Day x column grid for one class, matching exactly what's
+  // { 'Monday_P1': {label:'JEE XI + NEET XI', subject} } for one teacher
+  function getTeacherSchedule(tid){
+    var sch={};
+    DAYS.forEach(function(day){ PERIODS.forEach(function(p){
+      var key=day+'_'+p;
+      BATCHES.forEach(function(b){
+        var s=(timetables[b.key]||{})[key];
+        if(slotTeacherIds(s).indexOf(tid)===-1) return;
+        if(sch[key]) sch[key].label+=' + '+b.label;
+        else sch[key]={label:b.label,subject:slotSubjectFor(s,tid)};
+      });
+    }); });
+    return sch;
+  }
+  // Builds the Day x column grid for one batch, matching exactly what's
   // rendered on screen (column labels/times/order, break columns, weekly-off rows).
   function buildClassRows(grade,gradePeriodTimes){
     var rows=[['Day'].concat(visibleSchedule.map(function(col){
@@ -11577,8 +11614,8 @@ function TimetablePage({ currentUser, mySchool }) {
     return rows;
   }
   function exportCSV(){
-    var rows=[['Class 11']].concat(buildClassRows('11',periodTimes11));
-    rows.push([]); rows.push(['Class 12']); rows=rows.concat(buildClassRows('12',periodTimes12));
+    var rows=[];
+    BATCHES.forEach(function(b,i){ if(i>0) rows.push([]); rows.push([b.label]); rows=rows.concat(buildClassRows(b.key,getPeriodTimes(b.key))); });
     rows.push([]); rows.push(['Teacher','Periods Assigned (Wk)','Weekly Hours']);
     teachers.forEach(function(t){
       var tid=getTId(t); var cnt=Object.keys(getTeacherSchedule(tid)).length;
@@ -11586,7 +11623,7 @@ function TimetablePage({ currentUser, mySchool }) {
     });
     var csv=rows.map(function(r){ return r.map(function(c){ return '"'+String(c).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
     var blob=new Blob([csv],{type:'text/csv'}); var url=URL.createObjectURL(blob);
-    var a=document.createElement('a'); a.href=url; a.download='Timetable_'+(mySchool||'').replace(/\s+/g,'_')+'.csv';
+    var a=document.createElement('a'); a.href=url; a.download='Timetable_'+(ttSchool||'').replace(/\s+/g,'_')+'.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }
   if(isLoading) return React.createElement('div',{className:'text-center py-16 text-gray-500'},React.createElement('div',{className:'text-4xl mb-3'},'⏳'),React.createElement('p',null,'Loading timetable...'));
@@ -11611,13 +11648,29 @@ function TimetablePage({ currentUser, mySchool }) {
         React.createElement('div',{className:'overflow-x-auto'},
           React.createElement('table',{className:'w-full min-w-[600px] border-collapse text-xs'},
             React.createElement('thead',null,React.createElement('tr',{className:'bg-gray-100'},React.createElement('th',{className:'border p-2 text-left'},'Day'),PLABELS.map(function(p,i){ return React.createElement('th',{key:i,className:'border p-2 text-center'},React.createElement('div',{className:'font-semibold'},p),periodTimes[i]&&React.createElement('div',{className:'text-xs text-gray-400 font-normal'},periodTimes[i])); }))),
-            React.createElement('tbody',null,DAYS.map(function(day){ return React.createElement('tr',{key:day,className:'odd:bg-white even:bg-gray-50'},React.createElement('td',{className:'border p-2 font-semibold whitespace-nowrap'},day),PERIODS.map(function(period,i){ var slot=getTeacherSchedule(getTId(selT))[day+'_'+period]; return React.createElement('td',{key:i,className:'border p-1 text-center '+(slot?'bg-green-50':'')},slot?React.createElement('div',null,React.createElement('div',{className:'font-bold text-green-700'},slot.subject),React.createElement('div',{className:'text-gray-500'},'Cl '+slot.grade)):React.createElement('span',{className:'text-gray-300'},'—')); })); }))
+            React.createElement('tbody',null,DAYS.map(function(day){ return React.createElement('tr',{key:day,className:'odd:bg-white even:bg-gray-50'},React.createElement('td',{className:'border p-2 font-semibold whitespace-nowrap'},day),PERIODS.map(function(period,i){ var slot=getTeacherSchedule(getTId(selT))[day+'_'+period]; return React.createElement('td',{key:i,className:'border p-1 text-center '+(slot?'bg-green-50':'')},slot?React.createElement('div',null,React.createElement('div',{className:'font-bold text-green-700'},slot.subject),React.createElement('div',{className:'text-gray-500'},slot.label)):React.createElement('span',{className:'text-gray-300'},'—')); })); }))
           )
         )
       ):React.createElement('div',{className:'grid grid-cols-1 md:grid-cols-2 gap-4'},teachers.map(function(t){ var tid=getTId(t); var cnt=Object.keys(getTeacherSchedule(tid)).length; return React.createElement('div',{key:tid,className:'bg-white rounded-2xl shadow p-4 border-l-4 border-purple-400 cursor-pointer hover:shadow-md',onClick:function(){setTeacherFilter(tid);}},React.createElement('div',{className:'font-bold text-gray-800'},t.name),React.createElement('div',{className:'text-sm text-gray-500 mb-2'},t.subject||'—'),React.createElement('div',{className:'flex flex-wrap gap-2'},React.createElement('span',{className:'px-3 py-1 rounded-full text-xs font-semibold '+(cnt>0?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500')},cnt+' period'+(cnt!==1?'s':'')+' assigned'),cnt>0&&React.createElement('span',{className:'px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700'},formatHours(getTeacherWeeklyMinutes(tid))+'/wk'))); }))
     );
   }
-  var currentTT=activeClass==='11'?timetable11:timetable12;
+  var currentTT=timetables[activeClass]||{};
+  var activeBatch=BATCHES.find(function(b){ return b.key===activeClass; })||BATCHES[0];
+  var copySource=activeBatch.stream==='NEET'?BATCHES.find(function(b){ return b.stream==='JEE'&&b.grade===activeBatch.grade; }):null;
+  // Start a NEET batch from its JEE twin; NEET students get the Biology half
+  // of any Maths/Biology split slot.
+  function copyBatch(from,to){
+    var target=timetables[to.key]||{};
+    var hasData=Object.keys(target).some(function(k){ return target[k]&&(target[k].subject||target[k].teacherId); });
+    if(hasData&&!confirm('Replace the '+to.label+' timetable with a copy of '+from.label+'?\n\nEverything already entered in '+to.label+' will be overwritten.')) return;
+    var src=timetables[from.key]||{}; var copy={};
+    Object.keys(src).forEach(function(k){
+      var s=src[k]; if(!s) return;
+      copy[k]=isSplitSlot(s)?{subject:SPLIT_PARTS[1],teacherId:s.teacherId2||'',teacherName:s.teacherName2||''}:Object.assign({},s);
+    });
+    setTimetables(function(prev){ return Object.assign({},prev,{[to.key]:copy}); });
+    setPeriodTimesByBatch(function(prev){ return Object.assign({},prev,{[to.key]:getPeriodTimes(from.key).slice()}); });
+  }
   var totalFilled=Object.keys(currentTT).filter(function(k){ return currentTT[k]&&(currentTT[k].subject||currentTT[k].teacherName); }).length;
   var subjects=getAllSubjects(); var editable=canEdit();
   return React.createElement('div',{className:'space-y-4'},
@@ -11625,7 +11678,7 @@ function TimetablePage({ currentUser, mySchool }) {
       React.createElement('div',{className:'flex flex-wrap gap-3 items-start justify-between'},
         React.createElement('div',null,
           React.createElement('h2',{className:'text-2xl font-bold tracking-tight'},'📅 Class Timetable'),
-          React.createElement('p',{className:'text-sm opacity-90 mt-0.5'},mySchool+(lastSaved?' · Last saved: '+new Date(lastSaved).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}):''))
+          React.createElement('p',{className:'text-sm opacity-90 mt-0.5'},ttSchool+(lastSaved?' · Last saved: '+new Date(lastSaved).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'}):''))
         ),
         React.createElement('div',{className:'flex flex-wrap gap-2 items-center'},
           React.createElement('button',{onClick:function(){setActiveView('teacher');},className:'px-3 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-xl font-semibold text-xs border border-white border-opacity-30'},'👩‍🏫 Teacher View'),
@@ -11638,13 +11691,14 @@ function TimetablePage({ currentUser, mySchool }) {
     saveMsg&&React.createElement('div',{className:'p-3 rounded-xl text-sm font-semibold '+(saveMsg.startsWith('✅')?'bg-green-50 text-green-700 border border-green-200':'bg-red-50 text-red-700 border border-red-200')},saveMsg),
     conflicts.length>0&&React.createElement('div',{className:'bg-red-50 border-l-4 border-red-500 rounded-xl p-4'},
       React.createElement('h4',{className:'font-bold text-red-700 mb-2'},'⚠️ '+conflicts.length+' Conflict'+(conflicts.length>1?'s':'')+' Detected!'),
-      React.createElement('ul',{className:'space-y-1'},conflicts.map(function(c,i){ return React.createElement('li',{key:i,className:'text-sm text-red-600'},'🔴 '+c.teacherName+' — BOTH Class 11 & 12 on '+c.day+' '+c.period); })),
+      React.createElement('ul',{className:'space-y-1'},conflicts.map(function(c,i){ return React.createElement('li',{key:i,className:'text-sm text-red-600'},'🔴 '+c.teacherName+' — BOTH '+c.batchLabels.join(' & ')+' on '+c.day+' '+c.period); })),
       React.createElement('p',{className:'text-xs text-red-500 mt-2'},'Fix conflicts before saving.')
     ),
     React.createElement('div',{className:'flex flex-wrap gap-3 items-center'},
-      React.createElement('div',{className:'flex gap-2'},
-        ['11','12'].map(function(cls){ return React.createElement('button',{key:cls,onClick:function(){setActiveClass(cls);},className:'px-5 py-2 rounded-xl font-bold text-sm '+(activeClass===cls?'avanti-gradient text-white shadow-md':'bg-white border-2 border-gray-200 text-gray-600 hover:border-purple-300')},(cls==='11'?'📗':'📘')+' Class '+cls); })
+      React.createElement('div',{className:'flex flex-wrap gap-2'},
+        BATCHES.map(function(b){ return React.createElement('button',{key:b.key,onClick:function(){setActiveClass(b.key);},className:'px-5 py-2 rounded-xl font-bold text-sm '+(activeClass===b.key?'avanti-gradient text-white shadow-md':'bg-white border-2 border-gray-200 text-gray-600 hover:border-purple-300')},b.icon+' '+b.label); })
       ),
+      editable&&copySource&&React.createElement('button',{onClick:function(){copyBatch(copySource,activeBatch);},className:'px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border-2 border-purple-200 text-purple-700 hover:border-purple-400'},'📋 Copy from '+copySource.label),
       React.createElement('div',{className:'text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full'},totalFilled+' / '+(DAYS.length*numPeriods)+' periods filled'),
       editable&&React.createElement('div',{className:'flex items-center gap-1 bg-white border border-gray-200 rounded-full px-2 py-0.5'},
         React.createElement('span',{className:'text-xs text-gray-500 mr-1'},'Periods:'),
@@ -11796,7 +11850,7 @@ function TimetablePage({ currentUser, mySchool }) {
                   ?React.createElement('div',{className:'space-y-1.5 w-full'},
                       React.createElement('select',{value:s.subject||'',onChange:function(e){handleSubjectChange(activeClass,day,period,e.target.value);},className:'w-full border border-gray-300 rounded text-xs py-1.5 px-2 bg-white focus:border-yellow-400 focus:outline-none'},
                         React.createElement('option',{value:''},'— Sub —'),
-                        (hasNeetSplit||isSplit)&&React.createElement('optgroup',{label:'JEE + NEET split'},React.createElement('option',{value:SPLIT_SUBJECT},SPLIT_SUBJECT)),
+                        ((hasNeetSplit&&!hasFourBatches)||isSplit)&&React.createElement('optgroup',{label:'JEE + NEET split'},React.createElement('option',{value:SPLIT_SUBJECT},SPLIT_SUBJECT)),
                         React.createElement('optgroup',{label:'Subjects'},subjects.filter(function(sub){return !isCbseSubject(sub);}).map(function(sub){return React.createElement('option',{key:sub,value:sub},sub);})),
                         React.createElement('optgroup',{label:'Language / PT'},subjects.filter(function(sub){return isCbseSubject(sub);}).map(function(sub){return React.createElement('option',{key:sub,value:sub},sub);}))
                       ),
@@ -11823,9 +11877,9 @@ function TimetablePage({ currentUser, mySchool }) {
       )
     ),
 
-    teachers.length===0?React.createElement('div',{className:'bg-yellow-50 border border-yellow-300 rounded-xl p-4 text-sm text-yellow-800'},'⚠️ No teachers found for "'+mySchool+'". Teachers must be added to the system first.')
+    teachers.length===0?React.createElement('div',{className:'bg-yellow-50 border border-yellow-300 rounded-xl p-4 text-sm text-yellow-800'},'⚠️ No teachers found for "'+ttSchool+'". Teachers must be added to the system first.')
     :React.createElement('div',{className:'bg-white rounded-2xl shadow p-4'},
-      React.createElement('h4',{className:'font-bold text-gray-700 mb-3 text-sm'},'👥 Teachers at '+mySchool+' ('+teachers.length+')'),
+      React.createElement('h4',{className:'font-bold text-gray-700 mb-3 text-sm'},'👥 Teachers at '+ttSchool+' ('+teachers.length+')'),
       React.createElement('div',{className:'flex flex-wrap gap-2'},teachers.map(function(t){ return React.createElement('div',{key:getTId(t),className:'flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1 text-xs'},React.createElement('span',{className:'w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs'},(t.name||'?').charAt(0).toUpperCase()),React.createElement('span',{className:'font-medium text-gray-700'},t.name),t.subject&&React.createElement('span',{className:'text-gray-400'},'· '+t.subject)); }))
     )
   );
