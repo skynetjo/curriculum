@@ -123,9 +123,9 @@ const firebaseWithTimeout = async (promise, timeoutMs = 15000, fallback = null) 
 };
 const auth = firebase.auth();
 const SUBJECTS = ['Physics', 'Chemistry', 'Maths', 'Biology', 'CS', 'IT', 'IP'];
-// Centres running online classes (winter vacation) - attendance is marked per lecture
-const ONLINE_CLASS_CENTRE_PATTERNS = [/kolhapur/i, /barwani/i, /cutta(c)?k/i, /\bpuri\b/i];
-const isOnlineClassCentre = school => ONLINE_CLASS_CENTRE_PATTERNS.some(p => p.test(school || ''));
+// Online classes (winter vacation) run at every centre except these - attendance is marked per lecture
+const NON_ONLINE_CLASS_CENTRE_PATTERNS = [/bharuch/i, /palghar/i, /mahisagar/i];
+const isOnlineClassCentre = school => !!school && !NON_ONLINE_CLASS_CENTRE_PATTERNS.some(p => p.test(school));
 const APC_NAME_OVERRIDES = ['sharda'];
 const getStaffRoleText = staff => String(staff?.role || staff?.userType || staff?.type || staff?.position || '').toLowerCase();
 const isApcStaff = staff => {
@@ -10450,7 +10450,7 @@ function OnlineClassAttendance({
   if (centres.length === 0) {
     return React.createElement("div", {
       className: "bg-white p-6 rounded-2xl shadow-lg text-gray-600"
-    }, "Online class attendance is only enabled for the Kolhapur, Barwani, Cuttack and Puri centres.");
+    }, "Online class attendance is not enabled for the Bharuch, Palghar and Mahisagar centres.");
   }
   const tabButton = (id, label) => React.createElement("button", {
     onClick: () => setMode(id),
