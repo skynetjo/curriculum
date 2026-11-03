@@ -6,12 +6,15 @@ Two Cloud Functions that email teachers about their timetable:
   `timetables/{school}_class12` document is created or updated. It diffs the
   old and new `slots` map and emails only the teachers whose own slot
   actually changed (added, removed, or reassigned) — not everyone with a
-  slot in the document.
+  slot in the document. EMRS Bhopal and EMRS Kundra also have separate NEET
+  batches in `timetables/{school}_class11_neet` / `_class12_neet`; emails
+  name the batch ("JEE Class 11", "NEET Class 11").
 - **`dailyScheduleDigest`** — runs once a day at 6:00 AM IST. For every
   school, it skips days marked as a weekly off (per the "Weekly Off"
   checkboxes in the timetable editor), then emails each teacher who has at
-  least one period that day their schedule for Class 11 and Class 12
-  combined at that school. Teachers with no periods that day get no email.
+  least one period that day their schedule for every batch at that school
+  combined. A JEE + NEET class taken together is listed once. Teachers with
+  no periods that day get no email.
 
 Email is sent via Gmail SMTP (through `nodemailer`) using an address you
 control and an [app password](https://myaccount.google.com/apppasswords)

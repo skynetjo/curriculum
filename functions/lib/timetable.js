@@ -11,7 +11,9 @@ const CBSE_TEACHER_PREFIX = '__cbse_';
 // teacherId2 = Biology teacher.
 const SPLIT_SUBJECT = 'Maths/Biology';
 const SPLIT_PARTS = SPLIT_SUBJECT.split('/');
-const TIMETABLE_DOC_SUFFIX = /_class(11|12)$/;
+// EMRS Bhopal and EMRS Kundra run JEE and NEET as separate batches: JEE uses
+// the plain {school}_class11/12 doc and NEET {school}_class11/12_neet.
+const TIMETABLE_DOC_SUFFIX = /_class(11|12)(_neet)?$/;
 
 // Default period grid, copied from FULL_SCHEDULE in app.js (period rows only).
 // A school's own periodLabels/periodTimes arrays (stored on the timetable
@@ -25,7 +27,14 @@ const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Satu
 function parseTimetableDocId(docId) {
   const match = docId.match(TIMETABLE_DOC_SUFFIX);
   if (!match) return null;
-  return { school: docId.slice(0, match.index), grade: match[1] };
+  return { school: docId.slice(0, match.index), grade: match[1], stream: match[2] ? 'NEET' : null };
+}
+
+// What to call a timetable doc in emails: "Class 11", or "JEE Class 11" /
+// "NEET Class 11" at four-batch centres (the app stores batchLabel there).
+function timetableLabel(parsed, data) {
+  if (data && data.batchLabel) return data.batchLabel;
+  return `${parsed.stream ? parsed.stream + ' ' : ''}Class ${parsed.grade}`;
 }
 
 function isPlaceholderTeacherId(teacherId) {
@@ -86,18 +95,31 @@ function periodTime(periodKey, periodTimes) {
   return DEFAULT_PERIOD_TIMES[idx];
 }
 
-// Builds { day: [{ period, subject, grade }] } for one teacher from one
-// grade's `slots` map, optionally restricted to a single day.
-function teacherRowsFromSlots(slots, teacherId, grade, onlyDay) {
+// Builds [{ day, period, subject, label }] for one teacher from one batch's
+// `slots` map (label e.g. "Class 11"), optionally restricted to a single day.
+function teacherRowsFromSlots(slots, teacherId, label, onlyDay) {
   const rows = [];
   Object.keys(slots || {}).forEach(key => {
     const slot = slots[key];
     if (!slotTeacherIds(slot).includes(teacherId)) return;
     const { day, period } = splitSlotKey(key);
     if (onlyDay && day !== onlyDay) return;
-    rows.push({ day, period, subject: slotSubjectFor(slot, teacherId), grade });
+    rows.push({ day, period, subject: slotSubjectFor(slot, teacherId), label });
   });
   return rows;
+}
+
+// Adds `rows` to `existing`. A teacher taking JEE and NEET of the same class
+// together appears in both batches' timetables; that period is listed once,
+// naming both batches.
+function mergeTeacherRows(existing, rows) {
+  const merged = existing.slice();
+  rows.forEach(r => {
+    const same = merged.find(m => m.day === r.day && m.period === r.period && m.subject === r.subject);
+    if (same) same.label += ` + ${r.label}`;
+    else merged.push({ ...r });
+  });
+  return merged;
 }
 
 function groupRowsByDay(rows) {
@@ -120,8 +142,8 @@ function renderScheduleHtml(rows, periodLabels, periodTimes) {
     const items = byDay[day].map(r => {
       const label = periodLabel(r.period, periodLabels);
       const time = periodTime(r.period, periodTimes);
-      const gradeTag = r.grade ? ` &mdash; Class ${r.grade}` : '';
-      return `<li>${label}${time ? ` (${time})` : ''}: <strong>${escapeHtml(r.subject)}</strong>${gradeTag}</li>`;
+      const batchTag = r.label ? ` &mdash; ${escapeHtml(r.label)}` : '';
+      return `<li>${label}${time ? ` (${time})` : ''}: <strong>${escapeHtml(r.subject)}</strong>${batchTag}</li>`;
     }).join('');
     return `<h3 style="margin:16px 0 4px;font-size:15px;">${day}</h3><ul style="margin:0 0 8px;padding-left:20px;">${items}</ul>`;
   }).join('');
@@ -134,10 +156,12 @@ function escapeHtml(s) {
 module.exports = {
   DAY_ORDER,
   parseTimetableDocId,
+  timetableLabel,
   slotTeacherIds,
   diffAffectedTeacherIds,
   splitSlotKey,
   teacherRowsFromSlots,
+  mergeTeacherRows,
   renderScheduleHtml,
   escapeHtml
 };
