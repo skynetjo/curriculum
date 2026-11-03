@@ -6585,7 +6585,8 @@ function TeacherView({
     students: students,
     studentAttendance: studentAttendance,
     studentsStatus: studentsStatus,
-    onReloadStudents: onReloadStudents
+    onReloadStudents: onReloadStudents,
+    onOpenOnlineAttendance: isOnlineClassCentre(currentUser.school) ? () => setActiveTab('onlineattendance') : null
   }), activeTab === 'onlineattendance' && isOnlineClassCentre(currentUser.school) && React.createElement(OnlineClassAttendance, {
     key: currentUser.school,
     currentUser: currentUser,
@@ -9749,7 +9750,8 @@ function StudentAttendanceView({
   students,
   studentAttendance,
   studentsStatus = 'ready',
-  onReloadStudents
+  onReloadStudents,
+  onOpenOnlineAttendance
 }) {
   const [selectedGrade, setSelectedGrade] = useState('11');
   const [selectedDate, setSelectedDate] = useState(getTodayDate());
@@ -10135,7 +10137,18 @@ function StudentAttendanceView({
     }
   }, markingProgress.current, " of ", markingProgress.total, " students"))), React.createElement("h2", {
     className: "text-3xl font-bold"
-  }, "Student Attendance - ", mySchool), React.createElement("div", {
+  }, "Student Attendance - ", mySchool), onOpenOnlineAttendance && React.createElement("div", {
+    className: "flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border-2 border-amber-300 bg-amber-50"
+  }, React.createElement("div", {
+    className: "flex-1 min-w-[240px] text-amber-900"
+  }, React.createElement("div", {
+    className: "font-bold"
+  }, "💻 Taking online classes? Mark each lecture in Online Class Attendance."), React.createElement("div", {
+    className: "text-sm mt-1"
+  }, "This page keeps only one mark per student per day. Marking it again after every class replaces the earlier mark, and lecture-wise reports won't include it.")), React.createElement("button", {
+    onClick: onOpenOnlineAttendance,
+    className: "px-5 py-2 bg-blue-600 text-white rounded-xl font-semibold"
+  }, "Open Online Class Attendance")), React.createElement("div", {
     className: "grid grid-cols-2 gap-4"
   }, React.createElement("div", {
     className: `p-4 rounded-xl border-2 ${lockStatus['11'] ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`
